@@ -1,0 +1,198 @@
+syntax = "proto3";
+
+package datum.iam.v1alpha;
+
+import "datum/api/annotations.proto";
+import "datum/iam/v1alpha/services_resources.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/api/resource.proto";
+import "google/longrunning/operations.proto";
+import "google/protobuf/field_mask.proto";
+
+option go_package = "go.datumapis.com/os/genproto/iam/v1alpha;iampb";
+
+// Manages Services in the IAM system
+//
+// Services are used to group permissions assigned to IAM subjects through IAM
+// policies. Service providers can create a default set of services offered by
+// their services. Organization and Project admins can create custom services that
+// can be used to bind a custom set of permissions to their end users.
+//
+// Here's an example service
+service Services {
+  // Create a new service in the system
+  //
+  // (-- api-linter: core::0133::method-signature=disabled
+  //     aip.dev/not-precedent: The service resource does not have a parent. --)
+  rpc CreateService(CreateServiceRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/services.create";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/Service";
+    option (google.api.method_signature) = "service,service_id";
+    option (google.api.http) = {
+      post: "/iam/v1alpha/services"
+      body: "service"
+    };
+    option (google.longrunning.operation_info) = {
+      response_type: "Service"
+      metadata_type: "CreateServiceMetadata"
+    };
+  }
+
+  // Retrieves a service by its name.
+  //
+  // This will always return the expected state of the service. The service's
+  // status will always reflect the last observed status of the service.
+  rpc GetService(GetServiceRequest) returns (Service) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/services.get";
+    option (google.api.method_signature) = "name";
+    option (google.api.http) = {get: "/iam/v1alpha/{name=services/*}"};
+  }
+
+  // Lists services under a parent resource.
+  //
+  // Services can be organized into Folders or set at the root of the
+  // Organizatino's heirarchy.
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/services.list";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/Service";
+    option (google.api.http) = {get: "/iam/v1alpha/services"};
+  }
+
+  // Updates an existing Service
+  rpc UpdateService(UpdateServiceRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/services.update";
+    option (google.api.method_signature) = "service,update_mask";
+    option (google.api.http) = {
+      patch: "/iam/v1alpha/{service.name=services/*}"
+      body: "service"
+    };
+    option (google.longrunning.operation_info) = {
+      response_type: "Service"
+      metadata_type: "UpdateServiceMetadata"
+    };
+  }
+
+  // Delete a service from the platform.
+  //
+  // A service will not be deleted until all resources have been removed from
+  // the service. Deleting a service will not immediately stop the billing for
+  // any resources provisioned within the service. Billing for a resource
+  // provisioned within a service will only stop once the resource has been
+  // removed.
+  //
+  // Services can be scheduled for deletion in the future but no guarantees are
+  // provided on when the deletion will start after the requested deletion time
+  // has passed.
+  rpc DeleteService(DeleteServiceRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/services.delete";
+    option (google.api.method_signature) = "name";
+    option (google.api.http) = {delete: "/iam/v1alpha/{name=services/*}"};
+    option (google.longrunning.operation_info) = {
+      response_type: "Service"
+      metadata_type: "DeleteServiceMetadata"
+    };
+  }
+}
+
+// The request message for creating a service.
+message CreateServiceRequest {
+  // The service to create.
+  Service service = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Set the ID to use for the service. This will be used as the last section of
+  // the service's resource name.
+  string service_id = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // When set to true, the request will be validated but the service will not be
+  // created within the system. This is helpful to perform server-side
+  // validation of resources and show validation errors to users prior to
+  // allowing them to submit the creation request.
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata returned from the long running operations when creating a new
+// service.
+message CreateServiceMetadata {}
+
+// The request message for getting a service.
+message GetServiceRequest {
+  // Required. The name of the service to retrieve.
+  // Format: organizations/{organization}/services/{service}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Service"}
+  ];
+}
+
+// The request message for listing services.
+message ListServicesRequest {
+  // Optional. The maximum number of services to return. If unspecified, defaults to 50.
+  int32 page_size = 1 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional. A token identifying a page of results to return.
+  string page_token = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional. A filter to apply to the results.
+  string filter = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The response message for listing services.
+message ListServicesResponse {
+  // The list of services.
+  repeated Service services = 1;
+
+  // A token to retrieve the next page of results.
+  string next_page_token = 2;
+}
+
+// The request message for updating a service.
+message UpdateServiceRequest {
+  // Required. The service to update.
+  Service service = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Required. The update mask applies to the resource.
+  google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Indicates the request to update the service should only be validated and
+  // changes must not actually take effect on the resource. API consumers can
+  // leverage this option to perform validation and present errors to users
+  // before submitting a real update request.
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // Set to true to indicate that a new Service should be created if the
+  // provided service doesn't already exist.
+  bool allow_missing = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata used by long running operations when updating a service.
+message UpdateServiceMetadata {}
+
+// The request message for deleting a service.
+message DeleteServiceRequest {
+  // Required. The name of the service to delete.
+  // Format: organizations/{organization}/services/{service}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Service"}
+  ];
+
+  // Indicates the request to update the service should only be validated and
+  // changes must not actually take effect on the resource. API consumers can
+  // leverage this option to perform validation and present errors to users
+  // before submitting a real update request.
+  bool validate_only = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optionally provide the computed checksum value of the current resource to
+  // ensure updates only take effect when the latest resource was provided by
+  // the caller.
+  string etag = 4 [(google.api.field_behavior) = OPTIONAL];
+
+  // When set to true, the request will still succeed if the service does not
+  // exist.
+  bool allow_missing = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata used by long running operations when deleting a service.
+message DeleteServiceMetadata {}

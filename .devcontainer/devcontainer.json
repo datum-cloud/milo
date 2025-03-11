@@ -1,0 +1,88 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/go
+{
+	"name": "Go",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/go:1-1.23-bookworm",
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils": {
+			"installOhMyZsh": true,
+			"configureZshAsDefaultShell": true,
+			"installOhMyZshConfig": true,
+			"installZsh": true,
+			"upgradePackages": true
+		},
+		"ghcr.io/devcontainers/features/docker-in-docker": {},
+		"ghcr.io/dhoeric/features/act": {},
+		"ghcr.io/devcontainers/features/kubectl-helm-minikube": {},
+		"ghcr.io/mpriscella/features/kind": {},
+		"ghcr.io/devcontainers-extra/features/protoc": {},
+		"ghcr.io/partydrone/devcontainer/features/openfga-cli": {},
+		"ghcr.io/devcontainers-extra/features/go-task": {},
+		"ghcr.io/audacioustux/devcontainers/kustomize": {}
+	},
+	"onCreateCommand": ".devcontainer/create.sh",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"zxh404.vscode-proto3",
+				"patbenatar.advanced-new-file",
+				"emeraldwalk.RunOnSave",
+				"stkb.rewrap",
+				"openfga.openfga-vscode",
+				"task.vscode-task",
+				"humao.rest-client",
+				"bpruitt-goddard.mermaid-markdown-syntax-highlighting",
+				"streetsidesoftware.code-spell-checker",
+				"pbkit.vscode-pbkit",
+				"github.vscode-github-actions",
+				"yzhang.markdown-all-in-one"
+			],
+			"settings": {
+				"rewrap.autoWrap.enabled": true
+			},
+			"protoc": {
+				"options": [
+					"--proto_path=/workspaces/datum-os/api",
+					"--proto_path=/workspaces/datum-os/third_party"
+				]
+			},
+			"cSpell.enabled": true,
+			"cSpell.words": [
+			  "anypb",
+			  "apimachinery",
+			  "apiserver",
+			  "authwebhook",
+			  "datumapis",
+			  "genproto",
+			  "grpctool",
+			  "iampb",
+			  "longrunningpb",
+			  "openfga",
+			  "openfgav",
+			  "protobuf",
+			  "protocolbuffers",
+			  "protojson",
+			  "resourcemanager",
+			  "timestamppb",
+			  "Tupleset",
+			  "Userset",
+			  "Usersets",
+			  "wrapperspb"
+			],
+  		"editor.tabSize": 2
+		}
+	},
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "go version",
+
+	// Configure tool-specific properties.
+	// "customizations": {},
+}

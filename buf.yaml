@@ -1,0 +1,11 @@
+version: v2
+modules:
+  - path: api
+    name: buf.build/datum-cloud/iam
+
+deps:
+  - buf.build/googleapis/googleapis
+
+lint:
+  ignore:
+    - api

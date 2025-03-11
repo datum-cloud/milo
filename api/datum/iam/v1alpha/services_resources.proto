@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package datum.iam.v1alpha;
+
+import "google/api/field_behavior.proto";
+import "google/api/field_info.proto";
+import "google/api/resource.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "go.datumapis.com/os/genproto/iam/v1alpha;iampb";
+
+// Service is a managed service registered with the IAM system that will manage
+// resources in the platform. A service will register all of its resources that
+// will exist and permissions that need to be available on the resource.
+message Service {
+  option (google.api.resource) = {
+    type: "iam.datumapis.com/Service"
+    pattern: "services/{service}"
+    style: DECLARATIVE_FRIENDLY
+    singular: "service"
+    plural: "services"
+  };
+
+  // The resource name assigned to this service.
+  string name = 1 [
+    (google.api.field_behavior) = IDENTIFIER,
+    (google.api.field_behavior) = OUTPUT_ONLY
+  ];
+
+  // The resource ID of this Service within its parent resource.
+  string service_id = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Server assigned unique identifier for the Service. The value is a UUID4 string
+  // and guaranteed to remain unchanged until the resource is deleted.
+  string uid = 3 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_info).format = UUID4
+  ];
+
+  // Human-readable display name of this Service that you can modify. The maximum
+  // length is 63 characters.
+  string display_name = 4 [(google.api.field_behavior) = OPTIONAL];
+
+  // Annotations is an unstructured key-value map stored with a Service that may be
+  // set by external tools to store and retrieve arbitrary metadata. They are
+  // not queryable and should be preserved when modifying objects.
+  map<string, string> annotations = 5 [(google.api.field_behavior) = OPTIONAL];
+
+  // Labels is an unstructured key-value map stored with a Service that may be set
+  // by external tools to enable platform features which identify services via
+  // label selections.
+  map<string, string> labels = 6 [(google.api.field_behavior) = OPTIONAL];
+
+  // Output only. The time when the Service is created.
+  google.protobuf.Timestamp create_time = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Output only. The last time that the Service is updated.
+  google.protobuf.Timestamp update_time = 8 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Output only. For a deleted resource, the deletion time. It is only
+  // populated as a response to a Delete request.
+  google.protobuf.Timestamp delete_time = 9 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Output only. If set, there are currently changes in flight to the Service.
+  bool reconciling = 10 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // This checksum is computed by the server based on the value of other fields,
+  // and might be sent on update requests to ensure the client has an up-to-date
+  // value before proceeding.
+  string etag = 11 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Configuration options for the Service.
+  ServiceSpec spec = 12 [(google.api.field_behavior) = REQUIRED];
+
+  // Provides status information to determine the current state of the service.
+  ServiceStatus status = 13 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Defines the options that can be configured on a Service.
+message ServiceSpec {
+  // List of resources offered by a service.
+  repeated Resource resources = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Provides status information on the Service.
+message ServiceStatus {}
+
+// Resource is an entity offered by services to provide functionality to service
+// consumers. Resources can have actions registered that result in permissions
+// being created.
+message Resource {
+  // The fully qualified name of the resource.
+  //
+  // This will be in the format `compute.datumapis.com/Workload`.
+  string type = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // The singular form for the resource type, e.g. 'workload'. Must follow
+  // camelCase format.
+  string singular = 2 [(google.api.field_behavior) = REQUIRED];
+
+  // The plural form for the resource type, e.g. 'workloads'. Must follow
+  // camelCase format.
+  string plural = 3 [(google.api.field_behavior) = REQUIRED];
+
+  // A list of resources that are registered with the platform that may be a
+  // parent to the resource. Permissions may be bound to a parent resource so
+  // they can be inherited down the resource hierarchy. The resource must use
+  // the fully qualified resource name (e.g. compute.datumapis.com/Workload).
+  repeated string parent_resources = 4 [(google.api.field_behavior) = REQUIRED];
+
+  // A list of resource name patterns that may be present for the resource.
+  repeated string resource_name_patterns = 5 [(google.api.field_behavior) = REQUIRED];
+
+  // A list of permissions that are associated with the resource.
+  repeated string permissions = 6 [(google.api.field_behavior) = REQUIRED];
+}

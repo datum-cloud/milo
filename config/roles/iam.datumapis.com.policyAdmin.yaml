@@ -1,0 +1,9 @@
+roleId: policyAdmin
+parent: services/iam.datumapis.com
+name: services/iam.datumapis.com/roles/policyAdmin
+displayName: IAM Policy Admin
+spec:
+  launchStage: Stable
+  includedPermissions:
+  - iam.datumapis.com/policies.set
+  - iam.datumapis.com/policies.get

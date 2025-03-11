@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package datum.api;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "go.datumapis.com/os/genproto/api/annotations;annotations";
+
+extend google.protobuf.MethodOptions {
+  // Defines the permissions that the authenticated user must have on a resource
+  // to call the API endpoint. The permission must be in the fully qualifed
+  // format `{service_name}/{resource}.{action}`.
+  //
+  // e.g. `iam.datumapis.com/roles.create`
+  repeated string required_permissions = 100001;
+
+  // Optional resource name that can be added to the method to define which
+  // resource name is used to check the authenticated subject's access to the
+  // method.
+  string iam_resource_name = 100002;
+}
