@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package datum.iam.v1alpha;
+
+import "datum/api/annotations.proto";
+import "datum/iam/v1alpha/policy_resources.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/api/resource.proto";
+import "google/protobuf/field_mask.proto";
+
+option go_package = "go.datumapis.com/os/genproto/iam/v1alpha;iampb";
+
+// Manages Identity and Access Management (IAM) policies on resources provided
+// by services.
+//
+// Any implementation of an API that offers access control features on resources
+// will implement the [datum.iam.v1alpha.IAMPolicy] service.
+//
+// Access control is applied when a principal (user or service account), takes
+// some action on a resource exposed by a service. Resources, identified by
+// URI-like names (e.g. projects/my-project/workloads/my-workload), are the unit
+// of access control specification. Service implementations can choose the
+// granularity of access control and the supported permissions for their
+// resources. For example one database service may allow access control to be
+// specified only at the Table level, whereas another might allow access control
+// to also be specified at the Column level.
+//
+// See [datum.iam.v1alpha.Policy] for full documentation on the Policy
+// structure and available options.
+//
+// This is intentionally not a CRUD style API because access control policies
+// are created and deleted implicitly with the resources to which they are
+// attached.
+service IAMPolicy {
+  // Sets the access control policy on the specified resource. Replaces any
+  // existing policy.
+  //
+  // Can return `NOT_FOUND`, `INVALID_ARGUMENT`, and `PERMISSION_DENIED` errors.
+  //
+  // (-- api-linter: core::0136::response-message-name=disabled
+  //     aip.dev/not-precedent: The IAM Policy is a better response message for
+  //     this endpoint since it's setting the IAM policy. --)
+  // (-- api-linter: core::0136::http-uri-suffix=disabled
+  //     aip.dev/not-precedent: setIamPolicy is a better custom action against
+  //     the resource since the name of the resource is actually the resouce
+  //     name of the resource the IAM policy is being bound to. --)
+  rpc SetIamPolicy(SetIamPolicyRequest) returns (Policy) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/policies.set";
+    option (google.api.http) = {
+      post: "/iam/v1alpha/{policy.name=**}:setIamPolicy"
+      body: "*"
+    };
+  }
+
+  // Gets the access control policy for a resource. Returns an empty policy if
+  // the resource exists and does not have a policy set.
+  rpc GetIamPolicy(GetIamPolicyRequest) returns (Policy) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/policies.get";
+    option (google.api.http) = {
+      post: "/iam/v1alpha/{name=**}:getIamPolicy"
+      body: "*"
+    };
+  }
+
+  // Returns permissions that a caller has on the specified resource. If the
+  // resource does not exist, this will return an empty set of permissions, not
+  // a `NOT_FOUND` error.
+  //
+  // Note: This operation is designed to be used for building permission-aware
+  // UIs and command-line tools, not for authorization checking. This operation
+  // may "fail open" without warning.
+  rpc TestIamPermissions(TestIamPermissionsRequest) returns (TestIamPermissionsResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/permissions.test";
+    option (google.api.http) = {
+      post: "/iam/v1alpha/{resource=**}:testIamPermissions"
+      body: "*"
+    };
+  }
+}
+
+// Request message for `SetIamPolicy` method.
+message SetIamPolicyRequest {
+  // The complete policy to be applied to the `resource`. An empty policy is a
+  // technically valid, but services that implement this API may have different
+  // validation requirements. For example, a Project may require an owner role
+  // be bound to a project at all times.
+  Policy policy = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // A FieldMask specifying which fields of the policy to modify. Only the
+  // fields in the mask will be modified. If no mask is provided, the following
+  // default mask is used:
+  //
+  // `paths: "spec.bindings, etag"`
+  google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// Request message for `GetIamPolicy` method.
+//
+// (-- api-linter: core::0131::request-name-required=disabled
+//     aip.dev/not-precedent: This is named `resource` because the IAM Policy
+//     does not have it's own resource name. Instead the name of the resource
+//     the IAM policy was created for is used. See the command on the `resource`
+//     field below. --)
+message GetIamPolicyRequest {
+  // The resource name for which the policy is being requested. This will be in
+  // the format of a resource name (e.g.
+  // projects/my-project/workloads/my-workload).
+  //
+  // (-- api-linter: core::0131::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: The IAM Policy for a resource will be retrieved
+  //     using the name of the resource it was created on. The field name
+  //     `resource` better represents this model. --)
+  // (-- api-linter: core::0131::request-required-fields=disabled
+  //     aip.dev/not-precedent: The resource will be queried through the
+  //     `resource` field. See the above internal comment foe details. --)
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference).type = "*"
+  ];
+}
+
+// Request message for `TestIamPermissions` method.
+message TestIamPermissionsRequest {
+  // The resource name that permissions should be checked again.
+  //
+  // (-- api-linter: core::0131::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: The IAM Policy for a resource will be retrieved
+  //     using the name of the resource it was created on. The field name
+  //     `resource` better represents this model. --)
+  string resource = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference).type = "*"
+  ];
+
+  // The set of permissions to check for the `resource`.
+  repeated string permissions = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Response message for `TestIamPermissions` method.
+message TestIamPermissionsResponse {
+  // A subset of `TestPermissionsRequest.permissions` that the caller is allowed
+  // on the resource that was requested.
+  repeated string permissions = 1 [(google.api.field_behavior) = REQUIRED];
+}

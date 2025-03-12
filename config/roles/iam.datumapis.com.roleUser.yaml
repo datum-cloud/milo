@@ -1,0 +1,9 @@
+roleId: roleUser
+parent: services/iam.datumapis.com
+name: services/iam.datumapis.com/roles/roleUser
+displayName: IAM Role User
+spec:
+  launchStage: Stable
+  includedPermissions:
+  - iam.datumapis.com/roles.get
+  - iam.datumapis.com/roles.use

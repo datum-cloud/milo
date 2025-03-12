@@ -1,0 +1,49 @@
+version: 3
+tasks:
+  env:start:
+    run: once
+    desc: Start the development environment
+    cmds:
+      - docker compose -f test/docker-compose.yaml up -d
+  env:stop:
+    desc: Stops the development environment
+    cmds:
+      - docker compose -f test/docker-compose.yaml stop
+  env:reset:
+    desc: Resets the development environment. Warning this will remove all data!
+    cmds:
+      - docker compose -f test/docker-compose.yaml down
+
+  openfga:store-id:
+    silent: true
+    desc: Retrieves the store ID from the openfga server
+    cmd: fga store list | jq -r '.stores[] | select(.name=="datum") | .id'
+
+  openfga:create-store:
+    silent: true
+    run: once
+    deps:
+      - env:start
+    desc: Creates a store in OpenFGA that should be used for the environment.
+    cmd: |
+      STORE_ID=$(task openfga:store-id)
+      if [ -z "$STORE_ID" ]; then
+        fga store create --name "datum"
+        echo "Store 'datum' created."
+      else
+        echo "Store 'datum' already exists (ID: $STORE_ID)."
+      fi
+
+  apiserver:serve:
+    desc: Starts the IAM APIServer with authentication disabled.
+    deps:
+      - openfga:create-store
+    cmd: |
+      go run ./cmd/apiserver serve \
+        --openfga-endpoint=http://localhost:8080 \
+        --openfga-store-id=$(task openfga:store-id) \
+        --database=postgres://root@localhost:26257/iam?sslmode=disable \
+        --rest-addr=:8000 \
+        --grpc-addr=:8001 \
+        --disable-auth=true \
+        {{ .CLI_ARGS }}

@@ -1,0 +1,64 @@
+serviceId: iam.datumapis.com
+name: services/iam.datumapis.com
+displayName: Datum IAM Service
+spec:
+  resources:
+  - type: iam.datumapis.com/Role
+    plural: roles
+    singular: role
+    permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - use
+    resourceNamePatterns:
+    - "services/{service}/roles/{role}"
+    parentResources:
+    - iam.datumapis.com/Service
+  - type: iam.datumapis.com/Service
+    plural: services
+    singular: service
+    permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    resourceNamePatterns:
+    - "services/{service}"
+  - type: iam.datumapis.com/ServiceAccount
+    plural: serviceAccounts
+    singular: serviceAccount
+    permissions:
+    - get
+    - list
+    - create
+    - update
+    - delete
+    resourceNamePatterns:
+    - "projects/{project}/serviceAccounts/{serviceAccount}"
+    parentResources:
+    - resourcemanager.datumapis.com/Project
+  - type: iam.datumapis.com/ServiceAccountKeys
+    plural: serviceAccountKeys
+    singular: serviceAccountKey
+    permissions:
+    - get
+    - list
+    - create
+    - update
+    - delete
+    resourceNamePatterns:
+    - "projects/{project}/serviceAccounts/{serviceAccount}/keys/{key}"
+    parentResources:
+    - iam.datumapis.com/ServiceAccount
+  - type: iam.datumapis.com/Policy
+    plural: policies
+    singular: policy
+    permissions:
+    - get
+    - set
+    resourceNamePatterns:
+    - ".*"

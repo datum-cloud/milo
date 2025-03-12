@@ -1,0 +1,40 @@
+# BUF SCHEMA REGISTRY ACTION
+# https://buf.build/docs/ci-cd/github-actions
+#
+# Push to BSR are made when:
+# - a PR is merge into 'main' branch
+# - a new tag is created
+#
+# Format, Lint and Breaking actions are executed on PR creations
+
+
+name: Buf CI
+on:
+  push:
+    paths:
+      - 'api/**'
+      - 'buf.*'
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - 'api/**'
+      - 'buf.*'
+  delete:
+  release:
+    types: ["published"]
+
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  buf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-action@v1
+        with:
+          # To create a token: https://buf.build/docs/tutorials/getting-started-with-bsr/#login
+          token: ${{ secrets.BUF_TOKEN }}
+          setup_only: false
+          # Optional GitHub token for API requests. Ensures requests aren't rate limited.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
