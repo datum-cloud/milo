@@ -7,7 +7,7 @@
 # - Zitadel
 # - Mailhog
 services:
-  # Create a new postgres database
+  # Create a new cockroach database
   database:
     image: cockroachdb/cockroach:v24.1.14
     ports:
