@@ -84,8 +84,8 @@ services:
     image: ghcr.io/zitadel/zitadel:v2.69.2 # If throws an zitadel Error denied, run `docker logout ghcr.io` and try again
     command: 'start-from-init --config /config.yaml --steps /steps.yaml --masterkey "MasterkeyNeedsToHave32Characters" --tlsMode disabled'
     volumes:
-      - "../config/zitadel/steps.yaml:/steps.yaml:ro"
-      - "../config/zitadel/config.yaml:/config.yaml:ro"
+      - "./config/zitadel/steps.yaml:/steps.yaml:ro"
+      - "./config/zitadel/config.yaml:/config.yaml:ro"
     depends_on:
       database:
         condition: service_healthy
