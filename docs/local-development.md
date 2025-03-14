@@ -47,3 +47,41 @@ parameter.
 ```shell
 $ task apiserver:serve -- --help
 ```
+
+## Accessing the Zitadel Web Interface
+
+The Zitadel web interface is accessible at `http://localhost:8082`.
+
+The default credentials for the preconfigured user are as follows:
+
+- **Login Name**: `datum-admin@datum.localhost`
+- **Password**: `Password1!`
+
+## Accessing Mailhog - Test SMTP Server
+
+Mailhog is a lightweight test SMTP server designed for local development. It captures all outgoing emails, providing a convenient way to test email-related functionality without relying on external email services.
+
+### Web Interface
+
+- **URL**: `http://localhost:8025`
+  Access the Mailhog web interface to view and manage emails sent during development.
+
+### API Access
+
+- **Inbox Data**: `http://localhost:8025/api/v2/messages`
+- 
+  Retrieve all email data programmatically via the Mailhog API.
+
+- **API Documentation**: [Mailhog API v2 Documentation](https://github.com/mailhog/MailHog/tree/master/docs/APIv2)
+
+### Integration with Zitadel
+
+The Zitadel service is preconfigured to route all outgoing emails, such as:
+
+- One-Time Passwords (OTP)
+- Two-Factor Authentication (2FA) messages
+- Verification emails
+
+All emails, regardless of the recipient address, are captured and available for testing within Mailhog.
+
+This setup ensures a seamless and secure way to test email functionality during local development.
