@@ -48,6 +48,27 @@ parameter.
 $ task apiserver:serve -- --help
 ```
 
+## Getting an Access Token for the API Server
+
+To obtain an access token for use in Postman, follow these steps:
+
+1. [Create a Zitadel Web
+   App](https://github.com/datum-cloud/auth-playground/blob/main/providers/zitadel/README.md#-setting-up-zitadel-for-auth-playground-with-gogle-identity-provider)
+   and set the Callback URL to `https://oauth.pstmn.io/v1/callback`
+
+2. Get the `Access Token` from Postman
+   1. Go to `Authorization` tab
+   2. Configure the following settings:
+      - Header Prefix: `Bearer`
+      - Grant type: `Authorization Code (With PKCE)
+      - Enable `Authorize using browser`
+      - Auth URL: `http://localhost:8082/oauth/v2/authorize`
+      - Access TOken URL: `http://localhost:8082/oauth/v2/token`
+      -  Client ID: `<The Zitadel App Id>`
+      -  Scope: `email` or the neccesary scope
+      -  Client Authentication: `Send as Basic Auth header`
+   3. Click on `Get New Access Token`
+
 ## Accessing the Zitadel Web Interface
 
 The Zitadel web interface is accessible at `http://localhost:8082`.
@@ -85,3 +106,4 @@ The Zitadel service is preconfigured to route all outgoing emails, such as:
 All emails, regardless of the recipient address, are captured and available for testing within Mailhog.
 
 This setup ensures a seamless and secure way to test email functionality during local development.
+
