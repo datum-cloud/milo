@@ -38,6 +38,9 @@ tasks:
     desc: Starts the IAM APIServer with authentication disabled.
     deps:
       - openfga:create-store
+      - apiserver:start
+  
+  apiserver:start:
     cmd: |
       go run ./cmd/apiserver serve \
         --openfga-endpoint=http://localhost:8080 \
@@ -45,5 +48,6 @@ tasks:
         --database=postgres://root@localhost:26257/iam?sslmode=disable \
         --rest-addr=:8000 \
         --grpc-addr=:8001 \
-        --disable-auth=true \
+        --disable-auth=false \
+        --authentication-config=$(cat ./test/config/authentication/authentication-config.json | jq -c .) \
         {{ .CLI_ARGS }}
