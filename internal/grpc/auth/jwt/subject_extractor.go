@@ -40,14 +40,30 @@ func SubjectExtractor(auth *serviceconfig.Authentication) (auth.SubjectExtractor
 				return "", err
 			}
 
+			authenticationProvider := auth.Providers[i].JwksUri
+
 			if claims, err := jwt.Parse([]byte(token), jwt.WithKeySet(keySet)); err == nil {
+				claimsMap, err := claims.AsMap(ctx)
+				if err != nil {
+					slog.ErrorContext(ctx, "failed to convert claims to map", slog.String("error", err.Error()))
+					return "", err
+				}
+
+				claimsString := fmt.Sprint(claimsMap)
+				slog.InfoContext(
+					ctx, 
+					"bearer JWT token verified against authentication provider", 
+					slog.String("claims", claimsString),
+					slog.String("authentication_provider", authenticationProvider),
+				)
+
 				return claims.Subject(), nil
 			} else {
 				slog.ErrorContext(
 					ctx,
 					"failed to verify JWT bearer token against authentication provider",
 					slog.String("error", err.Error()),
-					slog.String("authentication_provider", auth.Providers[i].JwksUri),
+					slog.String("authentication_provider", authenticationProvider),
 				)
 			}
 		}
