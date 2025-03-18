@@ -1,0 +1,9 @@
+{
+  "providers": [
+    {
+      "jwks_uri": "http://localhost:8082/oauth/v2/keys",
+      "audiences": "http://localhost:8082",
+      "issuer": "http://localhost:8082"
+    }
+  ]
+}
