@@ -2,6 +2,8 @@ buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.35.2-2024112718024
 buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.35.2-20241127180247-a33202765966.1/go.mod h1:mnHCFccv4HwuIAOHNGdiIc5ZYbBCvbTWZcodLN5wITI=
 buf.build/gen/go/datum-cloud/datum-os/protocolbuffers/go v1.36.4-20250205212608-c5081deaa417.1 h1:fs75cJCoq6GGdEYs918AUHX0xBiKXqTOTd3S0SF51o0=
 buf.build/gen/go/datum-cloud/datum-os/protocolbuffers/go v1.36.4-20250205212608-c5081deaa417.1/go.mod h1:uLZpcSd3QVSevT5H7+f5tVcYWqQ9y5zGOSR7H4DGmNM=
+buf.build/gen/go/datum-cloud/datum-os/protocolbuffers/go v1.36.6-20250214190629-249284998450.1 h1:+GyEtb5KHSaxY+1nOgB+ZqUv5aRiSFejUnFLK/bZ81c=
+buf.build/gen/go/datum-cloud/datum-os/protocolbuffers/go v1.36.6-20250214190629-249284998450.1/go.mod h1:t+7Tn9BfxmPYrt6AF2e+lGG4u0CaaOIbArD5batWrsI=
 buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.0-20250205212608-5320b664a9d2.1 h1:qUGU2/euah/ogzKre+kxKwCGjlSJm4pJ9zfzz2uLANY=
 buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.0-20250205212608-5320b664a9d2.1/go.mod h1:zLERr16FGEJKIz/aFggLyMbIRsMgzk0QDOy7R93gf+w=
 buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250205212608-5320b664a9d2.2 h1:ZJ6j07x1au8PddUz3qZ69oJRVbXjH0xbo6s8sHFKpF4=
@@ -1648,6 +1650,8 @@ google.golang.org/protobuf v1.28.0/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqw
 google.golang.org/protobuf v1.28.1/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
 google.golang.org/protobuf v1.36.4 h1:6A3ZDJHn/eNqc1i+IdefRzy/9PokBTPvcqMySR7NNIM=
 google.golang.org/protobuf v1.36.4/go.mod h1:9fA7Ob0pmnwhb644+1+CVWFRbNajQ6iRojtC/QF5bRE=
+google.golang.org/protobuf v1.36.6 h1:z1NpPI8ku2WgiWnf+t9wTPsn6eP1L7ksHUlkfLvd9xY=
+google.golang.org/protobuf v1.36.6/go.mod h1:jduwjTPXsFjZGTmRluh+L6NjiWu7pchiJ2/5YcXBHnY=
 gopkg.in/airbrake/gobrake.v2 v2.0.9/go.mod h1:/h5ZAUhDkGaJfjzjKLSjv6zCL6O0LLBxU4K+aSYdM/U=
 gopkg.in/alecthomas/kingpin.v2 v2.2.6/go.mod h1:FMv+mEhP44yOT+4EoQTLFTRgOQ1FBLkstjWtayDeSgw=
 gopkg.in/cenkalti/backoff.v1 v1.1.0 h1:Arh75ttbsvlpVA7WtVpH4u9h6Zl46xuptxqLxPiSo4Y=

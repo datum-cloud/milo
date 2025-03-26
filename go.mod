@@ -3,7 +3,7 @@ module go.datum.net/iam
 go 1.23.1
 
 require (
-	buf.build/gen/go/datum-cloud/datum-os/protocolbuffers/go v1.36.4-20250205212608-c5081deaa417.1
+	buf.build/gen/go/datum-cloud/datum-os/protocolbuffers/go v1.36.6-20250214190629-249284998450.1
 	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.0-20250205212608-5320b664a9d2.1
 	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250205212608-5320b664a9d2.2
 	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.4-20250205212608-5320b664a9d2.1
@@ -33,7 +33,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250115164207-1a7da9e5054f
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f
 	google.golang.org/grpc v1.69.4
-	google.golang.org/protobuf v1.36.4
+	google.golang.org/protobuf v1.36.6
 )
 
 require (
