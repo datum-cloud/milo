@@ -1,18 +1,24 @@
 version: 3
+
+includes:
+  api:
+    taskfile: ./api/Taskfile.yaml
+    dir: ./api
+    
 tasks:
   env:start:
     run: once
     desc: Start the development environment
     cmds:
-      - docker compose -f test/docker-compose.yaml up -d
+      - docker compose -f docker-compose.yaml up -d
   env:stop:
     desc: Stops the development environment
     cmds:
-      - docker compose -f test/docker-compose.yaml stop
+      - docker compose -f docker-compose.yaml stop
   env:reset:
     desc: Resets the development environment. Warning this will remove all data!
     cmds:
-      - docker compose -f test/docker-compose.yaml down
+      - docker compose -f docker-compose.yaml down
 
   openfga:store-id:
     silent: true
@@ -38,12 +44,9 @@ tasks:
     desc: Starts the IAM APIServer with authentication disabled.
     deps:
       - openfga:create-store
-      - apiserver:start
-  
-  apiserver:start:
     cmd: |
       go run ./cmd/apiserver serve \
-        --openfga-endpoint=http://localhost:8080 \
+        --openfga-endpoint=dns:///localhost:8081 \
         --openfga-store-id=$(task openfga:store-id) \
         --database=postgres://root@localhost:26257/iam?sslmode=disable \
         --rest-addr=:8000 \
@@ -51,3 +54,33 @@ tasks:
         --disable-auth=false \
         --authentication-config=$(cat ./test/config/authentication/authentication-config.json | jq -c .) \
         {{ .CLI_ARGS }}
+
+  iamservice:loadservices:
+    cmd: |
+      go run ./cmd/apiserver add-resources \
+        --openfga-endpoint=dns:///localhost:8081 \
+        --openfga-store-id=$(task openfga:store-id) \
+        --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
+        --services config/services \
+        --overwrite true
+
+  iamservice:loadroles:
+    cmd: |
+      go run ./cmd/apiserver add-resources \
+        --openfga-endpoint=dns:///localhost:8081 \
+        --openfga-store-id=$(task openfga:store-id) \
+        --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
+        --roles config/roles \
+        --overwrite true
+    
+  iamservice:loadpolicies:
+    cmd: |
+      go run ./cmd/apiserver add-resources \
+        --openfga-endpoint=dns:///localhost:8081 \
+        --openfga-store-id=$(task openfga:store-id) \
+        --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
+        --policies config/policies \
+        --overwrite true
+
+
+        
