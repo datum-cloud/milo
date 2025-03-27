@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
-	annotations "buf.build/gen/go/datum-cloud/datum-os/protocolbuffers/go/datum/api"
+	annotations "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/api"
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 	"go.datum.net/iam/internal/grpc/errors"

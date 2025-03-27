@@ -23,6 +23,7 @@ type Server struct {
 	iamv1alphagrpc.UnimplementedRolesServer
 	iamv1alphagrpc.UnimplementedServicesServer
 	iamv1alphagrpc.UnimplementedAccessCheckServer
+	iamv1alphagrpc.UnimplementedUsersServer
 
 	PolicyReconciler             *openfga.PolicyReconciler
 	RoleReconciler               *openfga.RoleReconciler
@@ -32,6 +33,7 @@ type Server struct {
 	ServiceStorage               storage.ResourceServer[*iampb.Service]
 	RoleStorage                  storage.ResourceServer[*iampb.Role]
 	PolicyStorage                storage.ResourceServer[*iampb.Policy]
+	UserStorage                  storage.ResourceServer[*iampb.User]
 	SchemaRegistry               *schema.Registry
 	SubjectResolver              subject.Resolver
 	RoleResolver                 role.Resolver
@@ -45,6 +47,7 @@ type ServerOptions struct {
 	ServiceStorage  storage.ResourceServer[*iampb.Service]
 	RoleStorage     storage.ResourceServer[*iampb.Role]
 	PolicyStorage   storage.ResourceServer[*iampb.Policy]
+	UserStorage     storage.ResourceServer[*iampb.User]
 	SubjectResolver subject.Resolver
 	RoleResolver    role.Resolver
 }
@@ -77,6 +80,7 @@ func NewServer(opts ServerOptions) error {
 		ServiceStorage:  opts.ServiceStorage,
 		RoleStorage:     opts.RoleStorage,
 		PolicyStorage:   opts.PolicyStorage,
+		UserStorage:     opts.UserStorage,
 		SubjectResolver: opts.SubjectResolver,
 		RoleResolver:    opts.RoleResolver,
 		AccessChecker:   openfga.AccessChecker(schemaRegistry, opts.OpenFGAClient, opts.OpenFGAStoreID),
@@ -87,6 +91,7 @@ func NewServer(opts ServerOptions) error {
 	iamv1alphagrpc.RegisterRolesServer(opts.GRPCServer, server)
 	iamv1alphagrpc.RegisterServicesServer(opts.GRPCServer, server)
 	iamv1alphagrpc.RegisterAccessCheckServer(opts.GRPCServer, server)
+	iamv1alphagrpc.RegisterUsersServer(opts.GRPCServer, server)
 
 	return nil
 }
@@ -96,4 +101,5 @@ func RegisterProxyRoutes(ctx context.Context, mux *runtime.ServeMux, conn *grpc.
 	iamv1alphagateway.RegisterRolesHandler(ctx, mux, conn)
 	iamv1alphagateway.RegisterServicesHandler(ctx, mux, conn)
 	iamv1alphagateway.RegisterAccessCheckHandler(ctx, mux, conn)
+	iamv1alphagateway.RegisterUsersHandler(ctx, mux, conn)
 }
