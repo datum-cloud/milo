@@ -54,6 +54,17 @@ spec:
     - "projects/{project}/serviceAccounts/{serviceAccount}/keys/{key}"
     parentResources:
     - iam.datumapis.com/ServiceAccount
+  - type: iam.datumapis.com/User
+    plural: users
+    singular: user
+    permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    resourceNamePatterns:
+    - "users/{user}"
   - type: iam.datumapis.com/Policy
     plural: policies
     singular: policy

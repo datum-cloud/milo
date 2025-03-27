@@ -1,0 +1,11 @@
+# This the IAM role definition for a new created user
+roleId: newUser
+parent: services/iam.datumapis.com
+name: services/iam.datumapis.com/roles/newUser
+displayName: IAM New User Role
+spec:
+  includedPermissions:
+  - iam.datumapis.com/roles.use
+  - iam.datumapis.com/users.get
+  - iam.datumapis.com/users.update
+  - iam.datumapis.com/users.delete

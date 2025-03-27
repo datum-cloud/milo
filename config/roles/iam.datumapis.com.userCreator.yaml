@@ -1,0 +1,8 @@
+# This the IAM role definition for a machine user that can create new users
+roleId: userCreator
+parent: services/iam.datumapis.com
+name: services/iam.datumapis.com/roles/userCreator
+displayName: IAM Service Admin
+spec:
+  includedPermissions:
+  - iam.datumapis.com/users.create
