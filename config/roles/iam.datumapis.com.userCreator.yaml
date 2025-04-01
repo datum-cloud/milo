@@ -2,7 +2,7 @@
 roleId: userCreator
 parent: services/iam.datumapis.com
 name: services/iam.datumapis.com/roles/userCreator
-displayName: IAM Service Admin
+displayName: IAM User Creator
 spec:
   includedPermissions:
   - iam.datumapis.com/users.create
