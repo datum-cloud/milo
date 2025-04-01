@@ -44,28 +44,28 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 		return longrunning.ResponseOperation(&iampb.CreateUserMetadata{}, user, true)
 	}
 
-	createdUser, err := s.UserStorage.CreateResource(ctx, &storage.CreateResourceRequest[*iampb.User]{
-		Resource: user,
-		Name:     user.Name,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
 	policy := &iampb.SetIamPolicyRequest{
 		Policy: &iampb.Policy{
-			Name: fmt.Sprintf("iam.datumapis.com/%s", createdUser.Name),
+			Name: fmt.Sprintf("iam.datumapis.com/%s", user.Name),
 			Spec: &iampb.PolicySpec{
 				Bindings: []*iampb.Binding{{
-					Role:    "services/iam.datumapis.com/roles/newUser",
-					Members: []string{fmt.Sprintf("user:%s", createdUser.Spec.Email)},
+					Role:    "services/iam.datumapis.com/roles/userSelfManage",
+					Members: []string{fmt.Sprintf("user:%s", user.Spec.Email)},
 				}},
 			},
 		},
 	}
 
-	_, err = s.SetIamPolicy(ctx, policy)
+	_, err := s.SetIamPolicy(ctx, policy)
+	if err != nil {
+		return nil, err
+	}
+
+	createdUser, err := s.UserStorage.CreateResource(ctx, &storage.CreateResourceRequest[*iampb.User]{
+		Resource: user,
+		Name:     user.Name,
+	})
+
 	if err != nil {
 		return nil, err
 	}
