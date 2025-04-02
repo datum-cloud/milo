@@ -1,0 +1,7 @@
+name: iam.datumapis.com/root/iam.datumapis.com/User
+spec:
+  bindings:
+  # Only bind the `iam.datumapis.com/users.create` permission so the Zitadel user can create the user. 
+  - role: services/iam.datumapis.com/roles/userCreator
+    members:
+    - user:<email-address-of-zitadel-user>

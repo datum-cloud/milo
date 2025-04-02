@@ -1,7 +1,0 @@
-# This IAM policy allows all authenticated users to manage their own user account
-name: iam.datumapis.com/services/iam.datumapis.com/roles/userSelfManage
-spec:
-  bindings:
-  - role: services/iam.datumapis.com/roles/userSelfManage
-    members:
-    - allAuthenticatedUsers
