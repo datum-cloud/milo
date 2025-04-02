@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 
-	"buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2/datum/iam/v1alpha/iamv1alphagateway"
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 	_ "github.com/lib/pq"
@@ -110,12 +109,7 @@ func serve() *cobra.Command {
 				return err
 			}
 
-			serviceAccountKeyStorage, err := postgres.ResourceServer(db, &iampb.ServiceAccountKey{})
-			if err != nil {
-				return err
-			}
-
-			serviceAccountsStorage, err := postgres.ResourceServer(db, &iampb.ServiceAccount{})
+			userStorage, err := postgres.ResourceServer(db, &iampb.User{})
 			if err != nil {
 				return err
 			}
@@ -146,8 +140,7 @@ func serve() *cobra.Command {
 			parentResolverRegistry := &storage.ParentResolverRegistry{}
 			// Register a new parent resolver for the Project resource.
 			parentResolverRegistry.RegisterResolver(&iampb.Service{}, storage.ResourceParentResolver(serviceStorage))
-			parentResolverRegistry.RegisterResolver(&iampb.ServiceAccount{}, storage.ResourceParentResolver(serviceAccountsStorage))
-			parentResolverRegistry.RegisterResolver(&iampb.ServiceAccountKey{}, storage.ResourceParentResolver(serviceAccountKeyStorage))
+			parentResolverRegistry.RegisterResolver(&iampb.User{}, storage.ResourceParentResolver(userStorage))
 
 			unaryInterceptors := []grpc.UnaryServerInterceptor{
 				errors.InternalErrorsInterceptor(slog.Default()),
@@ -179,6 +172,7 @@ func serve() *cobra.Command {
 				ServiceStorage:  serviceStorage,
 				RoleStorage:     roleStorage,
 				PolicyStorage:   policyStorage,
+				UserStorage:     userStorage,
 				SubjectResolver: subjectResolver,
 				RoleResolver:    roleResolver,
 			}); err != nil {
@@ -203,7 +197,6 @@ func serve() *cobra.Command {
 
 			// Register all REST proxy handlers here.
 			iamServer.RegisterProxyRoutes(ctx, gRPCRestProxy, grpcClientConn)
-			iamv1alphagateway.RegisterServiceAccountsHandler(ctx, gRPCRestProxy, grpcClientConn)
 
 			proxySrv := &http.Server{
 				Addr:    mustStringFlag(cmd.Flags(), "rest-addr"),

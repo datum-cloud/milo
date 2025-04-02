@@ -79,3 +79,23 @@ services:
       - "3000:3000"
       # Needed for the prometheus metrics
       - "2112:2112" #prometheus metrics
+  
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:v2.69.2 # If throws an zitadel Error denied, run `docker logout ghcr.io` and try again
+    command: 'start-from-init --config /config.yaml --steps /steps.yaml --masterkey "MasterkeyNeedsToHave32Characters" --tlsMode disabled'
+    volumes:
+      - "./config/zitadel/steps.yaml:/steps.yaml:ro"
+      - "./config/zitadel/config.yaml:/config.yaml:ro"
+    depends_on:
+      database:
+        condition: service_healthy
+      create-databases:
+        condition: service_completed_successfully  
+    ports:
+      - '8082:8080'
+
+  mailhog: # Mailhog is a fake local SMTP server for testing
+    image: mailhog/mailhog:latest
+    ports:
+      - '1025:1025'
+      - '8025:8025' # Web UI

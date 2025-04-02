@@ -51,8 +51,8 @@ func SubjectExtractor(auth *serviceconfig.Authentication) (auth.SubjectExtractor
 
 				claimsString := fmt.Sprint(claimsMap)
 				slog.InfoContext(
-					ctx, 
-					"bearer JWT token verified against authentication provider", 
+					ctx,
+					"bearer JWT token verified against authentication provider",
 					slog.String("claims", claimsString),
 					slog.String("authentication_provider", authenticationProvider),
 				)

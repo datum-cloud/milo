@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package datum.iam.v1alpha;
+
+import "datum/api/annotations.proto";
+import "datum/iam/v1alpha/users_resources.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/api/resource.proto";
+import "google/api/visibility.proto";
+import "google/longrunning/operations.proto";
+import "google/protobuf/field_mask.proto";
+
+option go_package = "go.datumapis.com/os/genproto/iam/v1alpha;iampb";
+
+// Users is the service for managing Users.
+service Users {
+  option (google.api.api_visibility) = {restriction: "PUBLIC"};
+
+  // CreateUser creates a new User.
+  // Create a new service in the system
+  //
+  // (-- api-linter: core::0133::method-signature=disabled
+  //     aip.dev/not-precedent: The service resource does not have a parent. --)
+  rpc CreateUser(CreateUserRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/users.create";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/User";
+    option (google.api.method_signature) = "user,user_id";
+    option (google.api.http) = {
+      post: "/v1alpha/users"
+      body: "user"
+    };
+    option (google.longrunning.operation_info) = {
+      response_type: "User"
+      metadata_type: "CreateUserMetadata"
+    };
+  }
+
+  // GetUser gets a User by name.
+  rpc GetUser(GetUserRequest) returns (User) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/users.get";
+    option (google.api.method_signature) = "name";
+    option (google.api.http) = {get: "/v1alpha/{name=users/*}"};
+  }
+
+  // ListUsers lists all Users.
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/users.list";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/User";
+    option (google.api.http) = {get: "/v1alpha/users"};
+  }
+
+  // UpdateUser updates a User.
+  rpc UpdateUser(UpdateUserRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/users.update";
+    option (google.api.method_signature) = "user,update_mask";
+    option (google.api.http) = {
+      patch: "/v1alpha/{user.name=users/*}"
+      body: "user"
+    };
+    option (google.longrunning.operation_info) = {
+      response_type: "User"
+      metadata_type: "UpdateUserMetadata"
+    };
+  }
+
+  // DeleteUser deletes a User by name.
+  rpc DeleteUser(DeleteUserRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/users.delete";
+    option (google.api.method_signature) = "name";
+    option (google.api.http) = {delete: "/v1alpha/{name=users/*}"};
+    option (google.longrunning.operation_info) = {
+      response_type: "User"
+      metadata_type: "DeleteUserMetadata"
+    };
+  }
+}
+
+// CreateUserRequest is the request for creating a new User.
+message CreateUserRequest {
+  // The User to create.
+  User user = 1 [(google.api.field_behavior) = REQUIRED];
+  // The ID of the User to create
+  string user_id = 2 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the request is validated and nothing is persisted.
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata returned from the long running operations when creating a new
+// user.
+message CreateUserMetadata {}
+
+// GetUserRequest is the request for getting a User by name.
+message GetUserRequest {
+  // The name of the User to get.
+  // Format: users/{user}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/User"}
+  ];
+}
+
+// ListUsersRequest is the request for listing Users.
+message ListUsersRequest {
+  // The maximum number of Users to return. The service may return fewer than
+  // this value. If unspecified, at most 50 Users will be returned. The maximum
+  // value is 1000; values above 1000 will be coerced to 1000.
+  int32 page_size = 2 [(google.api.field_behavior) = OPTIONAL];
+  // A page token, received from a previous `ListUsers` call. Provide this to
+  // retrieve the subsequent page. When paginating, all other parameters must
+  // match the call that provided the page token.
+  string page_token = 3 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the deleted Users will be included in the response.
+  bool show_deleted = 6 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListUsersResponse is the response for listing Users.
+message ListUsersResponse {
+  // The list of Users.
+  repeated User users = 1;
+  // A token to retrieve the next page of results.
+  // Pass this value in the ListUsersRequest.page_token field in a subsequent
+  // call to `ListUsers` to retrieve the next page of results. If the page token
+  // is not set, there are no more results.
+  string next_page_token = 2;
+}
+
+// (-- api-linter: core::0134::request-allow-missing-field=disabled
+//     aip.dev/not-precedent: We really need this field because we only
+// want Users to be created using the corresponding creation flow. --)
+// UpdateUserRequest is the request for updating a User.
+message UpdateUserRequest {
+  // The User to update.
+  User user = 1 [(google.api.field_behavior) = REQUIRED];
+  // The field mask to update the User.
+  google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the request is validated and nothing is persisted.
+  bool validate_only = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata returned from the long running operations when updating a new
+// user.
+message UpdateUserMetadata {}
+
+// DeleteUserRequest is the request for deleting a User by name.
+message DeleteUserRequest {
+  // The name of the User to delete.
+  // Format: users/{user}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/User"}
+  ];
+  // The etag of the User to delete. If this is not the same etag as the
+  // currently stored User, the request will be rejected. If not provided, the
+  // User will be deleted unconditionally.
+  string etag = 2 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the request is validated and nothing is persisted.
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the User will be deleted successfully even if it does not exist.
+  bool allow_missing = 4 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the User will be deleted even if it has child resources still
+  // existing.
+  bool force = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata returned from the long running operations when deleting a new
+// user.
+message DeleteUserMetadata {}
