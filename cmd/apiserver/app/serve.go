@@ -166,10 +166,7 @@ func serve() *cobra.Command {
 
 			databaseResolver, err := subject.DatabaseResolver(db)
 			if err != nil {
-				fmt.Println("aca")
-
-				fmt.Println(err)
-				return err
+				return fmt.Errorf("failed to create database resolver: %w", err)
 			}
 
 			// Creates a new IAM gRPC service and registers it with the gRPC server
