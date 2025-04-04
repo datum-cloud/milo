@@ -164,17 +164,26 @@ func serve() *cobra.Command {
 				grpc.StatsHandler(otelgrpc.NewServerHandler()),
 			)
 
+			databaseResolver, err := subject.DatabaseResolver(db)
+			if err != nil {
+				fmt.Println("aca")
+
+				fmt.Println(err)
+				return err
+			}
+
 			// Creates a new IAM gRPC service and registers it with the gRPC server
 			if err := iamServer.NewServer(iamServer.ServerOptions{
-				OpenFGAClient:   openfgaClient,
-				OpenFGAStoreID:  openfgaStore,
-				GRPCServer:      grpcServer,
-				ServiceStorage:  serviceStorage,
-				RoleStorage:     roleStorage,
-				PolicyStorage:   policyStorage,
-				UserStorage:     userStorage,
-				SubjectResolver: subjectResolver,
-				RoleResolver:    roleResolver,
+				OpenFGAClient:    openfgaClient,
+				OpenFGAStoreID:   openfgaStore,
+				GRPCServer:       grpcServer,
+				ServiceStorage:   serviceStorage,
+				RoleStorage:      roleStorage,
+				PolicyStorage:    policyStorage,
+				UserStorage:      userStorage,
+				SubjectResolver:  subjectResolver,
+				RoleResolver:     roleResolver,
+				DatabaseResolver: databaseResolver,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}
