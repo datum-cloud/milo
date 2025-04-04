@@ -1,8 +1,0 @@
-FirstInstance:
-  InstanceName: DATUM
-  Org:
-    Name: DATUM
-    Human:
-      UserName: datum-admin 
-      Password: Password1!
-      PasswordChangeRequired: false
