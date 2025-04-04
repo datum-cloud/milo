@@ -1,0 +1,22 @@
+TLS:
+  Enabled: false
+
+ExternalSecure: false
+
+Database:
+  cockroach:
+    Host: database
+    Port: 26257 
+    Username: root 
+    Password: ""
+
+DefaultInstance:
+  SMTPConfiguration:
+    SMTP:
+      Host: mailhog:1025
+      User: fake_user
+      Password: fake_password
+    TLS: false
+    From: sender@example.com
+    FromName: Datum
+    ReplyToAddress: replyto@example.com
