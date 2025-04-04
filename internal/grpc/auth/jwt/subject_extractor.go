@@ -57,7 +57,13 @@ func SubjectExtractor(auth *serviceconfig.Authentication) (auth.SubjectExtractor
 					slog.String("authentication_provider", authenticationProvider),
 				)
 
-				return claims.Subject(), nil
+				email, ok := claimsMap["email"].(string)
+				if !ok {
+					slog.ErrorContext(ctx, "email claim not found or invalid in JWT claims")
+					return "", errors.Unauthenticated().Err()
+				}
+
+				return email, nil
 			} else {
 				slog.ErrorContext(
 					ctx,
