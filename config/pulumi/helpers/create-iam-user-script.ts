@@ -55,7 +55,7 @@ const createIamUserScript = (
         );
 
         api.v1.user.appendMetadata(
-          "internal.iam.datumapis.com/iam-resource-name",
+          "internal.iam.datumapis.com-iam-resource-name",
           res.response.name,
         );
       } catch (e) {
