@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 	"cloud.google.com/go/longrunning/autogen/longrunningpb"
+	"github.com/mennanov/fmutils"
 	"go.datum.net/iam/internal/grpc/longrunning"
 	"go.datum.net/iam/internal/grpc/validation"
 	"go.datum.net/iam/internal/storage"
@@ -94,4 +96,49 @@ func (s *Server) GetUser(ctx context.Context, req *iampb.GetUserRequest) (*iampb
 	return s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
 		Name: req.Name,
 	})
+}
+
+func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProviderIdRequest) (*longrunningpb.Operation, error) {
+	userEmail := strings.TrimPrefix(req.Name, "users/")
+
+	// Validate the update mask
+	if req.UpdateMask == nil || len(req.UpdateMask.Paths) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "update_mask is required and must specify at least one field")
+	}
+
+	// Validate the update mask
+	for _, path := range req.UpdateMask.Paths {
+		if path != "annotations" {
+			return nil, status.Errorf(codes.InvalidArgument, "only 'annotations' field can be updated")
+		}
+	}
+
+	// Getting the user uid from the email
+	sub, err := s.DatabaseResolver(ctx, subject.UserKind, userEmail)
+	if err != nil {
+		if errors.Is(err, subject.ErrSubjectNotFound) {
+			return nil, status.Errorf(codes.AlreadyExists, "user with email %s not found", userEmail)
+		}
+		return nil, err
+	}
+
+	resourceName := fmt.Sprintf("users/%s", sub)
+
+	// Update the user
+	updatedUser, err := s.UserStorage.UpdateResource(ctx, &storage.UpdateResourceRequest[*iampb.User]{
+		Name: resourceName,
+		Updater: func(existing *iampb.User) (new *iampb.User, err error) {
+			fmutils.Overwrite(req.User, existing, req.UpdateMask.Paths)
+
+			if errs := validation.ValidateUser(existing); len(errs) > 0 {
+				return nil, errs.GRPCStatus().Err()
+			}
+			return existing, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return longrunning.ResponseOperation(&iampb.SetUserProviderIdMetadata{}, updatedUser, true)
 }
