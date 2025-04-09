@@ -68,11 +68,6 @@ func serve() *cobra.Command {
 				return fmt.Errorf("failed to get authentication config: %w", err)
 			}
 
-			subjectExtractor, err := jwt.SubjectExtractor(authConfig)
-			if err != nil {
-				return err
-			}
-
 			dsn := mustStringFlag(cmd.Flags(), "database")
 
 			db, err := sql.Open("postgres", dsn)
@@ -92,8 +87,6 @@ func serve() *cobra.Command {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			subjectResolver := subject.NoopResolver()
-
 			serviceStorage, err := postgres.ResourceServer(db, &iampb.Service{})
 			if err != nil {
 				return err
@@ -110,6 +103,16 @@ func serve() *cobra.Command {
 			}
 
 			userStorage, err := postgres.ResourceServer(db, &iampb.User{})
+			if err != nil {
+				return err
+			}
+
+			subjectResolver, err := subject.DatabaseResolver(db)
+			if err != nil {
+				return fmt.Errorf("failed to create database resolver: %w", err)
+			}
+
+			subjectExtractor, err := jwt.SubjectExtractor(authConfig, subjectResolver)
 			if err != nil {
 				return err
 			}
@@ -164,23 +167,17 @@ func serve() *cobra.Command {
 				grpc.StatsHandler(otelgrpc.NewServerHandler()),
 			)
 
-			databaseResolver, err := subject.DatabaseResolver(db)
-			if err != nil {
-				return fmt.Errorf("failed to create database resolver: %w", err)
-			}
-
 			// Creates a new IAM gRPC service and registers it with the gRPC server
 			if err := iamServer.NewServer(iamServer.ServerOptions{
-				OpenFGAClient:    openfgaClient,
-				OpenFGAStoreID:   openfgaStore,
-				GRPCServer:       grpcServer,
-				ServiceStorage:   serviceStorage,
-				RoleStorage:      roleStorage,
-				PolicyStorage:    policyStorage,
-				UserStorage:      userStorage,
-				SubjectResolver:  subjectResolver,
-				RoleResolver:     roleResolver,
-				DatabaseResolver: databaseResolver,
+				OpenFGAClient:   openfgaClient,
+				OpenFGAStoreID:  openfgaStore,
+				GRPCServer:      grpcServer,
+				ServiceStorage:  serviceStorage,
+				RoleStorage:     roleStorage,
+				PolicyStorage:   policyStorage,
+				UserStorage:     userStorage,
+				SubjectResolver: subjectResolver,
+				RoleResolver:    roleResolver,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}

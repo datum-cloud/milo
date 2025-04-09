@@ -46,7 +46,7 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 	user.UpdateTime = now
 
 	// Check if the user already exists
-	sub, err := s.DatabaseResolver(ctx, subject.UserKind, user.Spec.Email)
+	sub, err := s.SubjectResolver(ctx, subject.UserKind, user.Spec.Email)
 	if err != nil {
 		// If error is not "not found", don't return it an continue
 		if !errors.Is(err, subject.ErrSubjectNotFound) {
@@ -59,6 +59,15 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 
 	if req.ValidateOnly {
 		return longrunning.ResponseOperation(&iampb.CreateUserMetadata{}, user, true)
+	}
+
+	createdUser, err := s.UserStorage.CreateResource(ctx, &storage.CreateResourceRequest[*iampb.User]{
+		Resource: user,
+		Name:     user.Name,
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	policy := &iampb.SetIamPolicyRequest{
@@ -74,15 +83,6 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 	}
 
 	_, err = s.SetIamPolicy(ctx, policy)
-	if err != nil {
-		return nil, err
-	}
-
-	createdUser, err := s.UserStorage.CreateResource(ctx, &storage.CreateResourceRequest[*iampb.User]{
-		Resource: user,
-		Name:     user.Name,
-	})
-
 	if err != nil {
 		return nil, err
 	}

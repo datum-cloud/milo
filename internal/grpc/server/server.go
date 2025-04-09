@@ -38,20 +38,18 @@ type Server struct {
 	SubjectResolver              subject.Resolver
 	RoleResolver                 role.Resolver
 	AccessChecker                func(context.Context, *iampb.CheckAccessRequest) (*iampb.CheckAccessResponse, error)
-	DatabaseResolver             subject.Resolver
 }
 
 type ServerOptions struct {
-	OpenFGAClient    openfgav1.OpenFGAServiceClient
-	OpenFGAStoreID   string
-	GRPCServer       grpc.ServiceRegistrar
-	ServiceStorage   storage.ResourceServer[*iampb.Service]
-	RoleStorage      storage.ResourceServer[*iampb.Role]
-	PolicyStorage    storage.ResourceServer[*iampb.Policy]
-	UserStorage      storage.ResourceServer[*iampb.User]
-	SubjectResolver  subject.Resolver
-	RoleResolver     role.Resolver
-	DatabaseResolver subject.Resolver
+	OpenFGAClient   openfgav1.OpenFGAServiceClient
+	OpenFGAStoreID  string
+	GRPCServer      grpc.ServiceRegistrar
+	ServiceStorage  storage.ResourceServer[*iampb.Service]
+	RoleStorage     storage.ResourceServer[*iampb.Role]
+	PolicyStorage   storage.ResourceServer[*iampb.Policy]
+	UserStorage     storage.ResourceServer[*iampb.User]
+	SubjectResolver subject.Resolver
+	RoleResolver    role.Resolver
 }
 
 // Configures a new IAM Server
@@ -76,17 +74,16 @@ func NewServer(opts ServerOptions) error {
 			StoreID: opts.OpenFGAStoreID,
 			Client:  opts.OpenFGAClient,
 		},
-		SchemaRegistry:   schemaRegistry,
-		OpenFGAClient:    opts.OpenFGAClient,
-		OpenFGAStoreID:   opts.OpenFGAStoreID,
-		ServiceStorage:   opts.ServiceStorage,
-		RoleStorage:      opts.RoleStorage,
-		PolicyStorage:    opts.PolicyStorage,
-		UserStorage:      opts.UserStorage,
-		SubjectResolver:  opts.SubjectResolver,
-		RoleResolver:     opts.RoleResolver,
-		AccessChecker:    openfga.AccessChecker(schemaRegistry, opts.OpenFGAClient, opts.OpenFGAStoreID),
-		DatabaseResolver: opts.DatabaseResolver,
+		SchemaRegistry:  schemaRegistry,
+		OpenFGAClient:   opts.OpenFGAClient,
+		OpenFGAStoreID:  opts.OpenFGAStoreID,
+		ServiceStorage:  opts.ServiceStorage,
+		RoleStorage:     opts.RoleStorage,
+		PolicyStorage:   opts.PolicyStorage,
+		UserStorage:     opts.UserStorage,
+		SubjectResolver: opts.SubjectResolver,
+		RoleResolver:    opts.RoleResolver,
+		AccessChecker:   openfga.AccessChecker(schemaRegistry, opts.OpenFGAClient, opts.OpenFGAStoreID),
 	}
 
 	// Register all gRPC services with the gRPC server here.
