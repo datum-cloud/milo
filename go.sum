@@ -2,8 +2,12 @@ buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.35.2-2024112718024
 buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.35.2-20241127180247-a33202765966.1/go.mod h1:mnHCFccv4HwuIAOHNGdiIc5ZYbBCvbTWZcodLN5wITI=
 buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250326213431-82b2ac492784.1 h1:10h1HnzBJuYvVHokqUME6CS1hb2VgH1NwWHowWj9z74=
 buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250326213431-82b2ac492784.1/go.mod h1:/NMd17U4fZ1vAmAYmUL33yOVUK1WV4ptfoPhHWh+ZHQ=
+buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250410165415-6baf466e2745.1 h1:CAiXZYFlBiLdaNBCRO4DtikCf9qBMCgQiL6/pbm3Now=
+buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250410165415-6baf466e2745.1/go.mod h1:XaO7lsStYRnnhp+oIB4bLpKXhI9v3V0JeFhwJiCZ60M=
 buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250326213431-82b2ac492784.2 h1:9heqFeEDL5PucnrrryPwn1JvcEcBQl546WAj+Urd9oE=
 buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250326213431-82b2ac492784.2/go.mod h1:o7yfYkvsRWpfEvLMPyLNYAUrzJ9OIWsFvS1t8kFeyyU=
+buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250410165415-6baf466e2745.2 h1:Z1WxcATMYRyIWfmOT27fxvFsAhuraGF0ei71dLWZKLM=
+buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250410165415-6baf466e2745.2/go.mod h1:u5BELi/omdt3avi+OwZfQgjOKHRhi5aw5IclT5I34rE=
 buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250326213431-82b2ac492784.1 h1:C/iwxcAUIbwvgOgVWroqXkE7X6OchicUNuJIW3oc1dc=
 buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250326213431-82b2ac492784.1/go.mod h1:mBNXMGhmoM4v2WU3Ocr2xvv5E4UUopEGt6dYDMp7huc=
 buf.build/go/protoyaml v0.3.0 h1:NF/C1r0ezdUm8J3ABJsZqbsOVpT/Igrg2b//QPAIieo=
