@@ -114,15 +114,34 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 	}
 
 	// Getting the user uid from the email
-	sub, err := s.DatabaseResolver(ctx, subject.UserKind, userEmail)
+	sub, err := s.SubjectResolver(ctx, subject.UserKind, userEmail)
 	if err != nil {
 		if errors.Is(err, subject.ErrSubjectNotFound) {
-			return nil, status.Errorf(codes.AlreadyExists, "user with email %s not found", userEmail)
+			return nil, status.Errorf(codes.NotFound, "user with email %s not found", userEmail)
 		}
 		return nil, err
 	}
 
 	resourceName := fmt.Sprintf("users/%s", sub)
+
+	if req.ValidateOnly {
+		existing, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
+			Name: resourceName,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		fmutils.Overwrite(req.User, existing, req.UpdateMask.Paths)
+
+		if errs := validation.ValidateUser(existing); len(errs) > 0 {
+			return nil, errs.GRPCStatus().Err()
+		}
+
+		existing.UpdateTime = timestamppb.Now()
+
+		return longrunning.ResponseOperation(&iampb.SetUserProviderIdMetadata{}, existing, true)
+	}
 
 	// Update the user
 	updatedUser, err := s.UserStorage.UpdateResource(ctx, &storage.UpdateResourceRequest[*iampb.User]{
@@ -133,6 +152,7 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 			if errs := validation.ValidateUser(existing); len(errs) > 0 {
 				return nil, errs.GRPCStatus().Err()
 			}
+
 			return existing, nil
 		},
 	})
