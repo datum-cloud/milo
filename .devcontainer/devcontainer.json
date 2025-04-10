@@ -19,7 +19,11 @@
 		"ghcr.io/devcontainers-extra/features/protoc": {},
 		"ghcr.io/partydrone/devcontainer/features/openfga-cli": {},
 		"ghcr.io/devcontainers-extra/features/go-task": {},
-		"ghcr.io/audacioustux/devcontainers/kustomize": {}
+		"ghcr.io/audacioustux/devcontainers/kustomize": {},
+		"ghcr.io/devcontainers/features/node": {
+            "version": "22.14.0" 
+        },
+		"ghcr.io/devcontainers-extra/features/pulumi": {}
 	},
 	"onCreateCommand": ".devcontainer/create.sh",
 	"customizations": {

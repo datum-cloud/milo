@@ -7,12 +7,7 @@ import (
 )
 
 func DatabaseResolver(db *sql.DB) (Resolver, error) {
-	userStmt, err := db.Prepare("SELECT id FROM users WHERE email = $1")
-	if err != nil {
-		return nil, err
-	}
-
-	serviceAccountStmt, err := db.Prepare("SELECT uid FROM iam_datumapis_com_serviceaccount_resource WHERE data->>'serviceAccountId' = $1")
+	userStmt, err := db.Prepare("SELECT uid FROM iam_datumapis_com_User_resource WHERE data->'spec'->>'email' = $1")
 	if err != nil {
 		return nil, err
 	}
@@ -23,8 +18,6 @@ func DatabaseResolver(db *sql.DB) (Resolver, error) {
 		switch kind {
 		case UserKind:
 			row = userStmt.QueryRowContext(ctx, subjectName)
-		case ServiceAccountKind:
-			row = serviceAccountStmt.QueryRowContext(ctx, subjectName)
 		default:
 			return "", fmt.Errorf("unsupported subject type provided: %s", string(kind))
 		}
