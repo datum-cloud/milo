@@ -77,29 +77,14 @@ service Users {
   }
 
   // SetUserProviderId updates the auth provider ID in a user's annotations.
-  // As for example, an Zitadel user ID would be stored in the annotations
-  // with the internal.iam.datumapis.com/zitadel-id key.
-  //
-  // Imperative only
   // (-- api-linter: core::0134::synonyms=disabled
   //     aip.dev/not-precedent: We need to use Set prefix as we are setting
   //     up the user provider id for the first time. --)
-  // (-- api-linter: core::0136::http-uri-suffix=disabled
-  //     aip.dev/not-precedent: setUserProviderId is used as an imperative action
-  //     to set the user provider ID for the first time, and does not follow the
-  //     standard declarative HTTP URI suffix conventions.  . --)
-  // (-- api-linter: core::0136::response-message-name=disabled
-  //     aip.dev/not-precedent: google.longrunning.operation response
-  //     is a more appropriate return type. --)
-  rpc SetUserProviderId(SetUserProviderIdRequest) returns (google.longrunning.Operation) {
+  rpc SetUserProviderId(SetUserProviderIdRequest) returns (SetUserProviderIdResponse) {
     option (datum.api.required_permissions) = "iam.datumapis.com/users.set";
     option (google.api.http) = {
       post: "/v1alpha/{name=users/*}:setUserProviderId"
       body: "*"
-    };
-    option (google.longrunning.operation_info) = {
-      response_type: "User"
-      metadata_type: "SetUserProviderIdMetadata"
     };
   }
 }
@@ -195,27 +180,22 @@ message DeleteUserRequest {
 // user.
 message DeleteUserMetadata {}
 
-// UpdateUserAuthProviderRequest is the request for updating a user's auth provider ID.
+// SetUserProviderIdRequest is the request for setting a user's provider ID.
 message SetUserProviderIdRequest {
+  // The name of the User to update.
   // Format: users/{email}
   string name = 1 [
     (google.api.field_behavior) = REQUIRED,
     (google.api.resource_reference) = {type: "iam.datumapis.com/User"}
   ];
-  // The User to update.
-  User user = 2 [(google.api.field_behavior) = REQUIRED];
-  // The field mask to update the User.
-  // Only the `annotations` field with the key value
-  // of the auth provider should be included.
-  // Example:
-  // update_mask {
-  //   paths:"annotations"
-  // }
-  google.protobuf.FieldMask update_mask = 3 [(google.api.field_behavior) = OPTIONAL];
+  // The provider ID to set in the user's annotations.
+  string provider_id = 2 [(google.api.field_behavior) = REQUIRED];
   // If true, the request is validated and nothing is persisted.
-  bool validate_only = 4 [(google.api.field_behavior) = OPTIONAL];
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
 }
 
-// The metadata returned from the long running operations when setting user
-// provider id
-message SetUserProviderIdMetadata {}
+// SetUserProviderIdResponse is the response for setting a user's provider ID.
+message SetUserProviderIdResponse {
+  // The updated User resource.
+  User user = 1;
+}
