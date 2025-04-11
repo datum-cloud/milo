@@ -1,4 +1,8 @@
+TLS:
+  Enabled: false
+
 ExternalSecure: false
+
 Database:
   cockroach:
     Host: database

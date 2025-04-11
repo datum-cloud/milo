@@ -1,0 +1,10 @@
+name: zitadel-docker-pulumi-example
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm
+description: A minimal TypeScript Pulumi program
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: typescript
