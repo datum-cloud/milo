@@ -15,13 +15,23 @@ func (v *UserAnnotationValidator) Validate(fieldPath *field.Path, annotations ma
 	errs := field.ErrorList{}
 
 	if _, exists := annotations[v.RequiredKey]; !exists {
-		errs = append(errs, field.Required(fieldPath.Key(v.RequiredKey), fmt.Sprintf("missing required annotation key: %s", v.RequiredKey)))
+		return append(errs, field.Required(fieldPath.Key(v.RequiredKey), fmt.Sprintf("missing required annotation key: %s", v.RequiredKey)))
+	}
+
+	providerId := annotations[v.RequiredKey]
+	if providerId == "" {
+		errs = append(errs, field.Required(fieldPath.Key(v.RequiredKey), fmt.Sprintf("missing required annotation value: %s", v.RequiredKey)))
 	}
 
 	return errs
 }
 
-var userAnnotationValidator = &UserAnnotationValidator{
+func (v *UserAnnotationValidator) GetProviderKey() string {
+	return v.RequiredKey
+}
+
+// TODO: update this to initialize validator on serve
+var UsersAnnotationValidator = &UserAnnotationValidator{
 	RequiredKey: "internal.iam.datumapis.com/zitadel-id",
 }
 
@@ -33,7 +43,7 @@ func ValidateUser(user *iampb.User) field.ErrorList {
 	}
 
 	errs = append(errs, meta.ValidateAnnotations(field.NewPath("annotations"), user.Annotations)...)
-	errs = append(errs, userAnnotationValidator.Validate(field.NewPath("annotations"), user.Annotations)...)
+	errs = append(errs, UsersAnnotationValidator.Validate(field.NewPath("annotations"), user.Annotations)...)
 	errs = append(errs, meta.ValidateLabels(field.NewPath("labels"), user.Labels)...)
 
 	if user.UserId != "" {

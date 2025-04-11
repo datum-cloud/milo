@@ -75,6 +75,18 @@ service Users {
       metadata_type: "DeleteUserMetadata"
     };
   }
+
+  // SetUserProviderId updates the auth provider ID in a user's annotations.
+  // (-- api-linter: core::0134::synonyms=disabled
+  //     aip.dev/not-precedent: We need to use Set prefix as we are setting
+  //     up the user provider id for the first time. --)
+  rpc SetUserProviderId(SetUserProviderIdRequest) returns (SetUserProviderIdResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/users.set";
+    option (google.api.http) = {
+      post: "/v1alpha/{name=users/*}:setUserProviderId"
+      body: "*"
+    };
+  }
 }
 
 // CreateUserRequest is the request for creating a new User.
@@ -167,3 +179,23 @@ message DeleteUserRequest {
 // The metadata returned from the long running operations when deleting a new
 // user.
 message DeleteUserMetadata {}
+
+// SetUserProviderIdRequest is the request for setting a user's provider ID.
+message SetUserProviderIdRequest {
+  // The name of the User to update.
+  // Format: users/{email}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/User"}
+  ];
+  // The provider ID to set in the user's annotations.
+  string provider_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // If true, the request is validated and nothing is persisted.
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// SetUserProviderIdResponse is the response for setting a user's provider ID.
+message SetUserProviderIdResponse {
+  // The updated User resource.
+  User user = 1;
+}

@@ -3,6 +3,7 @@ import { getMachineUserAccessToken } from "./helpers/get-machine-user-access-tok
 import { createIamUserScript } from "./helpers/create-iam-user-script";
 import { config } from "./config";
 import { addEmailClaimScript } from "./helpers/add-email-claim-script";
+import { updateIamUserExternalId } from "./helpers/update-iam-user-external-id";
 
 const org = new zitadel.Org("test-org", {
   name: "Datum Staging",
@@ -69,6 +70,24 @@ const createIamUserTriggerAction = new zitadel.TriggerActions("default", {
   triggerType: "TRIGGER_TYPE_PRE_CREATION",
   actionIds: [createIamUserAction.id],
 });
+
+const updateIamUserAction = new zitadel.Action("default_update_id", {
+  orgId: org.id,
+  name: "updateIamUserExternalId",
+  script: updateIamUserExternalId(accessToken), // Pass the resolved token
+  timeout: "10s",
+  allowedToFail: false,
+});
+
+const updateIamUserTriggerAction = new zitadel.TriggerActions(
+  "default_update_id",
+  {
+    orgId: org.id,
+    flowType: "FLOW_TYPE_EXTERNAL_AUTHENTICATION",
+    triggerType: "TRIGGER_TYPE_POST_CREATION",
+    actionIds: [updateIamUserAction.id],
+  },
+);
 
 const googleIdp = new zitadel.IdpGoogle("default", {
   name: "Google",
