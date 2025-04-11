@@ -18,7 +18,7 @@ require (
 	github.com/openfga/api/proto v0.0.0-20250127102726-f9709139a369
 	github.com/simukti/sqldb-logger v0.0.0-20230108155151-646c1a075551
 	github.com/spf13/cobra v1.8.1
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	github.com/testcontainers/testcontainers-go v0.34.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.34.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.59.0
