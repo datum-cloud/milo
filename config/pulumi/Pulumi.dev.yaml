@@ -1,0 +1,11 @@
+encryptionsalt: v1:3+NvibnLgN0=:v1:3ZkFbqV1yNyf2nrI:+MRPwS+O5N/S0nndVIlRwMadVLhKnQ==
+config:
+  zitadel:domain: localhost
+  zitadel:insecure: "true"
+  zitadel:jwtProfileFile: ../../test/config/zitadel/secrets/machine-key.json
+  zitadel:port: "8082"
+  google-idp:client-id: 440453241463-j8na10f90pedpsl6kroeqgviahie0mju.apps.googleusercontent.com
+  google-idp:client-secret:
+    secure: v1:8EBq6qpZxd3d7PCe:c8+rA4FEMSRwcw4sJ1fkxP4awQuMOvF3g8BTjWdACa2DaFn03Lk8ru6Yf6wHpC4Gc8br
+  datum-iam-system:api-url: http://host.docker.internal:8000
+  zitadel-auth-provider:url: http://localhost:8082

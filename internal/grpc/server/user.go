@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -11,6 +13,9 @@ import (
 	"go.datum.net/iam/internal/grpc/longrunning"
 	"go.datum.net/iam/internal/grpc/validation"
 	"go.datum.net/iam/internal/storage"
+	"go.datum.net/iam/internal/subject"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (*longrunningpb.Operation, error) {
@@ -40,8 +45,29 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 	user.CreateTime = now
 	user.UpdateTime = now
 
+	// Check if the user already exists
+	sub, err := s.SubjectResolver(ctx, subject.UserKind, user.Spec.Email)
+	if err != nil {
+		// If error is not "not found", don't return it an continue
+		if !errors.Is(err, subject.ErrSubjectNotFound) {
+			return nil, err
+		}
+	}
+	if len(sub) > 0 {
+		return nil, status.Errorf(codes.AlreadyExists, "user with email %s already exists", user.Spec.Email)
+	}
+
 	if req.ValidateOnly {
 		return longrunning.ResponseOperation(&iampb.CreateUserMetadata{}, user, true)
+	}
+
+	createdUser, err := s.UserStorage.CreateResource(ctx, &storage.CreateResourceRequest[*iampb.User]{
+		Resource: user,
+		Name:     user.Name,
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	policy := &iampb.SetIamPolicyRequest{
@@ -56,16 +82,7 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 		},
 	}
 
-	_, err := s.SetIamPolicy(ctx, policy)
-	if err != nil {
-		return nil, err
-	}
-
-	createdUser, err := s.UserStorage.CreateResource(ctx, &storage.CreateResourceRequest[*iampb.User]{
-		Resource: user,
-		Name:     user.Name,
-	})
-
+	_, err = s.SetIamPolicy(ctx, policy)
 	if err != nil {
 		return nil, err
 	}
