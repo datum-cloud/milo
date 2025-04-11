@@ -1,0 +1,27 @@
+{
+  "name": "zitadel-docker-pulumi-example",
+  "main": "index.ts",
+  "scripts": {
+    "dev:check": "pulumi stack ls | grep -q 'dev'",
+    "dev:uninstall": "pulumi stack select dev && pulumi destroy --skip-preview --yes || true",
+    "dev:rm": "npm run dev:check && pulumi stack rm dev --force --preserve-config --yes || true",
+    "dev:create": "pulumi stack select dev --create",
+    "dev:up": "pulumi up --yes",
+    "dev": "export PULUMI_CONFIG_PASSPHRASE='' && npm run dev:rm && npm run dev:create && npm run dev:up",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^18",
+    "prettier": "^3.5.3",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@pulumi/pulumi": "^3.113.0",
+    "@pulumiverse/zitadel": "^0.1.8",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "trustedDependencies": [
+    "protobufjs"
+  ]
+}

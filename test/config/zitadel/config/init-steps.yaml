@@ -16,9 +16,7 @@ FirstInstance:
       PreferredLanguage: en
     Machine:
       Machine:
-        # for some reason the machine key will only be generated if a machine user is created
         UserName: admin-sa
         Name: admin-sa
-      # necessary to create a machine key
       MachineKey:
         Type: 1

@@ -11,11 +11,12 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwt"
 	"go.datum.net/iam/internal/grpc/auth"
 	"go.datum.net/iam/internal/grpc/errors"
+	"go.datum.net/iam/internal/subject"
 	"google.golang.org/genproto/googleapis/api/serviceconfig"
 	"google.golang.org/grpc/metadata"
 )
 
-func SubjectExtractor(auth *serviceconfig.Authentication) (auth.SubjectExtractor, error) {
+func SubjectExtractor(auth *serviceconfig.Authentication, subjectResolver subject.Resolver) (auth.SubjectExtractor, error) {
 	// Create a set of token validators that should be checked against the JWT
 	// token that's retrieved from the request context.
 	cache := jwk.NewCache(context.Background(), jwk.WithRefreshWindow(time.Hour))
@@ -57,7 +58,18 @@ func SubjectExtractor(auth *serviceconfig.Authentication) (auth.SubjectExtractor
 					slog.String("authentication_provider", authenticationProvider),
 				)
 
-				return claims.Subject(), nil
+				email, ok := claimsMap["email"].(string)
+				if !ok {
+					slog.ErrorContext(ctx, "email claim not found or invalid in JWT claims")
+					return "", errors.Unauthenticated().Err()
+				}
+
+				subject, err := subjectResolver(ctx, subject.UserKind, email)
+				if err != nil {
+					return "", err
+				}
+
+				return subject, nil
 			} else {
 				slog.ErrorContext(
 					ctx,
