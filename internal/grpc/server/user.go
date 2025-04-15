@@ -4,18 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 	"cloud.google.com/go/longrunning/autogen/longrunningpb"
+	"github.com/mennanov/fmutils"
 	"go.datum.net/iam/internal/grpc/longrunning"
 	"go.datum.net/iam/internal/grpc/validation"
 	"go.datum.net/iam/internal/storage"
 	"go.datum.net/iam/internal/subject"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
+
 )
 
 func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (*longrunningpb.Operation, error) {
@@ -94,4 +98,68 @@ func (s *Server) GetUser(ctx context.Context, req *iampb.GetUserRequest) (*iampb
 	return s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
 		Name: req.Name,
 	})
+}
+
+func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProviderIdRequest) (*iampb.SetUserProviderIdResponse, error) {
+	userEmail := strings.TrimPrefix(req.Name, "users/")
+	// Create an update mask with the "annotations" path
+	updateMask := &fieldmaskpb.FieldMask{
+		Paths: []string{"annotations"},
+	}
+
+	userUpdates := &iampb.User{
+		Annotations: map[string]string{
+			// TODO: refactor to get the provider key from a config
+			validation.UsersAnnotationValidator.GetProviderKey(): req.ProviderId,
+		},
+	}
+	
+	// Getting the user uid from the email
+	sub, err := s.SubjectResolver(ctx, subject.UserKind, userEmail)
+	if err != nil {
+		if errors.Is(err, subject.ErrSubjectNotFound) {
+			return nil, status.Errorf(codes.NotFound, "user with email %s not found", userEmail)
+		}
+		return nil, err
+	}
+
+	resourceName := fmt.Sprintf("users/%s", sub)
+
+	if req.ValidateOnly {
+		existing, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
+			Name: resourceName,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		fmutils.Overwrite(userUpdates, existing, updateMask.Paths)
+
+		if errs := validation.ValidateUser(existing); len(errs) > 0 {
+			return nil, errs.GRPCStatus().Err()
+		}
+
+		existing.UpdateTime = timestamppb.Now()
+
+		return &iampb.SetUserProviderIdResponse{User: existing}, nil
+	}
+
+	// Update the user
+	updatedUser, err := s.UserStorage.UpdateResource(ctx, &storage.UpdateResourceRequest[*iampb.User]{
+		Name: resourceName,
+		Updater: func(existing *iampb.User) (new *iampb.User, err error) {
+			fmutils.Overwrite(userUpdates, existing, updateMask.Paths)
+
+			if errs := validation.ValidateUser(existing); len(errs) > 0 {
+				return nil, errs.GRPCStatus().Err()
+			}
+
+			return existing, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &iampb.SetUserProviderIdResponse{User: updatedUser}, nil
 }
