@@ -18,6 +18,7 @@ import (
 	"go.datum.net/iam/internal/subject"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
@@ -169,32 +170,28 @@ func (s *Server) UpdateUser(ctx context.Context, req *iampb.UpdateUserRequest) (
 	// TODO: refactor to get the provider key from a config
 	providerKey := validation.UsersAnnotationValidator.GetProviderKey()
 
-	allowedPaths := map[string]bool{
-		"display_name":     true,
-		"annotations":      true,
-		"labels":           true,
-		"spec.given_name":  true,
-		"spec.family_name": true,
-	}
-
-	// Check each path in the update mask
-	for _, path := range updateMask.GetPaths() {
-		if !allowedPaths[path] {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid update mask path: %s", path)
-		}
-	}
-
-	// Validate that annotations do not include the "provider id" key
-	if req.User.Annotations != nil {
-		if _, exists := req.User.Annotations[providerKey]; exists {
-			return nil, status.Errorf(codes.InvalidArgument, "annotations cannot include the key: %s", providerKey)
-		}
+	// TODO: refactor to only set the mutable paths, and on app initialization,
+	// retrieve the immutable paths from the from the *iampb.User resource
+	immutablePaths := []string{
+		"name",
+		"user_id",
+		"uid",
+		"spec.email",
+		"create_time",
+		"update_time",
+		"delete_time",
+		"reconciling",
 	}
 
 	updaterUserFunc := func(existing *iampb.User) (new *iampb.User, err error) {
 		providerId := existing.Annotations[providerKey]
+		existingUserCopy := proto.Clone(existing).(*iampb.User)
 
 		fmutils.Overwrite(userUpdates, existing, updateMask.Paths)
+
+		if errs := validation.ValidateUserUpdate(immutablePaths, existingUserCopy, existing, req); len(errs) > 0 {
+			return nil, errs.GRPCStatus().Err()
+		}
 
 		// Reassign the providerId to the user in case there was no annotation path
 		existing.Annotations[providerKey] = providerId
@@ -235,6 +232,6 @@ func (s *Server) UpdateUser(ctx context.Context, req *iampb.UpdateUserRequest) (
 		return nil, err
 	}
 
-	return longrunning.ResponseOperation(&iampb.CreateUserMetadata{}, updatedUser, true)
+	return longrunning.ResponseOperation(&iampb.UpdateUserMetadata{}, updatedUser, true)
 
 }
