@@ -19,7 +19,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
-
 )
 
 func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (*longrunningpb.Operation, error) {
@@ -113,7 +112,7 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 			validation.UsersAnnotationValidator.GetProviderKey(): req.ProviderId,
 		},
 	}
-	
+
 	// Getting the user uid from the email
 	sub, err := s.SubjectResolver(ctx, subject.UserKind, userEmail)
 	if err != nil {
@@ -162,4 +161,29 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 	}
 
 	return &iampb.SetUserProviderIdResponse{User: updatedUser}, nil
+}
+
+func (s *Server) ListUsers(ctx context.Context, req *iampb.ListUsersRequest) (*iampb.ListUsersResponse, error) {
+	if errs := validation.ValidateListUsersRequest(req); len(errs) > 0 {
+		return nil, errs.GRPCStatus().Err()
+	}
+
+	if req.PageSize > validation.MaxUsersPageSize {
+		req.PageSize = validation.MaxUsersPageSize
+	}
+
+	users, err := s.UserStorage.ListResources(ctx, &storage.ListResourcesRequest{
+		PageSize:       req.PageSize,
+		PageToken:      req.PageToken,
+		Filter:         req.Filter,
+		IncludeDeleted: req.ShowDeleted,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &iampb.ListUsersResponse{
+		Users:         users.Resources,
+		NextPageToken: users.NextPageToken,
+	}, nil
 }

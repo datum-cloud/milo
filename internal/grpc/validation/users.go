@@ -92,5 +92,14 @@ func validateUserId(fieldPath *field.Path, userId string) field.ErrorList {
 	}
 
 	return errs
+}
 
+func ValidateListUsersRequest(req *iampb.ListUsersRequest) field.ErrorList {
+	errs := field.ErrorList{}
+
+	if req.PageSize < 0 {
+		errs = append(errs, field.Invalid(field.NewPath("page_size"), req.PageSize, fmt.Sprintf("page_size must be greater than 0 and less than %d", MaxUsersPageSize)))
+	}
+
+	return errs
 }
