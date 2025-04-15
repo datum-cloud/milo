@@ -118,13 +118,15 @@ message ListUsersRequest {
   // The maximum number of Users to return. The service may return fewer than
   // this value. If unspecified, at most 50 Users will be returned. The maximum
   // value is 1000; values above 1000 will be coerced to 1000.
-  int32 page_size = 2 [(google.api.field_behavior) = OPTIONAL];
+  int32 page_size = 1 [(google.api.field_behavior) = OPTIONAL];
   // A page token, received from a previous `ListUsers` call. Provide this to
   // retrieve the subsequent page. When paginating, all other parameters must
   // match the call that provided the page token.
-  string page_token = 3 [(google.api.field_behavior) = OPTIONAL];
+  string page_token = 2 [(google.api.field_behavior) = OPTIONAL];
   // If true, the deleted Users will be included in the response.
-  bool show_deleted = 6 [(google.api.field_behavior) = OPTIONAL];
+  bool show_deleted = 3 [(google.api.field_behavior) = OPTIONAL];
+  // Optional. A filter to apply to the results.
+  string filter = 4 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // ListUsersResponse is the response for listing Users.
