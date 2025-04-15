@@ -168,10 +168,6 @@ func (s *Server) ListUsers(ctx context.Context, req *iampb.ListUsersRequest) (*i
 		return nil, errs.GRPCStatus().Err()
 	}
 
-	if req.PageSize > validation.MaxUsersPageSize {
-		req.PageSize = validation.MaxUsersPageSize
-	}
-
 	users, err := s.UserStorage.ListResources(ctx, &storage.ListResourcesRequest{
 		PageSize:       req.PageSize,
 		PageToken:      req.PageToken,

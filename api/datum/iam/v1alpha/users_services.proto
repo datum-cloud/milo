@@ -117,7 +117,7 @@ message GetUserRequest {
 message ListUsersRequest {
   // The maximum number of Users to return. The service may return fewer than
   // this value. If unspecified, at most 50 Users will be returned. The maximum
-  // value is 1000; values above 1000 will be coerced to 1000.
+  // value is 1000.
   int32 page_size = 1 [(google.api.field_behavior) = OPTIONAL];
   // A page token, received from a previous `ListUsers` call. Provide this to
   // retrieve the subsequent page. When paginating, all other parameters must
