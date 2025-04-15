@@ -19,7 +19,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
-
 )
 
 func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (*longrunningpb.Operation, error) {
@@ -113,7 +112,7 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 			validation.UsersAnnotationValidator.GetProviderKey(): req.ProviderId,
 		},
 	}
-	
+
 	// Getting the user uid from the email
 	sub, err := s.SubjectResolver(ctx, subject.UserKind, userEmail)
 	if err != nil {
@@ -162,4 +161,80 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 	}
 
 	return &iampb.SetUserProviderIdResponse{User: updatedUser}, nil
+}
+
+func (s *Server) UpdateUser(ctx context.Context, req *iampb.UpdateUserRequest) (*longrunningpb.Operation, error) {
+	userUpdates := req.User
+	updateMask := req.UpdateMask
+	// TODO: refactor to get the provider key from a config
+	providerKey := validation.UsersAnnotationValidator.GetProviderKey()
+
+	allowedPaths := map[string]bool{
+		"display_name":     true,
+		"annotations":      true,
+		"labels":           true,
+		"spec.given_name":  true,
+		"spec.family_name": true,
+	}
+
+	// Check each path in the update mask
+	for _, path := range updateMask.GetPaths() {
+		if !allowedPaths[path] {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid update mask path: %s", path)
+		}
+	}
+
+	// Validate that annotations do not include the "provider id" key
+	if req.User.Annotations != nil {
+		if _, exists := req.User.Annotations[providerKey]; exists {
+			return nil, status.Errorf(codes.InvalidArgument, "annotations cannot include the key: %s", providerKey)
+		}
+	}
+
+	updaterUserFunc := func(existing *iampb.User) (new *iampb.User, err error) {
+		providerId := existing.Annotations[providerKey]
+
+		fmutils.Overwrite(userUpdates, existing, updateMask.Paths)
+
+		// Reassign the providerId to the user in case there was no annotation path
+		existing.Annotations[providerKey] = providerId
+
+		if errs := validation.ValidateUser(existing); len(errs) > 0 {
+			return nil, errs.GRPCStatus().Err()
+		}
+
+		return existing, nil
+	}
+
+	resourceName := req.User.Name
+
+	if req.ValidateOnly {
+		existing, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
+			Name: resourceName,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		updatedUser, err := updaterUserFunc(existing)
+		if err != nil {
+			return nil, err
+		}
+
+		existing.UpdateTime = timestamppb.Now()
+
+		return longrunning.ResponseOperation(&iampb.CreateUserMetadata{}, updatedUser, true)
+	}
+
+	// Update the user
+	updatedUser, err := s.UserStorage.UpdateResource(ctx, &storage.UpdateResourceRequest[*iampb.User]{
+		Name:    resourceName,
+		Updater: updaterUserFunc,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return longrunning.ResponseOperation(&iampb.CreateUserMetadata{}, updatedUser, true)
+
 }
