@@ -9,7 +9,7 @@
 services:
   # Create a new cockroach database
   database:
-    image: cockroachdb/cockroach:v24.1.14
+    image: cockroachdb/cockroach:v24.3.10
     ports:
       - "26257:26257"
       # Expose the CRDB admin UI on 9090
@@ -22,7 +22,7 @@ services:
       retries: 5
 
   create-databases:
-    image: cockroachdb/cockroach:v24.1.14
+    image: cockroachdb/cockroach:v24.3.10
     command:
       - sql
       - --insecure
@@ -33,7 +33,7 @@ services:
         condition: service_healthy
 
   migrate-openfga:
-    image: openfga/openfga:v1.5.9
+    image: openfga/openfga:v1.8.9
     command: migrate
     depends_on:
       database:
@@ -50,7 +50,7 @@ services:
     depends_on:
       migrate-openfga:
         condition: service_completed_successfully
-    image: openfga/openfga:v1.5.9
+    image: openfga/openfga:v1.8.9
     environment:
       - OPENFGA_DATASTORE_ENGINE=postgres
       - OPENFGA_DATASTORE_URI=postgres://root@database:26257/openfga?sslmode=disable
