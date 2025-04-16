@@ -3,8 +3,8 @@ module go.datum.net/iam
 go 1.23.1
 
 require (
-	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250416125817-34e5700880d7.1
-	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250416125817-34e5700880d7.2
+	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250416133839-f53373f380ba.1
+	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250416133839-f53373f380ba.2
 	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250416125817-34e5700880d7.1
 	buf.build/go/protoyaml v0.3.2
 	cloud.google.com/go/longrunning v0.6.7
