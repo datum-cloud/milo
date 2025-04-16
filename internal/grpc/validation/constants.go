@@ -6,4 +6,5 @@ const (
 	MaxFamilyNameLength  = 63
 	MinUserIdLength      = 1
 	MaxUserIdLength      = 63
+	MaxUsersPageSize     = 1000
 )
