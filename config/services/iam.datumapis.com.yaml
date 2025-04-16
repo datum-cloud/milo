@@ -63,7 +63,7 @@ spec:
     - create
     - update
     - delete
-    - set
+    - setUserProviderId
     resourceNamePatterns:
     - "users/{user}"
   - type: iam.datumapis.com/Policy

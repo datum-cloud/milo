@@ -1,11 +1,11 @@
 buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.6-20250307204501-0409229c3780.1 h1:zgJPqo17m28+Lf5BW4xv3PvU20BnrmTcGYrog22lLIU=
 buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.6-20250307204501-0409229c3780.1/go.mod h1:avRlCjnFzl98VPaeCtJ24RrV/wwHFzB8sWXhj26+n/U=
-buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250415135819-cd405a0505bb.1 h1:8X4jDRztQXVsx0S6aUFtXfBq9KfmIzAd47ZTvFEdwYM=
-buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250415135819-cd405a0505bb.1/go.mod h1:gBzBqmBOAb0jD/FsBEA31HOFV1fjfsqzPgd+ynRYyyo=
-buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250415135819-cd405a0505bb.2 h1:DZAS5aQ3eZNZcQXB+/P21GNb+XrWxWb4GSP1WcP+Pys=
-buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250415135819-cd405a0505bb.2/go.mod h1:/QLwV5kwB5uRNJlLvNERP19Guhc8W60M1dPaOLHIKhQ=
-buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250415135819-cd405a0505bb.1 h1:3s7UIZRVL0O+i1xVL8bw0jjo31fF+QquuesQu4RKSWE=
-buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250415135819-cd405a0505bb.1/go.mod h1:mBNXMGhmoM4v2WU3Ocr2xvv5E4UUopEGt6dYDMp7huc=
+buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250416125817-34e5700880d7.1 h1:OSF5S12CxP3iGc0QtZ4BvaWNVfgdD4X8N3h9UmLtLXg=
+buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250416125817-34e5700880d7.1/go.mod h1:JrE9dJYOckUtBOt63fTllM6KPUAmic0+kDQZVs91sa8=
+buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250416125817-34e5700880d7.2 h1:k/lFB3sLPrKtt4ehNtvXy5Z/U/A+V+ijgFuj25iPBCk=
+buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250416125817-34e5700880d7.2/go.mod h1:KC8/+jWVf8Ekw6LilHdSMcelJng/ziDkMD50t73e+bw=
+buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250416125817-34e5700880d7.1 h1:r5CxjVnI2t7Uq7LAxC4eCRVNgZi13zVEOYlJDuzzZ50=
+buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250416125817-34e5700880d7.1/go.mod h1:mBNXMGhmoM4v2WU3Ocr2xvv5E4UUopEGt6dYDMp7huc=
 buf.build/go/protoyaml v0.3.0 h1:NF/C1r0ezdUm8J3ABJsZqbsOVpT/Igrg2b//QPAIieo=
 buf.build/go/protoyaml v0.3.0/go.mod h1:gaDlo8lOhxsvsBqblrvMFaVOcKVS1RQya8SGFB5XIxU=
 cel.dev/expr v0.19.1 h1:NciYrtDRIR0lNCnH1LFJegdjspNx9fI59O7TWcua/W4=

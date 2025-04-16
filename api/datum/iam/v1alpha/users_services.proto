@@ -81,7 +81,7 @@ service Users {
   //     aip.dev/not-precedent: We need to use Set prefix as we are setting
   //     up the user provider id for the first time. --)
   rpc SetUserProviderId(SetUserProviderIdRequest) returns (SetUserProviderIdResponse) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/users.set";
+    option (datum.api.required_permissions) = "iam.datumapis.com/users.setUserProviderId";
     option (google.api.http) = {
       post: "/v1alpha/{name=users/*}:setUserProviderId"
       body: "*"
