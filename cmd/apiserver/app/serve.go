@@ -19,6 +19,7 @@ import (
 	"go.datum.net/iam/internal/grpc/logging"
 	"go.datum.net/iam/internal/grpc/recovery"
 	iamServer "go.datum.net/iam/internal/grpc/server"
+	authProvider "go.datum.net/iam/internal/providers/authentication/zitadel"
 	"go.datum.net/iam/internal/role"
 	"go.datum.net/iam/internal/storage"
 	"go.datum.net/iam/internal/storage/postgres"
@@ -28,6 +29,9 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"github.com/zitadel/zitadel-go/v3/pkg/client"
+	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -124,6 +128,16 @@ func serve() *cobra.Command {
 				return err
 			})
 
+			zitadelClient, err := client.New(ctx, zitadel.New("localhost", zitadel.WithInsecure("8082")),
+				client.WithAuth(client.DefaultServiceUserAuthentication("test/config/zitadel/secrets/machine-key.json", oidc.ScopeOpenID, client.ScopeZitadelAPI())),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create zitadel client: %w", err)
+			}
+			authenticationProvider := &authProvider.Zitadel{
+				Client: zitadelClient,
+			}
+
 			grpcListener, err := net.Listen("tcp", mustStringFlag(cmd.Flags(), "grpc-addr"))
 			if err != nil {
 				return err
@@ -169,15 +183,16 @@ func serve() *cobra.Command {
 
 			// Creates a new IAM gRPC service and registers it with the gRPC server
 			if err := iamServer.NewServer(iamServer.ServerOptions{
-				OpenFGAClient:   openfgaClient,
-				OpenFGAStoreID:  openfgaStore,
-				GRPCServer:      grpcServer,
-				ServiceStorage:  serviceStorage,
-				RoleStorage:     roleStorage,
-				PolicyStorage:   policyStorage,
-				UserStorage:     userStorage,
-				SubjectResolver: subjectResolver,
-				RoleResolver:    roleResolver,
+				OpenFGAClient:          openfgaClient,
+				OpenFGAStoreID:         openfgaStore,
+				GRPCServer:             grpcServer,
+				ServiceStorage:         serviceStorage,
+				RoleStorage:            roleStorage,
+				PolicyStorage:          policyStorage,
+				UserStorage:            userStorage,
+				SubjectResolver:        subjectResolver,
+				RoleResolver:           roleResolver,
+				AuthenticationProvider: authenticationProvider,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}
