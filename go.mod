@@ -3,10 +3,10 @@ module go.datum.net/iam
 go 1.23.1
 
 require (
-	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250326213431-82b2ac492784.1
-	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250326213431-82b2ac492784.2
-	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250326213431-82b2ac492784.1
-	buf.build/go/protoyaml v0.3.2
+	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250416125817-34e5700880d7.1
+	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250416125817-34e5700880d7.2
+	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250416125817-34e5700880d7.1
+	buf.build/go/protoyaml v0.3.0
 	cloud.google.com/go/longrunning v0.6.6
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
@@ -18,7 +18,7 @@ require (
 	github.com/openfga/api/proto v0.0.0-20250127102726-f9709139a369
 	github.com/simukti/sqldb-logger v0.0.0-20230108155151-646c1a075551
 	github.com/spf13/cobra v1.8.1
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	github.com/testcontainers/testcontainers-go v0.34.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.34.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.59.0
@@ -28,7 +28,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.35.0
 	golang.org/x/oauth2 v0.28.0
 	google.golang.org/genproto v0.0.0-20250409194420-de1ac958c67a
-	google.golang.org/genproto/googleapis/api v0.0.0-20250404141209-ee84b53bf3d0
+	google.golang.org/genproto/googleapis/api v0.0.0-20250414145226-207652e42e2e
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250409194420-de1ac958c67a
 	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.6
