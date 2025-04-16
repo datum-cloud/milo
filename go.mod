@@ -29,7 +29,7 @@ require (
 	golang.org/x/oauth2 v0.28.0
 	google.golang.org/genproto v0.0.0-20250409194420-de1ac958c67a
 	google.golang.org/genproto/googleapis/api v0.0.0-20250414145226-207652e42e2e
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250409194420-de1ac958c67a
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250414145226-207652e42e2e
 	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.6
 )
