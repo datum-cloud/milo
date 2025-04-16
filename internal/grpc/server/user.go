@@ -233,5 +233,25 @@ func (s *Server) UpdateUser(ctx context.Context, req *iampb.UpdateUserRequest) (
 	}
 
 	return longrunning.ResponseOperation(&iampb.UpdateUserMetadata{}, updatedUser, true)
+}
 
+func (s *Server) ListUsers(ctx context.Context, req *iampb.ListUsersRequest) (*iampb.ListUsersResponse, error) {
+	if errs := validation.ValidateListUsersRequest(req); len(errs) > 0 {
+		return nil, errs.GRPCStatus().Err()
+	}
+
+	users, err := s.UserStorage.ListResources(ctx, &storage.ListResourcesRequest{
+		PageSize:       req.PageSize,
+		PageToken:      req.PageToken,
+		Filter:         req.Filter,
+		IncludeDeleted: req.ShowDeleted,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &iampb.ListUsersResponse{
+		Users:         users.Resources,
+		NextPageToken: users.NextPageToken,
+	}, nil
 }
