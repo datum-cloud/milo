@@ -6,3 +6,4 @@ displayName: IAM User Creator
 spec:
   includedPermissions:
   - iam.datumapis.com/users.create
+  - iam.datumapis.com/users.setUserProviderId
