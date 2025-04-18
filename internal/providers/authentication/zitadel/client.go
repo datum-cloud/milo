@@ -12,6 +12,13 @@ type Zitadel struct {
 	Client *client.Client
 }
 
+type Config struct {
+	Domain   string
+	Port     string
+	KeyPath  string
+	Insecure bool
+}
+
 func (z *Zitadel) DeleteUser(ctx context.Context, u *iampb.User) error {
 	providerId := u.Annotations[z.GetProviderKey()]
 

@@ -53,6 +53,8 @@ tasks:
         --grpc-addr=:8001 \
         --disable-auth=false \
         --authentication-config=$(cat ./test/config/authentication/authentication-config.json | jq -c .) \
+        --zitadel-insecure=true \
+        --zitadel-key-path="test/config/zitadel/secrets/machine-key.json" \
         {{ .CLI_ARGS }}
 
   iamservice:loadservices:

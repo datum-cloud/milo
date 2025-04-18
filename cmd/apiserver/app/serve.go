@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
@@ -128,11 +129,9 @@ func serve() *cobra.Command {
 				return err
 			})
 
-			zitadelClient, err := client.New(ctx, zitadel.New("localhost", zitadel.WithInsecure("8082")),
-				client.WithAuth(client.DefaultServiceUserAuthentication("test/config/zitadel/secrets/machine-key.json", oidc.ScopeOpenID, client.ScopeZitadelAPI())),
-			)
+			zitadelClient, err := getZitadelClient(cmd, ctx)
 			if err != nil {
-				return fmt.Errorf("failed to create zitadel client: %w", err)
+				return err
 			}
 			authenticationProvider := &authProvider.Zitadel{
 				Client: zitadelClient,
@@ -236,6 +235,10 @@ func serve() *cobra.Command {
 	cmd.Flags().String("authentication-config", "", "Configuration file to use for authenticating API requests")
 	cmd.Flags().Bool("disable-auth", false, "Whether authorization checks should be disabled on the APIs")
 
+	cmd.Flags().String("zitadel-domain", "localhost:8082", "The domain of the ZITADEL instance")
+	cmd.Flags().String("zitadel-key-path", "", "Path to the ZITADEL service account private key JSON file")
+	cmd.Flags().Bool("zitadel-insecure", false, "Use an insecure HTTP connection instead of HTTPS for ZITADEL")
+
 	return cmd
 }
 
@@ -262,4 +265,59 @@ type loggerFunc func(ctx context.Context, level sqldblogger.Level, msg string, d
 
 func (l loggerFunc) Log(ctx context.Context, level sqldblogger.Level, msg string, data map[string]interface{}) {
 	l(ctx, level, msg, data)
+}
+
+func getZitadelConfig(cmd *cobra.Command) (*authProvider.Config, error) {
+	domain, err := cmd.Flags().GetString("zitadel-domain")
+	if err != nil {
+		return nil, err
+	}
+
+	keyPath, err := cmd.Flags().GetString("zitadel-key-path")
+	if err != nil {
+		return nil, err
+	}
+
+	insecure, err := cmd.Flags().GetBool("zitadel-insecure")
+	if err != nil {
+		return nil, err
+	}
+
+	var port string
+	if insecure {
+		parts := strings.Split(domain, ":")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid domain format: %s. When using the --zitadel-insecure=true flag, the domain must include both the hostname and port in the format 'domain:port' (e.g., 'localhost:8082')", domain)
+		}
+		domain = parts[0]
+		port = parts[1]
+	}
+
+	return &authProvider.Config{
+		Domain:   domain,
+		Port:     port,
+		KeyPath:  keyPath,
+		Insecure: insecure,
+	}, nil
+}
+
+func getZitadelClient(cmd *cobra.Command, ctx context.Context) (*client.Client, error) {
+	zitadelConfig, err := getZitadelConfig(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ZITADEL config: %w", err)
+	}
+
+	zitadelOptions := []zitadel.Option{}
+	if zitadelConfig.Insecure {
+		zitadelOptions = append(zitadelOptions, zitadel.WithInsecure(zitadelConfig.Port))
+	}
+
+	zitadelClient, err := client.New(ctx, zitadel.New(zitadelConfig.Domain, zitadelOptions...),
+		client.WithAuth(client.DefaultServiceUserAuthentication(zitadelConfig.KeyPath, oidc.ScopeOpenID, client.ScopeZitadelAPI())),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create zitadel client: %w", err)
+	}
+
+	return zitadelClient, nil
 }
