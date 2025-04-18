@@ -255,3 +255,26 @@ func (s *Server) ListUsers(ctx context.Context, req *iampb.ListUsersRequest) (*i
 		NextPageToken: users.NextPageToken,
 	}, nil
 }
+
+func (s *Server) DeleteUser(ctx context.Context, req *iampb.DeleteUserRequest) (*longrunningpb.Operation, error) {
+	user, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
+		Name: req.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.AuthenticationProvider.DeleteUser(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	deletedUser, err := s.UserStorage.DeleteResource(ctx, &storage.DeleteResourceRequest{
+		Name: req.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return longrunning.ResponseOperation(&iampb.UpdateUserMetadata{}, deletedUser, true)
+}

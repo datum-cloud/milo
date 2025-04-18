@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
@@ -19,6 +20,7 @@ import (
 	"go.datum.net/iam/internal/grpc/logging"
 	"go.datum.net/iam/internal/grpc/recovery"
 	iamServer "go.datum.net/iam/internal/grpc/server"
+	authProvider "go.datum.net/iam/internal/providers/authentication/zitadel"
 	"go.datum.net/iam/internal/role"
 	"go.datum.net/iam/internal/storage"
 	"go.datum.net/iam/internal/storage/postgres"
@@ -28,6 +30,9 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"github.com/zitadel/zitadel-go/v3/pkg/client"
+	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -124,6 +129,14 @@ func serve() *cobra.Command {
 				return err
 			})
 
+			zitadelClient, err := getZitadelClient(cmd, ctx)
+			if err != nil {
+				return err
+			}
+			authenticationProvider := &authProvider.Zitadel{
+				Client: zitadelClient,
+			}
+
 			grpcListener, err := net.Listen("tcp", mustStringFlag(cmd.Flags(), "grpc-addr"))
 			if err != nil {
 				return err
@@ -169,15 +182,16 @@ func serve() *cobra.Command {
 
 			// Creates a new IAM gRPC service and registers it with the gRPC server
 			if err := iamServer.NewServer(iamServer.ServerOptions{
-				OpenFGAClient:   openfgaClient,
-				OpenFGAStoreID:  openfgaStore,
-				GRPCServer:      grpcServer,
-				ServiceStorage:  serviceStorage,
-				RoleStorage:     roleStorage,
-				PolicyStorage:   policyStorage,
-				UserStorage:     userStorage,
-				SubjectResolver: subjectResolver,
-				RoleResolver:    roleResolver,
+				OpenFGAClient:          openfgaClient,
+				OpenFGAStoreID:         openfgaStore,
+				GRPCServer:             grpcServer,
+				ServiceStorage:         serviceStorage,
+				RoleStorage:            roleStorage,
+				PolicyStorage:          policyStorage,
+				UserStorage:            userStorage,
+				SubjectResolver:        subjectResolver,
+				RoleResolver:           roleResolver,
+				AuthenticationProvider: authenticationProvider,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}
@@ -221,6 +235,9 @@ func serve() *cobra.Command {
 	cmd.Flags().String("authentication-config", "", "Configuration file to use for authenticating API requests")
 	cmd.Flags().Bool("disable-auth", false, "Whether authorization checks should be disabled on the APIs")
 
+	cmd.Flags().String("zitadel-endpoint", "http://localhost:8082", "The domain of the ZITADEL instance")
+	cmd.Flags().String("zitadel-key-path", "", "Path to the ZITADEL service account private key JSON file")
+
 	return cmd
 }
 
@@ -247,4 +264,70 @@ type loggerFunc func(ctx context.Context, level sqldblogger.Level, msg string, d
 
 func (l loggerFunc) Log(ctx context.Context, level sqldblogger.Level, msg string, data map[string]interface{}) {
 	l(ctx, level, msg, data)
+}
+
+func getZitadelConfig(cmd *cobra.Command) (*authProvider.Config, error) {
+	endpoint, err := cmd.Flags().GetString("zitadel-endpoint")
+	if err != nil {
+		return nil, err
+	}
+
+	keyPath, err := cmd.Flags().GetString("zitadel-key-path")
+	if err != nil {
+		return nil, err
+	}
+
+	parsedURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ZITADEL endpoint: %w", err)
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("invalid ZITADEL endpoint scheme: %s. The scheme must be either 'http' or 'https'", parsedURL.Scheme)
+	}
+
+	insecure := false
+	if parsedURL.Scheme == "http" {
+		insecure = true
+	}
+
+	if insecure {
+		if parsedURL.Port() == "" {
+			return nil, fmt.Errorf("invalid domain format: %s. When using the --zitadel-insecure=true flag, the domain must include both the scheme (http), hostname and port in the format 'http://domain:port' (e.g., 'http://localhost:8082')", endpoint)
+		}
+	}
+
+	return &authProvider.Config{
+		Endpoint: parsedURL.Hostname(),
+		Port:     parsedURL.Port(),
+		KeyPath:  keyPath,
+		Insecure: insecure,
+	}, nil
+}
+
+func getZitadelClient(cmd *cobra.Command, ctx context.Context) (*client.Client, error) {
+	zitadelConfig, err := getZitadelConfig(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ZITADEL config: %w", err)
+	}
+
+	if zitadelConfig.Insecure {
+		slog.InfoContext(ctx, "creating an insecure client connection to Zitadel authentication provider", slog.String("endpoint", zitadelConfig.Endpoint))
+	} else {
+		slog.InfoContext(ctx, "creating an secure client connection to Zitadel authentication provider", slog.String("endpoint", zitadelConfig.Endpoint))
+	}
+
+	zitadelOptions := []zitadel.Option{}
+	if zitadelConfig.Insecure {
+		zitadelOptions = append(zitadelOptions, zitadel.WithInsecure(zitadelConfig.Port))
+	}
+
+	zitadelClient, err := client.New(ctx, zitadel.New(zitadelConfig.Endpoint, zitadelOptions...),
+		client.WithAuth(client.DefaultServiceUserAuthentication(zitadelConfig.KeyPath, oidc.ScopeOpenID, client.ScopeZitadelAPI())),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create zitadel client: %w", err)
+	}
+
+	return zitadelClient, nil
 }

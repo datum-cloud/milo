@@ -23,12 +23,7 @@ const updateIamUserExternalId = (
         );
 
         const reqBody = {
-          user: {
-            annotations: {
-              "internal.iam.datumapis.com/zitadel-id": user.id,
-            },
-          },
-          update_mask: "annotations",
+          provider_id: user.id,
         };
 
         logger.log(`${operation} User to update: ${JSON.stringify(reqBody)}`);
@@ -50,7 +45,7 @@ const updateIamUserExternalId = (
           .json();
 
         logger.log(
-          `${operation} Updated into IAM System. IAM system name: ${JSON.stringify(res.response.name)}`,
+          `${operation} Updated into IAM System. IAM system name: ${JSON.stringify(res.name)}`,
         );
       } catch (e) {
         // @ts-expect-error
