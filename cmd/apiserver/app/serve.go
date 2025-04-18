@@ -237,7 +237,6 @@ func serve() *cobra.Command {
 
 	cmd.Flags().String("zitadel-endpoint", "http://localhost:8082", "The domain of the ZITADEL instance")
 	cmd.Flags().String("zitadel-key-path", "", "Path to the ZITADEL service account private key JSON file")
-	cmd.Flags().Bool("zitadel-insecure", false, "Use an insecure HTTP connection instead of HTTPS for ZITADEL")
 
 	return cmd
 }
@@ -278,23 +277,23 @@ func getZitadelConfig(cmd *cobra.Command) (*authProvider.Config, error) {
 		return nil, err
 	}
 
-	insecure, err := cmd.Flags().GetBool("zitadel-insecure")
-	if err != nil {
-		return nil, err
-	}
-
 	parsedURL, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid ZITADEL endpoint: %w", err)
 	}
 
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("invalid ZITADEL endpoint scheme: %s. The scheme must be either 'http' or 'https'", parsedURL.Scheme)
+	}
+
+	insecure := false
+	if parsedURL.Scheme == "http" {
+		insecure = true
+	}
+
 	if insecure {
 		if parsedURL.Port() == "" {
 			return nil, fmt.Errorf("invalid domain format: %s. When using the --zitadel-insecure=true flag, the domain must include both the scheme (http), hostname and port in the format 'http://domain:port' (e.g., 'http://localhost:8082')", endpoint)
-		}
-	} else {
-		if parsedURL.Scheme != "https" {
-			return nil, fmt.Errorf("invalid domain format: %s. When using the --zitadel-insecure=false flag, the domain must use the scheme HTTPS (e.g., 'https://auth.datum.net')", endpoint)
 		}
 	}
 
@@ -310,6 +309,12 @@ func getZitadelClient(cmd *cobra.Command, ctx context.Context) (*client.Client, 
 	zitadelConfig, err := getZitadelConfig(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ZITADEL config: %w", err)
+	}
+
+	if zitadelConfig.Insecure {
+		slog.InfoContext(ctx, "creating an insecure client connection to Zitadel authentication provider", slog.String("endpoint", zitadelConfig.Endpoint))
+	} else {
+		slog.InfoContext(ctx, "creating an secure client connection to Zitadel authentication provider", slog.String("endpoint", zitadelConfig.Endpoint))
 	}
 
 	zitadelOptions := []zitadel.Option{}
