@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
-	"strings"
 
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
@@ -235,7 +235,7 @@ func serve() *cobra.Command {
 	cmd.Flags().String("authentication-config", "", "Configuration file to use for authenticating API requests")
 	cmd.Flags().Bool("disable-auth", false, "Whether authorization checks should be disabled on the APIs")
 
-	cmd.Flags().String("zitadel-domain", "localhost:8082", "The domain of the ZITADEL instance")
+	cmd.Flags().String("zitadel-endpoint", "http://localhost:8082", "The domain of the ZITADEL instance")
 	cmd.Flags().String("zitadel-key-path", "", "Path to the ZITADEL service account private key JSON file")
 	cmd.Flags().Bool("zitadel-insecure", false, "Use an insecure HTTP connection instead of HTTPS for ZITADEL")
 
@@ -268,7 +268,7 @@ func (l loggerFunc) Log(ctx context.Context, level sqldblogger.Level, msg string
 }
 
 func getZitadelConfig(cmd *cobra.Command) (*authProvider.Config, error) {
-	domain, err := cmd.Flags().GetString("zitadel-domain")
+	endpoint, err := cmd.Flags().GetString("zitadel-endpoint")
 	if err != nil {
 		return nil, err
 	}
@@ -283,19 +283,24 @@ func getZitadelConfig(cmd *cobra.Command) (*authProvider.Config, error) {
 		return nil, err
 	}
 
-	var port string
+	parsedURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ZITADEL endpoint: %w", err)
+	}
+
 	if insecure {
-		parts := strings.Split(domain, ":")
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid domain format: %s. When using the --zitadel-insecure=true flag, the domain must include both the hostname and port in the format 'domain:port' (e.g., 'localhost:8082')", domain)
+		if parsedURL.Port() == "" {
+			return nil, fmt.Errorf("invalid domain format: %s. When using the --zitadel-insecure=true flag, the domain must include both the scheme (http), hostname and port in the format 'http://domain:port' (e.g., 'http://localhost:8082')", endpoint)
 		}
-		domain = parts[0]
-		port = parts[1]
+	} else {
+		if parsedURL.Scheme != "https" {
+			return nil, fmt.Errorf("invalid domain format: %s. When using the --zitadel-insecure=false flag, the domain must use the scheme HTTPS (e.g., 'https://auth.datum.net')", endpoint)
+		}
 	}
 
 	return &authProvider.Config{
-		Domain:   domain,
-		Port:     port,
+		Endpoint: parsedURL.Hostname(),
+		Port:     parsedURL.Port(),
 		KeyPath:  keyPath,
 		Insecure: insecure,
 	}, nil
@@ -312,7 +317,7 @@ func getZitadelClient(cmd *cobra.Command, ctx context.Context) (*client.Client, 
 		zitadelOptions = append(zitadelOptions, zitadel.WithInsecure(zitadelConfig.Port))
 	}
 
-	zitadelClient, err := client.New(ctx, zitadel.New(zitadelConfig.Domain, zitadelOptions...),
+	zitadelClient, err := client.New(ctx, zitadel.New(zitadelConfig.Endpoint, zitadelOptions...),
 		client.WithAuth(client.DefaultServiceUserAuthentication(zitadelConfig.KeyPath, oidc.ScopeOpenID, client.ScopeZitadelAPI())),
 	)
 	if err != nil {

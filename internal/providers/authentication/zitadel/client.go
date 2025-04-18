@@ -13,7 +13,7 @@ type Zitadel struct {
 }
 
 type Config struct {
-	Domain   string
+	Endpoint string
 	Port     string
 	KeyPath  string
 	Insecure bool
