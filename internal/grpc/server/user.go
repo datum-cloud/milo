@@ -257,14 +257,21 @@ func (s *Server) ListUsers(ctx context.Context, req *iampb.ListUsersRequest) (*i
 }
 
 func (s *Server) DeleteUser(ctx context.Context, req *iampb.DeleteUserRequest) (*longrunningpb.Operation, error) {
-	deletedUser, err := s.UserStorage.DeleteResource(ctx, &storage.DeleteResourceRequest{
+	user, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
 		Name: req.Name,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.AuthenticationProvider.DeleteUser(ctx, deletedUser)
+	err = s.AuthenticationProvider.DeleteUser(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	deletedUser, err := s.UserStorage.DeleteResource(ctx, &storage.DeleteResourceRequest{
+		Name: req.Name,
+	})
 	if err != nil {
 		return nil, err
 	}
