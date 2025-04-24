@@ -12,6 +12,7 @@ import (
 
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
+	resourcemanagerpb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/resourcemanager/v1alpha"
 	_ "github.com/lib/pq"
 	sqldblogger "github.com/simukti/sqldb-logger"
 	"go.datum.net/iam/internal/grpc/auth"
@@ -112,6 +113,11 @@ func serve() *cobra.Command {
 				return err
 			}
 
+			organizationStorage, err := postgres.ResourceServer(db, &resourcemanagerpb.Organization{})
+			if err != nil {
+				return err
+			}
+
 			subjectResolver, err := subject.DatabaseResolver(db)
 			if err != nil {
 				return fmt.Errorf("failed to create database resolver: %w", err)
@@ -182,16 +188,18 @@ func serve() *cobra.Command {
 
 			// Creates a new IAM gRPC service and registers it with the gRPC server
 			if err := iamServer.NewServer(iamServer.ServerOptions{
-				OpenFGAClient:          openfgaClient,
-				OpenFGAStoreID:         openfgaStore,
-				GRPCServer:             grpcServer,
-				ServiceStorage:         serviceStorage,
-				RoleStorage:            roleStorage,
-				PolicyStorage:          policyStorage,
-				UserStorage:            userStorage,
-				SubjectResolver:        subjectResolver,
-				RoleResolver:           roleResolver,
+				OpenFGAClient:   openfgaClient,
+				OpenFGAStoreID:  openfgaStore,
+				GRPCServer:      grpcServer,
+				ServiceStorage:  serviceStorage,
+				RoleStorage:     roleStorage,
+				PolicyStorage:   policyStorage,
+				UserStorage:     userStorage,
+				OrganizationStorage: organizationStorage,
+				SubjectResolver: subjectResolver,
+				RoleResolver:    roleResolver,
 				AuthenticationProvider: authenticationProvider,
+				SubjectExtractor:    subjectExtractor,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}
