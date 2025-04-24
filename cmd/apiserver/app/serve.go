@@ -188,18 +188,18 @@ func serve() *cobra.Command {
 
 			// Creates a new IAM gRPC service and registers it with the gRPC server
 			if err := iamServer.NewServer(iamServer.ServerOptions{
-				OpenFGAClient:   openfgaClient,
-				OpenFGAStoreID:  openfgaStore,
-				GRPCServer:      grpcServer,
-				ServiceStorage:  serviceStorage,
-				RoleStorage:     roleStorage,
-				PolicyStorage:   policyStorage,
-				UserStorage:     userStorage,
-				OrganizationStorage: organizationStorage,
-				SubjectResolver: subjectResolver,
-				RoleResolver:    roleResolver,
+				OpenFGAClient:          openfgaClient,
+				OpenFGAStoreID:         openfgaStore,
+				GRPCServer:             grpcServer,
+				ServiceStorage:         serviceStorage,
+				RoleStorage:            roleStorage,
+				PolicyStorage:          policyStorage,
+				UserStorage:            userStorage,
+				OrganizationStorage:    organizationStorage,
+				SubjectResolver:        subjectResolver,
+				RoleResolver:           roleResolver,
 				AuthenticationProvider: authenticationProvider,
-				SubjectExtractor:    subjectExtractor,
+				SubjectExtractor:       subjectExtractor,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}

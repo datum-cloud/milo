@@ -11,8 +11,8 @@ import (
 	resourcemanagerpb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/resourcemanager/v1alpha"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
-	"go.datum.net/iam/internal/providers/authentication"
 	"go.datum.net/iam/internal/grpc/auth"
+	"go.datum.net/iam/internal/providers/authentication"
 	"go.datum.net/iam/internal/providers/openfga"
 	"go.datum.net/iam/internal/role"
 	"go.datum.net/iam/internal/schema"
@@ -50,17 +50,17 @@ type Server struct {
 }
 
 type ServerOptions struct {
-	OpenFGAClient   openfgav1.OpenFGAServiceClient
-	OpenFGAStoreID  string
-	GRPCServer      grpc.ServiceRegistrar
-	ServiceStorage  storage.ResourceServer[*iampb.Service]
-	RoleStorage     storage.ResourceServer[*iampb.Role]
-	PolicyStorage   storage.ResourceServer[*iampb.Policy]
-	UserStorage     storage.ResourceServer[*iampb.User]
-	OrganizationStorage storage.ResourceServer[*resourcemanagerpb.Organization]
-	SubjectResolver subject.Resolver
-	RoleResolver    role.Resolver
-	SubjectExtractor    auth.SubjectExtractor
+	OpenFGAClient          openfgav1.OpenFGAServiceClient
+	OpenFGAStoreID         string
+	GRPCServer             grpc.ServiceRegistrar
+	ServiceStorage         storage.ResourceServer[*iampb.Service]
+	RoleStorage            storage.ResourceServer[*iampb.Role]
+	PolicyStorage          storage.ResourceServer[*iampb.Policy]
+	UserStorage            storage.ResourceServer[*iampb.User]
+	OrganizationStorage    storage.ResourceServer[*resourcemanagerpb.Organization]
+	SubjectResolver        subject.Resolver
+	RoleResolver           role.Resolver
+	SubjectExtractor       auth.SubjectExtractor
 	AuthenticationProvider authentication.Provider
 }
 
@@ -86,18 +86,18 @@ func NewServer(opts ServerOptions) error {
 			StoreID: opts.OpenFGAStoreID,
 			Client:  opts.OpenFGAClient,
 		},
-		SchemaRegistry:  schemaRegistry,
-		OpenFGAClient:   opts.OpenFGAClient,
-		OpenFGAStoreID:  opts.OpenFGAStoreID,
-		ServiceStorage:  opts.ServiceStorage,
-		RoleStorage:     opts.RoleStorage,
-		PolicyStorage:   opts.PolicyStorage,
-		UserStorage:     opts.UserStorage,
-		OrganizationStorage: opts.OrganizationStorage,
-		SubjectResolver: opts.SubjectResolver,
-		RoleResolver:    opts.RoleResolver,
-		AccessChecker:   openfga.AccessChecker(schemaRegistry, opts.OpenFGAClient, opts.OpenFGAStoreID),
-		SubjectExtractor:    opts.SubjectExtractor,
+		SchemaRegistry:         schemaRegistry,
+		OpenFGAClient:          opts.OpenFGAClient,
+		OpenFGAStoreID:         opts.OpenFGAStoreID,
+		ServiceStorage:         opts.ServiceStorage,
+		RoleStorage:            opts.RoleStorage,
+		PolicyStorage:          opts.PolicyStorage,
+		UserStorage:            opts.UserStorage,
+		OrganizationStorage:    opts.OrganizationStorage,
+		SubjectResolver:        opts.SubjectResolver,
+		RoleResolver:           opts.RoleResolver,
+		AccessChecker:          openfga.AccessChecker(schemaRegistry, opts.OpenFGAClient, opts.OpenFGAStoreID),
+		SubjectExtractor:       opts.SubjectExtractor,
 		AuthenticationProvider: opts.AuthenticationProvider,
 	}
 
