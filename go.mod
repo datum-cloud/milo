@@ -21,7 +21,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/testcontainers/testcontainers-go v0.34.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.34.0
-	github.com/zitadel/oidc/v3 v3.36.1
+	github.com/zitadel/oidc/v3 v3.38.1
 	github.com/zitadel/zitadel-go/v3 v3.5.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0
 	go.opentelemetry.io/otel v1.35.0
