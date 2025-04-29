@@ -1,0 +1,139 @@
+syntax = "proto3";
+
+package datum.resourcemanager.v1alpha;
+
+import "datum/resourcemanager/v1alpha/enums.proto";
+import "google/api/field_behavior.proto";
+import "google/api/field_info.proto";
+import "google/api/resource.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "go.datumapis.com/os/genproto/resourcemanager/v1alpha;resourcemanagerpb";
+
+// Invitation is a resource representing an Invitation to a user to join an
+// Organization.
+message Invitation {
+  option (google.api.resource) = {
+    type: "iam.datumapis.com/Invitation"
+    pattern: "invitations/{invitation}"
+    style: DECLARATIVE_FRIENDLY
+    singular: "invitation"
+    plural: "invitations"
+  };
+
+  // The resource name of this Invitation.
+  string name = 1 [
+    (google.api.field_behavior) = IDENTIFIER,
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // The resource ID of this Invitation.
+  string invitation_id = 2 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Server assigned unique identifier for the Invitation. The value
+  // is a UUID4 string and guaranteed to remain unchanged until the resource is
+  // deleted.
+  string uid = 3 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_info).format = UUID4,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Human-readable display name of this Invitation that you can modify.
+  // The maximum length is 63 characters.
+  string display_name = 4 [(google.api.field_behavior) = OPTIONAL];
+
+  // Annotations is an unstructured key-value map stored with a Invitation
+  // that may be set by external tools to store and retrieve arbitrary metadata.
+  // They are not queryable and should be preserved when modifying objects.
+  map<string, string> annotations = 5 [(google.api.field_behavior) = OPTIONAL];
+
+  // Labels is an unstructured key-value map stored with a Invitation that
+  // may be set by external tools to enable platform features which identify
+  // Invitations via label selections.
+  map<string, string> labels = 6 [(google.api.field_behavior) = OPTIONAL];
+
+  // Output only. The time when the Invitation is created.
+  google.protobuf.Timestamp create_time = 7 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Output only. The last time that the Invitation is updated.
+  google.protobuf.Timestamp update_time = 8 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Output only. For a deleted resource, the deletion time. It is only
+  // populated as a response to a Delete request.
+  google.protobuf.Timestamp delete_time = 9 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Output only. If set, there are currently changes in flight to the
+  // Invitation.
+  bool reconciling = 10 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // This checksum is computed by the server based on the value of
+  // other fields, and might be sent on update requests to ensure the client has
+  // an up-to-date value before proceeding.
+  string etag = 11 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Spec is the specifications of the Invitation.
+  Spec spec = 12 [(google.api.field_behavior) = REQUIRED];
+
+  // Status is the status of the Invitation.
+  InvitationState state = 13 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+}
+
+// Spec is the specification of an Invitation.
+message Spec {
+  // The email address of the user to invite.
+  string recipient_email_address = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // The expiration date of the invitation. If not set, the invitation
+  // will expire after 14 days.
+  google.protobuf.Timestamp expiration_time = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // The list of roles to be granted at organization level to the user once they
+  // accept the invitation.
+  // (e.g. ["resourcemanager.datumapis.com/project.admin", "compute.datumapis.com/workload.admin"])
+  repeated string roles = 3 [(google.api.field_behavior) = REQUIRED];
+
+  // The number of send attempts made for this invitation. Maximum is 5.
+  int32 send_attempts = 4 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // The user ID of the user who sent the invitation.
+  string requestor_id = 5 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // The resource name of the parent.
+  string parent = 6 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE,
+    (google.api.resource_reference).type = "iam.datumapis.com/Organization"
+  ];
+}
