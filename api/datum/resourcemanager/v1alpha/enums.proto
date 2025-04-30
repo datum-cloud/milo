@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package datum.resourcemanager.v1alpha;
+
+option go_package = "go.datumapis.com/os/genproto/resourcemanager/v1alpha;resourcemanagerpb";
+
+// VerificationState is the verification state of an Organization.
+enum VerificationState {
+  // The verification state is not specified.
+  VERIFICATION_STATE_UNSPECIFIED = 0;
+  // The organization is pending verification.
+  VERIFICATION_STATE_PENDING = 1;
+  // The organization is verified.
+  VERIFICATION_STATE_VERIFIED = 2;
+}

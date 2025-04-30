@@ -8,3 +8,8 @@ const (
 	MaxUserIdLength      = 63
 	MaxUsersPageSize     = 1000
 )
+const (
+	MaxDescriptionLength    = 63
+	MinOrganizationIdLength = 1
+	MaxOrganizationIdLength = 63
+)

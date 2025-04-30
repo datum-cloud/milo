@@ -4,10 +4,14 @@ import (
 	"context"
 
 	"buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2/datum/iam/v1alpha/iamv1alphagateway"
+	"buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2/datum/resourcemanager/v1alpha/resourcemanagerv1alphagateway"
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
+	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/resourcemanager/v1alpha/resourcemanagerv1alphagrpc"
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
+	resourcemanagerpb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/resourcemanager/v1alpha"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
+	"go.datum.net/iam/internal/grpc/auth"
 	"go.datum.net/iam/internal/providers/authentication"
 	"go.datum.net/iam/internal/providers/openfga"
 	"go.datum.net/iam/internal/role"
@@ -25,6 +29,7 @@ type Server struct {
 	iamv1alphagrpc.UnimplementedServicesServer
 	iamv1alphagrpc.UnimplementedAccessCheckServer
 	iamv1alphagrpc.UnimplementedUsersServer
+	resourcemanagerv1alphagrpc.UnimplementedOrganizationsServer
 
 	PolicyReconciler             *openfga.PolicyReconciler
 	RoleReconciler               *openfga.RoleReconciler
@@ -35,11 +40,13 @@ type Server struct {
 	RoleStorage                  storage.ResourceServer[*iampb.Role]
 	PolicyStorage                storage.ResourceServer[*iampb.Policy]
 	UserStorage                  storage.ResourceServer[*iampb.User]
+	OrganizationStorage          storage.ResourceServer[*resourcemanagerpb.Organization]
 	SchemaRegistry               *schema.Registry
 	SubjectResolver              subject.Resolver
 	RoleResolver                 role.Resolver
 	AccessChecker                func(context.Context, *iampb.CheckAccessRequest) (*iampb.CheckAccessResponse, error)
 	AuthenticationProvider       authentication.Provider
+	SubjectExtractor             auth.SubjectExtractor
 }
 
 type ServerOptions struct {
@@ -50,8 +57,10 @@ type ServerOptions struct {
 	RoleStorage            storage.ResourceServer[*iampb.Role]
 	PolicyStorage          storage.ResourceServer[*iampb.Policy]
 	UserStorage            storage.ResourceServer[*iampb.User]
+	OrganizationStorage    storage.ResourceServer[*resourcemanagerpb.Organization]
 	SubjectResolver        subject.Resolver
 	RoleResolver           role.Resolver
+	SubjectExtractor       auth.SubjectExtractor
 	AuthenticationProvider authentication.Provider
 }
 
@@ -84,9 +93,11 @@ func NewServer(opts ServerOptions) error {
 		RoleStorage:            opts.RoleStorage,
 		PolicyStorage:          opts.PolicyStorage,
 		UserStorage:            opts.UserStorage,
+		OrganizationStorage:    opts.OrganizationStorage,
 		SubjectResolver:        opts.SubjectResolver,
 		RoleResolver:           opts.RoleResolver,
 		AccessChecker:          openfga.AccessChecker(schemaRegistry, opts.OpenFGAClient, opts.OpenFGAStoreID),
+		SubjectExtractor:       opts.SubjectExtractor,
 		AuthenticationProvider: opts.AuthenticationProvider,
 	}
 
@@ -96,6 +107,7 @@ func NewServer(opts ServerOptions) error {
 	iamv1alphagrpc.RegisterServicesServer(opts.GRPCServer, server)
 	iamv1alphagrpc.RegisterAccessCheckServer(opts.GRPCServer, server)
 	iamv1alphagrpc.RegisterUsersServer(opts.GRPCServer, server)
+	resourcemanagerv1alphagrpc.RegisterOrganizationsServer(opts.GRPCServer, server)
 
 	return nil
 }
@@ -106,4 +118,5 @@ func RegisterProxyRoutes(ctx context.Context, mux *runtime.ServeMux, conn *grpc.
 	iamv1alphagateway.RegisterServicesHandler(ctx, mux, conn)
 	iamv1alphagateway.RegisterAccessCheckHandler(ctx, mux, conn)
 	iamv1alphagateway.RegisterUsersHandler(ctx, mux, conn)
+	resourcemanagerv1alphagateway.RegisterOrganizationsHandler(ctx, mux, conn)
 }
