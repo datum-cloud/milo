@@ -90,3 +90,8 @@ tasks:
 
 
         
+  openfga:getmodel:
+    desc: Retrieves the OpenFGA model from the server
+    cmd: |
+      fga model get --store-id $(task openfga:store-id) \
+        --format json > model.json \    
