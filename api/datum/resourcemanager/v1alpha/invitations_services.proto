@@ -4,6 +4,7 @@ package datum.resourcemanager.v1alpha;
 
 import "datum/api/annotations.proto";
 import "datum/resourcemanager/v1alpha/invitations_resources.proto";
+import "datum/resourcemanager/v1alpha/organizations_resources.proto";
 import "google/api/annotations.proto";
 import "google/api/client.proto";
 import "google/api/field_behavior.proto";
@@ -37,7 +38,7 @@ service Invitations {
   rpc GetInvitation(GetInvitationRequest) returns (Invitation) {
     option (datum.api.required_permissions) = "iam.datumapis.com/invitations.get";
     option (google.api.method_signature) = "name";
-    option (google.api.http) = {get: "/v1alpha/{name=invitations/*}"};
+    option (google.api.http) = {get: "/v1alpha/{name=organizations/*/invitations/*}"};
   }
 
   // ListInvitations lists all Invitations.
@@ -53,7 +54,7 @@ service Invitations {
     option (datum.api.required_permissions) = "iam.datumapis.com/invitations.update";
     option (google.api.method_signature) = "invitation,update_mask";
     option (google.api.http) = {
-      patch: "/v1alpha/{invitation.name=invitations/*}"
+      patch: "/v1alpha/{invitation.name=organizations/*/invitations/*}"
       body: "invitation"
     };
     option (google.longrunning.operation_info) = {
@@ -66,10 +67,20 @@ service Invitations {
   rpc DeleteInvitation(DeleteInvitationRequest) returns (google.longrunning.Operation) {
     option (datum.api.required_permissions) = "iam.datumapis.com/invitations.delete";
     option (google.api.method_signature) = "name";
-    option (google.api.http) = {delete: "/v1alpha/{name=invitations/*}"};
+    option (google.api.http) = {delete: "/v1alpha/{name=organizations/*/invitations/*}"};
     option (google.longrunning.operation_info) = {
       response_type: "Invitation"
       metadata_type: "DeleteInvitationMetadata"
+    };
+  }
+
+  // AcceptInvitation accepts and invitation to join an organization.
+  // Imperative only.
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/invitations.accept";
+    option (google.api.http) = {
+      post: "/v1alpha/{name=organizations/*/invitations/*}:accept"
+      body: "*"
     };
   }
 }
@@ -176,3 +187,25 @@ message DeleteInvitationRequest {
 // The metadata returned from the long running operations when deleting a
 // invitation.
 message DeleteInvitationMetadata {}
+
+// AcceptInvitationRequest is the request for accepting an invitation to join an
+// organization.
+// (-- api-linter: core::0154::declarative-friendly-required=disabled
+//     aip.dev/not-precedent: We don't need an etag in the AcceptInvitationRequest because accepting an invitation is an idempotent operation that does not modify the invitation resource itself.. --)
+message AcceptInvitationRequest {
+  // The name of the Invitation to accept.
+  // Format: organizations/{organization}/invitations/{invitation}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Invitation"}
+  ];
+  // If true, the request is validated and nothing is persisted.
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// AcceptInvitationResponse is the response for accepting an invitation to join
+// an organization.
+message AcceptInvitationResponse {
+  // The organization that the user is invited to join.
+  Organization organization = 1;
+}

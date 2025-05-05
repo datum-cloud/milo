@@ -15,7 +15,7 @@ option go_package = "go.datumapis.com/os/genproto/resourcemanager/v1alpha;resour
 message Invitation {
   option (google.api.resource) = {
     type: "iam.datumapis.com/Invitation"
-    pattern: "invitations/{invitation}"
+    pattern: "organizations/{organization}/invitations/{invitation}"
     style: DECLARATIVE_FRIENDLY
     singular: "invitation"
     plural: "invitations"
