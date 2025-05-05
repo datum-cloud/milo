@@ -66,6 +66,30 @@ spec:
     - setUserProviderId
     resourceNamePatterns:
     - "users/{user}"
+  - type: iam.datumapis.com/Organization
+    plural: organizations
+    singular: organization
+    permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    resourceNamePatterns:
+    - "organizations/{organization}"
+  - type: iam.datumapis.com/Invitation
+    plural: invitations
+    singular: invitation
+    permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - accept
+    resourceNamePatterns:
+    - "organizations/{organization}/invitations/{invitation}"
+    - "invitations/{invitation}"
   - type: iam.datumapis.com/Policy
     plural: policies
     singular: policy

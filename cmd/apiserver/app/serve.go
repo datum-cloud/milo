@@ -125,6 +125,11 @@ func serve() *cobra.Command {
 				return err
 			}
 
+			invitationStorage, err := postgres.ResourceServer(db, &resourcemanagerpb.Invitation{})
+			if err != nil {
+				return err
+			}
+
 			subjectResolver, err := subject.DatabaseResolver(db)
 			if err != nil {
 				return fmt.Errorf("failed to create database resolver: %w", err)
@@ -235,6 +240,7 @@ func serve() *cobra.Command {
 				PolicyStorage:          policyStorage,
 				UserStorage:            userStorage,
 				OrganizationStorage:    organizationStorage,
+				InvitationStorage:      invitationStorage,
 				SubjectResolver:        subjectResolver,
 				RoleResolver:           roleResolver,
 				AuthenticationProvider: authenticationProvider,

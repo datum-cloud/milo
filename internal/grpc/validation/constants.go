@@ -13,3 +13,8 @@ const (
 	MinOrganizationIdLength = 1
 	MaxOrganizationIdLength = 63
 )
+
+const (
+	MinInvitationIdLength = 1
+	MaxInvitationIdLength = 63
+)
