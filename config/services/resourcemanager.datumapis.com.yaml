@@ -1,0 +1,16 @@
+serviceId: resourcemanager.datumapis.com
+name: services/resourcemanager.datumapis.com
+displayName: Datum Resource Manager Service
+spec:
+  resources:
+  - type: resourcemanager.datumapis.com/Organization
+    plural: organizations
+    singular: organization
+    permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    resourceNamePatterns:
+    - "organizations/{organization}"

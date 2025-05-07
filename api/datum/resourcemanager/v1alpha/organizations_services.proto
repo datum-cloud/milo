@@ -23,8 +23,8 @@ service Organizations {
   // (-- api-linter: core::0133::method-signature=disabled
   //     aip.dev/not-precedent: The service resource does not have a parent. --)
   rpc CreateOrganization(CreateOrganizationRequest) returns (google.longrunning.Operation) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/organizations.create";
-    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/Organization";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/organizations.create";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/resourcemanager.datumapis.com/Organization";
     option (google.api.method_signature) = "organization,organization_id";
     option (google.api.http) = {
       post: "/v1alpha/organizations"
@@ -38,21 +38,21 @@ service Organizations {
 
   // GetOrganization gets an Organization by name.
   rpc GetOrganization(GetOrganizationRequest) returns (Organization) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/organizations.get";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/organizations.get";
     option (google.api.method_signature) = "name";
     option (google.api.http) = {get: "/v1alpha/{name=organizations/*}"};
   }
 
   // ListOrganizations lists all Organizations.
   rpc ListOrganizations(ListOrganizationsRequest) returns (ListOrganizationsResponse) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/organizations.list";
-    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/Organization";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/organizations.list";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/resourcemanager.datumapis.com/Organization";
     option (google.api.http) = {get: "/v1alpha/organizations"};
   }
 
   // UpdateOrganization updates an Organization.
   rpc UpdateOrganization(UpdateOrganizationRequest) returns (google.longrunning.Operation) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/organizations.update";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/organizations.update";
     option (google.api.method_signature) = "organization,update_mask";
     option (google.api.http) = {
       patch: "/v1alpha/{organization.name=organizations/*}"
@@ -66,7 +66,7 @@ service Organizations {
 
   // DeleteOrganization deletes an Organization by name.
   rpc DeleteOrganization(DeleteOrganizationRequest) returns (google.longrunning.Operation) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/organizations.delete";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/organizations.delete";
     option (google.api.method_signature) = "name";
     option (google.api.http) = {delete: "/v1alpha/{name=organizations/*}"};
     option (google.longrunning.operation_info) = {
@@ -98,7 +98,7 @@ message GetOrganizationRequest {
   // Format: organizations/{organization}
   string name = 1 [
     (google.api.field_behavior) = REQUIRED,
-    (google.api.resource_reference) = {type: "iam.datumapis.com/Organization"}
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Organization"}
   ];
 }
 
@@ -152,7 +152,7 @@ message DeleteOrganizationRequest {
   // The name of the Organization to delete.
   string name = 1 [
     (google.api.field_behavior) = REQUIRED,
-    (google.api.resource_reference) = {type: "iam.datumapis.com/Organization"}
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Organization"}
   ];
   // The etag of the Organization to delete. If this is not the same etag as the
   // currently stored Organization, the request will be rejected. If not
