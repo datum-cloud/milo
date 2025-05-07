@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -237,6 +238,20 @@ func migrateResourcesCommand() *cobra.Command {
 					updateTime, err := parseTime(datumOsUser.UpdateTime)
 					if err != nil {
 						slog.Error("Failed to parse update time", "error", err, "user", datumOsUser)
+						continue
+					}
+
+					// Check if the user already exists. Strategy: The first user with the same email is the one that will be migrated.
+					sub, err := subjectResolver(cmd.Context(), subject.UserKind, datumOsUser.Spec.Email)
+					if err != nil {
+						// If error is not "not found", don't return it an continue
+						if !errors.Is(err, subject.ErrSubjectNotFound) {
+							slog.Error("Failed to resolve subject", "error", err, "user", datumOsUser)
+							continue
+						}
+					}
+					if len(sub) > 0 {
+						slog.Error("User already exists", "user", datumOsUser.Spec.Email)
 						continue
 					}
 
