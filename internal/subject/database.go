@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 )
 
 func DatabaseResolver(db *sql.DB) (Resolver, error) {
@@ -36,12 +35,7 @@ func DatabaseResolver(db *sql.DB) (Resolver, error) {
 			return "", err
 		}
 
-		switch kind {
-		case UserKind:
-			return strings.TrimPrefix(subject, "users/"), nil
-		default:
-			return "", fmt.Errorf("unsupported subject type provided: %s", string(kind))
-		}
+		return subject, nil
 
 	}, nil
 }
