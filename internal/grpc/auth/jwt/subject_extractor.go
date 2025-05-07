@@ -64,6 +64,10 @@ func SubjectExtractor(auth *serviceconfig.Authentication, subjectResolver subjec
 					return "", errors.Unauthenticated().Err()
 				}
 
+				if subjectResolver == nil {
+					return email, nil
+				}
+
 				subject, err := subjectResolver(ctx, subject.UserKind, email)
 				if err != nil {
 					return "", err
