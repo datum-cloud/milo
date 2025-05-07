@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 func DatabaseResolver(db *sql.DB) (Resolver, error) {
-	userStmt, err := db.Prepare("SELECT uid FROM iam_datumapis_com_User_resource WHERE data->'spec'->>'email' = $1")
+	userStmt, err := db.Prepare("SELECT name FROM iam_datumapis_com_User_resource WHERE data->'spec'->>'email' = $1")
 	if err != nil {
 		return nil, err
 	}
@@ -35,6 +36,12 @@ func DatabaseResolver(db *sql.DB) (Resolver, error) {
 			return "", err
 		}
 
-		return subject, nil
+		switch kind {
+		case UserKind:
+			return strings.TrimPrefix(subject, "users/"), nil
+		default:
+			return "", fmt.Errorf("unsupported subject type provided: %s", string(kind))
+		}
+
 	}, nil
 }

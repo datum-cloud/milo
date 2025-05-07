@@ -95,6 +95,22 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 }
 
 func (s *Server) GetUser(ctx context.Context, req *iampb.GetUserRequest) (*iampb.User, error) {
+	// Check if the name is an email address
+	if strings.Contains(req.Name, "@") {
+		userEmail := strings.TrimPrefix(req.Name, "users/")
+		// If it's an email, we need to resolve it to a user subject first
+		sub, err := s.SubjectResolver(ctx, subject.UserKind, userEmail)
+		if err != nil {
+			if !errors.Is(err, subject.ErrSubjectNotFound) {
+				return nil, err
+			}
+		}
+		if len(sub) > 0 {
+			// If the user is found, we need to update the request name to the subject name
+			req.Name = fmt.Sprintf("users/%s", sub)
+		}
+	}
+
 	return s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
 		Name: req.Name,
 	})
