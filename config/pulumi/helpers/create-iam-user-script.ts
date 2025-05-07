@@ -50,6 +50,19 @@ const createIamUserScript = (
           })
           .json();
 
+        if(res.code == 6) {
+          // TODO: As the user already exists on the database, we wil need to
+          // update the metadata with the corresponding iam resource name later
+          logger.log(`${operation} User already exists in IAM system.`);
+        
+          api.v1.user.appendMetadata(
+            "internal.iam.datumapis.com-iam-resource-name",
+            "pending",
+          );
+
+          return;
+        }
+
         logger.log(
           `${operation} User Created into IAM System. IAM system name: ${res.response.name}`,
         );
