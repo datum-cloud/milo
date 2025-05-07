@@ -50,14 +50,24 @@ const createIamUserScript = (
           })
           .json();
 
+        // If the user already exists
         if(res.code == 6) {
-          // TODO: As the user already exists on the database, we wil need to
-          // update the metadata with the corresponding iam resource name later
           logger.log(`${operation} User already exists in IAM system.`);
-        
+          logger.log(`${operation} Getting existing user from IAM system.`);
+
+          const user = http
+          .fetch(`__API_URL__/v1alpha/users/${reqBody.spec.email}`, {
+            method: "GET",
+            headers: headers,
+          })
+          .json();
+
+          logger.log(`${operation} IAM System user resource name: ${user.name}`);
+          logger.log(`${operation} Updating Zitadeluser metadata with IAM System user resource name: ${user.name}`);
+
           api.v1.user.appendMetadata(
             "internal.iam.datumapis.com-iam-resource-name",
-            "pending",
+            user.name,
           );
 
           return;
