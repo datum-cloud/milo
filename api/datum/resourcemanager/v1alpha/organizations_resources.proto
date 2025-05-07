@@ -13,7 +13,7 @@ option go_package = "go.datumapis.com/os/genproto/resourcemanager/v1alpha;resour
 // Organization is a resource representing an Organization.
 message Organization {
   option (google.api.resource) = {
-    type: "iam.datumapis.com/Organization"
+    type: "resourcemanager.datumapis.com/Organization"
     pattern: "organizations/{organization}"
     style: DECLARATIVE_FRIENDLY
     singular: "organization"

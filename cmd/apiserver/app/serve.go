@@ -124,7 +124,12 @@ func serve() *cobra.Command {
 				return fmt.Errorf("failed to create database resolver: %w", err)
 			}
 
-			subjectExtractor, err := jwt.SubjectExtractor(authConfig, subjectResolver)
+			// We're not using the subject resolver here because the resources stored
+			// in the OpenFGA database are referencing the user's email address
+			// instead of the subject ID. We will want to adjust this in the future so
+			// that the subject ID is used instead of the email address all the way
+			// down to the OpenFGA layer to align with OpenFGA's best practices.
+			subjectExtractor, err := jwt.SubjectExtractor(authConfig, nil)
 			if err != nil {
 				return err
 			}
