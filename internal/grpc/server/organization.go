@@ -17,6 +17,12 @@ import (
 	"go.datum.net/iam/internal/storage"
 )
 
+func (s *Server) GetOrganization(ctx context.Context, req *resourcemanagerpb.GetOrganizationRequest) (*resourcemanagerpb.Organization, error) {
+	return s.OrganizationStorage.GetResource(ctx, &storage.GetResourceRequest{
+		Name: req.Name,
+	})
+}
+
 func (s *Server) CreateOrganization(ctx context.Context, req *resourcemanagerpb.CreateOrganizationRequest) (*longrunningpb.Operation, error) {
 	organization := req.Organization
 	organization.OrganizationId = req.OrganizationId
