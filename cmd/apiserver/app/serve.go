@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
@@ -328,6 +329,14 @@ func getZitadelClient(cmd *cobra.Command, ctx context.Context) (*client.Client, 
 	zitadelOptions := []zitadel.Option{}
 	if zitadelConfig.Insecure {
 		zitadelOptions = append(zitadelOptions, zitadel.WithInsecure(zitadelConfig.Port))
+	}
+
+	if zitadelConfig.Port != "" {
+		port, err := strconv.Atoi(zitadelConfig.Port)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert ZITADEL port to int: %w", err)
+		}
+		zitadelOptions = append(zitadelOptions, zitadel.WithPort(uint16(port)))
 	}
 
 	zitadelClient, err := client.New(ctx, zitadel.New(zitadelConfig.Endpoint, zitadelOptions...),
