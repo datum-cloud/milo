@@ -74,6 +74,16 @@ service Organizations {
       metadata_type: "DeleteOrganizationMetadata"
     };
   }
+
+  // SearchOrganizations searches for Organizations in which the user is a member of.
+  rpc SearchOrganizations(SearchOrganizationsRequest) returns (SearchOrganizationsResponse) {
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/organizations.search";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/resourcemanager.datumapis.com/Organization";
+    option (google.api.http) = {
+      post: "/v1alpha/organizations:search"
+      body: "*"
+    };
+  }
 }
 
 // CreateOrganizationRequest is the request for creating an Organization.
@@ -168,3 +178,22 @@ message DeleteOrganizationRequest {
 // The metadata returned from the long running operations when deleting a
 // organization.
 message DeleteOrganizationMetadata {}
+
+// SearchOrganizationsRequest is the request for searching Organizations in which
+// a user is a member of.
+// (-- api-linter: core::0158::request-page-size-field=disabled
+//     aip.dev/not-precedent: We prefer to not have that complexity on the
+//     response/request, as users won't be part of too many organizations. --)
+// (-- api-linter: core::0158::request-page-token-field=disabled
+//     aip.dev/not-precedent: We prefer to not have that complexity on the
+//     response/request, as users won't be part of too many organizations. --)
+message SearchOrganizationsRequest {}
+
+// SearchOrganizationsResponse is the response for searching Organizations.
+// (-- api-linter: core::0158::response-next-page-token-field=disabled
+//     aip.dev/not-precedent: We prefer to not have that complexity on the
+//     response/request, as users won't be part of too many organizations. --)
+message SearchOrganizationsResponse {
+  // The list of Organizations.
+  repeated Organization organizations = 1;
+}
