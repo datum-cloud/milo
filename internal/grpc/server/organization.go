@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"cloud.google.com/go/longrunning/autogen/longrunningpb"
 	"github.com/google/uuid"
 	"go.datum.net/iam/internal/grpc/longrunning"
@@ -14,6 +16,7 @@ import (
 	resourcemanagerpb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/resourcemanager/v1alpha"
 	"github.com/mennanov/fmutils"
 	"go.datum.net/iam/internal/grpc/validation"
+	"go.datum.net/iam/internal/providers/openfga"
 	"go.datum.net/iam/internal/storage"
 )
 
@@ -49,12 +52,11 @@ func (s *Server) CreateOrganization(ctx context.Context, req *resourcemanagerpb.
 	organization.CreateTime = now
 	organization.UpdateTime = now
 
-	userId, err := s.SubjectExtractor(ctx)
+	userName, err := s.SubjectExtractor(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	userName := fmt.Sprintf("users/%s", userId)
 	user, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
 		Name: userName,
 	})
@@ -72,10 +74,10 @@ func (s *Server) CreateOrganization(ctx context.Context, req *resourcemanagerpb.
 
 	policy := &iampb.SetIamPolicyRequest{
 		Policy: &iampb.Policy{
-			Name: fmt.Sprintf("iam.datumapis.com/%s", organization.Name),
+			Name: fmt.Sprintf("resourcemanager.datumapis.com/%s", organization.Name),
 			Spec: &iampb.PolicySpec{
 				Bindings: []*iampb.Binding{{
-					Role:    "services/iam.datumapis.com/roles/organizationManager",
+					Role:    "services/resourcemanager.datumapis.com/roles/organizationManager",
 					Members: []string{fmt.Sprintf("user:%s", user.Spec.Email)},
 				}},
 			},
@@ -153,4 +155,49 @@ func (s *Server) UpdateOrganization(ctx context.Context, req *resourcemanagerpb.
 	}
 
 	return longrunning.ResponseOperation(&resourcemanagerpb.DeleteOrganizationMetadata{}, updatedOrganization, true)
+}
+
+func (s *Server) SearchOrganizations(ctx context.Context, req *resourcemanagerpb.SearchOrganizationsRequest) (*resourcemanagerpb.SearchOrganizationsResponse, error) {
+	userName, err := s.SubjectExtractor(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the organizations that the user has the `organizations.get` permission
+	resourceType := "resourcemanager.datumapis.com/Organization"
+	hashedPermission := openfga.HashPermission("resourcemanager.datumapis.com/organizations.get")
+	organizationsObjects, err := s.OpenFGAClient.ListObjects(ctx, &openfgav1.ListObjectsRequest{
+		StoreId:  s.OpenFGAStoreID,
+		User:     fmt.Sprintf("iam.datumapis.com/InternalUser:%s", userName),
+		Relation: hashedPermission,
+		Type:     resourceType,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the organization names from the objects
+	organizationNames := make([]string, 0, len(organizationsObjects.Objects))
+	for _, obj := range organizationsObjects.Objects {
+		if name := strings.TrimPrefix(obj, fmt.Sprintf("%s:", resourceType)); name != obj {
+			organizationNames = append(organizationNames, name)
+		}
+	}
+
+	// Get the organizations from the storage
+	organizations := make([]*resourcemanagerpb.Organization, 0, len(organizationNames))
+	for _, name := range organizationNames {
+		org, err := s.OrganizationStorage.GetResource(ctx, &storage.GetResourceRequest{
+			Name: name,
+		})
+		if err != nil {
+			return nil, err
+		}
+		organizations = append(organizations, org)
+	}
+
+	// Return the organizations
+	return &resourcemanagerpb.SearchOrganizationsResponse{
+		Organizations: organizations,
+	}, nil
 }

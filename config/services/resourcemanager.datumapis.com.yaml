@@ -12,5 +12,6 @@ spec:
     - create
     - update
     - delete
+    - search
     resourceNamePatterns:
     - "organizations/{organization}"
