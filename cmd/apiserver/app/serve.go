@@ -164,7 +164,7 @@ func serve() *cobra.Command {
 				// If server TLS is configured, the client connection to it must also use TLS.
 				// We use the server's certificate file for the client's trusted CA.
 				slog.InfoContext(ctx, "gRPC client for REST proxy will use TLS", slog.String("serverCert", tlsCertFile))
-				clientCreds, err := credentials.NewClientTLSFromFile(tlsCertFile, "") // serverNameOverride "" uses host from address
+				clientCreds, err := credentials.NewClientTLSFromFile(tlsCertFile, "localhost")
 				if err != nil {
 					return fmt.Errorf("failed to create client TLS credentials for gRPC proxy client: %w", err)
 				}
