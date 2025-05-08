@@ -155,12 +155,29 @@ func serve() *cobra.Command {
 				return err
 			}
 
+			// Configure dial options for the gRPC client connection to the local gRPC service
+			var dialOptions []grpc.DialOption
+			dialOptions = append(dialOptions, grpc.WithSharedWriteBuffer(true))
+			dialOptions = append(dialOptions, grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
+
+			if tlsCertFile != "" && tlsKeyFile != "" {
+				// If server TLS is configured, the client connection to it must also use TLS.
+				// We use the server's certificate file for the client's trusted CA.
+				slog.InfoContext(ctx, "gRPC client for REST proxy will use TLS", slog.String("serverCert", tlsCertFile))
+				clientCreds, err := credentials.NewClientTLSFromFile(tlsCertFile, "") // serverNameOverride "" uses host from address
+				if err != nil {
+					return fmt.Errorf("failed to create client TLS credentials for gRPC proxy client: %w", err)
+				}
+				dialOptions = append(dialOptions, grpc.WithTransportCredentials(clientCreds))
+			} else {
+				slog.InfoContext(ctx, "gRPC client for REST proxy will use insecure credentials")
+				dialOptions = append(dialOptions, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			}
+
 			slog.InfoContext(ctx, "creating a client connection to the IAM gRPC service that was started", slog.String("address", grpcListener.Addr().String()))
 			grpcClientConn, err := grpc.NewClient(
 				grpcListener.Addr().String(),
-				grpc.WithSharedWriteBuffer(true),
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+				dialOptions...,
 			)
 			if err != nil {
 				return err
