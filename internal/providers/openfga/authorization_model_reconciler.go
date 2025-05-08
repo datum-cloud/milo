@@ -432,3 +432,7 @@ func hashPermission(permission string) string {
 
 	return hex.EncodeToString(hasher.Sum(nil))
 }
+
+func HashPermission(permission string) string {
+	return hashPermission(permission)
+}

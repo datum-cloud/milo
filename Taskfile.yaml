@@ -83,5 +83,10 @@ tasks:
         --policies config/policies \
         --overwrite true
 
+  openfga:getuserorganizations:
+    desc: Retrieves the OpenFGA model from the server
+    cmd: |                                                       #resource identifier, hashed permission, resource type
+      fga query list-objects --store-id $(task openfga:store-id) iam.datumapis.com/InternalUser:users/db2fcc5a-b98a-48e5-b5df-b282d910273b 7983b8fa resourcemanager.datumapis.com/Organization
+
 
         
