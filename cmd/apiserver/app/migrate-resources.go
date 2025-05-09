@@ -180,20 +180,27 @@ func migrateResourcesCommand() *cobra.Command {
 						continue
 					}
 
-					createTime, err := parseTime(datumOsOrg.CreateTime)
-					if err != nil {
-						slog.Error("Failed to parse create time for organization", "error", err, "organizationName", datumOsOrg.Name)
-						continue
-					}
+					var migratedOrg *resourcemanagerpb.Organization
+					slog.Info("Checking if organization already exists in new system", "organizationName", datumOsOrg.Name)
+					existingOrg, getErr := organizationsStorage.GetResource(cmd.Context(), &storage.GetResourceRequest{Name: datumOsOrg.Name})
 
-					updateTime, err := parseTime(datumOsOrg.UpdateTime)
-					if err != nil {
-						slog.Error("Failed to parse update time for organization", "error", err, "organizationName", datumOsOrg.Name)
-						continue
-					}
+					if getErr == nil {
+						slog.Info("Organization already exists in new system, using existing resource.", "organizationName", existingOrg.Name)
+						migratedOrg = existingOrg
+					} else if status.Code(getErr) == codes.NotFound {
+						slog.Info("Organization not found in new system, proceeding with creation.", "organizationName", datumOsOrg.Name)
+						createTime, parseCreateErr := parseTime(datumOsOrg.CreateTime)
+						if parseCreateErr != nil {
+							slog.Error("Failed to parse create time for organization", "error", parseCreateErr, "organizationName", datumOsOrg.Name)
+							continue
+						}
+						updateTime, parseUpdateErr := parseTime(datumOsOrg.UpdateTime)
+						if parseUpdateErr != nil {
+							slog.Error("Failed to parse update time for organization", "error", parseUpdateErr, "organizationName", datumOsOrg.Name)
+							continue
+						}
 
-					migratedOrg, err := organizationsStorage.CreateResource(cmd.Context(), &storage.CreateResourceRequest[*resourcemanagerpb.Organization]{
-						Resource: &resourcemanagerpb.Organization{
+						resourceToCreate := &resourcemanagerpb.Organization{
 							Name:           datumOsOrg.Name,
 							OrganizationId: datumOsOrg.OrganizationID,
 							Uid:            datumOsOrg.UID,
@@ -209,25 +216,26 @@ func migrateResourcesCommand() *cobra.Command {
 								Internal:          datumOsOrg.Status.Internal,
 								Personal:          datumOsOrg.Status.Personal,
 							},
-						},
-					})
-					if err != nil {
-						st, _ := status.FromError(err)
-						if st.Code() == codes.AlreadyExists {
-							slog.Warn("Organization already exists in new system, attempting to fetch for project migration", "organizationName", datumOsOrg.Name)
-							existingOrg, getErr := organizationsStorage.GetResource(cmd.Context(), &storage.GetResourceRequest{Name: datumOsOrg.Name})
-							if getErr != nil {
-								slog.Error("Organization already exists but failed to fetch it for project migration", "error", getErr, "organizationName", datumOsOrg.Name)
-								continue
-							}
-							migratedOrg = existingOrg
-						} else {
-							slog.Error("Failed to create organization", "error", err, "organizationName", datumOsOrg.Name)
+						}
+						createdOrg, createErr := organizationsStorage.CreateResource(cmd.Context(), &storage.CreateResourceRequest[*resourcemanagerpb.Organization]{
+							Resource: resourceToCreate,
+						})
+						if createErr != nil {
+							slog.Error("Failed to create organization after NotFound check", "error", createErr, "organizationName", datumOsOrg.Name)
 							continue
 						}
+						slog.Info("Successfully created new organization.", "organizationName", createdOrg.Name)
+						migratedOrg = createdOrg
+					} else {
+						slog.Error("Failed to check for existing organization", "error", getErr, "organizationName", datumOsOrg.Name)
+						continue
 					}
 
-					slog.Info("Organization migrated or confirmed in IAM System", "organizationName", migratedOrg.Name)
+					if migratedOrg == nil {
+						slog.Error("Organization could not be obtained. Skipping project migration for this org.", "organizationName", datumOsOrg.Name)
+						continue
+					}
+					slog.Info("Organization obtained for project migration", "organizationName", migratedOrg.Name)
 
 					slog.Info("Fetching projects for organization", "organizationOldID", datumOsOrg.OrganizationID, "baseEndpoint", datumOsBaseApiEndpoint, "pageSize", projectPageSize)
 					oldAPIProjects := fetch.GetDatumOsProjects(
@@ -264,26 +272,32 @@ func migrateResourcesCommand() *cobra.Command {
 						newNameInNewSystem := fmt.Sprintf("%s/projects/%s", migratedOrg.Name, projectIDForNewSystem)
 						newParentInNewSystem := migratedOrg.Name
 
-						migratedProjectResource := proto.Clone(oldProject).(*resourcemanagerpb.Project)
-						migratedProjectResource.Name = newNameInNewSystem
-						migratedProjectResource.Parent = newParentInNewSystem
+						slog.Info("Checking if project already exists in new system", "projectNewName", newNameInNewSystem)
+						_, getProjectErr := projectStorage.GetResource(cmd.Context(), &storage.GetResourceRequest{Name: newNameInNewSystem})
 
-						createdProject, err := projectStorage.CreateResource(cmd.Context(), &storage.CreateResourceRequest[*resourcemanagerpb.Project]{
-							Name:     newNameInNewSystem,
-							Parent:   newParentInNewSystem,
-							Resource: migratedProjectResource,
-						})
+						if getProjectErr == nil {
+							slog.Warn("Project already exists in new system, skipping creation.", "projectNewName", newNameInNewSystem)
+							continue
+						} else if status.Code(getProjectErr) == codes.NotFound {
+							slog.Info("Project not found in new system, proceeding with creation.", "projectNewName", newNameInNewSystem)
+							migratedProjectResource := proto.Clone(oldProject).(*resourcemanagerpb.Project)
+							migratedProjectResource.Name = newNameInNewSystem
+							migratedProjectResource.Parent = newParentInNewSystem
 
-						if err != nil {
-							st, _ := status.FromError(err)
-							if st.Code() == codes.AlreadyExists {
-								slog.Warn("Project already exists in new system, skipping", "projectNewName", newNameInNewSystem)
-							} else {
-								slog.Error("Failed to create project in new system", "error", err, "projectNewName", newNameInNewSystem, "resource", migratedProjectResource)
+							createdProject, createProjectErr := projectStorage.CreateResource(cmd.Context(), &storage.CreateResourceRequest[*resourcemanagerpb.Project]{
+								Name:     newNameInNewSystem,
+								Parent:   newParentInNewSystem,
+								Resource: migratedProjectResource,
+							})
+							if createProjectErr != nil {
+								slog.Error("Failed to create project in new system after NotFound check", "error", createProjectErr, "projectNewName", newNameInNewSystem)
+								continue
 							}
+							slog.Info("Project migrated into IAM System", "projectNewName", createdProject.GetName())
+						} else {
+							slog.Error("Failed to check for existing project", "error", getProjectErr, "projectNewName", newNameInNewSystem)
 							continue
 						}
-						slog.Info("Project migrated into IAM System", "projectNewName", createdProject.GetName())
 					}
 				}
 			}
