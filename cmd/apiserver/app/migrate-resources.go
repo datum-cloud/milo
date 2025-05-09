@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
@@ -28,7 +30,7 @@ import (
 func migrateResourcesCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate-resources",
-		Short: "Migrates organizations and users from the Datum OS API to the IAM service",
+		Short: "Migrates organizations, projects, and users from the Datum OS API to the IAM service",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 				Level:     slog.LevelDebug,
@@ -75,6 +77,11 @@ func migrateResourcesCommand() *cobra.Command {
 				return fmt.Errorf("failed to initialize organization storage: %w", err)
 			}
 
+			projectStorage, err := postgres.ResourceServer(db, &resourcemanagerpb.Project{})
+			if err != nil {
+				return fmt.Errorf("failed to initialize project storage: %w", err)
+			}
+
 			policyStorage, err := postgres.ResourceServer(db, &iampb.Policy{})
 			if err != nil {
 				return err
@@ -103,7 +110,7 @@ func migrateResourcesCommand() *cobra.Command {
 				return fmt.Errorf("invalid command: %s. Must be one of: organizations, users", command)
 			}
 
-			// Migrate organizations
+			// Migrate organizations (and their projects)
 			if command == "organizations" {
 				datumOsOrganizations := fetch.GetDatumOsOrganizations(
 					datumOsApiEndpoint,
@@ -155,23 +162,21 @@ func migrateResourcesCommand() *cobra.Command {
 						},
 					}
 
-					// We set the IAM policy before creating the organization to ensure that the
-					// organization oweners are already in the IAM system.
 					_, err = setIamPolicy(cmd.Context(), policy, policyStorage, policyReconciler)
 					if err != nil {
-						slog.Error("Failed to set IAM policy", "error", err, "organization", datumOsOrg)
+						slog.Error("Failed to set IAM policy for organization", "error", err, "organizationName", datumOsOrg.Name)
 						continue
 					}
 
 					createTime, err := parseTime(datumOsOrg.CreateTime)
 					if err != nil {
-						slog.Error("Failed to parse create time", "error", err, "user", datumOsOrg)
+						slog.Error("Failed to parse create time for organization", "error", err, "organizationName", datumOsOrg.Name)
 						continue
 					}
 
 					updateTime, err := parseTime(datumOsOrg.UpdateTime)
 					if err != nil {
-						slog.Error("Failed to parse update time", "error", err, "user", datumOsOrg)
+						slog.Error("Failed to parse update time for organization", "error", err, "organizationName", datumOsOrg.Name)
 						continue
 					}
 
@@ -195,11 +200,78 @@ func migrateResourcesCommand() *cobra.Command {
 						},
 					})
 					if err != nil {
-						slog.Error("Failed to create organization", "error", err, "organization", datumOsOrg)
-						continue
+						st, _ := status.FromError(err)
+						if st.Code() == codes.AlreadyExists {
+							slog.Warn("Organization already exists in new system, attempting to fetch for project migration", "organizationName", datumOsOrg.Name)
+							existingOrg, getErr := organizationsStorage.GetResource(cmd.Context(), &storage.GetResourceRequest{Name: datumOsOrg.Name})
+							if getErr != nil {
+								slog.Error("Organization already exists but failed to fetch it for project migration", "error", getErr, "organizationName", datumOsOrg.Name)
+								continue
+							}
+							migratedOrg = existingOrg
+						} else {
+							slog.Error("Failed to create organization", "error", err, "organizationName", datumOsOrg.Name)
+							continue
+						}
 					}
 
-					slog.Info("Organization migrated into IAM System", "organization", migratedOrg)
+					slog.Info("Organization migrated or confirmed in IAM System", "organizationName", migratedOrg.Name)
+
+					slog.Info("Fetching projects for organization", "organizationOldName", datumOsOrg.Name, "organizationOldID", datumOsOrg.OrganizationID, "organizationNewName", migratedOrg.Name)
+					const projectPageSize = 1000
+
+					oldAPIProjects := fetch.GetDatumOsProjects(
+						datumOsApiEndpoint,
+						datumOsApiKey,
+						datumOsOrg.OrganizationID,
+						projectPageSize,
+					)
+
+					slog.Info("Fetched projects from old API", "count", len(oldAPIProjects), "organizationOldID", datumOsOrg.OrganizationID)
+
+					for k, oldProject := range oldAPIProjects {
+						slog.Info("Attempting to migrate project", "index", k+1, "oldProjectName", oldProject.GetName(), "oldProjectDisplayName", oldProject.GetDisplayName(), "oldProjectUID", oldProject.GetUid())
+
+						var projectIDForNewSystem string
+						if oldProject.GetName() != "" {
+							nameParts := strings.Split(oldProject.GetName(), "/")
+							projectIDForNewSystem = nameParts[len(nameParts)-1]
+						} else if oldProject.GetUid() != "" {
+							projectIDForNewSystem = oldProject.GetUid()
+							slog.Warn("Project from old system is missing a 'name', using UID as ProjectId", "UID", oldProject.GetUid(), "DisplayName", oldProject.GetDisplayName())
+						} else {
+							slog.Error("Project from old system is missing both 'name' and 'UID'. Cannot determine ProjectId. Skipping.", "projectDetails", oldProject)
+							continue
+						}
+						if projectIDForNewSystem == "" {
+							slog.Error("Derived projectIDForNewSystem is empty. Skipping.", "oldProjectName", oldProject.GetName(), "oldProjectUID", oldProject.GetUid())
+							continue
+						}
+
+						newNameInNewSystem := fmt.Sprintf("%s/projects/%s", migratedOrg.Name, projectIDForNewSystem)
+						newParentInNewSystem := migratedOrg.Name
+
+						migratedProjectResource := proto.Clone(oldProject).(*resourcemanagerpb.Project)
+						migratedProjectResource.Name = newNameInNewSystem
+						migratedProjectResource.Parent = newParentInNewSystem
+
+						createdProject, err := projectStorage.CreateResource(cmd.Context(), &storage.CreateResourceRequest[*resourcemanagerpb.Project]{
+							Name:     newNameInNewSystem,
+							Parent:   newParentInNewSystem,
+							Resource: migratedProjectResource,
+						})
+
+						if err != nil {
+							st, _ := status.FromError(err)
+							if st.Code() == codes.AlreadyExists {
+								slog.Warn("Project already exists in new system, skipping", "projectNewName", newNameInNewSystem)
+							} else {
+								slog.Error("Failed to create project in new system", "error", err, "projectNewName", newNameInNewSystem, "resource", migratedProjectResource)
+							}
+							continue
+						}
+						slog.Info("Project migrated into IAM System", "projectNewName", createdProject.GetName())
+					}
 				}
 			}
 
@@ -241,10 +313,8 @@ func migrateResourcesCommand() *cobra.Command {
 						continue
 					}
 
-					// Check if the user already exists. Strategy: The first user with the same email is the one that will be migrated.
 					sub, err := subjectResolver(cmd.Context(), subject.UserKind, datumOsUser.Spec.Email)
 					if err != nil {
-						// If error is not "not found", don't return it an continue
 						if !errors.Is(err, subject.ErrSubjectNotFound) {
 							slog.Error("Failed to resolve subject", "error", err, "user", datumOsUser)
 							continue
