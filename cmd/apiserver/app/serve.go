@@ -192,7 +192,9 @@ func serve() *cobra.Command {
 			// Register a new parent resolver for the Project resource.
 			parentResolverRegistry.RegisterResolver(&iampb.Service{}, storage.ResourceParentResolver(serviceStorage))
 			parentResolverRegistry.RegisterResolver(&iampb.User{}, storage.ResourceParentResolver(userStorage))
+			parentResolverRegistry.RegisterResolver(&iampb.Role{}, storage.ResourceParentResolver(roleStorage))
 			parentResolverRegistry.RegisterResolver(&resourcemanagerpb.Project{}, storage.ResourceParentResolver(projectStorage))
+			parentResolverRegistry.RegisterResolver(&resourcemanagerpb.Organization{}, storage.ResourceParentResolver(organizationStorage))
 
 			unaryInterceptors := []grpc.UnaryServerInterceptor{
 				errors.InternalErrorsInterceptor(slog.Default()),

@@ -177,6 +177,7 @@ func resolveParents(ctx context.Context, parentResolver storage.ParentResolver, 
 		} else if parent == nil {
 			// Resource does not have a parent so we can skip looking for additional
 			// parents.
+			slog.DebugContext(ctx, "resource does not have a parent", slog.Any("resource", resource))
 			break
 		}
 
