@@ -5,4 +5,4 @@ name: services/resourcemanager.datumapis.com/roles/invitationResponder
 displayName: IAM Invitation Responder Role
 spec:
   includedPermissions:
-  - iam.datumapis.com/invitations.accept
+  - resourcemanager.datumapis.com/invitations.accept
