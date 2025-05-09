@@ -226,6 +226,12 @@ func ResourceNameResolver() ResourceResolver {
 			resourceType := resourceReferenceType(resourceNameField)
 			resourceName := message.Get(resourceNameField).String()
 
+			// If the resource name is already a full resource URL, we can return it
+			// immediately.
+			if storage.IsResourceURL(resourceName) {
+				return resourceName, resourceType, nil
+			}
+
 			return storage.ServiceName(resourceType) + "/" + resourceName, resourceType, nil
 		}
 
