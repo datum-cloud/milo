@@ -292,18 +292,17 @@ func migrateResourcesCommand() *cobra.Command {
 							continue
 						}
 
-						projectFQNForStorage := fmt.Sprintf("%s/projects/%s", migratedOrg.Name, projectSimpleID)
 						projectResourceName := fmt.Sprintf("projects/%s", projectSimpleID)
-						projectParentName := migratedOrg.Name
+						projectParentName := oldProject.Parent
 
-						slog.Info("Checking if project already exists in new system", "projectFQNForStorage", projectFQNForStorage)
-						_, getProjectErr := projectStorage.GetResource(cmd.Context(), &storage.GetResourceRequest{Name: projectFQNForStorage})
+						slog.Info("Checking if project already exists in new system", "projectResourceName", projectResourceName, "projectParentName", projectParentName)
+						_, getProjectErr := projectStorage.GetResource(cmd.Context(), &storage.GetResourceRequest{Name: projectResourceName})
 
 						if getProjectErr == nil {
-							slog.Warn("Project already exists in new system, skipping creation.", "projectFQNForStorage", projectFQNForStorage)
+							slog.Warn("Project already exists in new system, skipping creation.", "projectResourceName", projectResourceName, "projectParentName", projectParentName)
 							continue
 						} else if status.Code(getProjectErr) == codes.NotFound {
-							slog.Info("Project not found in new system, proceeding with creation.", "projectFQNForStorage", projectFQNForStorage)
+							slog.Info("Project not found in new system, proceeding with creation.", "projectResourceName", projectResourceName, "projectParentName", projectParentName)
 							migratedProjectResource := proto.Clone(oldProject).(*resourcemanagerpb.Project)
 
 							migratedProjectResource.Name = projectResourceName
@@ -311,17 +310,17 @@ func migrateResourcesCommand() *cobra.Command {
 							migratedProjectResource.ProjectId = projectSimpleID
 
 							createdProject, createProjectErr := projectStorage.CreateResource(cmd.Context(), &storage.CreateResourceRequest[*resourcemanagerpb.Project]{
-								Name:     projectFQNForStorage,
+								Name:     projectResourceName,
 								Parent:   projectParentName,
 								Resource: migratedProjectResource,
 							})
 							if createProjectErr != nil {
-								slog.Error("Failed to create project in new system after NotFound check", "error", createProjectErr, "projectFQNForStorage", projectFQNForStorage)
+								slog.Error("Failed to create project in new system after NotFound check", "error", createProjectErr, "projectResourceName", projectResourceName, "projectParentName", projectParentName)
 								continue
 							}
-							slog.Info("Project migrated into IAM System", "createdProjectName", createdProject.GetName(), "projectFQNForStorage", projectFQNForStorage)
+							slog.Info("Project migrated into IAM System", "createdProjectName", createdProject.GetName(), "projectResourceName", projectResourceName, "projectParentName", projectParentName)
 						} else {
-							slog.Error("Failed to check for existing project", "error", getProjectErr, "projectFQNForStorage", projectFQNForStorage)
+							slog.Error("Failed to check for existing project", "error", getProjectErr, "projectResourceName", projectResourceName, "projectParentName", projectParentName)
 							continue
 						}
 					}
