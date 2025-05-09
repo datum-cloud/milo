@@ -49,6 +49,29 @@ const createIamUserScript = (
             headers: headers,
           })
           .json();
+        
+        // If the user already exists
+        if(res.code == 6) {
+          logger.log(`${operation} User already exists in IAM system.`);
+          logger.log(`${operation} Getting existing user from IAM system.`);
+
+          const user = http
+          .fetch(`__API_URL__/v1alpha/users/${reqBody.spec.email}`, {
+            method: "GET",
+            headers: headers,
+          })
+          .json();
+
+          logger.log(`${operation} IAM System user resource name: ${user.name}`);
+          logger.log(`${operation} Updating Zitadel user metadata with IAM System user resource name: ${user.name}`);
+
+          api.v1.user.appendMetadata(
+            "internal.iam.datumapis.com-iam-resource-name",
+            user.name,
+          );
+
+          return;
+        }
 
         // If the user already exists
         if(res.code == 6) {

@@ -107,7 +107,7 @@ func (s *Server) GetUser(ctx context.Context, req *iampb.GetUserRequest) (*iampb
 		}
 		if len(sub) > 0 {
 			// If the user is found, we need to update the request name to the subject name
-			req.Name = fmt.Sprintf("users/%s", sub)
+			req.Name = sub
 		}
 	}
 
@@ -139,7 +139,7 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 		return nil, err
 	}
 
-	resourceName := fmt.Sprintf("users/%s", sub)
+	resourceName := sub
 
 	if req.ValidateOnly {
 		existing, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
