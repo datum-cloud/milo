@@ -267,14 +267,17 @@ func serve() *cobra.Command {
 				Handler: gRPCRestProxy,
 			}
 
-			slog.InfoContext(ctx, "starting REST proxy server", slog.String("address", proxySrv.Addr))
-			// Start TLS server if cert and key are provided
-			if tlsCertFile != "" && tlsKeyFile != "" {
-				slog.InfoContext(ctx, "starting REST proxy server with TLS using common certs", slog.String("address", proxySrv.Addr))
-				return proxySrv.ListenAndServeTLS(tlsCertFile, tlsKeyFile)
-			}
-			slog.InfoContext(ctx, "starting REST proxy server without TLS (common TLS cert/key not provided)", slog.String("address", proxySrv.Addr))
 			go func() {
+				// Start TLS server if cert and key are provided
+				if tlsCertFile != "" && tlsKeyFile != "" {
+					slog.InfoContext(ctx, "starting REST proxy server with TLS using common certs", slog.String("address", proxySrv.Addr))
+					if err := proxySrv.ListenAndServeTLS(tlsCertFile, tlsKeyFile); err != nil && err != http.ErrServerClosed {
+						slog.ErrorContext(ctx, "failed to start REST proxy server", slog.Any("error", err))
+						panic(err)
+					}
+				}
+
+				slog.InfoContext(ctx, "starting REST proxy server without TLS (common TLS cert/key not provided)", slog.String("address", proxySrv.Addr))
 				if err := proxySrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 					slog.ErrorContext(ctx, "failed to start REST proxy server", slog.Any("error", err))
 					panic(err)
