@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // OrganizationMember defines the structure of a member/owner in an organization
@@ -53,71 +54,64 @@ type OrganizationResponse struct {
 	Organizations []Organization `json:"organizations"`
 }
 
-func GetDatumOsOrganizations(endpoint string, apiKey string) []Organization {
-	url := endpoint
+// GetDatumOsOrganizations fetches organizations from the Datum OS API.
+// baseEndpoint should be the root of the Datum OS API, e.g., "https://api.example.com/datum-os"
+func GetDatumOsOrganizations(baseEndpoint string, apiKey string, pageSize int) []Organization {
+	path := "/v1alpha/organizations"
+	apiURL := strings.TrimSuffix(baseEndpoint, "/") + path
+	if pageSize > 0 {
+		apiURL = fmt.Sprintf("%s?pageSize=%d", apiURL, pageSize)
+	}
+
 	bearerToken := apiKey
 
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Error creating organizations request: %v\n", err)
+		// Consider returning nil or an error for robustness instead of os.Exit
+		return nil
 	}
 	req.Header.Set("Authorization", "Bearer "+bearerToken)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error executing request: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Error executing organizations request: %v\n", err)
+		return nil
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "Error fetching organizations: status code %d, body: %s\n", resp.StatusCode, string(bodyBytes))
+		return nil
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading response body: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Error reading organizations response body: %v\n", err)
+		return nil
 	}
 
-	var responseData map[string]interface{}
-	err = json.Unmarshal(body, &responseData)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error unmarshalling JSON response object: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Raw response body: %s\n", string(body))
-		os.Exit(1)
+	// Try to unmarshal assuming the response is wrapped in an object like {"organizations": [...]}
+	var orgResponse OrganizationResponse
+	err = json.Unmarshal(body, &orgResponse)
+	if err == nil && orgResponse.Organizations != nil {
+		fmt.Printf("Found %d organizations (via wrapper object).\n", len(orgResponse.Organizations))
+		return orgResponse.Organizations
 	}
 
-	var rawOrganizationsList []interface{}
-	organizationsData, ok := responseData["organizations"]
-	if !ok {
-		fmt.Println("Key 'organizations' not found in the response object.")
-		os.Exit(1)
-	}
-
-	rawOrganizationsList, ok = organizationsData.([]interface{})
-	if !ok {
-		fmt.Fprintf(os.Stderr, "Data under 'organizations' key is not a list (array). Type is: %T\n", organizationsData)
-		os.Exit(1)
-	}
-
+	// If that fails, try to unmarshal as a direct list of organizations []Organization
+	// This handles cases where the API might return a raw list.
+	fmt.Fprintf(os.Stderr, "Could not unmarshal into OrganizationResponse (key 'organizations' might be missing), trying direct list. Error: %v\n", err)
 	var typedOrganizations []Organization
-	for i, orgEntry := range rawOrganizationsList {
-		orgBytes, err := json.Marshal(orgEntry) // Marshal the map[string]interface{} back to JSON
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error marshalling organization entry %d: %v\n", i, err)
-			continue
-		}
-		var typedOrg Organization
-		err = json.Unmarshal(orgBytes, &typedOrg) // Unmarshal JSON into the Organization struct
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error unmarshalling organization entry %d into Organization struct: %v\n", i, err)
-			fmt.Fprintf(os.Stderr, "Problematic organization entry data: %s\n", string(orgBytes))
-			continue
-		}
-		typedOrganizations = append(typedOrganizations, typedOrg)
+	errDirect := json.Unmarshal(body, &typedOrganizations)
+	if errDirect != nil {
+		fmt.Fprintf(os.Stderr, "Error unmarshalling organizations JSON directly: %v\n", errDirect)
+		fmt.Fprintf(os.Stderr, "Raw response body: %s\n", string(body))
+		return nil
 	}
 
-	fmt.Printf("Found %d organizations.\n", len(typedOrganizations))
-	fmt.Println("Organizations:")
-
+	fmt.Printf("Found %d organizations (via direct list).\n", len(typedOrganizations))
 	return typedOrganizations
 }

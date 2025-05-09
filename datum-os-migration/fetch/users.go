@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings" // Added for strings.TrimSuffix
 )
 
 // UserSpec defines the specification for a user
@@ -55,75 +56,69 @@ type User struct {
 	UserID      string     `json:"userId"`
 }
 
-func GetDatumOsUsers(endpoint string, apiKey string) []User {
-	url := endpoint
-	bearerToken := apiKey
+// UsersResponse is the assumed top-level structure for the API response when listing users.
+// If the API returns a direct list, this might not be strictly needed.
+type UsersResponse struct {
+	Users []User `json:"users"`
+	// Potentially add NextPageToken string `json:"nextPageToken,omitempty"` if API supports pagination
+}
 
-	// Create a new HTTP client
-	client := &http.Client{}
-
-	// Create a new GET request
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-		os.Exit(1)
+// GetDatumOsUsers fetches users from the Datum OS API.
+// baseEndpoint should be the root of the Datum OS API, e.g., "https://api.example.com/datum-os"
+func GetDatumOsUsers(baseEndpoint string, apiKey string, pageSize int) []User {
+	path := "/v1alpha/users"
+	apiURL := strings.TrimSuffix(baseEndpoint, "/") + path
+	if pageSize > 0 {
+		apiURL = fmt.Sprintf("%s?pageSize=%d", apiURL, pageSize)
 	}
 
-	// Set the Authorization header
+	bearerToken := apiKey
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating users request: %v\n", err)
+		return nil // Return nil or empty slice on error
+	}
 	req.Header.Set("Authorization", "Bearer "+bearerToken)
 
-	// Execute the request
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error executing request: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Error executing users request: %v\n", err)
+		return nil
 	}
 	defer resp.Body.Close()
 
-	// Read the response body
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "Error fetching users: status code %d, body: %s\n", resp.StatusCode, string(bodyBytes))
+		return nil
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading response body: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "Error reading users response body: %v\n", err)
+		return nil
 	}
 
-	var responseData map[string]interface{}
-	err = json.Unmarshal(body, &responseData)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error unmarshalling JSON response object: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Raw response body: %s\n", string(body))
-		os.Exit(1)
+	// Try to unmarshal assuming the response is wrapped in an object like {"users": [...]}
+	var usersResponse UsersResponse
+	err = json.Unmarshal(body, &usersResponse)
+	if err == nil && usersResponse.Users != nil {
+		fmt.Printf("Found %d users (via wrapper object).\n", len(usersResponse.Users))
+		return usersResponse.Users
 	}
 
-	var rawUsersList []interface{}
-	usersData, ok := responseData["users"]
-	if !ok {
-		fmt.Println("Key 'users' not found in the response object.")
-		os.Exit(1)
-	}
-
-	rawUsersList, ok = usersData.([]interface{})
-	if !ok {
-		fmt.Fprintf(os.Stderr, "Data under 'users' key is not a list (array). Type is: %T\n", usersData)
-		os.Exit(1)
-	}
-
+	// If that fails, try to unmarshal as a direct list of users []User
+	fmt.Fprintf(os.Stderr, "Could not unmarshal into UsersResponse (key 'users' might be missing), trying direct list. Error: %v\n", err)
 	var typedUsers []User
-	for i, userEntry := range rawUsersList {
-		userBytes, err := json.Marshal(userEntry) // Marshal the map[string]interface{} back to JSON
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error marshalling user entry %d: %v\n", i, err)
-			continue
-		}
-		var typedUser User
-		err = json.Unmarshal(userBytes, &typedUser) // Unmarshal JSON into the User struct
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error unmarshalling user entry %d into User struct: %v\n", i, err)
-			fmt.Fprintf(os.Stderr, "Problematic user entry data: %s\n", string(userBytes))
-			continue
-		}
-		typedUsers = append(typedUsers, typedUser)
+	errDirect := json.Unmarshal(body, &typedUsers)
+	if errDirect != nil {
+		fmt.Fprintf(os.Stderr, "Error unmarshalling users JSON directly: %v\n", errDirect)
+		fmt.Fprintf(os.Stderr, "Raw response body for users: %s\n", string(body))
+		return nil
 	}
 
+	fmt.Printf("Found %d users (via direct list).\n", len(typedUsers))
 	return typedUsers
 }

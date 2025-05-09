@@ -27,6 +27,12 @@ import (
 	"go.datum.net/iam/internal/subject"
 )
 
+const (
+	organizationPageSize = 99999
+	projectPageSize      = 1000
+	userPageSize         = 9999
+)
+
 func migrateResourcesCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate-resources",
@@ -92,7 +98,7 @@ func migrateResourcesCommand() *cobra.Command {
 				return fmt.Errorf("failed to initialize user storage: %w", err)
 			}
 
-			datumOsApiEndpoint, err := cmd.Flags().GetString("datum-os-api-endpoint")
+			datumOsBaseApiEndpoint, err := cmd.Flags().GetString("datum-os-api-endpoint")
 			if err != nil {
 				return fmt.Errorf("failed to get `--datum-os-api-endpoint`: %w", err)
 			}
@@ -110,12 +116,18 @@ func migrateResourcesCommand() *cobra.Command {
 				return fmt.Errorf("invalid command: %s. Must be one of: organizations, users", command)
 			}
 
-			// Migrate organizations (and their projects)
 			if command == "organizations" {
+				slog.Info("Fetching organizations from Datum OS API", "baseEndpoint", datumOsBaseApiEndpoint, "pageSize", organizationPageSize)
 				datumOsOrganizations := fetch.GetDatumOsOrganizations(
-					datumOsApiEndpoint,
+					datumOsBaseApiEndpoint,
 					datumOsApiKey,
+					organizationPageSize,
 				)
+				if datumOsOrganizations == nil {
+					slog.Error("Failed to fetch organizations, or no organizations found. Aborting organization migration.")
+				} else {
+					slog.Info("Fetched organizations from Datum OS API", "count", len(datumOsOrganizations))
+				}
 
 				for i, datumOsOrg := range datumOsOrganizations {
 					fmt.Printf("--- Organization %d ---\n", i+1)
@@ -217,17 +229,18 @@ func migrateResourcesCommand() *cobra.Command {
 
 					slog.Info("Organization migrated or confirmed in IAM System", "organizationName", migratedOrg.Name)
 
-					slog.Info("Fetching projects for organization", "organizationOldName", datumOsOrg.Name, "organizationOldID", datumOsOrg.OrganizationID, "organizationNewName", migratedOrg.Name)
-					const projectPageSize = 1000
-
+					slog.Info("Fetching projects for organization", "organizationOldID", datumOsOrg.OrganizationID, "baseEndpoint", datumOsBaseApiEndpoint, "pageSize", projectPageSize)
 					oldAPIProjects := fetch.GetDatumOsProjects(
-						datumOsApiEndpoint,
+						datumOsBaseApiEndpoint,
 						datumOsApiKey,
 						datumOsOrg.OrganizationID,
 						projectPageSize,
 					)
-
-					slog.Info("Fetched projects from old API", "count", len(oldAPIProjects), "organizationOldID", datumOsOrg.OrganizationID)
+					if oldAPIProjects == nil {
+						slog.Warn("Failed to fetch projects for organization, or no projects found.", "organizationID", datumOsOrg.OrganizationID)
+					} else {
+						slog.Info("Fetched projects from old API", "count", len(oldAPIProjects), "organizationID", datumOsOrg.OrganizationID)
+					}
 
 					for k, oldProject := range oldAPIProjects {
 						slog.Info("Attempting to migrate project", "index", k+1, "oldProjectName", oldProject.GetName(), "oldProjectDisplayName", oldProject.GetDisplayName(), "oldProjectUID", oldProject.GetUid())
@@ -275,12 +288,18 @@ func migrateResourcesCommand() *cobra.Command {
 				}
 			}
 
-			// Migrate users
 			if command == "users" {
+				slog.Info("Fetching users from Datum OS API", "baseEndpoint", datumOsBaseApiEndpoint, "pageSize", userPageSize)
 				datumOsUsers := fetch.GetDatumOsUsers(
-					datumOsApiEndpoint,
+					datumOsBaseApiEndpoint,
 					datumOsApiKey,
+					userPageSize,
 				)
+				if datumOsUsers == nil {
+					slog.Error("Failed to fetch users, or no users found. Aborting user migration.")
+				} else {
+					slog.Info("Fetched users from Datum OS API", "count", len(datumOsUsers))
+				}
 
 				for i, datumOsUser := range datumOsUsers {
 					fmt.Printf("--- Migrating User %d ---\n", i+1)
@@ -379,7 +398,7 @@ func migrateResourcesCommand() *cobra.Command {
 	cmd.Flags().String("openfga-endpoint", "", "The gRPC endpoint to use for communication to OpenFGA")
 	cmd.Flags().String("openfga-ca", "", "The base64 encoded Certificate to use as the certificate authority when connecting to OpenFGA. Insecure mode will be used if this is not provided.")
 	cmd.Flags().String("openfga-auth", "", "The auth token to use when communicating to OpenFGA")
-	cmd.Flags().String("datum-os-api-endpoint", "", "Endpoint for the Datum OS API")
+	cmd.Flags().String("datum-os-api-endpoint", "", "Base Endpoint for the Datum OS API (e.g., https://api.example.com/datum-os)")
 	cmd.Flags().String("datum-os-api-key", "", "API Key for the Datum OS API")
 	cmd.Flags().String("openfga-store-id", "", "The ID of the store to use in the OpenFGA backend")
 	cmd.Flags().String("migrate-command", "", "The command to run. Must be one of: organizations, users")
