@@ -30,6 +30,7 @@ import (
 	"go.datum.net/iam/internal/tracing"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -40,6 +41,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/genproto/googleapis/api/serviceconfig"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -90,6 +92,10 @@ func serve() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			// Common HTTPS certificate and key files, declared once.
+			tlsCertFile := mustStringFlag(cmd.Flags(), "tls-cert-file")
+			tlsKeyFile := mustStringFlag(cmd.Flags(), "tls-key-file")
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -149,12 +155,29 @@ func serve() *cobra.Command {
 				return err
 			}
 
+			// Configure dial options for the gRPC client connection to the local gRPC service
+			var dialOptions []grpc.DialOption
+			dialOptions = append(dialOptions, grpc.WithSharedWriteBuffer(true))
+			dialOptions = append(dialOptions, grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
+
+			if tlsCertFile != "" && tlsKeyFile != "" {
+				// If server TLS is configured, the client connection to it must also use TLS.
+				// We use the server's certificate file for the client's trusted CA.
+				slog.InfoContext(ctx, "gRPC client for REST proxy will use TLS", slog.String("serverCert", tlsCertFile))
+				clientCreds, err := credentials.NewClientTLSFromFile(tlsCertFile, "localhost")
+				if err != nil {
+					return fmt.Errorf("failed to create client TLS credentials for gRPC proxy client: %w", err)
+				}
+				dialOptions = append(dialOptions, grpc.WithTransportCredentials(clientCreds))
+			} else {
+				slog.InfoContext(ctx, "gRPC client for REST proxy will use insecure credentials")
+				dialOptions = append(dialOptions, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			}
+
 			slog.InfoContext(ctx, "creating a client connection to the IAM gRPC service that was started", slog.String("address", grpcListener.Addr().String()))
 			grpcClientConn, err := grpc.NewClient(
 				grpcListener.Addr().String(),
-				grpc.WithSharedWriteBuffer(true),
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+				dialOptions...,
 			)
 			if err != nil {
 				return err
@@ -180,12 +203,27 @@ func serve() *cobra.Command {
 				roleResolver = role.IAMUseRoleResolver(iamv1alphagrpc.NewAccessCheckClient(grpcClientConn), subjectExtractor)
 			}
 
-			// Creates a new gRPC service with logging, error handling, and
-			// authentication middlewares.
-			grpcServer := grpc.NewServer(
+			// Configure gRPC server options
+			grpcServerOptions := []grpc.ServerOption{
 				grpc.ChainUnaryInterceptor(unaryInterceptors...),
 				grpc.StatsHandler(otelgrpc.NewServerHandler()),
-			)
+			}
+
+			// Add TLS credentials if gRPC TLS cert and key are provided
+			if tlsCertFile != "" && tlsKeyFile != "" {
+				creds, err := credentials.NewServerTLSFromFile(tlsCertFile, tlsKeyFile)
+				if err != nil {
+					return fmt.Errorf("failed to load gRPC TLS credentials from common certs: %w", err)
+				}
+				grpcServerOptions = append(grpcServerOptions, grpc.Creds(creds))
+				slog.InfoContext(ctx, "gRPC server will use TLS using common certs")
+			} else {
+				slog.InfoContext(ctx, "gRPC server will not use TLS (common TLS cert/key not provided)")
+			}
+
+			// Creates a new gRPC service with logging, error handling, and
+			// authentication middlewares.
+			grpcServer := grpc.NewServer(grpcServerOptions...)
 
 			// Creates a new IAM gRPC service and registers it with the gRPC server
 			if err := iamServer.NewServer(iamServer.ServerOptions{
@@ -229,8 +267,52 @@ func serve() *cobra.Command {
 				Handler: gRPCRestProxy,
 			}
 
-			slog.InfoContext(ctx, "starting REST proxy server", slog.String("address", proxySrv.Addr))
-			return proxySrv.ListenAndServe()
+			go func() {
+				// Start TLS server if cert and key are provided
+				if tlsCertFile != "" && tlsKeyFile != "" {
+					slog.InfoContext(ctx, "starting REST proxy server with TLS using common certs", slog.String("address", proxySrv.Addr))
+					if err := proxySrv.ListenAndServeTLS(tlsCertFile, tlsKeyFile); err != nil && err != http.ErrServerClosed {
+						slog.ErrorContext(ctx, "failed to start REST proxy server", slog.Any("error", err))
+						panic(err)
+					}
+				}
+
+				slog.InfoContext(ctx, "starting REST proxy server without TLS (common TLS cert/key not provided)", slog.String("address", proxySrv.Addr))
+				if err := proxySrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					slog.ErrorContext(ctx, "failed to start REST proxy server", slog.Any("error", err))
+					panic(err)
+				}
+			}()
+
+			// Start Metrics server
+			metricsAddr := mustStringFlag(cmd.Flags(), "metrics-addr")
+			metricsMux := http.NewServeMux()
+			metricsMux.Handle("/metrics", promhttp.Handler())
+			metricsSrv := &http.Server{
+				Addr:    metricsAddr,
+				Handler: metricsMux,
+			}
+
+			go func() {
+				if tlsCertFile != "" && tlsKeyFile != "" {
+					slog.InfoContext(ctx, "starting Metrics server with TLS using common certs", slog.String("address", metricsSrv.Addr))
+					if err := metricsSrv.ListenAndServeTLS(tlsCertFile, tlsKeyFile); err != nil && err != http.ErrServerClosed {
+						slog.ErrorContext(ctx, "failed to start HTTPS Metrics server", slog.Any("error", err))
+						panic(err)
+					}
+				} else {
+					slog.InfoContext(ctx, "starting Metrics server without TLS", slog.String("address", metricsSrv.Addr))
+					if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+						slog.ErrorContext(ctx, "failed to start HTTP Metrics server", slog.Any("error", err))
+						panic(err)
+					}
+				}
+			}()
+
+			// Keep the main function alive until context is cancelled, or wait for servers
+			<-ctx.Done()
+			// Add graceful shutdown for proxySrv and metricsSrv if needed here
+			return nil
 		},
 	}
 
@@ -240,6 +322,9 @@ func serve() *cobra.Command {
 	cmd.Flags().String("grpc-addr", ":8080", "The listen address to use for the gRPC service")
 	cmd.Flags().String("rest-addr", ":8081", "The listen address to use for the REST service")
 	cmd.Flags().String("metrics-addr", ":9000", "The listen address to use for the metrics service")
+
+	cmd.Flags().String("tls-cert-file", "", "Path to the common TLS certificate file for all HTTPS/TLS services")
+	cmd.Flags().String("tls-key-file", "", "Path to the common TLS key file for all HTTPS/TLS services")
 
 	cmd.Flags().String("authentication-config", "", "Configuration file to use for authenticating API requests")
 	cmd.Flags().Bool("disable-auth", false, "Whether authorization checks should be disabled on the APIs")
