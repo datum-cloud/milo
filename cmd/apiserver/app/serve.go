@@ -248,6 +248,7 @@ func serve() *cobra.Command {
 				RoleResolver:           roleResolver,
 				AuthenticationProvider: authenticationProvider,
 				SubjectExtractor:       subjectExtractor,
+				ParentResolver:         parentResolverRegistry,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}

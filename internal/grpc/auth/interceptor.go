@@ -169,10 +169,14 @@ func SubjectAuthorizationInterceptor(
 }
 
 func resolveParents(ctx context.Context, parentResolver storage.ParentResolver, resource *storage.ResourceReference) ([]*iampb.ParentRelationship, error) {
+	ctx, span := otel.Tracer("").Start(ctx, "datum.auth.resolveParents")
+	defer span.End()
+
 	var parents []*iampb.ParentRelationship
 	for {
 		parent, err := parentResolver.ResolveParent(ctx, resource)
 		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return nil, err
 		} else if parent == nil {
 			// Resource does not have a parent so we can skip looking for additional

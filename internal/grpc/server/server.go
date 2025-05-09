@@ -49,6 +49,7 @@ type Server struct {
 	AccessChecker                func(context.Context, *iampb.CheckAccessRequest) (*iampb.CheckAccessResponse, error)
 	AuthenticationProvider       authentication.Provider
 	SubjectExtractor             auth.SubjectExtractor
+	ParentResolver               storage.ParentResolver
 }
 
 type ServerOptions struct {
@@ -65,6 +66,7 @@ type ServerOptions struct {
 	RoleResolver           role.Resolver
 	SubjectExtractor       auth.SubjectExtractor
 	AuthenticationProvider authentication.Provider
+	ParentResolver         storage.ParentResolver
 }
 
 // Configures a new IAM Server
@@ -103,6 +105,7 @@ func NewServer(opts ServerOptions) error {
 		AccessChecker:          openfga.AccessChecker(schemaRegistry, opts.OpenFGAClient, opts.OpenFGAStoreID),
 		SubjectExtractor:       opts.SubjectExtractor,
 		AuthenticationProvider: opts.AuthenticationProvider,
+		ParentResolver:         opts.ParentResolver,
 	}
 
 	// Register all gRPC services with the gRPC server here.
