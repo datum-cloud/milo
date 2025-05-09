@@ -4,7 +4,7 @@ includes:
   api:
     taskfile: ./api/Taskfile.yaml
     dir: ./api
-    
+
 tasks:
   env:start:
     run: once
@@ -73,7 +73,7 @@ tasks:
         --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
         --roles config/roles \
         --overwrite true
-    
+
   iamservice:loadpolicies:
     cmd: |
       go run ./cmd/apiserver add-resources \
@@ -82,11 +82,27 @@ tasks:
         --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
         --policies config/policies \
         --overwrite true
-
   openfga:getuserorganizations:
     desc: Retrieves the OpenFGA model from the server
     cmd: |                                                       #resource identifier, hashed permission, resource type
       fga query list-objects --store-id $(task openfga:store-id) iam.datumapis.com/InternalUser:users/db2fcc5a-b98a-48e5-b5df-b282d910273b 7983b8fa resourcemanager.datumapis.com/Organization
 
+  apiserver:migrate-users:
+    cmd: |
+      go run ./cmd/apiserver migrate-resources \
+        --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
+        --datum-os-api-endpoint=https://api.staging.env.datum.net/datum-os/v1alpha/users?pageSize=9999 \
+        --datum-os-api-key=ZjU3MDNkYjUtM2YwNy00MTY1LTk5OGEtN2JmZDI4YWVjOGVlOmR0bXBfaDI2dGFYMXJtanFGZ0hYRnBxdEh5V0s2YVBCZENENXdyRW13cnpKbVVUeVdVOVVNR2ljTTF4Y2NwdUxydWR0NQ== \
+        --openfga-endpoint=dns:///localhost:8081 \
+        --openfga-store-id=$(task openfga:store-id) \
+        --migrate-command=users
 
-        
+  apiserver:migrate-organizations:
+    cmd: |
+      go run ./cmd/apiserver migrate-resources \
+        --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
+        --datum-os-api-endpoint=https://api.staging.env.datum.net/datum-os/v1alpha/organizations?pageSize=99999 \
+        --datum-os-api-key=ZjU3MDNkYjUtM2YwNy00MTY1LTk5OGEtN2JmZDI4YWVjOGVlOmR0bXBfaDI2dGFYMXJtanFGZ0hYRnBxdEh5V0s2YVBCZENENXdyRW13cnpKbVVUeVdVOVVNR2ljTTF4Y2NwdUxydWR0NQ== \
+        --openfga-endpoint=dns:///localhost:8081 \
+        --openfga-store-id=$(task openfga:store-id) \
+        --migrate-command=organizations

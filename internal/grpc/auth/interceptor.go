@@ -169,14 +169,19 @@ func SubjectAuthorizationInterceptor(
 }
 
 func resolveParents(ctx context.Context, parentResolver storage.ParentResolver, resource *storage.ResourceReference) ([]*iampb.ParentRelationship, error) {
+	ctx, span := otel.Tracer("").Start(ctx, "datum.auth.resolveParents")
+	defer span.End()
+
 	var parents []*iampb.ParentRelationship
 	for {
 		parent, err := parentResolver.ResolveParent(ctx, resource)
 		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return nil, err
 		} else if parent == nil {
 			// Resource does not have a parent so we can skip looking for additional
 			// parents.
+			slog.DebugContext(ctx, "resource does not have a parent", slog.Any("resource", resource))
 			break
 		}
 
@@ -226,6 +231,12 @@ func ResourceNameResolver() ResourceResolver {
 			resourceType := resourceReferenceType(resourceNameField)
 			resourceName := message.Get(resourceNameField).String()
 
+			// If the resource name is already a full resource URL, we can return it
+			// immediately.
+			if storage.IsResourceURL(resourceName) {
+				return resourceName, resourceType, nil
+			}
+
 			return storage.ServiceName(resourceType) + "/" + resourceName, resourceType, nil
 		}
 
@@ -253,7 +264,15 @@ func ResourceNameResolver() ResourceResolver {
 
 			resourceDescriptor := proto.GetExtension(embeddedDescriptor.Options(), googleannotations.E_Resource).(*googleannotations.ResourceDescriptor)
 
-			return storage.ServiceName(resourceDescriptor.Type) + "/" + embdededMessage.Get(embeddedDescriptor.Fields().ByName("name")).String(), resourceDescriptor.Type, nil
+			resourceName := embdededMessage.Get(embeddedDescriptor.Fields().ByName("name")).String()
+
+			// If the resource name is already a full resource URL, we can return it
+			// immediately.
+			if storage.IsResourceURL(resourceName) {
+				return resourceName, resourceDescriptor.Type, nil
+			}
+
+			return storage.ServiceName(resourceDescriptor.Type) + "/" + resourceName, resourceDescriptor.Type, nil
 		}
 
 		return "", "", fmt.Errorf("failed to resolve resource name")

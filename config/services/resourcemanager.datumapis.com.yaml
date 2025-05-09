@@ -15,3 +15,17 @@ spec:
     - search
     resourceNamePatterns:
     - "organizations/{organization}"
+  - type: resourcemanager.datumapis.com/Project
+    plural: projects
+    singular: project
+    permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - move
+    resourceNamePatterns:
+    - "projects/{project}"
+    - "organizations/{organization}/projects/{project}"
+    - "folders/{folder}/projects/{project}"

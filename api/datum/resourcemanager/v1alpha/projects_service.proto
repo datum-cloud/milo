@@ -1,0 +1,304 @@
+syntax = "proto3";
+
+package datum.resourcemanager.v1alpha;
+
+import "datum/resourcemanager/v1alpha/projects_resources.proto";
+import "datum/api/annotations.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/api/resource.proto";
+import "google/api/visibility.proto";
+import "google/longrunning/operations.proto";
+import "google/protobuf/field_mask.proto";
+
+// Manages projects within the Datum OS platform.
+//
+// Projects are used by customers to organize the resources they consume from
+// services on the platform. A project can be stored within an Organization or
+// within a nested hierarchy by utilizing Folders. Users can move projects to
+// different locations within the resource hierarchy based on the needs of their
+// organization.
+//
+// IAM endpoints are provided to support testing a user's permission to a
+// project. IAM permissions are inherited from policies created on parent
+// resources in the resource hierarchy.
+service Projects {
+  option (google.api.api_visibility) = {restriction: "PUBLIC"};
+
+  // Creates a project within the resource hierarchy.
+  rpc CreateProject(CreateProjectRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/projects.create";
+    option (google.api.method_signature) = "parent,project,project_id";
+    option (google.api.http) = {
+      post: "/v1alpha/{parent=organizations/*}/projects"
+      body: "project"
+      additional_bindings: {
+        post: "/v1alpha/{parent=folders/*}/projects"
+        body: "project"
+      }
+    };
+    option (google.longrunning.operation_info) = {
+      response_type: "Project"
+      metadata_type: "CreateProjectMetadata"
+    };
+  }
+
+  // Retrieves a project by its name.
+  //
+  // This will always return the expected state of the project. The project's
+  // status will always reflect the last observed status of the project.
+  rpc GetProject(GetProjectRequest) returns (Project) {
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/projects.get";
+    option (google.api.method_signature) = "name";
+    option (google.api.http) = {get: "/v1alpha/{name=projects/*}"};
+  }
+
+  // Lists projects under a parent resource.
+  //
+  // Projects can be organized into Folders or set at the root of the
+  // Organizatino's heirarchy.
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/projects.list";
+    option (google.api.method_signature) = "parent";
+    option (google.api.http) = {
+      get: "/v1alpha/{parent=organizations/*}/projects"
+      additional_bindings: {get: "/v1alpha/{parent=folders/*}/projects"}
+    };
+  }
+
+  // Updates an existing Project
+  rpc UpdateProject(UpdateProjectRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/projects.update";
+    option (google.api.method_signature) = "project,update_mask";
+    option (google.api.http) = {
+      patch: "/v1alpha/{project.name=projects/*}"
+      body: "project"
+    };
+    option (google.longrunning.operation_info) = {
+      response_type: "Project"
+      metadata_type: "UpdateProjectMetadata"
+    };
+  }
+
+  // Delete a project from the platform.
+  //
+  // A project will not be deleted until all resources have been removed from
+  // the project. Deleting a project will not immediately stop the billing for
+  // any resources provisioned within the project. Billing for a resource
+  // provisioned within a project will only stop once the resource has been
+  // removed.
+  //
+  // Projects can be scheduled for deletion in the future but no guarantees are
+  // provided on when the deletion will start after the requested deletion time
+  // has passed.
+  rpc DeleteProject(DeleteProjectRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/projects.delete";
+    option (google.api.method_signature) = "name";
+    option (google.api.http) = {delete: "/v1alpha/{name=projects/*}"};
+    option (google.longrunning.operation_info) = {
+      response_type: "Project"
+      metadata_type: "DeleteProjectMetadata"
+    };
+  }
+
+  // Move a project to a new location in the resource hierarchy.
+  //
+  // Users can move projects new locations in the resource hierarchy based on
+  // their organizational needs. Changing the location in the hierarchy can have
+  // adverse affects on IAM policies inherited by the project. Users must be
+  // careful that IAM policies applied from the existing parent are also set on
+  // the new parent **before** moving the project, otherwise they risk access
+  // granted through a parent's policies being removed.
+  //
+  // (-- Imperative only API to move a project to different locations in the
+  // resource hierarchy. --)
+  rpc MoveProject(MoveProjectRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/projects.move";
+    option (google.api.http) = {
+      post: "/v1alpha/{name=projects/*}:move"
+      body: "*"
+    };
+    option (google.api.method_signature) = "name,destination_parent";
+    option (google.longrunning.operation_info) = {
+      response_type: "MoveProjectResponse"
+      metadata_type: "MoveProjectMetadata"
+    };
+  }
+}
+
+// The request message for creating a project.
+message CreateProjectRequest {
+  // The resource name to use as the parent in the project's resource hierarchy.
+  // A Project can have a Folder or an Organization as it's parent. Must be in
+  // the format "organizations/{organization}" or "projects/{project}".
+  string parent = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "*"}
+  ];
+
+  // The project to create.
+  Project project = 2 [(google.api.field_behavior) = REQUIRED];
+
+  // Set the ID to use for the project. This will be used as the last section of
+  // the project's resource name.
+  string project_id = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // When set to true, the request will be validated but the project will not be
+  // created within the system. This is helpful to perform server-side
+  // validation of resources and show validation errors to users prior to
+  // allowing them to submit the creation request.
+  bool validate_only = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata returned from the long running operations when creating a new
+// project.
+message CreateProjectMetadata {}
+
+// The request message for getting a project.
+message GetProjectRequest {
+  // Required. The name of the project to retrieve.
+  // Format: organizations/{organization}/projects/{project}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Project"}
+  ];
+}
+
+// The request message for listing projects.
+message ListProjectsRequest {
+  // The parent location in the resource hierarchy that projects should be
+  // listed from.
+  string parent = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {
+      type: "resourcemanager.datumapis.com/Organization"
+      child_type: "resourcemanager.datumapis.com/Project"
+    }
+  ];
+
+  // Optional. The maximum number of projects to return. If unspecified,
+  // defaults to 50.
+  int32 page_size = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional. A token identifying a page of results to return.
+  string page_token = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional. A filter to apply to the results.
+  string filter = 4 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional. When set to true, the response will include deleted projects.
+  bool show_deleted = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The response message for listing projects.
+message ListProjectsResponse {
+  // The list of projects.
+  repeated Project projects = 1;
+
+  // A token to retrieve the next page of results.
+  string next_page_token = 2;
+}
+
+// The request message for updating a project.
+message UpdateProjectRequest {
+  // Required. The project to update.
+  Project project = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Required. The update mask applies to the resource.
+  google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Indicates the request to update the project should only be validated and
+  // changes must not actually take effect on the resource. API consumers can
+  // leverage this option to perform validation and present errors to users
+  // before submitting a real update request.
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // Set to true to indicate that a new Project should be created if the
+  // provided project doesn't already exist.
+  bool allow_missing = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata used by long running operations when updating a project.
+message UpdateProjectMetadata {}
+
+// The request message for deleting a project.
+message DeleteProjectRequest {
+  // Required. The name of the project to delete.
+  // Format: organizations/{organization}/projects/{project}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Project"}
+  ];
+
+  // Indicates the request to update the project should only be validated and
+  // changes must not actually take effect on the resource. API consumers can
+  // leverage this option to perform validation and present errors to users
+  // before submitting a real update request.
+  bool validate_only = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optionally provide the computed checksum value of the current resource to
+  // ensure updates only take effect when the latest resource was provided by
+  // the caller.
+  string etag = 4 [(google.api.field_behavior) = OPTIONAL];
+
+  // When set to true, the request will still succeed if the project does not
+  // exist.
+  bool allow_missing = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata used by long running operations when deleting a project.
+message DeleteProjectMetadata {}
+
+// The request message to use when moving a project to a new location within
+// the resource hierarchy.
+message MoveProjectRequest {
+  // The resource name of the project that will be moved to a new location
+  // within the resource hierarchy.
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Project"}
+  ];
+
+  // The location within the hierarchy to move the project to. The project
+  // can be moved to another folder within the organization or the root of
+  // the organization. Must be the resource name of the parent, e.g.
+  // `folders/{folder}` or `organizations/{organization}`.
+  string destination_parent = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "*"}
+  ];
+
+  // Optionally provide the computed checksum value of the current resource to
+  // ensure a project will only be moved when the current resource was provided
+  // in the request.
+  string etag = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // When set to true, the request will only be validated and no actions will be
+  // taken on the project. This is helpful for confirming the request options
+  // are correct before calling the endpoint.
+  bool validate_only = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata used by long running operations when moving a project.
+message MoveProjectMetadata {
+  // The resource name of the organization or folder where the project was
+  // originally located before the move.
+  string source_parent = 1;
+
+  // The resource name of the organization or folder where the project was
+  // moved to.
+  string destination_parent = 2;
+}
+
+// The response message for moving a project.
+message MoveProjectResponse {
+  // The moved project.
+  Project project = 1;
+  // The resource name of the organization or folder where the project was
+  // originally located before the move.
+  string source_parent = 2;
+  // The resource name of the organization or folder where the project was
+  // moved to.
+  string destination_parent = 3;
+}

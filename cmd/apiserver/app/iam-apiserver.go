@@ -10,6 +10,7 @@ func Command() *cobra.Command {
 
 	cmd.AddCommand(
 		addResourcesCommand(),
+		migrateResourcesCommand(),
 		serve(),
 	)
 

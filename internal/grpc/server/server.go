@@ -30,6 +30,7 @@ type Server struct {
 	iamv1alphagrpc.UnimplementedAccessCheckServer
 	iamv1alphagrpc.UnimplementedUsersServer
 	resourcemanagerv1alphagrpc.UnimplementedOrganizationsServer
+	resourcemanagerv1alphagrpc.UnimplementedProjectsServer
 
 	PolicyReconciler             *openfga.PolicyReconciler
 	RoleReconciler               *openfga.RoleReconciler
@@ -41,12 +42,14 @@ type Server struct {
 	PolicyStorage                storage.ResourceServer[*iampb.Policy]
 	UserStorage                  storage.ResourceServer[*iampb.User]
 	OrganizationStorage          storage.ResourceServer[*resourcemanagerpb.Organization]
+	ProjectStorage               storage.ResourceServer[*resourcemanagerpb.Project]
 	SchemaRegistry               *schema.Registry
 	SubjectResolver              subject.Resolver
 	RoleResolver                 role.Resolver
 	AccessChecker                func(context.Context, *iampb.CheckAccessRequest) (*iampb.CheckAccessResponse, error)
 	AuthenticationProvider       authentication.Provider
 	SubjectExtractor             auth.SubjectExtractor
+	ParentResolver               storage.ParentResolver
 }
 
 type ServerOptions struct {
@@ -58,10 +61,12 @@ type ServerOptions struct {
 	PolicyStorage          storage.ResourceServer[*iampb.Policy]
 	UserStorage            storage.ResourceServer[*iampb.User]
 	OrganizationStorage    storage.ResourceServer[*resourcemanagerpb.Organization]
+	ProjectStorage         storage.ResourceServer[*resourcemanagerpb.Project]
 	SubjectResolver        subject.Resolver
 	RoleResolver           role.Resolver
 	SubjectExtractor       auth.SubjectExtractor
 	AuthenticationProvider authentication.Provider
+	ParentResolver         storage.ParentResolver
 }
 
 // Configures a new IAM Server
@@ -94,11 +99,13 @@ func NewServer(opts ServerOptions) error {
 		PolicyStorage:          opts.PolicyStorage,
 		UserStorage:            opts.UserStorage,
 		OrganizationStorage:    opts.OrganizationStorage,
+		ProjectStorage:         opts.ProjectStorage,
 		SubjectResolver:        opts.SubjectResolver,
 		RoleResolver:           opts.RoleResolver,
 		AccessChecker:          openfga.AccessChecker(schemaRegistry, opts.OpenFGAClient, opts.OpenFGAStoreID),
 		SubjectExtractor:       opts.SubjectExtractor,
 		AuthenticationProvider: opts.AuthenticationProvider,
+		ParentResolver:         opts.ParentResolver,
 	}
 
 	// Register all gRPC services with the gRPC server here.
@@ -108,6 +115,7 @@ func NewServer(opts ServerOptions) error {
 	iamv1alphagrpc.RegisterAccessCheckServer(opts.GRPCServer, server)
 	iamv1alphagrpc.RegisterUsersServer(opts.GRPCServer, server)
 	resourcemanagerv1alphagrpc.RegisterOrganizationsServer(opts.GRPCServer, server)
+	resourcemanagerv1alphagrpc.RegisterProjectsServer(opts.GRPCServer, server)
 
 	return nil
 }
@@ -119,4 +127,5 @@ func RegisterProxyRoutes(ctx context.Context, mux *runtime.ServeMux, conn *grpc.
 	iamv1alphagateway.RegisterAccessCheckHandler(ctx, mux, conn)
 	iamv1alphagateway.RegisterUsersHandler(ctx, mux, conn)
 	resourcemanagerv1alphagateway.RegisterOrganizationsHandler(ctx, mux, conn)
+	resourcemanagerv1alphagateway.RegisterProjectsHandler(ctx, mux, conn)
 }
