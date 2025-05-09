@@ -7,6 +7,7 @@ import (
 
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 	"go.datum.net/iam/internal/storage"
+	"go.datum.net/iam/internal/subject"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -16,6 +17,18 @@ import (
 func (s *Server) CheckAccess(ctx context.Context, req *iampb.CheckAccessRequest) (*iampb.CheckAccessResponse, error) {
 	resolveCtx, span := otel.Tracer("").Start(ctx, "datum.server.CheckAccess.resolveParents")
 	defer span.End()
+
+	subjectID, subjectKind, err := subject.Parse(req.Subject)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse subject: %w", err)
+	}
+
+	subject, err := s.SubjectResolver(resolveCtx, subjectKind, subjectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve subject: %w", err)
+	}
+
+	req.Subject = subject
 
 	// Use schema.Registry to resolve the resource URL into its components including type.
 	schemaRef, err := s.SchemaRegistry.ResolveResource(resolveCtx, req.Resource)

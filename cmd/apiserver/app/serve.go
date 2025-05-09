@@ -135,7 +135,7 @@ func serve() *cobra.Command {
 				return fmt.Errorf("failed to create database resolver: %w", err)
 			}
 
-			subjectExtractor, err := jwt.SubjectExtractor(authConfig, subjectResolver)
+			subjectExtractor, err := jwt.SubjectExtractor(authConfig, nil)
 			if err != nil {
 				return err
 			}
