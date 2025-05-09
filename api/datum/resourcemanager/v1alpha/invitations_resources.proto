@@ -14,7 +14,7 @@ option go_package = "go.datumapis.com/os/genproto/resourcemanager/v1alpha;resour
 // Organization.
 message Invitation {
   option (google.api.resource) = {
-    type: "iam.datumapis.com/Invitation"
+    type: "resourcemanager.datumapis.com/Invitation"
     pattern: "organizations/{organization}/invitations/{invitation}"
     style: DECLARATIVE_FRIENDLY
     singular: "invitation"
@@ -134,6 +134,6 @@ message Spec {
   string parent = 6 [
     (google.api.field_behavior) = OUTPUT_ONLY,
     (google.api.field_behavior) = IMMUTABLE,
-    (google.api.resource_reference).type = "iam.datumapis.com/Organization"
+    (google.api.resource_reference).type = "resourcemanager.datumapis.com/Organization"
   ];
 }

@@ -21,8 +21,8 @@ service Invitations {
 
   // CreateInvitation creates a new invitation.
   rpc CreateInvitation(CreateInvitationRequest) returns (google.longrunning.Operation) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/invitations.create";
-    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/Invitation";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/invitations.create";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/resourcemanager.datumapis.com/Invitation";
     option (google.api.method_signature) = "parent,invitation,invitation_id";
     option (google.api.http) = {
       post: "/v1alpha/{parent=organizations/*}/invitations"
@@ -36,22 +36,22 @@ service Invitations {
 
   // GetInvitation gets an Invitation by name.
   rpc GetInvitation(GetInvitationRequest) returns (Invitation) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/invitations.get";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/invitations.get";
     option (google.api.method_signature) = "name";
     option (google.api.http) = {get: "/v1alpha/{name=organizations/*/invitations/*}"};
   }
 
   // ListInvitations lists all Invitations.
   rpc ListInvitations(ListInvitationsRequest) returns (ListInvitationsResponse) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/invitations.list";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/invitations.list";
     option (google.api.method_signature) = "parent";
-    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/Invitation";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/resourcemanager.datumapis.com/Invitation";
     option (google.api.http) = {get: "/v1alpha/{parent=organizations/*}/invitations"};
   }
 
   // UpdateInvitation updates an Invitation.
   rpc UpdateInvitation(UpdateInvitationRequest) returns (google.longrunning.Operation) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/invitations.update";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/invitations.update";
     option (google.api.method_signature) = "invitation,update_mask";
     option (google.api.http) = {
       patch: "/v1alpha/{invitation.name=organizations/*/invitations/*}"
@@ -65,7 +65,7 @@ service Invitations {
 
   // DeleteInvitation deletes an Invitation by name.
   rpc DeleteInvitation(DeleteInvitationRequest) returns (google.longrunning.Operation) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/invitations.delete";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/invitations.delete";
     option (google.api.method_signature) = "name";
     option (google.api.http) = {delete: "/v1alpha/{name=organizations/*/invitations/*}"};
     option (google.longrunning.operation_info) = {
@@ -77,7 +77,7 @@ service Invitations {
   // AcceptInvitation accepts and invitation to join an organization.
   // Imperative only.
   rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse) {
-    option (datum.api.required_permissions) = "iam.datumapis.com/invitations.accept";
+    option (datum.api.required_permissions) = "resourcemanager.datumapis.com/invitations.accept";
     option (google.api.http) = {
       post: "/v1alpha/{name=organizations/*/invitations/*}:accept"
       body: "*"
@@ -90,7 +90,7 @@ message CreateInvitationRequest {
   // The resource name to use as the parent in the invitations's resource hierarchy.
   string parent = 1 [
     (google.api.field_behavior) = REQUIRED,
-    (google.api.resource_reference) = {type: "iam.datumapis.com/Organization"}
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Organization"}
   ];
   // The ID to use for the Invitation. If not specified, an ID will be
   // automatically generated. If the ID is automatically generated, the Client
@@ -112,7 +112,7 @@ message GetInvitationRequest {
   // Format: invitations/{invitation}
   string name = 1 [
     (google.api.field_behavior) = REQUIRED,
-    (google.api.resource_reference) = {type: "iam.datumapis.com/Invitation"}
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Invitation"}
   ];
 }
 
@@ -121,7 +121,7 @@ message ListInvitationsRequest {
   // The resource name to use as the parent in the invitations's resource hierarchy.
   string parent = 1 [
     (google.api.field_behavior) = REQUIRED,
-    (google.api.resource_reference) = {type: "iam.datumapis.com/Organization"}
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Organization"}
   ];
   // The maximum number of Invitations to return. The service may return fewer than
   // this value. If unspecified, at most 50 Invitations will be returned. The maximum
@@ -171,7 +171,7 @@ message DeleteInvitationRequest {
   // The name of the invitation to delete.
   string name = 1 [
     (google.api.field_behavior) = REQUIRED,
-    (google.api.resource_reference) = {type: "iam.datumapis.com/invitation"}
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Invitation"}
   ];
   // The etag of the invitation to delete. If this is not the same etag as the
   // currently stored invitation, the request will be rejected. If not
@@ -197,7 +197,7 @@ message AcceptInvitationRequest {
   // Format: organizations/{organization}/invitations/{invitation}
   string name = 1 [
     (google.api.field_behavior) = REQUIRED,
-    (google.api.resource_reference) = {type: "iam.datumapis.com/Invitation"}
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Invitation"}
   ];
   // If true, the request is validated and nothing is persisted.
   bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
