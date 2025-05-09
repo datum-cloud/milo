@@ -226,6 +226,12 @@ func ResourceNameResolver() ResourceResolver {
 			resourceType := resourceReferenceType(resourceNameField)
 			resourceName := message.Get(resourceNameField).String()
 
+			// If the resource name is already a full resource URL, we can return it
+			// immediately.
+			if storage.IsResourceURL(resourceName) {
+				return resourceName, resourceType, nil
+			}
+
 			return storage.ServiceName(resourceType) + "/" + resourceName, resourceType, nil
 		}
 
@@ -253,7 +259,15 @@ func ResourceNameResolver() ResourceResolver {
 
 			resourceDescriptor := proto.GetExtension(embeddedDescriptor.Options(), googleannotations.E_Resource).(*googleannotations.ResourceDescriptor)
 
-			return storage.ServiceName(resourceDescriptor.Type) + "/" + embdededMessage.Get(embeddedDescriptor.Fields().ByName("name")).String(), resourceDescriptor.Type, nil
+			resourceName := embdededMessage.Get(embeddedDescriptor.Fields().ByName("name")).String()
+
+			// If the resource name is already a full resource URL, we can return it
+			// immediately.
+			if storage.IsResourceURL(resourceName) {
+				return resourceName, resourceDescriptor.Type, nil
+			}
+
+			return storage.ServiceName(resourceDescriptor.Type) + "/" + resourceName, resourceDescriptor.Type, nil
 		}
 
 		return "", "", fmt.Errorf("failed to resolve resource name")
