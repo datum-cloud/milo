@@ -8,6 +8,7 @@ import (
 	"github.com/mennanov/fmutils"
 	"go.datum.net/iam/internal/grpc/longrunning"
 	"go.datum.net/iam/internal/storage"
+	"go.datum.net/iam/internal/validation"
 	lropb "google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -30,8 +31,13 @@ func (s *Server) CreateProject(ctx context.Context, req *resourcemanagerpb.Creat
 		return nil, status.Error(codes.InvalidArgument, "project.display_name is required")
 	}
 
+	if errs := validation.ValidateProject(req.GetProject()); len(errs) > 0 {
+		return nil, errs.GRPCStatus().Err()
+	}
+
 	if req.GetValidateOnly() {
-		return &lropb.Operation{Name: "operations/validateOnly/" + req.GetProjectId(), Done: true}, nil
+		metadata := &resourcemanagerpb.CreateProjectMetadata{}
+		return longrunning.ResponseOperation(metadata, req.GetProject(), true)
 	}
 
 	projectToCreate := proto.Clone(req.GetProject()).(*resourcemanagerpb.Project)
@@ -114,8 +120,18 @@ func (s *Server) UpdateProject(ctx context.Context, req *resourcemanagerpb.Updat
 	}
 
 	updaterFunc := func(existingProject *resourcemanagerpb.Project) (*resourcemanagerpb.Project, error) {
+		originalProjectState := proto.Clone(existingProject).(*resourcemanagerpb.Project)
+
 		projectToUpdate := proto.Clone(existingProject).(*resourcemanagerpb.Project)
 		fmutils.Overwrite(projectFromRequest, projectToUpdate, updateMask.GetPaths())
+
+		if errs := validation.AssertProjectImmutableFieldsUnchanged(updateMask.GetPaths(), originalProjectState, projectToUpdate); len(errs) > 0 {
+			return nil, errs.GRPCStatus().Err()
+		}
+
+		if errs := validation.ValidateProject(projectToUpdate); len(errs) > 0 {
+			return nil, errs.GRPCStatus().Err()
+		}
 
 		projectToUpdate.UpdateTime = timestamppb.Now()
 		return projectToUpdate, nil
