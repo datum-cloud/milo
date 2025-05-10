@@ -34,8 +34,8 @@ func (s *Server) CreateInvitation(ctx context.Context, req *resourcemanagerpb.Cr
 
 	// Check if the user is already a member of the organization
 	resp, err := s.CheckAccess(ctx, &iampb.CheckAccessRequest{
-		Resource:   fmt.Sprintf("iam.datumapis.com/%s", req.Parent),
-		Permission: "iam.datumapis.com/organizations.get",
+		Resource:   fmt.Sprintf("resourcemanager.datumapis.com/%s", req.Parent),
+		Permission: "resourcemanager.datumapis.com/organizations.get",
 		Subject:    invitationRecipientSub,
 	})
 	if err != nil {
@@ -99,10 +99,10 @@ func (s *Server) CreateInvitation(ctx context.Context, req *resourcemanagerpb.Cr
 	// Set the IAM policy to the user so they can accept the invitation
 	policy := &iampb.SetIamPolicyRequest{
 		Policy: &iampb.Policy{
-			Name: fmt.Sprintf("iam.datumapis.com/%s", invitation.Name),
+			Name: fmt.Sprintf("resourcemanager.datumapis.com/%s", invitation.Name),
 			Spec: &iampb.PolicySpec{
 				Bindings: []*iampb.Binding{{
-					Role:    "services/iam.datumapis.com/roles/invitationResponder",
+					Role:    "services/resourcemanager.datumapis.com/roles/invitationResponder",
 					Members: []string{fmt.Sprintf("user:%s", invitation.Spec.RecipientEmailAddress)},
 				}},
 			},
@@ -176,7 +176,7 @@ func (s *Server) AcceptInvitation(ctx context.Context, req *resourcemanagerpb.Ac
 	for _, role := range invitation.Spec.Roles {
 		policy := &iampb.SetIamPolicyRequest{
 			Policy: &iampb.Policy{
-				Name: fmt.Sprintf("iam.datumapis.com/%s", organization.Name),
+				Name: fmt.Sprintf("resourcemanager.datumapis.com/%s", organization.Name),
 				Spec: &iampb.PolicySpec{
 					Bindings: []*iampb.Binding{{
 						Role:    role,
