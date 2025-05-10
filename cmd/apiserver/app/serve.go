@@ -23,6 +23,9 @@ import (
 	"go.datum.net/iam/internal/grpc/recovery"
 	iamServer "go.datum.net/iam/internal/grpc/server"
 	authProvider "go.datum.net/iam/internal/providers/authentication/zitadel"
+	"go.datum.net/iam/internal/providers/email"
+	mockedEmailProvider "go.datum.net/iam/internal/providers/email/mock"
+	"go.datum.net/iam/internal/providers/email/resend"
 	"go.datum.net/iam/internal/role"
 	"go.datum.net/iam/internal/storage"
 	"go.datum.net/iam/internal/storage/postgres"
@@ -155,6 +158,11 @@ func serve() *cobra.Command {
 				Client: zitadelClient,
 			}
 
+			emailProvider, err := getEmailProvider(cmd, ctx)
+			if err != nil {
+				return err
+			}
+
 			grpcListener, err := net.Listen("tcp", mustStringFlag(cmd.Flags(), "grpc-addr"))
 			if err != nil {
 				return err
@@ -245,6 +253,7 @@ func serve() *cobra.Command {
 				RoleResolver:           roleResolver,
 				AuthenticationProvider: authenticationProvider,
 				SubjectExtractor:       subjectExtractor,
+				EmailProvider:          emailProvider,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}
@@ -337,6 +346,12 @@ func serve() *cobra.Command {
 
 	cmd.Flags().String("zitadel-endpoint", "http://localhost:8082", "The domain of the ZITADEL instance")
 	cmd.Flags().String("zitadel-key-path", "", "Path to the ZITADEL service account private key JSON file")
+
+	cmd.Flags().String("email-provider", "resend", "The email provider to use")
+	cmd.Flags().String("email-provider-api-key", "", "The API key for the email provider")
+	cmd.Flags().String("email-provider-from-address", "", "The 'from' email address for the email provider")
+	cmd.Flags().String("email-provider-reply-to-address", "", "The 'reply-to' email address for the email provider")
+	cmd.Flags().Bool("disable-email-provider", false, "Whether the email provider should be disabled")
 
 	return cmd
 }
@@ -438,4 +453,42 @@ func getZitadelClient(cmd *cobra.Command, ctx context.Context) (*client.Client, 
 	}
 
 	return zitadelClient, nil
+}
+
+func getEmailProvider(cmd *cobra.Command, ctx context.Context) (email.Provider, error) {
+	disableEmailProvider, err := cmd.Flags().GetBool("disable-email-provider")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get disable email provider: %w", err)
+	}
+
+	if disableEmailProvider {
+		return mockedEmailProvider.NewClient(), nil
+	}
+
+	emailProvider, err := cmd.Flags().GetString("email-provider")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get email provider: %w", err)
+	}
+
+	emailProviderKey, err := cmd.Flags().GetString("email-provider-api-key")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get email provider key: %w", err)
+	}
+
+	emailProviderFromAddress, err := cmd.Flags().GetString("email-provider-from-address")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get email provider from address: %w", err)
+	}
+
+	emailProviderReplyToAddress, err := cmd.Flags().GetString("email-provider-reply-to-address")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get email provider reply to address: %w", err)
+	}
+
+	switch emailProvider {
+	case "resend":
+		return resend.NewResendProvider(emailProviderKey, emailProviderFromAddress, emailProviderReplyToAddress), nil
+	}
+
+	return nil, fmt.Errorf("invalid email provider: %s", emailProvider)
 }

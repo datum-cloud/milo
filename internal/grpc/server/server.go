@@ -13,6 +13,7 @@ import (
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"go.datum.net/iam/internal/grpc/auth"
 	"go.datum.net/iam/internal/providers/authentication"
+	"go.datum.net/iam/internal/providers/email"
 	"go.datum.net/iam/internal/providers/openfga"
 	"go.datum.net/iam/internal/role"
 	"go.datum.net/iam/internal/schema"
@@ -49,6 +50,7 @@ type Server struct {
 	AccessChecker                func(context.Context, *iampb.CheckAccessRequest) (*iampb.CheckAccessResponse, error)
 	AuthenticationProvider       authentication.Provider
 	SubjectExtractor             auth.SubjectExtractor
+	EmailProvider                email.Provider
 }
 
 type ServerOptions struct {
@@ -65,6 +67,7 @@ type ServerOptions struct {
 	RoleResolver           role.Resolver
 	SubjectExtractor       auth.SubjectExtractor
 	AuthenticationProvider authentication.Provider
+	EmailProvider          email.Provider
 }
 
 // Configures a new IAM Server
@@ -103,6 +106,7 @@ func NewServer(opts ServerOptions) error {
 		AccessChecker:          openfga.AccessChecker(schemaRegistry, opts.OpenFGAClient, opts.OpenFGAStoreID),
 		SubjectExtractor:       opts.SubjectExtractor,
 		AuthenticationProvider: opts.AuthenticationProvider,
+		EmailProvider:          opts.EmailProvider,
 	}
 
 	// Register all gRPC services with the gRPC server here.

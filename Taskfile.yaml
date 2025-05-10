@@ -51,9 +51,13 @@ tasks:
         --database=postgres://root@localhost:26257/iam?sslmode=disable \
         --rest-addr=:8000 \
         --grpc-addr=:8001 \
-        --disable-auth=false \
+        --disable-auth=true\
         --authentication-config=$(cat ./test/config/authentication/authentication-config.json | jq -c .) \
         --zitadel-key-path="test/config/zitadel/secrets/machine-key.json" \
+        --disable-email-provider=true \
+        --email-provider-api-key="xxxxxxxxx" \
+        --email-provider-from-address="delivered@resend.dev" \
+        --email-provider-reply-to-address="delivered@resend.dev" \
         {{ .CLI_ARGS }}
 
   iamservice:loadservices:

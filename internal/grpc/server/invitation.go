@@ -8,6 +8,7 @@ import (
 	resourcemanagerpb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/resourcemanager/v1alpha"
 	"go.datum.net/iam/internal/grpc/longrunning"
 	"go.datum.net/iam/internal/grpc/validation"
+	"go.datum.net/iam/internal/providers/email"
 	"go.datum.net/iam/internal/storage"
 	"go.datum.net/iam/internal/subject"
 	"go.datum.net/iam/internal/validation/field"
@@ -129,6 +130,18 @@ func (s *Server) CreateInvitation(ctx context.Context, req *resourcemanagerpb.Cr
 			return existing, nil
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Add correct URL for accepting the invitation
+	err = s.EmailProvider.SendEmail(
+		&email.SendEmailParams{
+			To:       []string{req.Invitation.Spec.RecipientEmailAddress},
+			Subject:  "Welcome to Datum!",
+			HTMLBody: fmt.Sprintf("You have been invited to join the organization %s. Please accept the invitation by clicking the link below: %s", req.Parent, invitation.Name),
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
