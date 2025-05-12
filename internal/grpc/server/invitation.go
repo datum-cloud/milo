@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"errors"
 
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 	resourcemanagerpb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/resourcemanager/v1alpha"
@@ -30,7 +31,31 @@ func (s *Server) CreateInvitation(ctx context.Context, req *resourcemanagerpb.Cr
 
 	invitationRecipientSub, err := s.SubjectResolver(ctx, subject.UserKind, invitation.Spec.RecipientEmailAddress)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, subject.ErrSubjectNotFound) {
+			// If user is not found, create a new user with the email address
+			createUserOp, err := s.CreateUser(ctx, &iampb.CreateUserRequest{
+				User: &iampb.User{
+					Spec: &iampb.UserSpec{
+						Email: invitation.Spec.RecipientEmailAddress,
+					},
+					Annotations: map[string]string{
+						s.AuthenticationProvider.GetProviderKey(): "pending",
+					},
+				},
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			// Set invitationRecipientSub to the user name
+			var user iampb.User
+			if err := createUserOp.GetResponse().UnmarshalTo(&user); err != nil {
+				return nil, err
+			}
+			invitationRecipientSub = user.Name
+		} else {
+			return nil, err
+		}
 	}
 
 	// Check if the user is already a member of the organization
