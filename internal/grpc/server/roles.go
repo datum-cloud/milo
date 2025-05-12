@@ -22,6 +22,7 @@ func (s *Server) CreateRole(ctx context.Context, req *iampb.CreateRoleRequest) (
 	// Validate the role
 	if errs := validation.ValidateRole(role, &validation.RoleValidatorOptions{
 		PermissionValidator: validation.NewPermissionValidator(s.ServiceStorage),
+		RoleValidator:       validation.NewRoleValidator(s.RoleStorage),
 	}); len(errs) != 0 {
 		return nil, errs.GRPCStatus().Err()
 	}
