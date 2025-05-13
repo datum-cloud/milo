@@ -89,8 +89,9 @@ to the system.
 			}
 
 			roleReconciler := &openfga.RoleReconciler{
-				StoreID: storeID,
-				Client:  openFGAClient,
+				StoreID:     storeID,
+				Client:      openFGAClient,
+				RoleStorage: roleStorage,
 			}
 
 			policyReconciler := &openfga.PolicyReconciler{
@@ -120,6 +121,7 @@ to the system.
 			if err := addResources(cmd, roleStorage, func(role *iampb.Role) error {
 				if errs := validation.ValidateRole(role, &validation.RoleValidatorOptions{
 					PermissionValidator: validation.NewPermissionValidator(serviceStorage),
+					RoleValidator:       validation.NewRoleValidator(roleStorage),
 				}); len(errs) > 0 {
 					return errs.GRPCStatus().Err()
 				}
