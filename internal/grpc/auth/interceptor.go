@@ -123,7 +123,8 @@ func SubjectAuthorizationInterceptor(
 		}
 
 		resp, err := accessChecker.CheckAccess(checkAccessCtx, &iampb.CheckAccessRequest{
-			Subject:    subject,
+			// TODO: Resolve subject type to support machine accounts and groups
+			Subject:    fmt.Sprintf("user:%s", subject),
 			Permission: requiredPermissions[0],
 			Resource:   resourceURL,
 			Context:    accessCheckContext,
