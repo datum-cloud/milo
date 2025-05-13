@@ -64,7 +64,7 @@ func validateSpecInheritedRoles(fieldPath *field.Path, roleSpec *iampb.RoleSpec,
 var roleMatcher *regexp.Regexp
 
 func init() {
-	roleMatcher = regexp.MustCompile(`([a-zA-Z0-9\.\-]+)\/([a-zA-Z0-9\.\-]+)`)
+	roleMatcher = regexp.MustCompile(`services\/([a-zA-Z0-9\.\-]+)\/roles\/([a-zA-Z0-9\.\-]+)`)
 }
 
 func NewRoleValidator(services storage.ResourceGetter[*iampb.Role]) RoleValidator {
@@ -72,15 +72,12 @@ func NewRoleValidator(services storage.ResourceGetter[*iampb.Role]) RoleValidato
 		errs := field.ErrorList{}
 		matches := roleMatcher.FindStringSubmatch(role)
 		if len(matches) != 3 {
-			errs = append(errs, field.Invalid(fieldPath, role, "role must be in the format `{service_name}/{role_name}`"))
+			errs = append(errs, field.Invalid(fieldPath, role, "role must be in the format `services/{service_name}/roles/{role_name}`"))
 			return errs
 		}
 
-		serviceName := matches[1]
-		roleName := matches[2]
-
 		resource, err := services.GetResource(context.Background(), &storage.GetResourceRequest{
-			Name: "services/" + serviceName + "/roles/" + roleName,
+			Name: role,
 		})
 		if len(resource.GetName()) == 0 && err != nil {
 			errs = append(errs, field.NotFound(fieldPath, role))
