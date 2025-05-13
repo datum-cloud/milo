@@ -13,3 +13,17 @@ enum VerificationState {
   // The organization is verified.
   VERIFICATION_STATE_VERIFIED = 2;
 }
+
+// InvitationState is the invitation state of an Invitation.
+enum InvitationState {
+  // The invitation state is not specified.
+  INVITATION_STATE_UNSPECIFIED = 0;
+  // The invitation is sent.
+  INVITATION_SENT = 1;
+  // The invitation is accepted.
+  INVITATION_ACCEPTED = 2;
+  // The invitation is expired.
+  INVITATION_EXPIRED = 3;
+  // The invitation has reached the maximum send attempts.
+  INVITATION_MAX_SEND_ATTEMPTS_REACHED = 4;
+}

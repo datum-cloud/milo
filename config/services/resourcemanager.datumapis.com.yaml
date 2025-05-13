@@ -15,3 +15,17 @@ spec:
     - search
     resourceNamePatterns:
     - "organizations/{organization}"
+  - type: resourcemanager.datumapis.com/Invitation
+    plural: invitations
+    singular: invitation
+    permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - accept
+    resourceNamePatterns:
+    - "organizations/{organization}/invitations/{invitation}"
+    parentResources:
+    - resourcemanager.datumapis.com/Organization

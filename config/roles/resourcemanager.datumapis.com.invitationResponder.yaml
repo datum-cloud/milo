@@ -1,0 +1,8 @@
+# This the IAM role definition for a user who can respond to a specific invitation
+roleId: invitationResponder
+parent: services/resourcemanager.datumapis.com
+name: services/resourcemanager.datumapis.com/roles/invitationResponder
+displayName: IAM Invitation Responder Role
+spec:
+  includedPermissions:
+  - resourcemanager.datumapis.com/invitations.accept

@@ -7,3 +7,8 @@ spec:
   - resourcemanager.datumapis.com/organizations.get
   - resourcemanager.datumapis.com/organizations.update
   - resourcemanager.datumapis.com/organizations.delete
+  - resourcemanager.datumapis.com/invitations.get
+  - resourcemanager.datumapis.com/invitations.create
+  - resourcemanager.datumapis.com/invitations.update
+  - resourcemanager.datumapis.com/invitations.delete
+  - resourcemanager.datumapis.com/invitations.list

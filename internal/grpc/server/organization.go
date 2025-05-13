@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"cloud.google.com/go/longrunning/autogen/longrunningpb"
 	"github.com/google/uuid"
+	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"go.datum.net/iam/internal/grpc/longrunning"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
