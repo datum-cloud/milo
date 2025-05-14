@@ -85,8 +85,9 @@ func NewServer(opts ServerOptions) error {
 			SubjectResolver: opts.SubjectResolver,
 		},
 		RoleReconciler: &openfga.RoleReconciler{
-			StoreID: opts.OpenFGAStoreID,
-			Client:  opts.OpenFGAClient,
+			StoreID:     opts.OpenFGAStoreID,
+			Client:      opts.OpenFGAClient,
+			RoleStorage: opts.RoleStorage,
 		},
 		SchemaRegistry:         schemaRegistry,
 		OpenFGAClient:          opts.OpenFGAClient,
