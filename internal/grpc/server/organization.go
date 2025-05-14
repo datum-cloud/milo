@@ -169,12 +169,17 @@ func (s *Server) SearchOrganizations(ctx context.Context, req *resourcemanagerpb
 		return nil, err
 	}
 
+	subjectName, err := s.SubjectResolver(ctx, subject.UserKind, userName)
+	if err != nil {
+		return nil, err
+	}
+
 	// Get the organizations that the user has the `organizations.get` permission
 	resourceType := "resourcemanager.datumapis.com/Organization"
 	hashedPermission := openfga.HashPermission("resourcemanager.datumapis.com/organizations.get")
 	organizationsObjects, err := s.OpenFGAClient.ListObjects(ctx, &openfgav1.ListObjectsRequest{
 		StoreId:  s.OpenFGAStoreID,
-		User:     fmt.Sprintf("iam.datumapis.com/InternalUser:%s", userName),
+		User:     fmt.Sprintf("iam.datumapis.com/InternalUser:%s", subjectName),
 		Relation: hashedPermission,
 		Type:     resourceType,
 	})
