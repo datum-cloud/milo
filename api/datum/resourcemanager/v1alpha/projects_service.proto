@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package datum.resourcemanager.v1alpha;
 
-import "datum/resourcemanager/v1alpha/projects_resources.proto";
 import "datum/api/annotations.proto";
+import "datum/resourcemanager/v1alpha/projects_resources.proto";
 import "google/api/annotations.proto";
 import "google/api/client.proto";
 import "google/api/field_behavior.proto";
