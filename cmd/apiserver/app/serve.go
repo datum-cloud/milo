@@ -142,6 +142,11 @@ func serve() *cobra.Command {
 				return err
 			})
 
+			databaseRoleResolver, err := role.DatabaseRoleResolver(db)
+			if err != nil {
+				return fmt.Errorf("failed to create database role resolver: %w", err)
+			}
+
 			zitadelClient, err := getZitadelClient(cmd, ctx)
 			if err != nil {
 				return err
@@ -239,6 +244,7 @@ func serve() *cobra.Command {
 				RoleResolver:           roleResolver,
 				AuthenticationProvider: authenticationProvider,
 				SubjectExtractor:       subjectExtractor,
+				DatabaseRoleResolver:   databaseRoleResolver,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}
