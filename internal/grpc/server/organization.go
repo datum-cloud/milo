@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"cloud.google.com/go/longrunning/autogen/longrunningpb"
 	"github.com/google/uuid"
+	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"go.datum.net/iam/internal/grpc/longrunning"
+	"go.datum.net/iam/internal/subject"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -52,13 +53,18 @@ func (s *Server) CreateOrganization(ctx context.Context, req *resourcemanagerpb.
 	organization.CreateTime = now
 	organization.UpdateTime = now
 
-	userName, err := s.SubjectExtractor(ctx)
+	userEmail, err := s.SubjectExtractor(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	subjectName, err := s.SubjectResolver(ctx, subject.UserKind, userEmail)
 	if err != nil {
 		return nil, err
 	}
 
 	user, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
-		Name: userName,
+		Name: subjectName,
 	})
 	if err != nil {
 		return nil, err
