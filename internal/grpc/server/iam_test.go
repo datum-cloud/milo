@@ -356,6 +356,10 @@ func setupIAMClient(t *testing.T, ctx context.Context) (client *Client) {
 		t.Fatalf("failed to create new in-memory client: %s", err)
 	}
 
+	parentResolverRegistry := &storage.ParentResolverRegistry{}
+	// Register a new parent resolver for the Project resource.
+	parentResolverRegistry.RegisterResolver(&iampb.Service{}, storage.ResourceParentResolver(servicesStorage))
+
 	if err := server.NewServer(server.ServerOptions{
 		OpenFGAClient:   openFGAClient,
 		OpenFGAStoreID:  openFGAStoreID,
@@ -363,6 +367,7 @@ func setupIAMClient(t *testing.T, ctx context.Context) (client *Client) {
 		RoleStorage:     rolesStorage,
 		PolicyStorage:   policyStorage,
 		SubjectResolver: subject.NoopResolver(),
+		ParentResolver:  parentResolverRegistry,
 		GRPCServer:      grpcServer,
 		RoleResolver: func(ctx context.Context, roleName string) error {
 			_, err := rolesStorage.GetResource(ctx, &storage.GetResourceRequest{
