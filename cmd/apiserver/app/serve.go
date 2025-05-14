@@ -125,6 +125,11 @@ func serve() *cobra.Command {
 				return err
 			}
 
+			projectStorage, err := postgres.ResourceServer(db, &resourcemanagerpb.Project{})
+			if err != nil {
+				return err
+			}
+
 			subjectResolver, err := subject.DatabaseResolver(db)
 			if err != nil {
 				return fmt.Errorf("failed to create database resolver: %w", err)
@@ -192,6 +197,8 @@ func serve() *cobra.Command {
 			// Register a new parent resolver for the Project resource.
 			parentResolverRegistry.RegisterResolver(&iampb.Service{}, storage.ResourceParentResolver(serviceStorage))
 			parentResolverRegistry.RegisterResolver(&iampb.User{}, storage.ResourceParentResolver(userStorage))
+			parentResolverRegistry.RegisterResolver(&resourcemanagerpb.Project{}, storage.ResourceParentResolver(projectStorage))
+			parentResolverRegistry.RegisterResolver(&resourcemanagerpb.Organization{}, storage.ResourceParentResolver(organizationStorage))
 
 			unaryInterceptors := []grpc.UnaryServerInterceptor{
 				errors.InternalErrorsInterceptor(slog.Default()),
@@ -240,6 +247,7 @@ func serve() *cobra.Command {
 				PolicyStorage:          policyStorage,
 				UserStorage:            userStorage,
 				OrganizationStorage:    organizationStorage,
+				ProjectStorage:         projectStorage,
 				SubjectResolver:        subjectResolver,
 				RoleResolver:           roleResolver,
 				AuthenticationProvider: authenticationProvider,

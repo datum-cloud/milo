@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package datum.resourcemanager.v1alpha;
+
+import "google/api/field_behavior.proto";
+import "google/api/field_info.proto";
+import "google/api/resource.proto";
+import "google/protobuf/timestamp.proto";
+
+// The Project resource message.
+message Project {
+  option (google.api.resource) = {
+    type: "resourcemanager.datumapis.com/Project"
+    pattern: "projects/{project}"
+    singular: "project"
+    plural: "projects"
+    style: DECLARATIVE_FRIENDLY
+  };
+
+  // The resource name of the Project.
+  // Format: projects/{project}
+  string name = 1 [(google.api.field_behavior) = IDENTIFIER];
+
+  // The resource name of the Project's parent in the resource hierarchy. This
+  // value will change if the project is moved in the resource hierachy. The
+  // parent will always be a folder (e.g. `folders/{folder}`) or organization
+  // (e.g. `organizations/{organization}`).
+  //
+  // The [MoveProject] method can be used to move the Project to a new parent.
+  string parent = 12 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Organization"}
+  ];
+
+  // The resource ID of the Project.
+  string project_id = 13 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // A system-generated UUIDv4 that uniquely identifies the resource.
+  string uid = 2 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_info).format = UUID4
+  ];
+
+  // A checksum calculated by the server based on the current state of the
+  // project resource. This value can be sent on update and delete requests to
+  // ensure the client has an up-to-date value before proceeding with the mutate
+  // call.
+  string etag = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // The time when the project was created.
+  google.protobuf.Timestamp create_time = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // The time when the project was last updated.
+  google.protobuf.Timestamp update_time = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // The time when the project was deleted.
+  google.protobuf.Timestamp delete_time = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Inidicates whether the project is being reconciled because the current
+  // state of the project does not match the desired state.
+  bool reconciling = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Annotations are an unstructured key-value map stored with a project that
+  // may be set by external tools to store and retrieve arbitrary metadata.
+  // They are not queryable and will be modified based on the update mask or
+  // patch operation that's used to update the project.
+  //
+  // Annotation keys must be in a fully-qualified domain format.
+  //
+  //   annotations:
+  //     resourcemanager.datumapis.com/project-id: some-value
+  //     extensions.calico.com/network: some-network
+  map<string, string> annotations = 8 [(google.api.field_behavior) = OPTIONAL];
+
+  // Labels are an unstructured key-value map that can be used to categorizing
+  // the resource. Eventually the system will allow filtering on project labels.
+  map<string, string> labels = 9 [(google.api.field_behavior) = OPTIONAL];
+
+  // A user-provided name for the project. This must be unique within the parent
+  // resource.
+  string display_name = 10 [(google.api.field_behavior) = REQUIRED];
+
+  // An optional description for the project.
+  string description = 11 [(google.api.field_behavior) = OPTIONAL];
+}

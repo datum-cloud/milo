@@ -3,9 +3,9 @@ module go.datum.net/iam
 go 1.23.1
 
 require (
-	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250512132552-ef4f07e9750a.1
-	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250512132552-ef4f07e9750a.2
-	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250512132552-ef4f07e9750a.1
+	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-00000000000000-025aad085555.1
+	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-00000000000000-025aad085555.2
+	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-00000000000000-025aad085555.1
 	buf.build/go/protoyaml v0.3.2
 	cloud.google.com/go/longrunning v0.6.7
 	github.com/google/go-cmp v0.7.0
@@ -35,6 +35,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250414145226-207652e42e2e
 	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.6
+	k8s.io/apimachinery v0.29.2
 )
 
 require (
@@ -222,7 +223,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.29.2 // indirect
-	k8s.io/apimachinery v0.29.2 // indirect
 	k8s.io/client-go v0.29.2 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
