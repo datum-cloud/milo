@@ -10,7 +10,9 @@ import (
 	"github.com/mennanov/fmutils"
 	"go.datum.net/iam/internal/grpc/longrunning"
 	"go.datum.net/iam/internal/grpc/validation"
+	roleResolver "go.datum.net/iam/internal/role"
 	"go.datum.net/iam/internal/storage"
+	"go.datum.net/iam/internal/validation/field"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -112,6 +114,11 @@ func (s *Server) UpdateRole(ctx context.Context, req *iampb.UpdateRoleRequest) (
 		return nil, err
 	}
 
+	errs := s.reconcileInheritedRoles(ctx, updatedRole.Name)
+	if len(errs) > 0 {
+		return nil, errs.GRPCStatus().Err()
+	}
+
 	return longrunning.ResponseOperation(&iampb.UpdateRoleMetadata{}, updatedRole, true)
 }
 
@@ -149,6 +156,14 @@ func (s *Server) DeleteRole(ctx context.Context, req *iampb.DeleteRoleRequest) (
 }
 
 func (s *Server) roleInUse(ctx context.Context, role string) (bool, error) {
+	rolesThatDependOnThisRole, err := s.DatabaseRoleResolver(ctx, roleResolver.InheritedRoleKind, role)
+	if err != nil {
+		return false, err
+	}
+	if len(rolesThatDependOnThisRole) > 0 {
+		return true, nil
+	}
+
 	var pageToken string
 	for {
 		policies, err := s.PolicyStorage.ListResources(ctx, &storage.ListResourcesRequest{
@@ -174,4 +189,57 @@ func (s *Server) roleInUse(ctx context.Context, role string) (bool, error) {
 
 		pageToken = policies.NextPageToken
 	}
+}
+
+// reconcileInheritedRoles recursively finds all roles that inherit from the given role name (directly or indirectly),
+// reconciles them, and collects all errors encountered during reconciliation.
+func (s *Server) reconcileInheritedRoles(ctx context.Context, roleName string) field.ErrorList {
+	errs := field.ErrorList{}
+	visited := make(map[string]struct{})
+	counter := 0
+	const maxRecursion = 9999
+
+	var process func(string)
+	process = func(parentRole string) {
+		counter++
+		if counter >= maxRecursion {
+			errs = append(errs, field.InternalError(field.NewPath("reconcileInheritedRoles"), fmt.Errorf("maximum recursion limit (%d) reached, possible cycle or excessive depth", maxRecursion)))
+			return
+		}
+
+		// Use the DatabaseRoleResolver to find all roles that inherit from parentRole
+		childRoles, err := s.DatabaseRoleResolver(ctx, roleResolver.InheritedRoleKind, parentRole)
+		if err != nil {
+			errs = append(errs, field.InternalError(field.NewPath("DatabaseRoleResolver"), err))
+			return
+		}
+
+		for _, childRoleName := range childRoles {
+			if _, ok := visited[childRoleName]; ok {
+				continue // already processed this role name
+			}
+			visited[childRoleName] = struct{}{}
+
+			// Fetch the full role object by name
+			roleObj, err := s.RoleStorage.GetResource(ctx, &storage.GetResourceRequest{
+				Name: childRoleName,
+			})
+			if err != nil {
+				errs = append(errs, field.InternalError(field.NewPath("RoleStorage.GetResource").Child(childRoleName), err))
+				continue
+			}
+
+			if recErr := s.RoleReconciler.ReconcileRole(ctx, roleObj); recErr != nil {
+				errs = append(errs, field.InternalError(field.NewPath("RoleReconciler.ReconcileRole").Child(childRoleName), recErr))
+			}
+
+			// Recursively process roles that inherit from this child role
+			process(childRoleName)
+		}
+	}
+
+	// Mark the initial role as visited to avoid reprocessing if it appears as a child
+	visited[roleName] = struct{}{}
+	process(roleName)
+	return errs
 }
