@@ -2,6 +2,7 @@ package role
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
@@ -25,7 +26,8 @@ func IAMUseRoleResolver(client iamv1alphagrpc.AccessCheckClient, subjectExtracto
 		}
 
 		resp, err := client.CheckAccess(ctx, &iampb.CheckAccessRequest{
-			Subject:    subject,
+			// TODO: Support additional subject types
+			Subject:    fmt.Sprintf("user:%s", subject),
 			Resource:   "iam.datumapis.com/" + roleName,
 			Permission: "iam.datumapis.com/roles.use",
 		})
