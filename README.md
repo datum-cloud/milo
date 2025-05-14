@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/milo.png" width="220px"></p>
+
 # Milo
 
 Milo is a "business operating system" for product-led, B2B companies. Think of
@@ -45,7 +47,7 @@ There are a few big "System of Record" buckets to which we think folks should
 have programmatic access, namely: contacts, accounts, products, vendors, and
 assets.
 
-- Operator Portal: Hosted admin panel for a “single pane of glass” business
+- Operator Portal: Hosted admin panel for a "single pane of glass" business
   view.
 - Contacts: Marketing contacts management with dynamic lists and opt-in.
 - Customers: User, Account, Parent Account management w/ standard workflows.
