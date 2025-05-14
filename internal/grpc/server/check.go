@@ -18,17 +18,20 @@ func (s *Server) CheckAccess(ctx context.Context, req *iampb.CheckAccessRequest)
 	resolveCtx, span := otel.Tracer("").Start(ctx, "datum.server.CheckAccess.resolveParents")
 	defer span.End()
 
-	subjectID, subjectKind, err := subject.Parse(req.Subject)
+	subjectID, _, err := subject.Parse(req.Subject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse subject: %w", err)
 	}
 
-	subject, err := s.SubjectResolver(resolveCtx, subjectKind, subjectID)
+	subjectReference, err := s.SubjectResolver(resolveCtx, subjectID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve subject: %w", err)
 	}
 
-	req.Subject = subject
+	// The subject ID within the authorization engine is the resource name of
+	// the subject so it's guaranteed to be unique within the authorization
+	// engine.
+	req.Subject = subjectReference.ResourceName
 
 	// Use schema.Registry to resolve the resource URL into its components including type.
 	schemaRef, err := s.SchemaRegistry.ResolveResource(resolveCtx, req.Resource)

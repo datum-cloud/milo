@@ -357,15 +357,13 @@ func setupIAMClient(t *testing.T, ctx context.Context) (client *Client) {
 	}
 
 	if err := server.NewServer(server.ServerOptions{
-		OpenFGAClient:  openFGAClient,
-		OpenFGAStoreID: openFGAStoreID,
-		ServiceStorage: servicesStorage,
-		RoleStorage:    rolesStorage,
-		PolicyStorage:  policyStorage,
-		SubjectResolver: func(_ context.Context, _ subject.Kind, subject string) (string, error) {
-			return subject, nil
-		},
-		GRPCServer: grpcServer,
+		OpenFGAClient:   openFGAClient,
+		OpenFGAStoreID:  openFGAStoreID,
+		ServiceStorage:  servicesStorage,
+		RoleStorage:     rolesStorage,
+		PolicyStorage:   policyStorage,
+		SubjectResolver: subject.NoopResolver(),
+		GRPCServer:      grpcServer,
 		RoleResolver: func(ctx context.Context, roleName string) error {
 			_, err := rolesStorage.GetResource(ctx, &storage.GetResourceRequest{
 				Name: roleName,
