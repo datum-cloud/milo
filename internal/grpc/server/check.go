@@ -7,7 +7,6 @@ import (
 
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 	"go.datum.net/iam/internal/storage"
-	"go.datum.net/iam/internal/subject"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -18,12 +17,7 @@ func (s *Server) CheckAccess(ctx context.Context, req *iampb.CheckAccessRequest)
 	resolveCtx, span := otel.Tracer("").Start(ctx, "datum.server.CheckAccess.resolveParents")
 	defer span.End()
 
-	subjectID, _, err := subject.Parse(req.Subject)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse subject: %w", err)
-	}
-
-	subjectReference, err := s.SubjectResolver(resolveCtx, subjectID)
+	subjectReference, err := s.SubjectResolver(resolveCtx, req.Subject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve subject: %w", err)
 	}
