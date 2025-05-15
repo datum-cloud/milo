@@ -8,3 +8,5 @@ spec:
   - iam.datumapis.com/users.get
   - iam.datumapis.com/users.update
   - iam.datumapis.com/users.delete
+  - resourcemanager.datumapis.com/organizations.search
+  - resourcemanager.datumapis.com/organizations.create

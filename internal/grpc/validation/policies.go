@@ -74,10 +74,9 @@ func validatePolicySpec(fieldPath *field.Path, spec *iampb.PolicySpec, opts Poli
 					continue
 				}
 
-				subjectName, subjectType, err := subject.Parse(member)
-				if err != nil {
+				if _, _, err := subject.Parse(member); err != nil {
 					errs = append(errs, field.Invalid(membersPath.Index(index), member, "Invalid member provided. Must be in format 'allAuthenticatedUsers', 'user:*', 'serviceAccount:*', or 'group:*'"))
-				} else if _, err := opts.SubjectResolver(opts.Context, subjectType, subjectName); err != nil {
+				} else if _, err := opts.SubjectResolver(opts.Context, member); err != nil {
 					errs = append(errs, field.Invalid(membersPath.Index(index), member, "Member must be an active user, service account, or group."))
 				}
 			}

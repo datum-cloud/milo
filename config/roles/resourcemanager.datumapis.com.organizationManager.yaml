@@ -1,0 +1,9 @@
+roleId: organizationManager
+parent: services/resourcemanager.datumapis.com
+name: services/resourcemanager.datumapis.com/roles/organizationManager
+displayName: Organization Manager
+spec:
+  includedPermissions:
+  - resourcemanager.datumapis.com/organizations.get
+  - resourcemanager.datumapis.com/organizations.update
+  - resourcemanager.datumapis.com/organizations.delete

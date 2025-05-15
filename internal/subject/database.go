@@ -7,34 +7,43 @@ import (
 )
 
 func DatabaseResolver(db *sql.DB) (Resolver, error) {
-	userStmt, err := db.Prepare("SELECT uid FROM iam_datumapis_com_User_resource WHERE data->'spec'->>'email' = $1")
+	userStmt, err := db.Prepare("SELECT name FROM iam_datumapis_com_User_resource WHERE data->'spec'->>'email' = $1")
 	if err != nil {
 		return nil, err
 	}
 
-	return func(ctx context.Context, kind Kind, subjectName string) (string, error) {
+	return func(ctx context.Context, subjectIdentifier string) (*SubjectReference, error) {
 		var row *sql.Row
 
-		switch kind {
+		subjectName, subjectKind, err := Parse(subjectIdentifier)
+		if err != nil {
+			return nil, err
+		}
+
+		switch subjectKind {
 		case UserKind:
 			row = userStmt.QueryRowContext(ctx, subjectName)
 		default:
-			return "", fmt.Errorf("unsupported subject type provided: %s", string(kind))
+			return nil, fmt.Errorf("unsupported subject type provided: %s", string(subjectKind))
 		}
 
 		if row.Err() == sql.ErrNoRows {
-			return "", ErrSubjectNotFound
+			return nil, ErrSubjectNotFound
 		} else if row.Err() != nil {
-			return "", row.Err()
+			return nil, row.Err()
 		}
 
 		var subject string
 		if err := row.Scan(&subject); err == sql.ErrNoRows {
-			return "", ErrSubjectNotFound
+			return nil, ErrSubjectNotFound
 		} else if err != nil {
-			return "", err
+			return nil, err
 		}
 
-		return subject, nil
+		return &SubjectReference{
+			ResourceName:      subject,
+			Kind:              subjectKind,
+			SubjectIdentifier: subjectIdentifier,
+		}, nil
 	}, nil
 }
