@@ -50,14 +50,14 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 	user.UpdateTime = now
 
 	// Check if the user already exists
-	sub, err := s.SubjectResolver(ctx, subject.UserKind, user.Spec.Email)
+	sub, err := s.SubjectResolver(ctx, fmt.Sprintf("user:%s", user.Spec.Email))
 	if err != nil {
 		// If error is not "not found", don't return it an continue
 		if !errors.Is(err, subject.ErrSubjectNotFound) {
 			return nil, err
 		}
 	}
-	if len(sub) > 0 {
+	if sub != nil {
 		return nil, status.Errorf(codes.AlreadyExists, "user with email %s already exists", user.Spec.Email)
 	}
 
@@ -99,15 +99,15 @@ func (s *Server) GetUser(ctx context.Context, req *iampb.GetUserRequest) (*iampb
 	if strings.Contains(req.Name, "@") {
 		userEmail := strings.TrimPrefix(req.Name, "users/")
 		// If it's an email, we need to resolve it to a user subject first
-		sub, err := s.SubjectResolver(ctx, subject.UserKind, userEmail)
+		sub, err := s.SubjectResolver(ctx, fmt.Sprintf("user:%s", userEmail))
 		if err != nil {
 			if !errors.Is(err, subject.ErrSubjectNotFound) {
 				return nil, err
 			}
 		}
-		if len(sub) > 0 {
+		if sub != nil {
 			// If the user is found, we need to update the request name to the subject name
-			req.Name = sub
+			req.Name = sub.ResourceName
 		}
 	}
 
@@ -131,7 +131,7 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 	}
 
 	// Getting the user uid from the email
-	sub, err := s.SubjectResolver(ctx, subject.UserKind, userEmail)
+	sub, err := s.SubjectResolver(ctx, fmt.Sprintf("user:%s", userEmail))
 	if err != nil {
 		if errors.Is(err, subject.ErrSubjectNotFound) {
 			return nil, status.Errorf(codes.NotFound, "user with email %s not found", userEmail)
@@ -139,7 +139,7 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 		return nil, err
 	}
 
-	resourceName := sub
+	resourceName := sub.ResourceName
 
 	if req.ValidateOnly {
 		existing, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
