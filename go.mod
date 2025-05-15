@@ -13,6 +13,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.2.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
 	github.com/lestrrat-go/jwx/v2 v2.1.6
+	github.com/lestrrat-go/jwx/v3 v3.0.1
 	github.com/lib/pq v1.10.9
 	github.com/mennanov/fmutils v0.3.0
 	github.com/openfga/api/proto v0.0.0-20250127102726-f9709139a369
