@@ -4,7 +4,7 @@ go 1.23.1
 
 require (
 	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-00000000000000-025aad085555.1
-	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-00000000000000-025aad085555.2
+	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250514212923-1f8eeff5190d.2
 	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-00000000000000-025aad085555.1
 	buf.build/go/protoyaml v0.3.2
 	cloud.google.com/go/longrunning v0.6.7
