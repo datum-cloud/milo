@@ -57,16 +57,18 @@ func (r *PolicyReconciler) ReconcilePolicy(ctx context.Context, resource string,
 		)
 
 		for _, member := range binding.GetMembers() {
-			subjectName, subjectKind, err := subject.Parse(member)
+			subjectName, _, err := subject.Parse(member)
 			if err != nil {
 				return err
 			}
 
 			if subjectName != "*" {
-				subjectName, err = r.SubjectResolver(ctx, subjectKind, subjectName)
+				subjectReference, err := r.SubjectResolver(ctx, member)
 				if err != nil {
 					return fmt.Errorf("failed to resolve member '%s': %w", member, err)
 				}
+
+				subjectName = subjectReference.ResourceName
 			}
 
 			tuples = append(tuples, &openfgav1.TupleKey{
