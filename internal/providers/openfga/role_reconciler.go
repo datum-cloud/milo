@@ -7,11 +7,44 @@ import (
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
+	"go.datum.net/iam/internal/storage"
 )
 
 type RoleReconciler struct {
-	StoreID string
-	Client  openfgav1.OpenFGAServiceClient
+	StoreID     string
+	Client      openfgav1.OpenFGAServiceClient
+	RoleStorage storage.ResourceServer[*iampb.Role]
+}
+
+func (r *RoleReconciler) getAllPermissions(ctx context.Context, role *iampb.Role, visited map[string]struct{}) ([]string, error) {
+	if visited == nil {
+		visited = make(map[string]struct{})
+	}
+	if _, ok := visited[role.Name]; ok {
+		return nil, nil // Prevent cycles
+	}
+	visited[role.Name] = struct{}{}
+
+	permissions := append([]string{}, role.Spec.IncludedPermissions...)
+
+	for _, inheritedRoleName := range role.Spec.InheritedRoles {
+
+		inheritedRole, err := r.RoleStorage.GetResource(ctx, &storage.GetResourceRequest{
+			Name: inheritedRoleName,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get inherited role %s: %w", inheritedRoleName, err)
+		}
+
+		inheritedPerms, err := r.getAllPermissions(ctx, inheritedRole, visited)
+		if err != nil {
+			return nil, err
+		}
+
+		permissions = append(permissions, inheritedPerms...)
+	}
+
+	return permissions, nil
 }
 
 func (r *RoleReconciler) ReconcileRole(ctx context.Context, role *iampb.Role) error {
@@ -24,7 +57,12 @@ func (r *RoleReconciler) ReconcileRole(ctx context.Context, role *iampb.Role) er
 		return fmt.Errorf("failed to get existing tuples: %w", err)
 	}
 
-	for _, permission := range role.Spec.IncludedPermissions {
+	allPermissions, err := r.getAllPermissions(ctx, role, nil)
+	if err != nil {
+		return fmt.Errorf("failed to collect permissions: %w", err)
+	}
+
+	for _, permission := range allPermissions {
 		expectedTuples = append(
 			expectedTuples,
 			&openfgav1.TupleKey{

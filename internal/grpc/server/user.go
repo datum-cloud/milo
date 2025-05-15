@@ -50,14 +50,14 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 	user.UpdateTime = now
 
 	// Check if the user already exists
-	sub, err := s.SubjectResolver(ctx, subject.UserKind, user.Spec.Email)
+	sub, err := s.SubjectResolver(ctx, fmt.Sprintf("user:%s", user.Spec.Email))
 	if err != nil {
 		// If error is not "not found", don't return it an continue
 		if !errors.Is(err, subject.ErrSubjectNotFound) {
 			return nil, err
 		}
 	}
-	if len(sub) > 0 {
+	if sub != nil {
 		return nil, status.Errorf(codes.AlreadyExists, "user with email %s already exists", user.Spec.Email)
 	}
 
@@ -95,6 +95,22 @@ func (s *Server) CreateUser(ctx context.Context, req *iampb.CreateUserRequest) (
 }
 
 func (s *Server) GetUser(ctx context.Context, req *iampb.GetUserRequest) (*iampb.User, error) {
+	// Check if the name is an email address
+	if strings.Contains(req.Name, "@") {
+		userEmail := strings.TrimPrefix(req.Name, "users/")
+		// If it's an email, we need to resolve it to a user subject first
+		sub, err := s.SubjectResolver(ctx, fmt.Sprintf("user:%s", userEmail))
+		if err != nil {
+			if !errors.Is(err, subject.ErrSubjectNotFound) {
+				return nil, err
+			}
+		}
+		if sub != nil {
+			// If the user is found, we need to update the request name to the subject name
+			req.Name = sub.ResourceName
+		}
+	}
+
 	return s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
 		Name: req.Name,
 	})
@@ -115,7 +131,7 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 	}
 
 	// Getting the user uid from the email
-	sub, err := s.SubjectResolver(ctx, subject.UserKind, userEmail)
+	sub, err := s.SubjectResolver(ctx, fmt.Sprintf("user:%s", userEmail))
 	if err != nil {
 		if errors.Is(err, subject.ErrSubjectNotFound) {
 			return nil, status.Errorf(codes.NotFound, "user with email %s not found", userEmail)
@@ -123,7 +139,7 @@ func (s *Server) SetUserProviderId(ctx context.Context, req *iampb.SetUserProvid
 		return nil, err
 	}
 
-	resourceName := fmt.Sprintf("users/%s", sub)
+	resourceName := sub.ResourceName
 
 	if req.ValidateOnly {
 		existing, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
@@ -254,4 +270,27 @@ func (s *Server) ListUsers(ctx context.Context, req *iampb.ListUsersRequest) (*i
 		Users:         users.Resources,
 		NextPageToken: users.NextPageToken,
 	}, nil
+}
+
+func (s *Server) DeleteUser(ctx context.Context, req *iampb.DeleteUserRequest) (*longrunningpb.Operation, error) {
+	user, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
+		Name: req.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.AuthenticationProvider.DeleteUser(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	deletedUser, err := s.UserStorage.DeleteResource(ctx, &storage.DeleteResourceRequest{
+		Name: req.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return longrunning.ResponseOperation(&iampb.UpdateUserMetadata{}, deletedUser, true)
 }

@@ -150,6 +150,20 @@ func getFieldValue(path string, message proto.Message) interface{} {
 		value := current.Get(field)
 
 		if i == len(components)-1 {
+			if field.IsMap() {
+				mapValue := value.Map()
+				result := make(map[interface{}]interface{})
+				mapValue.Range(func(k protoreflect.MapKey, v protoreflect.Value) bool {
+					result[k.Interface()] = v.Interface()
+					return true
+				})
+				return result
+			}
+
+			if field.Message() != nil {
+				return value.Message().Interface()
+			}
+
 			return value.Interface()
 		}
 
