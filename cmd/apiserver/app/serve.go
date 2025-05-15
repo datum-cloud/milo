@@ -135,7 +135,7 @@ func serve() *cobra.Command {
 				return fmt.Errorf("failed to create database resolver: %w", err)
 			}
 
-			subjectExtractor, err := jwt.SubjectExtractor(authConfig, subjectResolver)
+			subjectExtractor, err := jwt.SubjectExtractor(authConfig)
 			if err != nil {
 				return err
 			}
@@ -253,6 +253,7 @@ func serve() *cobra.Command {
 				AuthenticationProvider: authenticationProvider,
 				SubjectExtractor:       subjectExtractor,
 				DatabaseRoleResolver:   databaseRoleResolver,
+				ParentResolver:         parentResolverRegistry,
 			}); err != nil {
 				return fmt.Errorf("failed to create IAM gRPC server: %w", err)
 			}

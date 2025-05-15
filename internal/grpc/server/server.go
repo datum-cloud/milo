@@ -11,7 +11,6 @@ import (
 	resourcemanagerpb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/resourcemanager/v1alpha"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
-	"go.datum.net/iam/internal/grpc/auth"
 	"go.datum.net/iam/internal/providers/authentication"
 	"go.datum.net/iam/internal/providers/openfga"
 	"go.datum.net/iam/internal/role"
@@ -48,8 +47,9 @@ type Server struct {
 	RoleResolver                 role.Resolver
 	AccessChecker                func(context.Context, *iampb.CheckAccessRequest) (*iampb.CheckAccessResponse, error)
 	AuthenticationProvider       authentication.Provider
-	SubjectExtractor             auth.SubjectExtractor
 	DatabaseRoleResolver         role.DatabaseResolver
+	SubjectExtractor             subject.Extractor
+	ParentResolver               storage.ParentResolver
 }
 
 type ServerOptions struct {
@@ -64,9 +64,10 @@ type ServerOptions struct {
 	ProjectStorage         storage.ResourceServer[*resourcemanagerpb.Project]
 	SubjectResolver        subject.Resolver
 	RoleResolver           role.Resolver
-	SubjectExtractor       auth.SubjectExtractor
+	SubjectExtractor       subject.Extractor
 	AuthenticationProvider authentication.Provider
 	DatabaseRoleResolver   role.DatabaseResolver
+	ParentResolver         storage.ParentResolver
 }
 
 // Configures a new IAM Server
@@ -107,6 +108,7 @@ func NewServer(opts ServerOptions) error {
 		SubjectExtractor:       opts.SubjectExtractor,
 		AuthenticationProvider: opts.AuthenticationProvider,
 		DatabaseRoleResolver:   opts.DatabaseRoleResolver,
+		ParentResolver:         opts.ParentResolver,
 	}
 
 	// Register all gRPC services with the gRPC server here.
