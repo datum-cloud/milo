@@ -44,11 +44,11 @@ const updateIamUserExternalId = (
           },
         )
 
-        if(response.status < 200 || response.status >= 300) {
-          throw new Error(`${operation} Failed to update user provider id in IAM system. Status: ${response.status}.`);
-        }
-
         const setUserProviderIdResponse = response.json();
+
+        if(response.status < 200 || response.status >= 300) {
+          throw new Error(`${operation} Failed to update user provider id in IAM system. Status: ${response.status}. Message: ${setUserProviderIdResponse.message}`);
+        }
 
         logger.log(
           `${operation} Updated into IAM System. IAM system name: ${JSON.stringify(setUserProviderIdResponse.user.name)}`,

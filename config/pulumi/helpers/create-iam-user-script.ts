@@ -62,11 +62,11 @@ const createIamUserScript = (
             headers: headers,
           })
 
-          if(getResponse.status < 200 || getResponse.status >= 300) {
-            throw new Error(`${operation} Failed to get user from IAM system. Status: ${getResponse.status}.`);
-          }
-
           const getUserResponse = getResponse.json();
+
+          if(getResponse.status < 200 || getResponse.status >= 300) {
+            throw new Error(`${operation} Failed to get user from IAM system. Status: ${getResponse.status}. Message: ${getUserResponse.message}`);
+          }
 
           logger.log(`${operation} IAM System user resource name: ${user.name}`);
           logger.log(`${operation} Updating Zitadel user metadata with IAM System user resource name: ${user.name}`);
@@ -80,7 +80,7 @@ const createIamUserScript = (
         }
 
         if(postResponse.status < 200 || postResponse.status >= 300) {
-          throw new Error(`${operation} Failed to create user in IAM system. Status: ${postResponse.status}.`);
+          throw new Error(`${operation} Failed to create user in IAM system. Status: ${postResponse.status}. Message: ${createUserResponse.message}`);
         }
 
         logger.log(
