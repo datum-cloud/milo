@@ -3,22 +3,22 @@ module go.datum.net/iam
 go 1.23.1
 
 require (
-	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250508154930-4255cdb88b53.1
-	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250508154930-4255cdb88b53.2
-	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250508154930-4255cdb88b53.1
+	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-00000000000000-025aad085555.1
+	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-00000000000000-025aad085555.2
+	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-00000000000000-025aad085555.1
 	buf.build/go/protoyaml v0.3.2
 	cloud.google.com/go/longrunning v0.6.7
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.2.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
-	github.com/lestrrat-go/jwx/v2 v2.1.4
+	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/lib/pq v1.10.9
 	github.com/mennanov/fmutils v0.3.0
 	github.com/openfga/api/proto v0.0.0-20250127102726-f9709139a369
 	github.com/prometheus/client_golang v1.17.0
 	github.com/simukti/sqldb-logger v0.0.0-20230108155151-646c1a075551
-	github.com/spf13/cobra v1.8.1
+	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/testcontainers/testcontainers-go v0.34.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.34.0
@@ -35,6 +35,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250414145226-207652e42e2e
 	google.golang.org/grpc v1.72.1
 	google.golang.org/protobuf v1.36.6
+	k8s.io/apimachinery v0.29.2
 )
 
 require (
@@ -130,7 +131,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
-	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
+	github.com/lestrrat-go/blackmagic v1.0.3 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/httprc v1.0.6 // indirect
 	github.com/lestrrat-go/iter v1.0.2 // indirect
@@ -222,7 +223,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.29.2 // indirect
-	k8s.io/apimachinery v0.29.2 // indirect
 	k8s.io/client-go v0.29.2 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect

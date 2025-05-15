@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"cloud.google.com/go/longrunning/autogen/longrunningpb"
 	"github.com/google/uuid"
+	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"go.datum.net/iam/internal/grpc/longrunning"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -52,13 +52,18 @@ func (s *Server) CreateOrganization(ctx context.Context, req *resourcemanagerpb.
 	organization.CreateTime = now
 	organization.UpdateTime = now
 
-	userName, err := s.SubjectExtractor(ctx)
+	userEmail, err := s.SubjectExtractor(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	subjectReference, err := s.SubjectResolver(ctx, userEmail)
 	if err != nil {
 		return nil, err
 	}
 
 	user, err := s.UserStorage.GetResource(ctx, &storage.GetResourceRequest{
-		Name: userName,
+		Name: subjectReference.ResourceName,
 	})
 	if err != nil {
 		return nil, err
@@ -158,7 +163,12 @@ func (s *Server) UpdateOrganization(ctx context.Context, req *resourcemanagerpb.
 }
 
 func (s *Server) SearchOrganizations(ctx context.Context, req *resourcemanagerpb.SearchOrganizationsRequest) (*resourcemanagerpb.SearchOrganizationsResponse, error) {
-	userName, err := s.SubjectExtractor(ctx)
+	subjectIdentifier, err := s.SubjectExtractor(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	subjectReference, err := s.SubjectResolver(ctx, subjectIdentifier)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +178,7 @@ func (s *Server) SearchOrganizations(ctx context.Context, req *resourcemanagerpb
 	hashedPermission := openfga.HashPermission("resourcemanager.datumapis.com/organizations.get")
 	organizationsObjects, err := s.OpenFGAClient.ListObjects(ctx, &openfgav1.ListObjectsRequest{
 		StoreId:  s.OpenFGAStoreID,
-		User:     fmt.Sprintf("iam.datumapis.com/InternalUser:%s", userName),
+		User:     fmt.Sprintf("iam.datumapis.com/InternalUser:%s", subjectReference.ResourceName),
 		Relation: hashedPermission,
 		Type:     resourceType,
 	})
