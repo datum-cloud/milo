@@ -103,6 +103,10 @@ message RoleSpec {
   // Defines the launch stage of the IAM Role. Must be one of: Early Access,
   // Alpha, Beta, Stable, Deprecated.
   string launch_stage = 2 [(google.api.field_behavior) = REQUIRED];
+
+  // The list of roles from which this role inherits permissions.
+  // Each entry must be a valid role resource name, e.g. "services/resourcemanager.datumapis.com/roles/projectAdmin".
+  repeated string inherited_roles = 3 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // Provides status information on the Role.

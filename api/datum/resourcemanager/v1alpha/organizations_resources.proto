@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package datum.resourcemanager.v1alpha;
+
+import "datum/resourcemanager/v1alpha/enums.proto";
+import "google/api/field_behavior.proto";
+import "google/api/field_info.proto";
+import "google/api/resource.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "go.datumapis.com/os/genproto/resourcemanager/v1alpha;resourcemanagerpb";
+
+// Organization is a resource representing an Organization.
+message Organization {
+  option (google.api.resource) = {
+    type: "resourcemanager.datumapis.com/Organization"
+    pattern: "organizations/{organization}"
+    style: DECLARATIVE_FRIENDLY
+    singular: "organization"
+    plural: "organizations"
+  };
+
+  // The resource name of this Organization.
+  string name = 1 [
+    (google.api.field_behavior) = IDENTIFIER,
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // The resource ID of this Organization.
+  string organization_id = 2 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Server assigned unique identifier for the Organization. The value
+  // is a UUID4 string and guaranteed to remain unchanged until the resource is
+  // deleted.
+  string uid = 3 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_info).format = UUID4,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Human-readable display name of this Organization that you can modify.
+  // The maximum length is 63 characters.
+  string display_name = 4 [(google.api.field_behavior) = OPTIONAL];
+
+  // Annotations is an unstructured key-value map stored with a Organization
+  // that may be set by external tools to store and retrieve arbitrary metadata.
+  // They are not queryable and should be preserved when modifying objects.
+  map<string, string> annotations = 5 [(google.api.field_behavior) = OPTIONAL];
+
+  // Labels is an unstructured key-value map stored with a Organization that
+  // may be set by external tools to enable platform features which identify
+  // Organizations via label selections.
+  map<string, string> labels = 6 [(google.api.field_behavior) = OPTIONAL];
+
+  // Output only. The time when the Organization is created.
+  google.protobuf.Timestamp create_time = 7 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Output only. The last time that the Organization is updated.
+  google.protobuf.Timestamp update_time = 8 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Output only. For a deleted resource, the deletion time. It is only
+  // populated as a response to a Delete request.
+  google.protobuf.Timestamp delete_time = 9 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Output only. If set, there are currently changes in flight to the
+  // Organization.
+  bool reconciling = 10 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // This checksum is computed by the server based on the value of
+  // other fields, and might be sent on update requests to ensure the client has
+  // an up-to-date value before proceeding.
+  string etag = 11 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // The specifications of the Organization.
+  Spec spec = 12 [(google.api.field_behavior) = REQUIRED];
+
+  // The status of the Organization.
+  Status status = 13 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Spec is the specification of an Organization.
+  message Spec {
+    // A description of the organization.
+    string description = 1 [(google.api.field_behavior) = OPTIONAL];
+  }
+
+  // Status is the status of an Organization.
+  message Status {
+    // The verification state of the organization.
+    VerificationState verification_state = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+    // For internal use only.
+    bool internal = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+    // For internal user only.
+    bool personal = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+  }
+}

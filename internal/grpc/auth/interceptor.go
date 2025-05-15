@@ -11,6 +11,7 @@ import (
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 	"go.datum.net/iam/internal/grpc/errors"
 	"go.datum.net/iam/internal/storage"
+	"go.datum.net/iam/internal/subject"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -23,9 +24,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
-
-// A subject extractor will extract the Auth subject from
-type SubjectExtractor func(context.Context) (string, error)
 
 // ResourceResolver is used by the IAMInterceptor to resolve the resource URL
 // that is used when checking for the authenticated user's access.
@@ -55,7 +53,7 @@ type ResourceResolver func(method protoreflect.MethodDescriptor, request proto.M
 // resources.
 func SubjectAuthorizationInterceptor(
 	accessChecker iamv1alphagrpc.AccessCheckClient,
-	subjectExtractor SubjectExtractor,
+	subjectExtractor subject.Extractor,
 	resourceResolver ResourceResolver,
 	parentResolver storage.ParentResolver,
 ) grpc.UnaryServerInterceptor {
@@ -84,14 +82,14 @@ func SubjectAuthorizationInterceptor(
 			attribute.String("permission", requiredPermissions[0]),
 		))
 
-		subject, err := subjectExtractor(checkAccessCtx)
+		subjectName, err := subjectExtractor(checkAccessCtx)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			span.End()
 			return nil, err
 		}
 
-		span.SetAttributes(attribute.String("subject", subject))
+		span.SetAttributes(attribute.String("subject", subjectName))
 
 		resourceURL, resourceType, err := resourceResolver(methodDescriptor, req.(proto.Message))
 		if err != nil {
@@ -123,11 +121,18 @@ func SubjectAuthorizationInterceptor(
 		}
 
 		resp, err := accessChecker.CheckAccess(checkAccessCtx, &iampb.CheckAccessRequest{
-			Subject:    subject,
+			Subject:    subjectName,
 			Permission: requiredPermissions[0],
 			Resource:   resourceURL,
 			Context:    accessCheckContext,
 		})
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+			span.End()
+			return nil, err
+		}
+
+		subjectEmail, _, err := subject.Parse(subjectName)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
 			span.End()
@@ -145,8 +150,8 @@ func SubjectAuthorizationInterceptor(
 				},
 			}},
 			AuthenticationInfo: &audit.AuthenticationInfo{
-				PrincipalEmail:   subject,
-				PrincipalSubject: "user:" + subject,
+				PrincipalEmail:   subjectEmail,
+				PrincipalSubject: subjectName,
 			},
 			MethodName:   string(methodDescriptor.Name()),
 			ServiceName:  string(serviceDescriptor.Name()),
@@ -169,14 +174,19 @@ func SubjectAuthorizationInterceptor(
 }
 
 func resolveParents(ctx context.Context, parentResolver storage.ParentResolver, resource *storage.ResourceReference) ([]*iampb.ParentRelationship, error) {
+	ctx, span := otel.Tracer("").Start(ctx, "datum.auth.resolveParents")
+	defer span.End()
+
 	var parents []*iampb.ParentRelationship
 	for {
 		parent, err := parentResolver.ResolveParent(ctx, resource)
 		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return nil, err
 		} else if parent == nil {
 			// Resource does not have a parent so we can skip looking for additional
 			// parents.
+			slog.DebugContext(ctx, "resource does not have a parent", slog.Any("resource", resource))
 			break
 		}
 
@@ -226,6 +236,12 @@ func ResourceNameResolver() ResourceResolver {
 			resourceType := resourceReferenceType(resourceNameField)
 			resourceName := message.Get(resourceNameField).String()
 
+			// If the resource name is already a full resource URL, we can return it
+			// immediately.
+			if storage.IsResourceURL(resourceName) {
+				return resourceName, resourceType, nil
+			}
+
 			return storage.ServiceName(resourceType) + "/" + resourceName, resourceType, nil
 		}
 
@@ -253,7 +269,15 @@ func ResourceNameResolver() ResourceResolver {
 
 			resourceDescriptor := proto.GetExtension(embeddedDescriptor.Options(), googleannotations.E_Resource).(*googleannotations.ResourceDescriptor)
 
-			return storage.ServiceName(resourceDescriptor.Type) + "/" + embdededMessage.Get(embeddedDescriptor.Fields().ByName("name")).String(), resourceDescriptor.Type, nil
+			resourceName := embdededMessage.Get(embeddedDescriptor.Fields().ByName("name")).String()
+
+			// If the resource name is already a full resource URL, we can return it
+			// immediately.
+			if storage.IsResourceURL(resourceName) {
+				return resourceName, resourceDescriptor.Type, nil
+			}
+
+			return storage.ServiceName(resourceDescriptor.Type) + "/" + resourceName, resourceDescriptor.Type, nil
 		}
 
 		return "", "", fmt.Errorf("failed to resolve resource name")
