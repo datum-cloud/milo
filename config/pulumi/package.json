@@ -12,13 +12,13 @@
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.9",
-    "@types/node": "^18",
+    "@types/node": "^22.0.0",
     "prettier": "^3.5.3",
     "typescript": "^5.0.0"
   },
   "dependencies": {
     "@pulumi/pulumi": "^3.113.0",
-    "@pulumiverse/zitadel": "^0.1.8",
+    "@pulumiverse/zitadel": "^0.2.0",
     "jsonwebtoken": "^9.0.2"
   },
   "trustedDependencies": [

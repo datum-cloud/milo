@@ -53,6 +53,7 @@ tasks:
         --grpc-addr=:8001 \
         --disable-auth=false \
         --authentication-config=$(cat ./test/config/authentication/authentication-config.json | jq -c .) \
+        --zitadel-key-path="test/config/zitadel/secrets/machine-key.json" \
         {{ .CLI_ARGS }}
 
   iamservice:loadservices:
@@ -81,6 +82,11 @@ tasks:
         --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
         --policies config/policies \
         --overwrite true
+
+  openfga:getuserorganizations:
+    desc: Retrieves the OpenFGA model from the server
+    cmd: |                                                       #resource identifier, hashed permission, resource type
+      fga query list-objects --store-id $(task openfga:store-id) iam.datumapis.com/InternalUser:users/db2fcc5a-b98a-48e5-b5df-b282d910273b 7983b8fa resourcemanager.datumapis.com/Organization
 
 
         
