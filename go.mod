@@ -14,7 +14,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/lib/pq v1.10.9
-	github.com/mennanov/fmutils v0.3.0
+	github.com/mennanov/fmutils v0.3.2
 	github.com/openfga/api/proto v0.0.0-20250127102726-f9709139a369
 	github.com/prometheus/client_golang v1.17.0
 	github.com/simukti/sqldb-logger v0.0.0-20230108155151-646c1a075551
