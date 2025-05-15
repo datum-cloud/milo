@@ -89,8 +89,14 @@ to the system.
 			}
 
 			roleReconciler := &openfga.RoleReconciler{
-				StoreID: storeID,
-				Client:  openFGAClient,
+				StoreID:     storeID,
+				Client:      openFGAClient,
+				RoleStorage: roleStorage,
+			}
+
+			subjectResolver, err := subject.DatabaseResolver(db)
+			if err != nil {
+				return fmt.Errorf("failed to create database subject resolver: %w", err)
 			}
 
 			policyReconciler := &openfga.PolicyReconciler{
@@ -99,7 +105,7 @@ to the system.
 				SchemaRegistry: &schema.Registry{
 					Services: serviceStorage,
 				},
-				SubjectResolver: subject.NoopResolver(),
+				SubjectResolver: subjectResolver,
 			}
 
 			// Add any IAM services that are defined and reconcile the authorization
@@ -120,6 +126,7 @@ to the system.
 			if err := addResources(cmd, roleStorage, func(role *iampb.Role) error {
 				if errs := validation.ValidateRole(role, &validation.RoleValidatorOptions{
 					PermissionValidator: validation.NewPermissionValidator(serviceStorage),
+					RoleValidator:       validation.NewRoleValidator(roleStorage),
 				}); len(errs) > 0 {
 					return errs.GRPCStatus().Err()
 				}
@@ -138,7 +145,7 @@ to the system.
 						})
 						return err
 					},
-					SubjectResolver: subject.NoopResolver(),
+					SubjectResolver: subjectResolver,
 					Context:         context.Background(),
 				}); len(errs) > 0 {
 					return errs.GRPCStatus().Err()

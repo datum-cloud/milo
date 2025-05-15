@@ -9,14 +9,13 @@ import (
 
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	"go.datum.net/iam/internal/grpc/auth"
 	"go.datum.net/iam/internal/grpc/errors"
 	"go.datum.net/iam/internal/subject"
 	"google.golang.org/genproto/googleapis/api/serviceconfig"
 	"google.golang.org/grpc/metadata"
 )
 
-func SubjectExtractor(auth *serviceconfig.Authentication, subjectResolver subject.Resolver) (auth.SubjectExtractor, error) {
+func SubjectExtractor(auth *serviceconfig.Authentication) (subject.Extractor, error) {
 	// Create a set of token validators that should be checked against the JWT
 	// token that's retrieved from the request context.
 	cache := jwk.NewCache(context.Background(), jwk.WithRefreshWindow(time.Hour))
@@ -64,12 +63,8 @@ func SubjectExtractor(auth *serviceconfig.Authentication, subjectResolver subjec
 					return "", errors.Unauthenticated().Err()
 				}
 
-				subject, err := subjectResolver(ctx, subject.UserKind, email)
-				if err != nil {
-					return "", err
-				}
-
-				return subject, nil
+				// TODO: Resolve subject type to support machine accounts and groups
+				return fmt.Sprintf("user:%s", email), nil
 			} else {
 				slog.ErrorContext(
 					ctx,
