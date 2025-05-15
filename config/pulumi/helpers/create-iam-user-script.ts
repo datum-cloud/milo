@@ -42,48 +42,58 @@ const createIamUserScript = (
           "Content-Type": "application/json",
         };
 
-        var res = http
-          .fetch("__API_URL__/v1alpha/users", {
-            method: "POST",
-            body: reqBody,
-            headers: headers,
-          })
-          .json();
-        
+        const postResponse  = http
+        .fetch("__API_URL__/v1alpha/users", {
+          method: "POST",
+          body: reqBody,
+          headers: headers,
+        })
+
+        const createUserResponse = postResponse.json();
+
         // If the user already exists
-        if(res.code == 6) {
+        if(postResponse.status == 409) {
           logger.log(`${operation} User already exists in IAM system.`);
           logger.log(`${operation} Getting existing user from IAM system.`);
 
-          const user = http
+          const getResponse = http
           .fetch(`__API_URL__/v1alpha/users/${reqBody.spec.email}`, {
             method: "GET",
             headers: headers,
           })
-          .json();
+
+          if(getResponse.status < 200 || getResponse.status >= 300) {
+            throw new Error(`${operation} Failed to get user from IAM system. Status: ${getResponse.status}.`);
+          }
+
+          const getUserResponse = getResponse.json();
 
           logger.log(`${operation} IAM System user resource name: ${user.name}`);
           logger.log(`${operation} Updating Zitadel user metadata with IAM System user resource name: ${user.name}`);
 
           api.v1.user.appendMetadata(
             "internal.iam.datumapis.com-iam-resource-name",
-            user.name,
+            getUserResponse.name,
           );
 
           return;
         }
 
+        if(postResponse.status < 200 || postResponse.status >= 300) {
+          throw new Error(`${operation} Failed to create user in IAM system. Status: ${postResponse.status}.`);
+        }
+
         logger.log(
-          `${operation} User Created into IAM System. IAM system name: ${res.response.name}`,
+          `${operation} User Created into IAM System. IAM system name: ${createUserResponse.response.name}`,
         );
 
         api.v1.user.appendMetadata(
           "internal.iam.datumapis.com-iam-resource-name",
-          res.response.name,
+          createUserResponse.response.name,
         );
       } catch (e) {
         // @ts-expect-error
-        const error = `${operation} Error: ${e.message}`;
+        const error = `${e.message}`;
         logger.log(error);
         throw error;
       }
