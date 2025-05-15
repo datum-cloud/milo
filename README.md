@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/images/milo.png" width="220px"></p>
+<p align="center"><img src="docs/images/milo.png" width="500px"></p>
 
 # Milo
 
