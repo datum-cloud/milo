@@ -6,6 +6,8 @@ buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-00000000000000-025aad085555.2 h1
 buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-00000000000000-025aad085555.2/go.mod h1:8EerVlDeijYdDrpifjyjhd6tvLYQjERBH/yfBIJ4zgI=
 buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-00000000000000-025aad085555.1 h1:YzHuGUnF3tOb8oNE8shUVykYz6hJr3FPjxph8xsfOHE=
 buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-00000000000000-025aad085555.1/go.mod h1:mBNXMGhmoM4v2WU3Ocr2xvv5E4UUopEGt6dYDMp7huc=
+buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250514212923-1f8eeff5190d.1 h1:NqJQWqZ44uwNduqTmklRUs5B1OlTcnPMRvcsaG3ieqc=
+buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250514212923-1f8eeff5190d.1/go.mod h1:mBNXMGhmoM4v2WU3Ocr2xvv5E4UUopEGt6dYDMp7huc=
 buf.build/go/protoyaml v0.3.2 h1:QJF3k7btMameIadLLcK3Rry81OK3gYA5nZMXirV1Bs4=
 buf.build/go/protoyaml v0.3.2/go.mod h1:rUlMqwfZeONS/BAt00wB6jV5ay/eHXUzxgiKSIyrvyc=
 cel.dev/expr v0.20.0 h1:OunBvVCfvpWlt4dN7zg3FM6TDkzOePe1+foGJ9AXeeI=
