@@ -13,7 +13,6 @@ import (
 	"buf.build/gen/go/datum-cloud/iam/grpc/go/datum/iam/v1alpha/iamv1alphagrpc"
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
-	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"go.datum.net/iam/internal/grpc/logging"
 	"go.datum.net/iam/internal/grpc/server"
@@ -28,7 +27,6 @@ import (
 
 func TestIAMEndToEnd(t *testing.T) {
 	env, err := compose.NewDockerComposeWith(
-		compose.WithLogger(testcontainers.TestLogger(t)),
 		compose.WithStackFiles("../../../test/docker-compose.yaml"),
 	)
 	if err != nil {
