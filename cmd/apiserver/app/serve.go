@@ -54,6 +54,7 @@ func mustStringFlag(flags *pflag.FlagSet, flagName string) string {
 	return val
 }
 
+// Serve is the main function for the IAM API server.
 func serve() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
