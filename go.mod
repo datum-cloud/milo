@@ -14,7 +14,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/lib/pq v1.10.9
-	github.com/mennanov/fmutils v0.3.0
+	github.com/mennanov/fmutils v0.3.2
 	github.com/openfga/api/proto v0.0.0-20250127102726-f9709139a369
 	github.com/prometheus/client_golang v1.17.0
 	github.com/simukti/sqldb-logger v0.0.0-20230108155151-646c1a075551
@@ -29,21 +29,21 @@ require (
 	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
 	golang.org/x/oauth2 v0.29.0
-	google.golang.org/genproto v0.0.0-20250409194420-de1ac958c67a
-	google.golang.org/genproto/googleapis/api v0.0.0-20250414145226-207652e42e2e
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250414145226-207652e42e2e
-	google.golang.org/grpc v1.71.1
+	google.golang.org/genproto v0.0.0-20250512202823-5a2f75b736a9
+	google.golang.org/genproto/googleapis/api v0.0.0-20250512202823-5a2f75b736a9
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250512202823-5a2f75b736a9
+	google.golang.org/grpc v1.72.1
 	google.golang.org/protobuf v1.36.6
 	k8s.io/apimachinery v0.29.2
 )
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.6-20250307204501-0409229c3780.1 // indirect
-	cel.dev/expr v0.19.1 // indirect
+	cel.dev/expr v0.20.0 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
-	cloud.google.com/go/iam v1.5.0 // indirect
-	dario.cat/mergo v1.0.0 // indirect
-	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
+	cloud.google.com/go/iam v1.5.2 // indirect
+	dario.cat/mergo v1.0.1 // indirect
+	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 // indirect
 	github.com/AlecAivazis/survey/v2 v2.3.7 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
