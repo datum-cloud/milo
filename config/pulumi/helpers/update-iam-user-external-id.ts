@@ -33,23 +33,29 @@ const updateIamUserExternalId = (
           "Content-Type": "application/json",
         };
 
-        const res = http
-          .fetch(
-            `__API_URL__/v1alpha/users/${user.human.email}:setUserProviderId`,
-            {
-              method: "POST",
-              body: reqBody,
-              headers: headers,
-            },
-          )
-          .json();
+
+        const response = http
+        .fetch(
+          `__API_URL__/v1alpha/users/${user.human.email}:setUserProviderId`,
+          {
+            method: "POST",
+            body: reqBody,
+            headers: headers,
+          },
+        )
+
+        const setUserProviderIdResponse = response.json();
+
+        if(response.status < 200 || response.status >= 300) {
+          throw new Error(`${operation} Failed to update user provider id in IAM system. Status: ${response.status}. Message: ${setUserProviderIdResponse.message}`);
+        }
 
         logger.log(
-          `${operation} Updated into IAM System. IAM system name: ${JSON.stringify(res.name)}`,
+          `${operation} Updated into IAM System. IAM system name: ${JSON.stringify(setUserProviderIdResponse.user.name)}`,
         );
       } catch (e) {
         // @ts-expect-error
-        const error = `${operation} Error: ${e.message}`;
+        const error = e.message;
         logger.log(error);
         throw error;
       }
