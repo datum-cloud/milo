@@ -6,7 +6,7 @@ require (
 	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-00000000000000-025aad085555.1
 	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-00000000000000-025aad085555.2
 	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-00000000000000-025aad085555.1
-	buf.build/go/protoyaml v0.3.2
+	buf.build/go/protoyaml v0.6.0
 	cloud.google.com/go/longrunning v0.6.7
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
@@ -39,8 +39,9 @@ require (
 )
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.6-20250307204501-0409229c3780.1 // indirect
-	cel.dev/expr v0.20.0 // indirect
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.6-20250425153114-8976f5be98c1.1 // indirect
+	buf.build/go/protovalidate v0.11.0 // indirect
+	cel.dev/expr v0.23.1 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.5.2 // indirect
 	dario.cat/mergo v1.0.1 // indirect
@@ -118,7 +119,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/cel-go v0.23.2 // indirect
+	github.com/google/cel-go v0.25.0 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
