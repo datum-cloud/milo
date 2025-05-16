@@ -9,7 +9,7 @@
 services:
   # Create a new cockroach database
   database:
-    image: cockroachdb/cockroach:v24.3.13
+    image: cockroachdb/cockroach:v25.1.6
     ports:
       - "26257:26257"
       # Expose the CRDB admin UI on 9090
@@ -22,7 +22,7 @@ services:
       retries: 5
 
   create-databases:
-    image: cockroachdb/cockroach:v24.3.13
+    image: cockroachdb/cockroach:v25.1.6
     command:
       - sql
       - --insecure
@@ -33,7 +33,7 @@ services:
         condition: service_healthy
 
   migrate-openfga:
-    image: openfga/openfga:v1.8.9
+    image: openfga/openfga:v1.8.12
     command: migrate
     depends_on:
       database:
@@ -50,7 +50,7 @@ services:
     depends_on:
       migrate-openfga:
         condition: service_completed_successfully
-    image: openfga/openfga:v1.8.9
+    image: openfga/openfga:v1.8.12
     environment:
       - OPENFGA_DATASTORE_ENGINE=postgres
       - OPENFGA_DATASTORE_URI=postgres://root@database:26257/openfga?sslmode=disable
@@ -81,7 +81,7 @@ services:
       - "2112:2112" #prometheus metrics
   
   zitadel:
-    image: 'ghcr.io/zitadel/zitadel:v2.71.7'
+    image: 'ghcr.io/zitadel/zitadel:v2.71.10'
     command: >
       start-from-init
       --config /zitadel/config/defaults.yaml
