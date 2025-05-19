@@ -83,6 +83,15 @@ tasks:
         --policies config/policies \
         --overwrite true
 
+  iamservice:loadusers:
+    cmd: |
+      go run ./cmd/apiserver add-resources \
+        --openfga-endpoint=dns:///localhost:8081 \
+        --openfga-store-id=$(task openfga:store-id) \
+        --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
+        --users config/users \
+        --overwrite false
+
   openfga:getuserorganizations:
     desc: Retrieves the OpenFGA model from the server
     cmd: |                                                       #resource identifier, hashed permission, resource type
