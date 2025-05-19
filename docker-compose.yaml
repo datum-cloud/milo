@@ -81,7 +81,7 @@ services:
       - "2112:2112" #prometheus metrics
   
   zitadel:
-    image: 'ghcr.io/zitadel/zitadel:v3.0.4'
+    image: 'ghcr.io/zitadel/zitadel:v2.71.7'
     command: >
       start-from-init
       --config /zitadel/config/defaults.yaml

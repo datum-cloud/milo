@@ -2,7 +2,8 @@ package openfga
 
 import (
 	"context"
-	"encoding/base64"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 
 	iampb "buf.build/gen/go/datum-cloud/iam/protocolbuffers/go/datum/iam/v1alpha"
@@ -178,7 +179,12 @@ func (r *PolicyReconciler) getExistingPolicyTuples(ctx context.Context, resource
 }
 
 func getBindingObjectName(resource, role string) string {
-	roleBindingHash := base64.RawStdEncoding.EncodeToString([]byte(resource + role))
+	hashInput := resource + role
+	// Creating a new hasher instance for each operation is straightforward
+	// and guarantees working with a clean state
+	hasher := sha256.New()
+	hasher.Write([]byte(hashInput))
+	roleBindingHash := hex.EncodeToString(hasher.Sum(nil))
 	return "iam.datumapis.com/RoleBinding:" + roleBindingHash
 }
 
