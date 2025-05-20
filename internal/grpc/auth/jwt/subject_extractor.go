@@ -102,5 +102,6 @@ func extractBearerToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("invalid authorization header format")
 	}
 
-	return parts[1], nil // Return the token part
+	tokenPart := strings.Split(parts[1], "Bearer")[1]
+	return tokenPart, nil // Return the token part
 }
