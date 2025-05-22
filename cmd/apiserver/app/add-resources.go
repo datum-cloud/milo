@@ -82,6 +82,11 @@ to the system.
 				return err
 			}
 
+			userStorage, err := postgres.ResourceServer(db, &iampb.User{})
+			if err != nil {
+				return err
+			}
+
 			authorizationModelReconciler := &openfga.AuthorizationModelReconciler{
 				StoreID:        storeID,
 				Client:         openFGAClient,
@@ -157,6 +162,30 @@ to the system.
 				return fmt.Errorf("failed to add policies: %w", err)
 			}
 
+			if err := addResources(cmd, userStorage, func(user *iampb.User) error {
+				if errs := validation.ValidateUser(user); len(errs) > 0 {
+					return errs.GRPCStatus().Err()
+				}
+
+				subjectReference, err := subjectResolver(cmd.Context(), fmt.Sprintf("user:%s", user.Spec.Email))
+				if err != nil {
+					if !errors.Is(err, subject.ErrSubjectNotFound) {
+						return fmt.Errorf("failed to create users: %w", err)
+					}
+				}
+				if !errors.Is(err, subject.ErrSubjectNotFound) {
+					if subjectReference.ResourceName != user.Name {
+						return fmt.Errorf("user with email %s already exists under the resource name of: %s", user.Spec.Email, subjectReference.ResourceName)
+					}
+				}
+
+				return nil
+			}, func(user *iampb.User) error {
+				return nil
+			}); err != nil {
+				return fmt.Errorf("failed to add users: %w", err)
+			}
+
 			return nil
 		},
 	}
@@ -168,7 +197,7 @@ to the system.
 	cmd.Flags().String("services", "", "A directory that contains a series of YAML files with IAM service definitions that should be created.")
 	cmd.Flags().String("roles", "", "A directory that contains a series of YAML files with IAM role definitions that should be created.")
 	cmd.Flags().String("policies", "", "A directory that contains a series of YAML files with IAM policy definitions that should be created.")
-
+	cmd.Flags().String("users", "", "A directory that contains a series of YAML files with IAM user definitions that should be created.")
 	return cmd
 }
 

@@ -1,0 +1,9 @@
+# User resource example
+name: "users/userCreator"
+user_id: "userCreator"
+spec:
+  email: "usercreator@datum.com"
+  given_name: ""             
+  family_name: "" 
+annotations:
+  internal.iam.datumapis.com/zitadel-id: "pending"
