@@ -5,7 +5,7 @@ go 1.24.2
 require (
 	buf.build/gen/go/datum-cloud/iam/grpc-ecosystem/gateway/v2 v2.26.3-20250514212923-1f8eeff5190d.1
 	buf.build/gen/go/datum-cloud/iam/grpc/go v1.5.1-20250514212923-1f8eeff5190d.2
-	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250514212923-1f8eeff5190d.1
+	buf.build/gen/go/datum-cloud/iam/protocolbuffers/go v1.36.6-20250522191909-c33f1c0d984f.1
 	buf.build/go/protoyaml v0.6.0
 	cloud.google.com/go/longrunning v0.6.7
 	github.com/google/go-cmp v0.7.0
