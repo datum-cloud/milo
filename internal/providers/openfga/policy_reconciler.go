@@ -63,17 +63,25 @@ func (r *PolicyReconciler) ReconcilePolicy(ctx context.Context, resource string,
 				return err
 			}
 
+			var tupleUser string
 			if subjectName != "*" {
 				subjectReference, err := r.SubjectResolver(ctx, member)
 				if err != nil {
 					return fmt.Errorf("failed to resolve member '%s': %w", member, err)
 				}
 
-				subjectName = subjectReference.ResourceName
+				switch subjectReference.Kind {
+				case subject.GroupKind:
+					tupleUser = "iam.datumapis.com/InternalUserGroup:" + subjectReference.ResourceName + "#assignee"
+				case subject.UserKind, subject.ServiceAccountKind:
+					tupleUser = "iam.datumapis.com/InternalUser:" + subjectReference.ResourceName
+				default:
+					return fmt.Errorf("unhandled subject kind '%s' for member '%s'", subjectReference.Kind, member)
+				}
 			}
 
 			tuples = append(tuples, &openfgav1.TupleKey{
-				User:     "iam.datumapis.com/InternalUser:" + subjectName,
+				User:     tupleUser,
 				Relation: "iam.datumapis.com/InternalUser",
 				Object:   getBindingObjectName(resourceReference.SelfLink, binding.Role),
 			})

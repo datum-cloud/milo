@@ -31,6 +31,7 @@ type Kind string
 const (
 	UserKind           Kind = "iam.datumapis.com/User"
 	ServiceAccountKind Kind = "iam.datumapis.com/ServiceAccount"
+	GroupKind          Kind = "iam.datumapis.com/Group"
 )
 
 var ErrInvalidSubject = errors.New("invalid subject name format")
@@ -43,6 +44,8 @@ func Parse(subjectIdentifier string) (string, Kind, error) {
 	switch parts[0] {
 	case "user":
 		subjectType = UserKind
+	case "group":
+		subjectType = GroupKind
 	case "serviceAccount":
 		subjectType = ServiceAccountKind
 	case "allAuthenticatedUsers":
