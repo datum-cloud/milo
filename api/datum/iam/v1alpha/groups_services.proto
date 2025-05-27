@@ -1,0 +1,312 @@
+syntax = "proto3";
+
+package datum.iam.v1alpha;
+
+import "datum/api/annotations.proto";
+import "datum/iam/v1alpha/groups_resources.proto"; // Import new group resources
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/api/resource.proto";
+import "google/longrunning/operations.proto";
+import "google/protobuf/empty.proto"; // For delete operations that don't return the resource
+import "google/protobuf/field_mask.proto";
+
+option go_package = "go.datumapis.com/os/genproto/iam/v1alpha;iampb";
+
+// Groups is the service for managing Groups.
+service Groups {
+  // CreateGroup creates a new Group under an Organization.
+  rpc CreateGroup(CreateGroupRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/groups.create";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/Group";
+    option (google.api.method_signature) = "parent,group,group_id";
+    option (google.api.http) = {
+      post: "/v1alpha/{parent=organizations/*}/groups"
+      body: "group"
+    };
+    option (google.longrunning.operation_info) = {
+      response_type: "Group"
+      metadata_type: "CreateGroupMetadata"
+    };
+  }
+
+  // GetGroup gets a Group by name.
+  rpc GetGroup(GetGroupRequest) returns (Group) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/groups.get";
+    option (google.api.method_signature) = "name";
+    option (google.api.http) = {get: "/v1alpha/{name=organizations/*/groups/*}"};
+  }
+
+  // ListGroups lists all Groups under an Organization.
+  rpc ListGroups(ListGroupsRequest) returns (ListGroupsResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/groups.list";
+    option (datum.api.iam_resource_name) = "iam.datumapis.com/root/iam.datumapis.com/Group";
+    option (google.api.method_signature) = "parent";
+    option (google.api.http) = {get: "/v1alpha/{parent=organizations/*}/groups"};
+  }
+
+  // UpdateGroup updates a Group.
+  rpc UpdateGroup(UpdateGroupRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/groups.update";
+    option (google.api.method_signature) = "group,update_mask";
+    option (google.api.http) = {
+      patch: "/v1alpha/{group.name=organizations/*/groups/*}"
+      body: "group"
+    };
+    option (google.longrunning.operation_info) = {
+      response_type: "Group"
+      metadata_type: "UpdateGroupMetadata"
+    };
+  }
+
+  // DeleteGroup deletes a Group by name.
+  rpc DeleteGroup(DeleteGroupRequest) returns (google.longrunning.Operation) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/groups.delete";
+    option (google.api.method_signature) = "name";
+    option (google.api.http) = {delete: "/v1alpha/{name=organizations/*/groups/*}"};
+    option (google.longrunning.operation_info) = {
+      response_type: "google.protobuf.Empty" // Or Group, if we want to return the deleted group
+      metadata_type: "DeleteGroupMetadata"
+    };
+  }
+
+  // AddGroupMember adds a User to a Group.
+  // Imperative only.
+  rpc AddGroupMember(AddGroupMemberRequest) returns (AddGroupMemberResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/groups.update"; // Or a more specific permission
+    option (google.api.method_signature) = "name,member";
+    option (google.api.http) = {
+      post: "/v1alpha/{name=organizations/*/groups/*}:addGroupMember"
+      body: "*"
+    };
+  }
+
+  // RemoveGroupMember removes a User from a Group.
+  // Imperative only.
+  rpc RemoveGroupMember(RemoveGroupMemberRequest) returns (RemoveGroupMemberResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/groups.update"; // Or a more specific permission
+    option (google.api.method_signature) = "name,member";
+    option (google.api.http) = {
+      post: "/v1alpha/{name=organizations/*/groups/*}:removeGroupMember"
+      body: "*"
+    };
+  }
+
+  // AddGroupRole adds a Role to a Group.
+  // Imperative only.
+  rpc AddGroupRole(AddGroupRoleRequest) returns (AddGroupRoleResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/groups.update"; // Or a more specific permission
+    option (google.api.method_signature) = "name,roles";
+    option (google.api.http) = {
+      post: "/v1alpha/{name=organizations/*/groups/*}:addGroupRole"
+      body: "*"
+    };
+  }
+
+  // RemoveGroupRole removes a Role from a Group.
+  // Imperative only.
+  rpc RemoveGroupRole(RemoveGroupRoleRequest) returns (RemoveGroupRoleResponse) {
+    option (datum.api.required_permissions) = "iam.datumapis.com/groups.update"; // Or a more specific permission
+    option (google.api.method_signature) = "name,roles";
+    option (google.api.http) = {
+      post: "/v1alpha/{name=organizations/*/groups/*}:removeGroupRole"
+      body: "*"
+    };
+  }
+}
+
+// Request messages
+message CreateGroupRequest {
+  // The parent Organization in which to create the Group.
+  // Format: organizations/{organization}
+  string parent = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Organization"}
+  ];
+  // The Group to create.
+  Group group = 2 [(google.api.field_behavior) = REQUIRED];
+  // The ID to use for the Group, which will become the final component of
+  // the Group's resource name.
+  string group_id = 3 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the request is validated and nothing is persisted.
+  bool validate_only = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata returned from the long running operations when creating a
+// group.
+message CreateGroupMetadata {}
+
+// GetGroupRequest is the request message for getting a group.
+message GetGroupRequest {
+  // The name of the Group to get.
+  // Format: organizations/{organization}/groups/{group}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Group"}
+  ];
+}
+
+// ListGroupsRequest is the request message for listing groups.
+message ListGroupsRequest {
+  // The resource name to use as the parent in the groups's resource hierarchy.
+  string parent = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "resourcemanager.datumapis.com/Organization"}
+  ];
+  // The maximum number of groups to return. The service may return fewer than
+  // this value. If unspecified, at most 50 groups will be returned. The maximum
+  // value is 1000.
+  int32 page_size = 2 [(google.api.field_behavior) = OPTIONAL];
+  // A page token, received from a previous `ListGroup` call. Provide this to
+  // retrieve the subsequent page. When paginating, all other parameters must
+  // match the call that provided the page token.
+  string page_token = 3 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the deleted Groups will be included in the response.
+  bool show_deleted = 4 [(google.api.field_behavior) = OPTIONAL];
+  // Optional. A filter to apply to the results.
+  string filter = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListGroupsResponse is the response message for listing groups.
+message ListGroupsResponse {
+  // The list of groups.
+  repeated Group groups = 1;
+  // A token to retrieve the next page of results.
+  // Pass this value in the ListGroupsRequest.page_token field in a
+  // subsequent call to `ListGroups` to retrieve the next page of
+  // results. If the page token is not set, there are no more results.
+  string next_page_token = 2;
+}
+
+// UpdateGroupRequest is the request message for updating a group.
+message UpdateGroupRequest {
+  // The Group to update.
+  Group group = 1 [(google.api.field_behavior) = REQUIRED];
+  // The field mask to update the Group.
+  google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the request is validated and nothing is persisted.
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
+  // If true, an invitation that is missing or previously deleted will be
+  // deleted successfully.
+  bool allow_missing = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata returned from the long running operations when updating a
+// group.
+message UpdateGroupMetadata {}
+
+// DeleteGroupRequest is the request message for deleting a group.
+message DeleteGroupRequest {
+  // The name of the Group to delete.
+  // Format: organizations/{organization}/groups/{group}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Group"}
+  ];
+  // The etag of the Group to delete. If this is not the same etag as the
+  // currently stored Group, the request will be rejected. If not provided, the
+  // Group will be deleted unconditionally.
+  string etag = 2 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the request is validated and nothing is persisted.
+  bool validate_only = 3 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the Group will be deleted successfully even if it does not exist.
+  bool allow_missing = 4 [(google.api.field_behavior) = OPTIONAL];
+  // If true, the Group will be deleted even if it has dependent resources (e.g. IAM bindings).
+  // The exact behavior of force delete might need further definition (e.g., cascade delete bindings or fail).
+  bool force = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// The metadata returned from the long running operations when deleting a
+// group.
+message DeleteGroupMetadata {}
+
+// AddGroupMemberRequest is the request message for adding a member to a group.
+message AddGroupMemberRequest {
+  // The name of the Group to add the member to.
+  // Format: organizations/{organization}/groups/{group}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Group"}
+  ];
+  // The member to add to the group.
+  // Format: users/{user}
+  string member = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/User"}
+  ];
+}
+
+// AddGroupMemberResponse is currently the updated Group itself.
+message RemoveGroupMemberRequest {
+  // The name of the Group to remove the member from.
+  // Format: organizations/{organization}/groups/{group}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Group"}
+  ];
+  // The member to remove from the group.
+  // Format: users/{user}
+  string member = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/User"}
+  ];
+}
+
+// AddGroupMemberResponse is currently the updated Group itself.
+message AddGroupMemberResponse {
+  // The updated Group.
+  Group group = 1;
+}
+
+// RemoveGroupMemberResponse is currently the updated Group itself.
+message RemoveGroupMemberResponse {
+  // The updated Group.
+  Group group = 1;
+}
+
+// AddGroupRoleRequest is the request message for adding a role to a group.
+message AddGroupRoleRequest {
+  // The name of the Group to add the role to.
+  // Format: organizations/{organization}/groups/{group}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Group"}
+  ];
+
+  // The list of roles to be granted at organization level to the group.
+  // (e.g. ["resourcemanager.datumapis.com/project.admin", "compute.datumapis.com/workload.admin"])
+  repeated string roles = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Role"}
+  ];
+}
+
+// AddGroupRoleResponse is currently the updated Group itself.
+message AddGroupRoleResponse {
+  // The updated Group.
+  Group group = 1;
+}
+
+// RemoveGroupRoleRequest is the request message for removing a role from a group.
+message RemoveGroupRoleRequest {
+  // The name of the Group to remove the role from.
+  // Format: organizations/{organization}/groups/{group}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Group"}
+  ];
+
+  // The list of roles to be removed from the group.
+  // (e.g. ["resourcemanager.datumapis.com/project.admin", "compute.datumapis.com/workload.admin"])
+  repeated string roles = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "iam.datumapis.com/Role"}
+  ];
+}
+
+// RemoveGroupRoleResponse is currently the updated Group itself.
+message RemoveGroupRoleResponse {
+  // The updated Group.
+  Group group = 1;
+}

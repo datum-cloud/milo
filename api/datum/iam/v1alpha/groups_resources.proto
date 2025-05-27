@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package datum.iam.v1alpha;
+
+import "google/api/field_behavior.proto";
+import "google/api/field_info.proto";
+import "google/api/resource.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "go.datumapis.com/os/genproto/iam/v1alpha;iampb";
+
+// Group is a resource representing a Group.
+message Group {
+  option (google.api.resource) = {
+    type: "iam.datumapis.com/Group"
+    pattern: "organizations/{organization}/groups/{group}" // Groups are under an Organization
+    style: DECLARATIVE_FRIENDLY
+    singular: "group"
+    plural: "groups"
+  };
+
+  // The resource name of this Group.
+  // Format: organizations/{organization}/groups/{group}
+  string name = 1 [
+    (google.api.field_behavior) = IDENTIFIER,
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // The resource ID of this Group within its parent Organization. If not
+  // provided, it will be the same as the uid.
+  string group_id = 2 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Server assigned unique identifier for the Group. The value
+  // is a UUID4 string and guaranteed to remain unchanged until the resource is
+  // deleted.
+  string uid = 3 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_info).format = UUID4,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Human-readable display name of this Group that you can modify.
+  // The maximum length is 63 characters.
+  string display_name = 4 [(google.api.field_behavior) = OPTIONAL];
+
+  // Annotations is an unstructured key-value map stored with a Group that
+  // may be set by external tools to store and retrieve arbitrary metadata.
+  // They are not queryable and should be preserved when modifying objects.
+  map<string, string> annotations = 5 [(google.api.field_behavior) = OPTIONAL];
+
+  // Labels is an unstructured key-value map stored with a Group that
+  // may be set by external tools to enable platform features which identify
+  // Groups via label selections.
+  map<string, string> labels = 6 [(google.api.field_behavior) = OPTIONAL];
+
+  // The specification of the group.
+  GroupSpec spec = 7 [(google.api.field_behavior) = REQUIRED];
+
+  // Output only. The time when the Group is created.
+  google.protobuf.Timestamp create_time = 8 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Output only. The last time that the Group is updated.
+  google.protobuf.Timestamp update_time = 9 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Output only. For a deleted resource, the deletion time. It is only
+  // populated as a response to a Delete request.
+  google.protobuf.Timestamp delete_time = 10 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // Output only. If set, there are currently changes in flight to the Group.
+  bool reconciling = 11 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+
+  // This checksum is computed by the server based on the value of
+  // other fields, and might be sent on update requests to ensure the client has
+  // an up-to-date value before proceeding.
+  string etag = 12 [
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+}
+
+// GroupSpec is the specification of a Group.
+message GroupSpec {
+  // Optional description of the group.
+  string description = 1 [(google.api.field_behavior) = OPTIONAL];
+  // The list of members in this group. Members can only be added or removed
+  // via the AddGroupMember and RemoveGroupMember methods.
+  // Members must be Users.
+  // Format: users/{user_id}
+  repeated string members = 2 [
+    (google.api.field_behavior) = OPTIONAL,
+    (google.api.field_behavior) = IMMUTABLE
+  ];
+}

@@ -125,5 +125,8 @@ message Binding {
   //
   // * `serviceAccount:{emailid}`: An email address that represents a service
   //    account. For example, `my-service@my-project.datum.ncom`.
+  //
+  // * `group:{group_resource_name}`: The resource name of a group.
+  //    For example, `organizations/123/groups/my-admin-group`.
   repeated string members = 2 [(google.api.field_behavior) = REQUIRED];
 }
