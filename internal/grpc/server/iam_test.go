@@ -39,7 +39,13 @@ func TestIAMEndToEnd(t *testing.T) {
 	if err := env.Up(ctx, compose.Wait(true)); err != nil {
 		t.Fatalf("failed to start environment: %s", err)
 	}
-	defer env.Down(ctx)
+
+	// Use t.Cleanup to ensure the docker compose environment is torn down.
+	t.Cleanup(func() {
+		if err := env.Down(context.Background()); err != nil {
+			t.Logf("failed to compose down environment: %s", err)
+		}
+	})
 
 	// Creates a new gRPC client we can use to make API requests to a backend
 	// that implements Datum's Identity and Access Management (IAM) API.
@@ -138,6 +144,14 @@ func TestIAMEndToEnd(t *testing.T) {
 		t.Fatalf("failed to register library service: %s", err)
 	}
 
+	// Create a group and add a member to it.
+	// The groupID is "librarians@new-york.libraries".
+	// The member is "group-member-admin@new-york.libraries".
+	err = createGroupAndAddMembers(clients, ctx, "librarians@new-york.libraries", []string{"group-member-admin@new-york.libraries"})
+	if err != nil {
+		t.Fatalf("failed to create group and add members: %s", err)
+	}
+
 	// Setup some library branches and books we can use to check access in the
 	// system.
 	err = setupBranches(clients, ctx, []*LibraryBranch{
@@ -147,7 +161,7 @@ func TestIAMEndToEnd(t *testing.T) {
 				Spec: &iampb.PolicySpec{
 					Bindings: []*iampb.Binding{{
 						Role:    "services/a-really-long-library-name.example.api/roles/libraryAdmin",
-						Members: []string{"user:branch-admin@new-york.libraries"},
+						Members: []string{"user:branch-admin@new-york.libraries", "group:librarians@new-york.libraries"},
 					}},
 				},
 			},
@@ -217,6 +231,42 @@ func TestIAMEndToEnd(t *testing.T) {
 					Permissions: []PermissionCheck{
 						{Name: "a-really-long-library-name.example.api/books.checkout", Allowed: true},
 						{Name: "a-really-long-library-name.example.api/books.return", Allowed: true},
+					},
+					Context: []*iampb.CheckContext{{
+						ContextType: &iampb.CheckContext_ParentRelationship{
+							ParentRelationship: &iampb.ParentRelationship{
+								ParentResource: "a-really-long-library-name.example.api/branches/central-park-new-york",
+								ChildResource:  "a-really-long-library-name.example.api/branches/central-park-new-york/books/alice-in-wonderland",
+							},
+						},
+					}},
+				},
+			},
+		},
+		{
+			Subject: "user:group-member-admin@new-york.libraries",
+			ResourceChecks: []ResourceCheck{
+				{
+					Resource: "a-really-long-library-name.example.api/branches/central-park-new-york",
+					Permissions: []PermissionCheck{
+						{Name: "a-really-long-library-name.example.api/branches.list", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/branches.get", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/branches.create", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/branches.update", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/branches.delete", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/books.checkout", Allowed: false},
+					},
+				},
+				{
+					Resource: "a-really-long-library-name.example.api/branches/central-park-new-york/books/alice-in-wonderland",
+					Permissions: []PermissionCheck{
+						{Name: "a-really-long-library-name.example.api/books.list", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/books.get", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/books.create", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/books.update", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/books.delete", Allowed: true},
+						{Name: "a-really-long-library-name.example.api/books.checkout", Allowed: false},
+						{Name: "a-really-long-library-name.example.api/books.return", Allowed: false},
 					},
 					Context: []*iampb.CheckContext{{
 						ContextType: &iampb.CheckContext_ParentRelationship{
@@ -490,4 +540,40 @@ func (c *Client) Close() error {
 		StoreId: c.OpenFGAStoreID,
 	})
 	return c.closer.Close()
+}
+
+// createGroupAndAddMembers writes tuples to OpenFGA to establish group memberships.
+// groupID is the ID of the group (e.g., "librarians@new-york.libraries").
+// members is a slice of user IDs (e.g., "group-member-admin@new-york.libraries") to add to the group.
+func createGroupAndAddMembers(clients *Client, ctx context.Context, groupID string, members []string) error {
+	var tupleKeys []*openfgav1.TupleKey
+
+	openFGAGroupObject := fmt.Sprintf("iam.datumapis.com/InternalUserGroup:%s", groupID)
+
+	for _, member := range members {
+		openFGAMemberUser := fmt.Sprintf("iam.datumapis.com/InternalUser:%s", member)
+		tupleKeys = append(tupleKeys, &openfgav1.TupleKey{
+			User:     openFGAMemberUser,
+			Relation: "member",
+			Object:   openFGAGroupObject,
+		})
+	}
+
+	if len(tupleKeys) == 0 {
+		return nil
+	}
+
+	writeRequest := &openfgav1.WriteRequest{
+		StoreId: clients.OpenFGAStoreID,
+		Writes: &openfgav1.WriteRequestWrites{
+			TupleKeys: tupleKeys,
+		},
+	}
+
+	_, err := clients.OpenFGA.Write(ctx, writeRequest)
+	if err != nil {
+		return fmt.Errorf("failed to write group membership tuples for group '%s': %w", groupID, err)
+	}
+
+	return nil
 }
