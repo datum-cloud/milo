@@ -17,5 +17,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o milo ./cmd/milo
 # Use a minimal image for the final container
 FROM gcr.io/distroless/static
 WORKDIR /
-COPY --from=builder /milo .
+COPY --from=builder /app/milo .
 ENTRYPOINT ["/milo"]
