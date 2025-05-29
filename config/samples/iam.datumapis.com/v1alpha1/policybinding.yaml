@@ -1,0 +1,18 @@
+apiVersion: iam.datumapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: sample-org-admin-binding
+  namespace: default
+spec:
+  roleRef:
+    name: resourcemanager.datumapis.com-organizationowner
+    namespace: datum-system
+  subjects:
+    - kind: User
+      name: "kubernetes-admin"
+      uid: "0cca596b-e87e-4842-9b96-acb7c3cfe5e8"
+  targetRef:
+    apiGroup: "resourcemanager.datumapis.com"
+    kind: Organization
+    name: "datum"
+    uid: "8f80d08c-be9e-4a5c-aab3-80cf83f97dba"
