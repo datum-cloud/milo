@@ -13,7 +13,7 @@ import (
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "milo",
-		Short: "Milo is a platform for building and managing the next generation of service providers and their customers.",
+		Short: "Milo is a control plane for modern service providers, built on top of a comprehensive system of record that ties together key parts of your business.",
 	}
 
 	rootCmd.AddCommand(controller.NewCommand())
