@@ -1,13 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: datum-apiserver
+  name: apiserver
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: datum-apiserver
-      app.kubernetes.io/part-of: datum-control-plane
+      app.kubernetes.io/name: apiserver
+      app.kubernetes.io/part-of: milo-control-plane
   strategy:
     rollingUpdate:
       maxSurge: 25%
@@ -16,13 +16,15 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: datum-apiserver
-        app.kubernetes.io/part-of: datum-control-plane
+        app.kubernetes.io/name: apiserver
+        app.kubernetes.io/part-of: milo-control-plane
     spec:
       automountServiceAccountToken: false
       containers:
-      - image: us-east4-docker.pkg.dev/datum-cloud-prod/datum-internal-images/datum-apiserver:v0.0.1-v1alpha12-amd64
+      - image: ghcr.io/datum-cloud/milo:latest
         imagePullPolicy: IfNotPresent
+        args:
+        - apiserver
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -33,7 +35,7 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 15
-        name: datum-apiserver
+        name: apiserver
         ports:
         - containerPort: 6443
           name: https

@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: datum-controller-manager
+  name: controller-manager
 spec:
   replicas: 1
   selector:
@@ -22,8 +22,10 @@ spec:
       automountServiceAccountToken: false
       containers:
       - name: datum-controller-manager
-        image: us-east4-docker.pkg.dev/datum-cloud-prod/datum-internal-images/datum-controller-manager:v0.0.1-v1alpha2-amd64
+        image: ghcr.io/datum-cloud/milo:latest
         imagePullPolicy: IfNotPresent
+        args:
+        - manager
         ports:
         - containerPort: 6443
           name: https
