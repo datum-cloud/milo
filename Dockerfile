@@ -12,10 +12,10 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o apiserver ./cmd/apiserver
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o milo ./cmd/milo
 
 # Use a minimal image for the final container
 FROM gcr.io/distroless/static
-WORKDIR /app
-COPY --from=builder /app/apiserver .
-ENTRYPOINT ["/app/apiserver"]
+WORKDIR /
+COPY --from=builder /milo .
+ENTRYPOINT ["/milo"]

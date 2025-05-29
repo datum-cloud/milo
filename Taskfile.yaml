@@ -1,96 +1,120 @@
-version: 3
+version: '3'
 
-includes:
-  api:
-    taskfile: ./api/Taskfile.yaml
-    dir: ./api
-    
+vars:
+  TOOL_DIR: "{{.USER_WORKING_DIR}}/bin"
+  # renovate: datasource=go depName=sigs.k8s.io/controller-tools
+  CONTROLLER_TOOLS_VERSION: v0.18.0
+  # renovate: datasource=go depName=fybrik.io/crdoc
+  CRDOC_VERSION: v0.6.4
+
 tasks:
-  env:start:
-    run: once
-    desc: Start the development environment
+  default:
+    desc: List all available tasks
     cmds:
-      - docker compose -f docker-compose.yaml up -d
-  env:stop:
-    desc: Stops the development environment
-    cmds:
-      - docker compose -f docker-compose.yaml stop
-  env:reset:
-    desc: Resets the development environment. Warning this will remove all data!
-    cmds:
-      - docker compose -f docker-compose.yaml down
-
-  openfga:store-id:
+      - task --list
     silent: true
-    desc: Retrieves the store ID from the openfga server
-    cmd: fga store list | jq -r '.stores[] | select(.name=="datum") | .id'
 
-  openfga:create-store:
+  generate:
+    desc: Generate code including deepcopy, objects, CRDs, and potentially protobuf marshallers
+    deps:
+      - task: install-go-tool
+        vars:
+          NAME: controller-gen
+          PACKAGE: sigs.k8s.io/controller-tools/cmd/controller-gen
+          VERSION: "{{.CONTROLLER_TOOLS_VERSION}}"
+    cmds:
+      - echo "Generating deepcopy and object files..."
+      - "{{.TOOL_DIR}}/controller-gen object paths=\"./pkg/apis/...\""
+      - echo "Generating CRD manifests..."
+      # Output CRDs to config/crd/bases. You can change this path.
+      - "{{.TOOL_DIR}}/controller-gen crd paths=\"./pkg/apis/...\" output:dir=./config/crd/bases"
     silent: true
-    run: once
+
+  api-docs:
+    desc: Generate API docs
     deps:
-      - env:start
-    desc: Creates a store in OpenFGA that should be used for the environment.
-    cmd: |
-      STORE_ID=$(task openfga:store-id)
-      if [ -z "$STORE_ID" ]; then
-        fga store create --name "datum"
-        echo "Store 'datum' created."
-      else
-        echo "Store 'datum' already exists (ID: $STORE_ID)."
-      fi
+      - task: install-go-tool
+        vars:
+          NAME: crdoc
+          PACKAGE: fybrik.io/crdoc
+          VERSION: "{{.CRDOC_VERSION}}"
+    cmds:
+      - |
+        set -e ;
+        mkdir -p docs/api ;
+        for crdmanifest in config/crd/bases/*; do
+          filename="$(basename -s .resourcemanager.datumapis.com.yaml $crdmanifest)" ;
+          filename="${filename#apiextensions.k8s.io_v1_customresourcedefinition_}" ;
+          bin/crdoc --resources $crdmanifest --output docs/api/$filename.md ;
+        done;
+    silent: true
 
-  apiserver:serve:
-    desc: Starts the IAM APIServer with authentication disabled.
-    deps:
-      - openfga:create-store
-    cmd: |
-      go run ./cmd/apiserver serve \
-        --openfga-endpoint=dns:///localhost:8081 \
-        --openfga-store-id=$(task openfga:store-id) \
-        --database=postgres://root@localhost:26257/iam?sslmode=disable \
-        --rest-addr=:8000 \
-        --grpc-addr=:8001 \
-        --disable-auth=false \
-        --authentication-config=$(cat ./test/config/authentication/authentication-config.json | jq -c .) \
-        --zitadel-key-path="test/config/zitadel/secrets/machine-key.json" \
-        {{ .CLI_ARGS }}
+  install-go-tool:
+    desc: Install a Go tool to {{.TOOL_DIR}}/{{.NAME}} (symlinked from {{.TOOL_DIR}}/{{.NAME}}-{{.VERSION}})
+    internal: true
+    # vars: - Variables that need to be set when depending on this task
+    #   NAME:
+    #   PACKAGE:
+    #   VERSION:
+    cmds:
+      - mkdir -p {{.TOOL_DIR}}
+      - |
+        set -e
+        # Capture Taskfile vars into shell vars for clarity and safety in the script
+        _NAME="{{.NAME}}"
+        _PACKAGE="{{.PACKAGE}}"
+        _VERSION="{{.VERSION}}"
+        _TOOL_DIR="{{.TOOL_DIR}}"
 
-  iamservice:loadservices:
-    cmd: |
-      go run ./cmd/apiserver add-resources \
-        --openfga-endpoint=dns:///localhost:8081 \
-        --openfga-store-id=$(task openfga:store-id) \
-        --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
-        --services config/services \
-        --overwrite true
+        _VERSIONED_TOOL_PATH="$_TOOL_DIR/$_NAME-$_VERSION" # e.g., ./bin/crdoc-v0.6.4
+        _SYMLINK_PATH="$_TOOL_DIR/$_NAME"                 # e.g., ./bin/crdoc (this is where go install puts it first)
 
-  iamservice:loadroles:
-    cmd: |
-      go run ./cmd/apiserver add-resources \
-        --openfga-endpoint=dns:///localhost:8081 \
-        --openfga-store-id=$(task openfga:store-id) \
-        --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
-        --roles config/roles \
-        --overwrite true
-    
-  iamservice:loadpolicies:
-    cmd: |
-      go run ./cmd/apiserver add-resources \
-        --openfga-endpoint=dns:///localhost:8081 \
-        --openfga-store-id=$(task openfga:store-id) \
-        --database-connection-string=postgres://root@localhost:26257/iam?sslmode=disable \
-        --policies config/policies \
-        --overwrite true
+        # Check if the correctly versioned binary already exists
+        if [ ! -f "$_VERSIONED_TOOL_PATH" ]; then
+          echo "Downloading $_PACKAGE@$_VERSION (binary name: $_NAME) to $_VERSIONED_TOOL_PATH"
 
-  openfga:getuserorganizations:
-    desc: Retrieves the OpenFGA model from the server
-    cmd: |                                                       #resource identifier, hashed permission, resource type
-      fga query list-objects --store-id $(task openfga:store-id) iam.datumapis.com/InternalUser:users/db2fcc5a-b98a-48e5-b5df-b282d910273b 7983b8fa resourcemanager.datumapis.com/Organization
-      
-  test:
-    desc: Runs the test suite
-    cmd: |
-      go clean -testcache
-      go test ./...
-        
+          # Ensure the path where `go install` will place the binary (before mv) is clear.
+          # This is $_SYMLINK_PATH (e.g., ./bin/crdoc).
+          if [ -d "$_SYMLINK_PATH" ]; then
+            echo "Error: Target path $_SYMLINK_PATH for 'go install' is an existing directory. Please remove it manually."
+            exit 1
+          fi
+          # Remove if it's a file or symlink, to mimic `rm -f $(1)` from Makefile.
+          # This ensures 'go install' doesn't conflict with an existing symlink or wrong file.
+          echo "Preparing $_SYMLINK_PATH for new installation..."
+          rm -f "$_SYMLINK_PATH" || true
+
+          echo "Installing with GOBIN=$_TOOL_DIR..."
+          # 'go install' will place the executable (named $_NAME) into $_TOOL_DIR.
+          # This relies on $_NAME being the actual binary name derived from $_PACKAGE.
+          if ! GOBIN="$_TOOL_DIR" go install "$_PACKAGE@$_VERSION"; then
+            echo "Failed to 'go install $_PACKAGE@$_VERSION' with GOBIN=$_TOOL_DIR"
+            exit 1
+          fi
+
+          # After `go install`, the binary should be at $_SYMLINK_PATH (e.g. $_TOOL_DIR/$_NAME)
+          if [ ! -f "$_SYMLINK_PATH" ]; then
+            echo "Error: 'go install' did not produce $_SYMLINK_PATH"
+            # As a fallback, check if it was installed with the package basename if _NAME was different
+            _PKG_BASENAME=$(basename "$_PACKAGE")
+            if [ "$_PKG_BASENAME" != "$_NAME" ] && [ -f "$_TOOL_DIR/$_PKG_BASENAME" ]; then
+                echo "Found $_TOOL_DIR/$_PKG_BASENAME instead (package basename). Moving this one."
+                mv "$_TOOL_DIR/$_PKG_BASENAME" "$_VERSIONED_TOOL_PATH"
+            else
+                echo "Please ensure the NAME variable ('$_NAME') accurately matches the binary name produced by 'go install $_PACKAGE'."
+                exit 1
+            fi
+          else
+            # Binary $_SYMLINK_PATH was created as expected. Now move it to its versioned path.
+            echo "Moving installed binary from $_SYMLINK_PATH to $_VERSIONED_TOOL_PATH"
+            mv "$_SYMLINK_PATH" "$_VERSIONED_TOOL_PATH"
+          fi
+
+          # Create/update the symlink (e.g., ./bin/crdoc -> crdoc-v0.6.4)
+          # The target of the symlink is relative to _TOOL_DIR.
+          echo "Creating/updating symlink: $_SYMLINK_PATH -> $_NAME-$_VERSION (within $_TOOL_DIR)"
+          (cd "$_TOOL_DIR" && ln -sf "$_NAME-$_VERSION" "$_NAME")
+          echo "Tool $_NAME is now available at $_SYMLINK_PATH (points to $_VERSIONED_TOOL_PATH)"
+        fi
+
+    silent: true
