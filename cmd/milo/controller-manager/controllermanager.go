@@ -65,9 +65,9 @@ import (
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 
 	// Datum webhook and API type imports
-	"go.datum.net/milo/internal/webhooks/resourcemanager"
-	iamv1alpha1 "go.datum.net/milo/pkg/apis/iam/v1alpha1"
-	resourcemanagerv1alpha1 "go.datum.net/milo/pkg/apis/resourcemanager/v1alpha1"
+	"go.miloapis.com/milo/internal/webhooks/resourcemanager"
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 

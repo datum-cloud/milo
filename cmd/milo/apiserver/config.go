@@ -34,7 +34,7 @@ import (
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	svmrest "k8s.io/kubernetes/pkg/registry/storagemigration/rest"
 
-	datumfilters "go.datum.net/milo/pkg/server/filters"
+	datumfilters "go.miloapis.com/milo/pkg/server/filters"
 )
 
 type Config struct {

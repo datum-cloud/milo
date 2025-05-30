@@ -10,9 +10,9 @@ spec:
   subjects:
     - kind: User
       name: "kubernetes-admin"
-      uid: "0cca596b-e87e-4842-9b96-acb7c3cfe5e8"
+      uid: "34f31881-14ce-4234-8a6c-aeee52c3191e"
   targetRef:
     apiGroup: "resourcemanager.datumapis.com"
     kind: Organization
     name: "datum"
-    uid: "8f80d08c-be9e-4a5c-aab3-80cf83f97dba"
+    uid: "c399429c-47c0-4181-9068-80670ac5a6c0"
