@@ -1,2 +1,3 @@
 node_modules
 test/config/zitadel/secrets/machine-key.json
+bin/

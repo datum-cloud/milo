@@ -30,7 +30,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ghcr.io/datum-cloud/iam-apiserver
+        images: ghcr.io/datum-cloud/milo
         tags: |
           type=schedule
           type=ref,event=branch
@@ -41,7 +41,7 @@ jobs:
           type=semver,pattern={{major}}
           type=sha
 
-    - name: Build iam-apiserver
+    - name: Build Milo
       id: push
       uses: docker/build-push-action@v6.18.0
       with:

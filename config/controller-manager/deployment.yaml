@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: datum-controller-manager
+      app.kubernetes.io/part-of: datum-control-plane
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: datum-controller-manager
+        app.kubernetes.io/part-of: datum-control-plane
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: datum-controller-manager
+        image: ghcr.io/datum-cloud/milo:latest
+        imagePullPolicy: IfNotPresent
+        args:
+        - manager
+        ports:
+        - containerPort: 6443
+          name: https
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      restartPolicy: Always

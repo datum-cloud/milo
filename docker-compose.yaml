@@ -2,49 +2,10 @@
 # end-to-end testing with the IAM system.
 #
 # Services deployed:
-# - CockroachDB
 # - OpenFGA
 # - Zitadel
 # - Mailhog
 services:
-  # Create a new cockroach database
-  database:
-    image: cockroachdb/cockroach:v25.2.0
-    ports:
-      - "26257:26257"
-      # Expose the CRDB admin UI on 9090
-      - "9090:8080"
-    command: start-single-node --insecure
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health?ready=1"]
-      interval: 3s
-      timeout: 3s
-      retries: 5
-
-  create-databases:
-    image: cockroachdb/cockroach:v25.2.0
-    command:
-      - sql
-      - --insecure
-      - --host=database
-      - --execute=CREATE DATABASE IF NOT EXISTS openfga; CREATE DATABASE IF NOT EXISTS iam;
-    depends_on:
-      database:
-        condition: service_healthy
-
-  migrate-openfga:
-    image: openfga/openfga:v1.8.13
-    command: migrate
-    depends_on:
-      database:
-        condition: service_healthy
-      create-databases:
-        condition: service_completed_successfully
-    environment:
-      - OPENFGA_DATASTORE_ENGINE=postgres
-      - OPENFGA_DATASTORE_URI=postgres://root@database:26257/openfga?sslmode=disable
-      - OPENFGA_LOG_FORMAT=json
-
   openfga-apiserver:
     user: "1001:1001"
     depends_on:
@@ -52,12 +13,9 @@ services:
         condition: service_completed_successfully
     image: openfga/openfga:v1.8.13
     environment:
-      - OPENFGA_DATASTORE_ENGINE=postgres
-      - OPENFGA_DATASTORE_URI=postgres://root@database:26257/openfga?sslmode=disable
+      - OPENFGA_DATASTORE_ENGINE=memory
       - OPENFGA_LOG_FORMAT=json
-      - OPENFGA_DATASTORE_MAX_OPEN_CONNS=100
       - OPENFGA_PLAYGROUND_ENABLED=true
-      - OPENFGA_LIST_USERS_MAX_RESULTS=10000
       - OPENFGA_GRPC_TLS_ENABLED=false
     command:
       - run
@@ -79,7 +37,7 @@ services:
       - "3000:3000"
       # Needed for the prometheus metrics
       - "2112:2112" #prometheus metrics
-  
+
   zitadel:
     image: 'ghcr.io/zitadel/zitadel:v2.71.7'
     command: >
@@ -95,7 +53,7 @@ services:
       database:
         condition: service_healthy
       create-databases:
-        condition: service_completed_successfully 
+        condition: service_completed_successfully
     ports:
       - '8082:8080'
     healthcheck:
@@ -104,7 +62,7 @@ services:
       timeout: '5s'
       retries: 5
       start_period: '10s'
-   
+
   mailhog: # Mailhog is a fake local SMTP server for testing
     image: mailhog/mailhog:latest
     ports:
