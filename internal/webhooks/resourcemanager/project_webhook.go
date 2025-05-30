@@ -15,8 +15,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	iamv1alpha1 "go.datum.net/milo/pkg/apis/iam/v1alpha1"
-	"go.datum.net/milo/pkg/apis/resourcemanager/v1alpha1"
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 )
 
 // log is for logging in this package.

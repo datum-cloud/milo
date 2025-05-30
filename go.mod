@@ -1,4 +1,4 @@
-module go.datum.net/milo
+module go.miloapis.com/milo
 
 go 1.23.1
 

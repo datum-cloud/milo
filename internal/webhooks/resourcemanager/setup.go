@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	ctrladmission "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	iamv1alpha1 "go.datum.net/milo/pkg/apis/iam/v1alpha1"
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 )
 
 var setuplog = logf.Log.WithName("resourcemanager-webhook-setup")
