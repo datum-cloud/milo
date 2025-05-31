@@ -4,17 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: projects.resourcemanager.datumapis.com
+  name: userinvitations.iam.miloapis.com
 spec:
-  group: resourcemanager.datumapis.com
+  group: iam.miloapis.com
   names:
-    kind: Project
-    listKind: ProjectList
-    plural: projects
-    singular: project
-  scope: Cluster
+    kind: UserInvitation
+    listKind: UserInvitationList
+    plural: userinvitations
+    singular: userinvitation
+  scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.email
+      name: Email
+      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -24,7 +27,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Project is the Schema for the projects API.
+        description: UserInvitation is the Schema for the userinvitations API
         properties:
           apiVersion:
             description: |-
@@ -44,45 +47,40 @@ spec:
           metadata:
             type: object
           spec:
-            description: ProjectSpec defines the desired state of Project.
+            description: UserInvitationSpec defines the desired state of UserInvitation
             properties:
-              parent:
-                description: A reference to the project's parent in the resource hierarchy.
-                properties:
-                  external:
-                    description: |-
-                      External is a reference to the parent of the project. Must be a valid
-                      resource name.
-                    type: string
-                  resourceRef:
-                    description: |-
-                      Resource is a reference to the parent of the project. Must be a valid
-                      resource.
-                    properties:
-                      apiGroup:
-                        description: Group is the group of the resource.
-                        type: string
-                      kind:
-                        description: Kind is the kind of the resource.
-                        enum:
-                        - Organization
-                        type: string
-                      name:
-                        description: Name is the name of the resource.
-                        type: string
-                    required:
-                    - apiGroup
-                    - kind
-                    - name
-                    type: object
-                required:
-                - resourceRef
-                type: object
+              email:
+                description: The email of the user being invited.
+                type: string
+              familyName:
+                description: The last name of the user being invited.
+                type: string
+              givenName:
+                description: The first name of the user being invited.
+                type: string
+              roles:
+                description: The roles that will be assigned to the user when they
+                  accept the invitation.
+                items:
+                  description: RoleReference contains information that points to the
+                    Role being used
+                  properties:
+                    name:
+                      description: Name is the name of resource being referenced
+                      type: string
+                    namespace:
+                      description: Namespace of the referenced Role. If empty, it
+                        is assumed to be in the PolicyBinding's namespace.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
             required:
-            - parent
+            - email
             type: object
           status:
-            description: ProjectStatus defines the observed state of Project.
+            description: UserInvitationStatus defines the observed state of UserInvitation
             properties:
               conditions:
                 default:
@@ -91,9 +89,8 @@ spec:
                   reason: Unknown
                   status: Unknown
                   type: Ready
-                description: |-
-                  Represents the observations of a project's current state.
-                  Known condition types are: "Ready"
+                description: Conditions provide conditions that represent the current
+                  status of the UserInvitation.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -150,8 +147,6 @@ spec:
                   type: object
                 type: array
             type: object
-        required:
-        - spec
         type: object
     served: true
     storage: true

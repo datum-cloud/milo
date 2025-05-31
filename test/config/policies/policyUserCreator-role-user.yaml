@@ -1,7 +1,7 @@
-name: iam.datumapis.com/services/iam.datumapis.com/roles/userSelfManage
+name: iam.miloapis.com/services/iam.miloapis.com/roles/userSelfManage
 spec:
   bindings:
-  # Only assigns the `iam.datumapis.com/role.use` and `iam.datumapis.com/roles.get` permissions
-  - role: services/iam.datumapis.com/roles/roleUser
+  # Only assigns the `iam.miloapis.com/role.use` and `iam.miloapis.com/roles.get` permissions
+  - role: services/iam.miloapis.com/roles/roleUser
     members:
     - user:<email-address-of-zitadel-user>

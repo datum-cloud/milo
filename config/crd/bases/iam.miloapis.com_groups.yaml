@@ -4,20 +4,17 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: protectedresources.iam.datumapis.com
+  name: groups.iam.miloapis.com
 spec:
-  group: iam.datumapis.com
+  group: iam.miloapis.com
   names:
-    kind: ProtectedResource
-    listKind: ProtectedResourceList
-    plural: protectedresources
-    singular: protectedresource
-  scope: Cluster
+    kind: Group
+    listKind: GroupList
+    plural: groups
+    singular: group
+  scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.kind
-      name: Kind
-      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -27,7 +24,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ProtectedResource is the Schema for the protectedresources API
+        description: Group is the Schema for the groups API
         properties:
           apiVersion:
             description: |-
@@ -46,80 +43,12 @@ spec:
             type: string
           metadata:
             type: object
-          spec:
-            description: ProtectedResourceSpec defines the desired state of ProtectedResource
-            properties:
-              kind:
-                description: |-
-                  The kind of the resource.
-                  This will be in the format `Workload`.
-                type: string
-              parentResources:
-                description: |-
-                  A list of resources that are registered with the platform that may be a
-                  parent to the resource. Permissions may be bound to a parent resource so
-                  they can be inherited down the resource hierarchy.
-                items:
-                  description: ParentResourceRef defines the reference to a parent
-                    resource
-                  properties:
-                    apiGroup:
-                      description: |-
-                        APIGroup is the group for the resource being referenced.
-                        If APIGroup is not specified, the specified Kind must be in the core API group.
-                        For any other third-party types, APIGroup is required.
-                      type: string
-                    kind:
-                      description: Kind is the type of resource being referenced.
-                      type: string
-                  required:
-                  - kind
-                  type: object
-                type: array
-              permissions:
-                description: A list of permissions that are associated with the resource.
-                items:
-                  type: string
-                type: array
-              plural:
-                description: |-
-                  The plural form for the resource type, e.g. 'workloads'. Must follow
-                  camelCase format.
-                type: string
-              serviceRef:
-                description: ServiceRef references the service definition this protected
-                  resource belongs to.
-                properties:
-                  name:
-                    description: Name is the resource name of the service definition.
-                    type: string
-                required:
-                - name
-                type: object
-              singular:
-                description: |-
-                  The singular form for the resource type, e.g. 'workload'. Must follow
-                  camelCase format.
-                type: string
-            required:
-            - kind
-            - permissions
-            - plural
-            - serviceRef
-            - singular
-            type: object
           status:
-            description: ProtectedResourceStatus defines the observed state of ProtectedResource
+            description: GroupStatus defines the observed state of Group
             properties:
               conditions:
-                default:
-                - lastTransitionTime: "1970-01-01T00:00:00Z"
-                  message: Waiting for control plane to reconcile
-                  reason: Unknown
-                  status: Unknown
-                  type: Ready
-                description: Conditions provide conditions that represent the current
-                  status of the ProtectedResource.
+                description: Conditions represent the latest available observations
+                  of an object's current state.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -175,12 +104,6 @@ spec:
                   - type
                   type: object
                 type: array
-              observedGeneration:
-                description: |-
-                  ObservedGeneration is the most recent generation observed for this ProtectedResource. It corresponds to the
-                  ProtectedResource's generation, which is updated on mutation by the API Server.
-                format: int64
-                type: integer
             type: object
         type: object
     served: true

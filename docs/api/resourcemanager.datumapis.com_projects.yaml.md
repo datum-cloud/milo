@@ -2,9 +2,9 @@
 
 Packages:
 
-- [resourcemanager.datumapis.com/v1alpha1](#resourcemanagerdatumapiscomv1alpha1)
+- [resourcemanager.miloapis.com/v1alpha1](#resourcemanagerdatumapiscomv1alpha1)
 
-# resourcemanager.datumapis.com/v1alpha1
+# resourcemanager.miloapis.com/v1alpha1
 
 Resource Types:
 
@@ -35,7 +35,7 @@ Project is the Schema for the projects API.
     <tbody><tr>
       <td><b>apiVersion</b></td>
       <td>string</td>
-      <td>resourcemanager.datumapis.com/v1alpha1</td>
+      <td>resourcemanager.miloapis.com/v1alpha1</td>
       <td>true</td>
       </tr>
       <tr>

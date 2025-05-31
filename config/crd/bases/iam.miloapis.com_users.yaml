@@ -4,19 +4,26 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: organizations.resourcemanager.datumapis.com
+  name: users.iam.miloapis.com
 spec:
-  group: resourcemanager.datumapis.com
+  group: iam.miloapis.com
   names:
-    categories:
-    - datum
-    kind: Organization
-    listKind: OrganizationList
-    plural: organizations
-    singular: organization
+    kind: User
+    listKind: UserList
+    plural: users
+    singular: user
   scope: Cluster
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.email
+      name: Email
+      type: string
+    - jsonPath: .spec.givenName
+      name: Given Name
+      type: string
+    - jsonPath: .spec.familyName
+      name: Family Name
+      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -26,9 +33,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: |-
-          Use lowercase for path, which influences plural name. Ensure kind is Organization.
-          Organization is the Schema for the Organizations API
+        description: User is the Schema for the users API
         properties:
           apiVersion:
             description: |-
@@ -48,24 +53,22 @@ spec:
           metadata:
             type: object
           spec:
-            description: OrganizationSpec defines the desired state of Organization
+            description: UserSpec defines the desired state of User
             properties:
-              type:
-                description: The type of organization.
-                enum:
-                - Personal
-                - Business
-                - Government
-                - Research
-                - Education
-                - Nonprofit
-                - Other
+              email:
+                description: The email of the user.
+                type: string
+              familyName:
+                description: The last name of the user.
+                type: string
+              givenName:
+                description: The first name of the user.
                 type: string
             required:
-            - type
+            - email
             type: object
           status:
-            description: OrganizationStatus defines the observed state of Organization
+            description: UserStatus defines the observed state of User
             properties:
               conditions:
                 default:
@@ -74,9 +77,8 @@ spec:
                   reason: Unknown
                   status: Unknown
                   type: Ready
-                description: |-
-                  Conditions represents the observations of an organization's current state.
-                  Known condition types are: "Ready"
+                description: Conditions provide conditions that represent the current
+                  status of the User.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -132,11 +134,6 @@ spec:
                   - type
                   type: object
                 type: array
-              observedGeneration:
-                description: ObservedGeneration is the most recent generation observed
-                  for this Organization by the controller.
-                format: int64
-                type: integer
             type: object
         type: object
     served: true

@@ -1,0 +1,52 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam.miloapis.com-user-creator
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - iam.miloapis.com/users.create
+    - iam.miloapis.com/users.get
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: resourcemanager.miloapis.com-organizationowner
+  namespace: datum-system
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - resourcemanager.miloapis.com/organizations.delete
+    - resourcemanager.miloapis.com/organizations.get
+    - resourcemanager.miloapis.com/organizations.update
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: resourcemanager.miloapis.com-projectowner
+  namespace: datum-system
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: compute.miloapis.com-workload-admin
+      namespace: datum-system
+  includedPermissions:
+    - resourcemanager.miloapis.com/projects.delete
+    - resourcemanager.miloapis.com/projects.get
+    - resourcemanager.miloapis.com/projects.update
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: compute.miloapis.com-workload-admin
+  namespace: datum-system
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - compute.miloapis.com/workloads.create
+    - compute.miloapis.com/workloads.get
+    - compute.miloapis.com/workloads.update
+    - compute.miloapis.com/workloads.delete
+    - compute.miloapis.com/workloads.list
+    - compute.miloapis.com/workloads.watch
+    - compute.miloapis.com/workloads.patch

@@ -1,2 +1,2 @@
-// +groupName=resourcemanager.datumapis.com
+// +groupName=resourcemanager.miloapis.com
 package v1alpha1

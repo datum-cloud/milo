@@ -22,7 +22,7 @@ import (
 // log is for logging in this package.
 var projectlog = logf.Log.WithName("project-resource")
 
-// +kubebuilder:webhook:path=/webhooks/resourcemanager/validate-v1alpha1-project,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.datumapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=vproject.datum.net,admissionReviewVersions={v1,v1beta1}
+// +kubebuilder:webhook:path=/webhooks/resourcemanager/validate-v1alpha1-project,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=vproject.datum.net,admissionReviewVersions={v1,v1beta1}
 
 // ProjectValidator validates Projects and creates associated PolicyBindings for owners.
 type ProjectValidator struct {
@@ -32,7 +32,7 @@ type ProjectValidator struct {
 	ProjectOwnerRoleName string
 }
 
-// +kubebuilder:webhook:path=/webhooks/resourcemanager/mutate-v1alpha1-project,mutating=true,failurePolicy=fail,sideEffects=None,groups=resourcemanager.datumapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=mproject.datum.net,admissionReviewVersions={v1,v1beta1}
+// +kubebuilder:webhook:path=/webhooks/resourcemanager/mutate-v1alpha1-project,mutating=true,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=mproject.datum.net,admissionReviewVersions={v1,v1beta1}
 
 // ProjectMutator mutates Projects to add owner references.
 type ProjectMutator struct {
@@ -94,7 +94,7 @@ func (v *ProjectValidator) validateParentReference(project *v1alpha1.Project) ad
 	return admission.Allowed("")
 }
 
-// lookupUser retrieves the User resource from the iam.datumapis.com API
+// lookupUser retrieves the User resource from the iam.miloapis.com API
 func (v *ProjectValidator) lookupUser(ctx context.Context, username string) (*unstructured.Unstructured, admission.Response) {
 	// TODO: Determine if we can actually use the UID from the User object in
 	//       the UserInfo of the request. Likely need to configure the OIDC
@@ -107,7 +107,7 @@ func (v *ProjectValidator) lookupUser(ctx context.Context, username string) (*un
 
 	foundUser, err := v.Client.Resource(userGVR).Get(ctx, username, metav1.GetOptions{})
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to get user '%s' from iam.datumapis.com API: %s", username, err.Error())
+		errMsg := fmt.Sprintf("failed to get user '%s' from iam.miloapis.com API: %s", username, err.Error())
 		projectlog.Error(err, errMsg)
 		return nil, admission.Denied(errMsg)
 	}
@@ -119,7 +119,7 @@ func (v *ProjectValidator) lookupUser(ctx context.Context, username string) (*un
 		return nil, admission.Denied(errMsg)
 	}
 
-	projectlog.Info("Found user in iam.datumapis.com API", "username", username, "userUID", userUID)
+	projectlog.Info("Found user in iam.miloapis.com API", "username", username, "userUID", userUID)
 	return foundUser, admission.Allowed("")
 }
 

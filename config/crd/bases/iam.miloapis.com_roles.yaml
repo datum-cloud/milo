@@ -4,25 +4,25 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: groupmemberships.iam.datumapis.com
+  name: roles.iam.miloapis.com
 spec:
-  group: iam.datumapis.com
+  group: iam.miloapis.com
   names:
-    kind: GroupMembership
-    listKind: GroupMembershipList
-    plural: groupmemberships
-    singular: groupmembership
+    kind: Role
+    listKind: RoleList
+    plural: roles
+    singular: role
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.userRef.name
-      name: User
-      type: string
-    - jsonPath: .spec.groupRef.name
-      name: Group
+    - jsonPath: .spec.displayName
+      name: Display Name
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
+      type: string
+    - jsonPath: .spec.launchStage
+      name: Launch Stage
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -30,7 +30,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: GroupMembership is the Schema for the groupmemberships API
+        description: Role is the Schema for the roles API
         properties:
           apiVersion:
             description: |-
@@ -50,44 +50,60 @@ spec:
           metadata:
             type: object
           spec:
-            description: GroupMembershipSpec defines the desired state of GroupMembership
+            description: RoleSpec defines the desired state of Role
             properties:
-              groupRef:
+              includedPermissions:
                 description: |-
-                  GroupRef is a reference to the Group.
-                  Group is a namespaced resource.
-                properties:
-                  name:
-                    description: Name is the name of the Group being referenced.
-                    type: string
-                  namespace:
-                    description: Namespace of the referenced Group.
-                    type: string
-                required:
-                - name
-                - namespace
-                type: object
-              userRef:
+                  The names of the permissions this role grants when bound in an IAM policy.
+                  All permissions must be in the format: `{service}.{resource}.{action}`
+                  (e.g. compute.workloads.create).
+                items:
+                  type: string
+                type: array
+              inheritedRoles:
                 description: |-
-                  UserRef is a reference to the User that is a member of the Group.
-                  User is a cluster-scoped resource.
-                properties:
-                  name:
-                    description: Name is the name of the User being referenced.
-                    type: string
-                required:
-                - name
-                type: object
+                  The list of roles from which this role inherits permissions.
+                  Each entry must be a valid role resource name.
+                items:
+                  description: |-
+                    ScopedRoleReference defines a reference to another Role, scoped by namespace.
+                    This is used for purposes like role inheritance where a simple name and namespace
+                    is sufficient to identify the target role.
+                  properties:
+                    name:
+                      description: Name of the referenced Role.
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace of the referenced Role.
+                        If not specified, it defaults to the namespace of the resource containing this reference.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              launchStage:
+                description: |-
+                  Defines the launch stage of the IAM Role. Must be one of: Early Access,
+                  Alpha, Beta, Stable, Deprecated.
+                type: string
             required:
-            - groupRef
-            - userRef
+            - includedPermissions
+            - launchStage
             type: object
           status:
-            description: GroupMembershipStatus defines the observed state of GroupMembership
+            default:
+              conditions:
+              - lastTransitionTime: "1970-01-01T00:00:00Z"
+                message: Waiting for control plane to reconcile
+                reason: Unknown
+                status: Unknown
+                type: Ready
+            description: RoleStatus defines the observed state of Role
             properties:
               conditions:
-                description: Conditions represent the latest available observations
-                  of an object's current state.
+                description: Conditions provide conditions that represent the current
+                  status of the Role.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -143,6 +159,15 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                  by the controller.
+                format: int64
+                type: integer
+              parent:
+                description: The resource name of the parent the role was created
+                  under.
+                type: string
             type: object
         type: object
     served: true

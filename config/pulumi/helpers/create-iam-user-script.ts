@@ -26,7 +26,7 @@ const createIamUserScript = (
         const reqBody = {
           display_name: user.displayName || "",
           annotations: {
-            "internal.iam.datumapis.com/zitadel-id": "pending",
+            "internal.iam.miloapis.com/zitadel-id": "pending",
           },
           spec: {
             email: user.email,
@@ -72,7 +72,7 @@ const createIamUserScript = (
           logger.log(`${operation} Updating Zitadel user metadata with IAM System user resource name: ${user.name}`);
 
           api.v1.user.appendMetadata(
-            "internal.iam.datumapis.com-iam-resource-name",
+            "internal.iam.miloapis.com-iam-resource-name",
             getUserResponse.name,
           );
 
@@ -88,7 +88,7 @@ const createIamUserScript = (
         );
 
         api.v1.user.appendMetadata(
-          "internal.iam.datumapis.com-iam-resource-name",
+          "internal.iam.miloapis.com-iam-resource-name",
           createUserResponse.response.name,
         );
       } catch (e) {

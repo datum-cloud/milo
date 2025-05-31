@@ -4,25 +4,19 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: roles.iam.datumapis.com
+  name: projects.resourcemanager.miloapis.com
 spec:
-  group: iam.datumapis.com
+  group: resourcemanager.miloapis.com
   names:
-    kind: Role
-    listKind: RoleList
-    plural: roles
-    singular: role
-  scope: Namespaced
+    kind: Project
+    listKind: ProjectList
+    plural: projects
+    singular: project
+  scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.displayName
-      name: Display Name
-      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
-      type: string
-    - jsonPath: .spec.launchStage
-      name: Launch Stage
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -30,7 +24,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Role is the Schema for the roles API
+        description: Project is the Schema for the projects API.
         properties:
           apiVersion:
             description: |-
@@ -50,60 +44,56 @@ spec:
           metadata:
             type: object
           spec:
-            description: RoleSpec defines the desired state of Role
+            description: ProjectSpec defines the desired state of Project.
             properties:
-              includedPermissions:
-                description: |-
-                  The names of the permissions this role grants when bound in an IAM policy.
-                  All permissions must be in the format: `{service}.{resource}.{action}`
-                  (e.g. compute.workloads.create).
-                items:
-                  type: string
-                type: array
-              inheritedRoles:
-                description: |-
-                  The list of roles from which this role inherits permissions.
-                  Each entry must be a valid role resource name.
-                items:
-                  description: |-
-                    ScopedRoleReference defines a reference to another Role, scoped by namespace.
-                    This is used for purposes like role inheritance where a simple name and namespace
-                    is sufficient to identify the target role.
-                  properties:
-                    name:
-                      description: Name of the referenced Role.
-                      type: string
-                    namespace:
-                      description: |-
-                        Namespace of the referenced Role.
-                        If not specified, it defaults to the namespace of the resource containing this reference.
-                      type: string
-                  required:
-                  - name
-                  type: object
-                type: array
-              launchStage:
-                description: |-
-                  Defines the launch stage of the IAM Role. Must be one of: Early Access,
-                  Alpha, Beta, Stable, Deprecated.
-                type: string
+              parent:
+                description: A reference to the project's parent in the resource hierarchy.
+                properties:
+                  external:
+                    description: |-
+                      External is a reference to the parent of the project. Must be a valid
+                      resource name.
+                    type: string
+                  resourceRef:
+                    description: |-
+                      Resource is a reference to the parent of the project. Must be a valid
+                      resource.
+                    properties:
+                      apiGroup:
+                        description: Group is the group of the resource.
+                        type: string
+                      kind:
+                        description: Kind is the kind of the resource.
+                        enum:
+                        - Organization
+                        type: string
+                      name:
+                        description: Name is the name of the resource.
+                        type: string
+                    required:
+                    - apiGroup
+                    - kind
+                    - name
+                    type: object
+                required:
+                - resourceRef
+                type: object
             required:
-            - includedPermissions
-            - launchStage
+            - parent
             type: object
           status:
-            default:
-              conditions:
-              - lastTransitionTime: "1970-01-01T00:00:00Z"
-                message: Waiting for control plane to reconcile
-                reason: Unknown
-                status: Unknown
-                type: Ready
-            description: RoleStatus defines the observed state of Role
+            description: ProjectStatus defines the observed state of Project.
             properties:
               conditions:
-                description: Conditions provide conditions that represent the current
-                  status of the Role.
+                default:
+                - lastTransitionTime: "1970-01-01T00:00:00Z"
+                  message: Waiting for control plane to reconcile
+                  reason: Unknown
+                  status: Unknown
+                  type: Ready
+                description: |-
+                  Represents the observations of a project's current state.
+                  Known condition types are: "Ready"
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -159,16 +149,9 @@ spec:
                   - type
                   type: object
                 type: array
-              observedGeneration:
-                description: ObservedGeneration is the most recent generation observed
-                  by the controller.
-                format: int64
-                type: integer
-              parent:
-                description: The resource name of the parent the role was created
-                  under.
-                type: string
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true

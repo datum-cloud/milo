@@ -796,9 +796,9 @@ func leaderElectAndRun(ctx context.Context, c *config.CompletedConfig, lockIdent
 func setupWebhooks(logger klog.Logger, kubeConfig *restclient.Config, mux *mux.PathRecorderMux, scheme *runtime.Scheme, systemNamespace string, organizationOwnerRoleName string, projectOwnerRoleName string) error {
 	logger.Info("Setting up webhooks")
 
-	// Setup resourcemanager.datumapis.com webhooks
+	// Setup resourcemanager.miloapis.com webhooks
 	if err := resourcemanager.SetupWebhooksWithManager(kubeConfig, mux, scheme, systemNamespace, organizationOwnerRoleName, projectOwnerRoleName); err != nil {
-		return fmt.Errorf("failed to setup resourcemanager.datumapis.com webhooks: %w", err)
+		return fmt.Errorf("failed to setup resourcemanager.miloapis.com webhooks: %w", err)
 	}
 
 	logger.Info("Webhooks setup complete")

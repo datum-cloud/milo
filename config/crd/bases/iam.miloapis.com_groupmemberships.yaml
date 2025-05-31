@@ -4,17 +4,23 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: groups.iam.datumapis.com
+  name: groupmemberships.iam.miloapis.com
 spec:
-  group: iam.datumapis.com
+  group: iam.miloapis.com
   names:
-    kind: Group
-    listKind: GroupList
-    plural: groups
-    singular: group
+    kind: GroupMembership
+    listKind: GroupMembershipList
+    plural: groupmemberships
+    singular: groupmembership
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.userRef.name
+      name: User
+      type: string
+    - jsonPath: .spec.groupRef.name
+      name: Group
+      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -24,7 +30,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Group is the Schema for the groups API
+        description: GroupMembership is the Schema for the groupmemberships API
         properties:
           apiVersion:
             description: |-
@@ -43,8 +49,41 @@ spec:
             type: string
           metadata:
             type: object
+          spec:
+            description: GroupMembershipSpec defines the desired state of GroupMembership
+            properties:
+              groupRef:
+                description: |-
+                  GroupRef is a reference to the Group.
+                  Group is a namespaced resource.
+                properties:
+                  name:
+                    description: Name is the name of the Group being referenced.
+                    type: string
+                  namespace:
+                    description: Namespace of the referenced Group.
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+              userRef:
+                description: |-
+                  UserRef is a reference to the User that is a member of the Group.
+                  User is a cluster-scoped resource.
+                properties:
+                  name:
+                    description: Name is the name of the User being referenced.
+                    type: string
+                required:
+                - name
+                type: object
+            required:
+            - groupRef
+            - userRef
+            type: object
           status:
-            description: GroupStatus defines the observed state of Group
+            description: GroupMembershipStatus defines the observed state of GroupMembership
             properties:
               conditions:
                 description: Conditions represent the latest available observations

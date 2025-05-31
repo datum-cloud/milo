@@ -1,10 +1,10 @@
-apiVersion: iam.datumapis.com/v1alpha1
+apiVersion: iam.miloapis.com/v1alpha1
 kind: ProtectedResource
 metadata:
   name: iam-role
 spec:
   serviceRef:
-    name: "iam.datumapis.com"
+    name: "iam.miloapis.com"
   kind: Role
   plural: roles
   singular: role
@@ -18,13 +18,13 @@ spec:
     - patch
     - watch
 ---
-apiVersion: iam.datumapis.com/v1alpha1
+apiVersion: iam.miloapis.com/v1alpha1
 kind: ProtectedResource
 metadata:
   name: iam-user
 spec:
   serviceRef:
-    name: "iam.datumapis.com"
+    name: "iam.miloapis.com"
   kind: User
   plural: users
   singular: user
@@ -37,13 +37,13 @@ spec:
     - patch
     - watch
 ---
-apiVersion: iam.datumapis.com/v1alpha1
+apiVersion: iam.miloapis.com/v1alpha1
 kind: ProtectedResource
 metadata:
   name: iam-group
 spec:
   serviceRef:
-    name: "iam.datumapis.com"
+    name: "iam.miloapis.com"
   kind: Group
   plural: groups
   singular: group
@@ -56,13 +56,13 @@ spec:
     - patch
     - watch
 ---
-apiVersion: iam.datumapis.com/v1alpha1
+apiVersion: iam.miloapis.com/v1alpha1
 kind: ProtectedResource
 metadata:
   name: resourcemanager-organization
 spec:
   serviceRef:
-    name: "resourcemanager.datumapis.com"
+    name: "resourcemanager.miloapis.com"
   kind: Organization
   plural: organizations
   singular: organization
@@ -76,13 +76,13 @@ spec:
     - patch
     - watch
 ---
-apiVersion: iam.datumapis.com/v1alpha1
+apiVersion: iam.miloapis.com/v1alpha1
 kind: ProtectedResource
 metadata:
   name: resourcemanager-project
 spec:
   serviceRef:
-    name: "resourcemanager.datumapis.com"
+    name: "resourcemanager.miloapis.com"
   kind: Project
   plural: projects
   singular: project
@@ -95,16 +95,16 @@ spec:
     - patch
     - watch
   parentResources:
-    - apiGroup: resourcemanager.datumapis.com
+    - apiGroup: resourcemanager.miloapis.com
       kind: Organization
 ---
-apiVersion: iam.datumapis.com/v1alpha1
+apiVersion: iam.miloapis.com/v1alpha1
 kind: ProtectedResource
 metadata:
   name: compute-workloads
 spec:
   serviceRef:
-    name: "compute.datumapis.com"
+    name: "compute.miloapis.com"
   kind: Workload
   plural: workloads
   singular: workload
@@ -117,5 +117,5 @@ spec:
     - patch
     - watch
   parentResources:
-    - apiGroup: resourcemanager.datumapis.com
+    - apiGroup: resourcemanager.miloapis.com
       kind: Project

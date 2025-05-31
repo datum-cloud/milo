@@ -30,18 +30,18 @@ func TestOrganizationContextHandler(t *testing.T) {
 		assertRequest func(*testing.T, *http.Request)
 	}{
 		"bad request: missing org id": {
-			path:         "/apis/resourcemanager.datumapis.com/v1alpha/organizations/",
+			path:         "/apis/resourcemanager.miloapis.com/v1alpha/organizations/",
 			expectedCode: http.StatusBadRequest,
 		},
 		"internal error: org request with no user": {
-			path: "/apis/resourcemanager.datumapis.com/v1alpha/organizations/some-org/control-plane",
+			path: "/apis/resourcemanager.miloapis.com/v1alpha/organizations/some-org/control-plane",
 			assertRequest: func(t *testing.T, req *http.Request) {
 				assert.Equal(t, "", req.URL.Path)
 			},
 			expectedCode: http.StatusInternalServerError,
 		},
 		"org request succeeds": {
-			path:         "/apis/resourcemanager.datumapis.com/v1alpha/organizations/some-org/control-plane",
+			path:         "/apis/resourcemanager.miloapis.com/v1alpha/organizations/some-org/control-plane",
 			reqUser:      &user.DefaultInfo{},
 			expectedCode: http.StatusOK,
 			assertRequest: func(t *testing.T, req *http.Request) {
@@ -57,7 +57,7 @@ func TestOrganizationContextHandler(t *testing.T) {
 			},
 		},
 		"org project list label selector injected": {
-			path:         "/apis/resourcemanager.datumapis.com/v1alpha/organizations/some-org/control-plane/apis/resourcemanager.datumapis.com/v1alpha/projects?labelSelector=resourcemanager.datumapis.com/organization-id=notvalid,other=value",
+			path:         "/apis/resourcemanager.miloapis.com/v1alpha/organizations/some-org/control-plane/apis/resourcemanager.miloapis.com/v1alpha/projects?labelSelector=resourcemanager.miloapis.com/organization-id=notvalid,other=value",
 			reqUser:      &user.DefaultInfo{},
 			expectedCode: http.StatusOK,
 			assertRequest: func(t *testing.T, req *http.Request) {

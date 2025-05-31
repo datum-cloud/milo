@@ -22,24 +22,24 @@ type key int
 
 const orgId key = iota
 
-const organizationIdKey = "resourcemanager.datumapis.com/organization-id"
+const organizationIdKey = "resourcemanager.miloapis.com/organization-id"
 
 // OrganizationContextHandler will react to requests sent to a pseudo API path
-// of `/apis/resourcemanager.datumapis.com/v1alpha/organizations/` and injects
+// of `/apis/resourcemanager.miloapis.com/v1alpha/organizations/` and injects
 // the provided organization ID into a request context value. This value will
 // then be used by `organizationContextAuthorizationDecorator` to inject the
 // org ID into the authenticated user's Extra field. It will then rewrite the
-// request path to strip the prefix of `/apis/resourcemanager.datumapis.com/v1alpha/organizations/{organization}/control-plane`,
+// request path to strip the prefix of `/apis/resourcemanager.miloapis.com/v1alpha/organizations/{organization}/control-plane`,
 // which will result in the next set of handlers seeing a typical API request.
 func OrganizationContextHandler(handler http.Handler, s runtime.NegotiatedSerializer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		const prefix = "/apis/resourcemanager.datumapis.com/v1alpha/organizations/"
+		const prefix = "/apis/resourcemanager.miloapis.com/v1alpha/organizations/"
 		if strings.HasPrefix(req.URL.Path, prefix) {
 			// Extract the organization ID and the remaining path
 			rest := strings.TrimPrefix(req.URL.Path, prefix)
 			parts := strings.SplitN(rest, "/", 2)
 
-			gv := schema.GroupVersion{Group: "resourcemanager.datumapis.com", Version: "v1alpha"}
+			gv := schema.GroupVersion{Group: "resourcemanager.miloapis.com", Version: "v1alpha"}
 			if len(parts) != 2 {
 				responsewriters.ErrorNegotiated(apierrors.NewBadRequest(
 					"invalid request",
@@ -134,7 +134,7 @@ func OrganizationProjectListConstraintDecorator(handler http.Handler) http.Handl
 			return
 		}
 
-		if info.APIGroup == "resourcemanager.datumapis.com" && info.Resource == "projects" && info.Verb == "list" {
+		if info.APIGroup == "resourcemanager.miloapis.com" && info.Resource == "projects" && info.Verb == "list" {
 			organizationID, ok := ctx.Value(orgId).(string)
 			if ok {
 				requirements, err := labels.ParseToRequirements(info.LabelSelector)

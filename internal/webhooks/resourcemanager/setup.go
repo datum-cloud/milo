@@ -18,9 +18,9 @@ import (
 
 var setuplog = logf.Log.WithName("resourcemanager-webhook-setup")
 
-// SetupWebhooksWithManager sets up all resourcemanager.datumapis.com webhooks
+// SetupWebhooksWithManager sets up all resourcemanager.miloapis.com webhooks
 func SetupWebhooksWithManager(kubeConfig *rest.Config, mux *mux.PathRecorderMux, scheme *runtime.Scheme, systemNamespace string, organizationOwnerRoleName string, projectOwnerRoleName string) error {
-	setuplog.Info("Setting up resourcemanager.datumapis.com webhooks")
+	setuplog.Info("Setting up resourcemanager.miloapis.com webhooks")
 
 	// Ensure IAM types are known to the scheme used by webhooks
 	utilruntime.Must(iamv1alpha1.AddToScheme(scheme))
@@ -48,7 +48,7 @@ func SetupWebhooksWithManager(kubeConfig *rest.Config, mux *mux.PathRecorderMux,
 		return fmt.Errorf("failed to setup organization validator: %w", err)
 	}
 
-	setuplog.Info("All resourcemanager.datumapis.com webhooks setup complete")
+	setuplog.Info("All resourcemanager.miloapis.com webhooks setup complete")
 	return nil
 }
 

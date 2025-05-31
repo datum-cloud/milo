@@ -1,11 +1,11 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: resourcemanager.datumapis.com
+  name: resourcemanager.miloapis.com
 webhooks:
-  - name: validation.project.resourcemanager.datumapis.com
+  - name: validation.project.resourcemanager.miloapis.com
     rules:
-      - apiGroups: ["resourcemanager.datumapis.com"]
+      - apiGroups: ["resourcemanager.miloapis.com"]
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["projects"]
@@ -20,9 +20,9 @@ webhooks:
     sideEffects: None
     timeoutSeconds: 5
     failurePolicy: Fail # Or Ignore, depending on your needs
-  - name: validation.organization.resourcemanager.datumapis.com
+  - name: validation.organization.resourcemanager.miloapis.com
     rules:
-      - apiGroups: ["resourcemanager.datumapis.com"]
+      - apiGroups: ["resourcemanager.miloapis.com"]
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["organizations"]

@@ -4,19 +4,19 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: userinvitations.iam.datumapis.com
+  name: protectedresources.iam.miloapis.com
 spec:
-  group: iam.datumapis.com
+  group: iam.miloapis.com
   names:
-    kind: UserInvitation
-    listKind: UserInvitationList
-    plural: userinvitations
-    singular: userinvitation
-  scope: Namespaced
+    kind: ProtectedResource
+    listKind: ProtectedResourceList
+    plural: protectedresources
+    singular: protectedresource
+  scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.email
-      name: Email
+    - jsonPath: .spec.kind
+      name: Kind
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -27,7 +27,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: UserInvitation is the Schema for the userinvitations API
+        description: ProtectedResource is the Schema for the protectedresources API
         properties:
           apiVersion:
             description: |-
@@ -47,40 +47,69 @@ spec:
           metadata:
             type: object
           spec:
-            description: UserInvitationSpec defines the desired state of UserInvitation
+            description: ProtectedResourceSpec defines the desired state of ProtectedResource
             properties:
-              email:
-                description: The email of the user being invited.
+              kind:
+                description: |-
+                  The kind of the resource.
+                  This will be in the format `Workload`.
                 type: string
-              familyName:
-                description: The last name of the user being invited.
-                type: string
-              givenName:
-                description: The first name of the user being invited.
-                type: string
-              roles:
-                description: The roles that will be assigned to the user when they
-                  accept the invitation.
+              parentResources:
+                description: |-
+                  A list of resources that are registered with the platform that may be a
+                  parent to the resource. Permissions may be bound to a parent resource so
+                  they can be inherited down the resource hierarchy.
                 items:
-                  description: RoleReference contains information that points to the
-                    Role being used
+                  description: ParentResourceRef defines the reference to a parent
+                    resource
                   properties:
-                    name:
-                      description: Name is the name of resource being referenced
+                    apiGroup:
+                      description: |-
+                        APIGroup is the group for the resource being referenced.
+                        If APIGroup is not specified, the specified Kind must be in the core API group.
+                        For any other third-party types, APIGroup is required.
                       type: string
-                    namespace:
-                      description: Namespace of the referenced Role. If empty, it
-                        is assumed to be in the PolicyBinding's namespace.
+                    kind:
+                      description: Kind is the type of resource being referenced.
                       type: string
                   required:
-                  - name
+                  - kind
                   type: object
                 type: array
+              permissions:
+                description: A list of permissions that are associated with the resource.
+                items:
+                  type: string
+                type: array
+              plural:
+                description: |-
+                  The plural form for the resource type, e.g. 'workloads'. Must follow
+                  camelCase format.
+                type: string
+              serviceRef:
+                description: ServiceRef references the service definition this protected
+                  resource belongs to.
+                properties:
+                  name:
+                    description: Name is the resource name of the service definition.
+                    type: string
+                required:
+                - name
+                type: object
+              singular:
+                description: |-
+                  The singular form for the resource type, e.g. 'workload'. Must follow
+                  camelCase format.
+                type: string
             required:
-            - email
+            - kind
+            - permissions
+            - plural
+            - serviceRef
+            - singular
             type: object
           status:
-            description: UserInvitationStatus defines the observed state of UserInvitation
+            description: ProtectedResourceStatus defines the observed state of ProtectedResource
             properties:
               conditions:
                 default:
@@ -90,7 +119,7 @@ spec:
                   status: Unknown
                   type: Ready
                 description: Conditions provide conditions that represent the current
-                  status of the UserInvitation.
+                  status of the ProtectedResource.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -146,6 +175,12 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the most recent generation observed for this ProtectedResource. It corresponds to the
+                  ProtectedResource's generation, which is updated on mutation by the API Server.
+                format: int64
+                type: integer
             type: object
         type: object
     served: true

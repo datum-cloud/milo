@@ -11,7 +11,7 @@ involved in OpenFGA.
 The IAM system will dynamically manage the OpenFGA Authorization Model based on
 the resources that are registered by services. A new Type Definition will be
 created for every resource defined in the system using the fully qualified
-resource name format (e.g. **iam.datumapis.com/Role**).
+resource name format (e.g. **iam.miloapis.com/Role**).
 
 > **Note**: The OpenFGA schema language does **not** support using the `/` or
 > `.` character in type definitions or relationships. OpenFGA **does** support
@@ -22,9 +22,9 @@ by merging the dynamically managed Authorization Model created by the IAM system
 with the Authorization Model created from the OpenFGA schema. This is done by
 taking the existing Authorization Model and overwriting any type definitions
 that are using the fully qualified resource name format (e.g.
-iam.datumapis.com/Role).
+iam.miloapis.com/Role).
 
-The `iam.datumapis.com/Role` type definition will have a relation for every
+The `iam.miloapis.com/Role` type definition will have a relation for every
 permission that may be potentially added to the role by a user. Resources
 dynamically created by service registrations will have permission relations
 created for any permissions the resource supports along with any permissions
@@ -37,15 +37,15 @@ that may be granted directly through a role binding or inherited through a
 parent relationship.
 
 ```yaml
-type resourcemanager.datumapis.com/Project # module: resourcemanager.datumapis.com, file: dynamically_managed_iam_datumapis_com.fga
+type resourcemanager.miloapis.com/Project # module: resourcemanager.miloapis.com, file: dynamically_managed_iam_datumapis_com.fga
   relations
-    define granted: [iam.datumapis.com/RoleBinding]
-    define parent: [resourcemanager.datumapis.com/Organization]
-    define resourcemanager.datumapis.com/projects.create: resourcemanager.datumapis.com/projects.create from granted or resourcemanager.datumapis.com/projects.create from parent
-    define resourcemanager.datumapis.com/projects.delete: resourcemanager.datumapis.com/projects.delete from granted or resourcemanager.datumapis.com/projects.delete from parent
-    define resourcemanager.datumapis.com/projects.get: resourcemanager.datumapis.com/projects.get from granted or resourcemanager.datumapis.com/projects.get from parent
-    define resourcemanager.datumapis.com/projects.list: resourcemanager.datumapis.com/projects.list from granted or resourcemanager.datumapis.com/projects.list from parent
-    define resourcemanager.datumapis.com/projects.update: resourcemanager.datumapis.com/projects.update from granted or resourcemanager.datumapis.com/projects.update from parent
+    define granted: [iam.miloapis.com/RoleBinding]
+    define parent: [resourcemanager.miloapis.com/Organization]
+    define resourcemanager.miloapis.com/projects.create: resourcemanager.miloapis.com/projects.create from granted or resourcemanager.miloapis.com/projects.create from parent
+    define resourcemanager.miloapis.com/projects.delete: resourcemanager.miloapis.com/projects.delete from granted or resourcemanager.miloapis.com/projects.delete from parent
+    define resourcemanager.miloapis.com/projects.get: resourcemanager.miloapis.com/projects.get from granted or resourcemanager.miloapis.com/projects.get from parent
+    define resourcemanager.miloapis.com/projects.list: resourcemanager.miloapis.com/projects.list from granted or resourcemanager.miloapis.com/projects.list from parent
+    define resourcemanager.miloapis.com/projects.update: resourcemanager.miloapis.com/projects.update from granted or resourcemanager.miloapis.com/projects.update from parent
 ```
 
 ## Creating Custom Roles
@@ -56,9 +56,9 @@ available to all users.
 
 ```yaml
 tuples:
-- object: iam.datumapis.com/Role:services/resourcemanager.datumapis.com/roles/projectAdmin
-  relation: resourcemanager.datumapis.com/projects.list
-  user: iam.datumapis.com/User:*
+- object: iam.miloapis.com/Role:services/resourcemanager.miloapis.com/roles/projectAdmin
+  relation: resourcemanager.miloapis.com/projects.list
+  user: iam.miloapis.com/User:*
 ...
 ```
 
@@ -77,13 +77,13 @@ to provide a user with the project admin role.
 
 ```yaml
 tuples:
-- object: resourcemanager.datumapis.com/Organization:organizations/example-org
-  relation: iam.datumapis.com/RoleBinding
-  user: iam.datumapis.com/RoleBinding:{{ role_binding_hash }}
-- object: iam.datumapis.com/RoleBinding:{{ role_binding_hash }}
-  relation: iam.datumapis.com/Role
-  user: iam.datumapis.com/Role:services/resourcemanager.datumapis.com/roles/projectAdmin
-- object: iam.datumapis.com/RoleBinding:{{ role_binding_hash }}
-  relation: iam.datumapis.com/User
-  user: iam.datumapis.com/User:project-admin@datum.net
+- object: resourcemanager.miloapis.com/Organization:organizations/example-org
+  relation: iam.miloapis.com/RoleBinding
+  user: iam.miloapis.com/RoleBinding:{{ role_binding_hash }}
+- object: iam.miloapis.com/RoleBinding:{{ role_binding_hash }}
+  relation: iam.miloapis.com/Role
+  user: iam.miloapis.com/Role:services/resourcemanager.miloapis.com/roles/projectAdmin
+- object: iam.miloapis.com/RoleBinding:{{ role_binding_hash }}
+  relation: iam.miloapis.com/User
+  user: iam.miloapis.com/User:project-admin@datum.net
 ```

@@ -2,9 +2,9 @@
 
 Packages:
 
-- [iam.datumapis.com/v1alpha1](#iamdatumapiscomv1alpha1)
+- [iam.miloapis.com/v1alpha1](#iamdatumapiscomv1alpha1)
 
-# iam.datumapis.com/v1alpha1
+# iam.miloapis.com/v1alpha1
 
 Resource Types:
 
@@ -35,7 +35,7 @@ Role is the Schema for the roles API
     <tbody><tr>
       <td><b>apiVersion</b></td>
       <td>string</td>
-      <td>iam.datumapis.com/v1alpha1</td>
+      <td>iam.miloapis.com/v1alpha1</td>
       <td>true</td>
       </tr>
       <tr>

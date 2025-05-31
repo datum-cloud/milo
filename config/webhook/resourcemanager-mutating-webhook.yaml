@@ -1,7 +1,7 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  name: resourcemanager.datumapis.com-mutating
+  name: resourcemanager.miloapis.com-mutating
 webhooks:
 - name: mproject.datum.net
   clientConfig:
@@ -11,7 +11,7 @@ webhooks:
       path: /webhooks/resourcemanager/mutate-v1alpha1-project
   rules:
   - operations: ["CREATE"]
-    apiGroups: ["resourcemanager.datumapis.com"]
+    apiGroups: ["resourcemanager.miloapis.com"]
     apiVersions: ["v1alpha1"]
     resources: ["projects"]
   sideEffects: None

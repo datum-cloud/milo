@@ -1,18 +1,18 @@
-apiVersion: iam.datumapis.com/v1alpha1
+apiVersion: iam.miloapis.com/v1alpha1
 kind: PolicyBinding
 metadata:
   name: sample-org-admin-binding
   namespace: default
 spec:
   roleRef:
-    name: resourcemanager.datumapis.com-organizationowner
+    name: resourcemanager.miloapis.com-organizationowner
     namespace: datum-system
   subjects:
     - kind: User
       name: "kubernetes-admin"
       uid: "34f31881-14ce-4234-8a6c-aeee52c3191e"
   targetRef:
-    apiGroup: "resourcemanager.datumapis.com"
+    apiGroup: "resourcemanager.miloapis.com"
     kind: Organization
     name: "datum"
     uid: "c399429c-47c0-4181-9068-80670ac5a6c0"

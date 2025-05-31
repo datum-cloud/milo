@@ -21,7 +21,7 @@ import (
 // log is for logging in this package.
 var organizationlog = logf.Log.WithName("organization-resource")
 
-// +kubebuilder:webhook:path=/webhooks/resourcemanager/validate-v1alpha1-organization,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.datumapis.com,resources=organizations,verbs=create;update,versions=v1alpha1,name=vorganization.datum.net,admissionReviewVersions={v1,v1beta1}
+// +kubebuilder:webhook:path=/webhooks/resourcemanager/validate-v1alpha1-organization,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=organizations,verbs=create;update,versions=v1alpha1,name=vorganization.datum.net,admissionReviewVersions={v1,v1beta1}
 
 // OrganizationValidator validates Organizations
 type OrganizationValidator struct {
@@ -53,7 +53,7 @@ func (v *OrganizationValidator) Handle(ctx context.Context, req admission.Reques
 	return admission.Allowed("")
 }
 
-// lookupUser retrieves the User resource from the iam.datumapis.com API
+// lookupUser retrieves the User resource from the iam.miloapis.com API
 func (v *OrganizationValidator) lookupUser(ctx context.Context, username string) (*unstructured.Unstructured, admission.Response) {
 	// TODO: Determine if we can actually use the UID from the User object in
 	//       the UserInfo of the request. Likely need to configure the OIDC
@@ -67,7 +67,7 @@ func (v *OrganizationValidator) lookupUser(ctx context.Context, username string)
 	// Get the user directly by name since resource name matches username
 	foundUser, err := v.Client.Resource(userGVR).Get(ctx, username, metav1.GetOptions{})
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to get user '%s' from iam.datumapis.com API: %s", username, err.Error())
+		errMsg := fmt.Sprintf("failed to get user '%s' from iam.miloapis.com API: %s", username, err.Error())
 		organizationlog.Error(err, errMsg)
 		return nil, admission.Denied(errMsg)
 	}
@@ -79,7 +79,7 @@ func (v *OrganizationValidator) lookupUser(ctx context.Context, username string)
 		return nil, admission.Denied(errMsg)
 	}
 
-	organizationlog.Info("Found user in iam.datumapis.com API", "username", username, "userUID", userUID)
+	organizationlog.Info("Found user in iam.miloapis.com API", "username", username, "userUID", userUID)
 	return foundUser, admission.Allowed("")
 }
 
