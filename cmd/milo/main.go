@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/component-base/cli"
 
-	apiserver "go.datum.net/milo/cmd/milo/apiserver"
-	controller "go.datum.net/milo/cmd/milo/controller-manager"
+	apiserver "go.miloapis.com/milo/cmd/milo/apiserver"
+	controller "go.miloapis.com/milo/cmd/milo/controller-manager"
 )
 
 func main() {
