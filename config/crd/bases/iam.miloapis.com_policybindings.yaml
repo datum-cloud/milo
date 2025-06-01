@@ -86,6 +86,7 @@ spec:
                         in Kind constants.
                       enum:
                       - User
+                      - Group
                       type: string
                     name:
                       description: Name of the object being referenced.
