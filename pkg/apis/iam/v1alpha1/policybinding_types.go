@@ -23,7 +23,7 @@ type RoleReference struct {
 type Subject struct {
 	// Kind of object being referenced. Values defined in Kind constants.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=User
+	// +kubebuilder:validation:Enum=User;Group
 	Kind string `json:"kind"`
 	// Name of the object being referenced.
 	// +kubebuilder:validation:Required

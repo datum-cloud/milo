@@ -1,0 +1,11 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: GroupMembership
+metadata:
+  name: admin-groupmembership
+  namespace: default
+spec:
+  userRef:
+    name: group-user
+  groupRef:
+    name: admin-group
+    namespace: default
