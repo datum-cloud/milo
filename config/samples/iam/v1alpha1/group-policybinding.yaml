@@ -1,0 +1,19 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: sample-org-admin-binding
+  namespace: default
+spec:
+  roleRef:
+    name: resourcemanager.miloapis.com-organizationowner
+    namespace: datum-system
+  subjects:
+    - kind: Group
+      name: "admin-group"
+      namespace: default
+      uid: "2a72b56d-9493-46a6-9158-dbb3b4f81afa"
+  targetRef:
+    apiGroup: "resourcemanager.miloapis.com"
+    kind: Organization
+    name: "datum"
+    uid: "e78b28b1-6062-426a-ba2b-078906d3d42e"
