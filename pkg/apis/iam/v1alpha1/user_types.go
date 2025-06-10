@@ -27,21 +27,21 @@ type User struct {
 // UserSpec defines the desired state of User
 type UserSpec struct {
 	// The email of the user.
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	Email string `json:"email"`
 	// The first name of the user.
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:validation:Optional
 	GivenName string `json:"givenName,omitempty"`
 	// The last name of the user.
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:validation:Optional
 	FamilyName string `json:"familyName,omitempty"`
 }
 
 // UserStatus defines the observed state of User
 type UserStatus struct {
 	// Conditions provide conditions that represent the current status of the User.
-	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
+	//+kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

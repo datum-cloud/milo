@@ -8,3 +8,4 @@ resources:
 - iam.miloapis.com_userinvitations.yaml
 - resourcemanager.miloapis.com_organizations.yaml
 - resourcemanager.miloapis.com_projects.yaml
+- resourcemanager.miloapis.com_projectcontrolplanes.yaml

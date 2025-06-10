@@ -8,45 +8,45 @@ import (
 // +k8s:openapi-gen=true
 type ProtectedResourceSpec struct {
 	// ServiceRef references the service definition this protected resource belongs to.
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	ServiceRef ServiceReference `json:"serviceRef"`
 
 	// The kind of the resource.
 	// This will be in the format `Workload`.
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	Kind string `json:"kind"`
 
 	// The singular form for the resource type, e.g. 'workload'. Must follow
 	// camelCase format.
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	Singular string `json:"singular"`
 
 	// The plural form for the resource type, e.g. 'workloads'. Must follow
 	// camelCase format.
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	Plural string `json:"plural"`
 
 	// A list of resources that are registered with the platform that may be a
 	// parent to the resource. Permissions may be bound to a parent resource so
 	// they can be inherited down the resource hierarchy.
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:validation:Optional
 	ParentResources []ParentResourceRef `json:"parentResources,omitempty"`
 
 	// A list of permissions that are associated with the resource.
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	Permissions []string `json:"permissions"`
 }
 
 // ProtectedResourceStatus defines the observed state of ProtectedResource
 type ProtectedResourceStatus struct {
 	// Conditions provide conditions that represent the current status of the ProtectedResource.
-	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
+	//+kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// ObservedGeneration is the most recent generation observed for this ProtectedResource. It corresponds to the
 	// ProtectedResource's generation, which is updated on mutation by the API Server.
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:validation:Optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
@@ -83,10 +83,10 @@ type ParentResourceRef struct {
 	// APIGroup is the group for the resource being referenced.
 	// If APIGroup is not specified, the specified Kind must be in the core API group.
 	// For any other third-party types, APIGroup is required.
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:validation:Optional
 	APIGroup string `json:"apiGroup,omitempty"`
 	// Kind is the type of resource being referenced.
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	Kind string `json:"kind"`
 }
 
@@ -94,6 +94,6 @@ type ParentResourceRef struct {
 // +k8s:openapi-gen=true
 type ServiceReference struct {
 	// Name is the resource name of the service definition.
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	Name string `json:"name"`
 }

@@ -9,8 +9,8 @@ import (
 // +k8s:protobuf=true
 type OrganizationSpec struct {
 	// The type of organization.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=Personal;Business;Government;Research;Education;Nonprofit;Other
+	//+kubebuilder:validation:Required
+	//+kubebuilder:validation:Enum=Personal;Business;Government;Research;Education;Nonprofit;Other
 	Type string `json:"type"`
 }
 
@@ -23,7 +23,7 @@ type OrganizationStatus struct {
 
 	// Conditions represents the observations of an organization's current state.
 	// Known condition types are: "Ready"
-	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
+	//+kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +optional
 	// +patchMergeKey=type
 	// +patchStrategy=merge

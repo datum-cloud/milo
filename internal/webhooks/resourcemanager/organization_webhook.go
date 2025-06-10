@@ -21,7 +21,7 @@ import (
 // log is for logging in this package.
 var organizationlog = logf.Log.WithName("organization-resource")
 
-// +kubebuilder:webhook:path=/webhooks/resourcemanager/validate-v1alpha1-organization,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=organizations,verbs=create;update,versions=v1alpha1,name=vorganization.datum.net,admissionReviewVersions={v1,v1beta1}
+//+kubebuilder:webhook:path=/webhooks/resourcemanager/validate-v1alpha1-organization,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=organizations,verbs=create;update,versions=v1alpha1,name=vorganization.datum.net,admissionReviewVersions={v1,v1beta1}
 
 // OrganizationValidator validates Organizations
 type OrganizationValidator struct {

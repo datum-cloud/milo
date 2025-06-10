@@ -21,7 +21,7 @@ type Role struct {
 
 	Spec RoleSpec `json:"spec,omitempty"`
 
-	// +kubebuilder:default={conditions: {{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}}
+	//+kubebuilder:default={conditions: {{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}}
 	Status RoleStatus `json:"status,omitempty"`
 }
 
@@ -30,28 +30,28 @@ type RoleSpec struct {
 	// The names of the permissions this role grants when bound in an IAM policy.
 	// All permissions must be in the format: `{service}.{resource}.{action}`
 	// (e.g. compute.workloads.create).
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	IncludedPermissions []string `json:"includedPermissions"`
 
 	// Defines the launch stage of the IAM Role. Must be one of: Early Access,
 	// Alpha, Beta, Stable, Deprecated.
-	// +kubebuilder:validation:Required
+	//+kubebuilder:validation:Required
 	LaunchStage string `json:"launchStage"`
 
 	// The list of roles from which this role inherits permissions.
 	// Each entry must be a valid role resource name.
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:validation:Optional
 	InheritedRoles []ScopedRoleReference `json:"inheritedRoles,omitempty"`
 }
 
 // RoleStatus defines the observed state of Role
 type RoleStatus struct {
 	// The resource name of the parent the role was created under.
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:validation:Optional
 	Parent string `json:"parent,omitempty"`
 
 	// Conditions provide conditions that represent the current status of the Role.
-	// +kubebuilder:validation:Optional
+	//+kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// ObservedGeneration is the most recent generation observed by the controller.

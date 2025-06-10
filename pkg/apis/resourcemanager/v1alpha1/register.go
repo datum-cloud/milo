@@ -13,6 +13,13 @@ var (
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 	// AddToScheme is a global function that registers this API group & version to a scheme
 	AddToScheme = SchemeBuilder.AddToScheme
+
+	// InfrastructureSchemeBuilder initializes a scheme builder for the
+	// infrastructure control plane.
+	InfrastructureSchemeBuilder = runtime.NewSchemeBuilder(addInfrastructureControlPlaneTypes)
+	// InfrastructureAddToScheme is a global function that registers this API
+	// group & version to a scheme
+	InfrastructureAddToScheme = InfrastructureSchemeBuilder.AddToScheme
 )
 
 // Kind takes an unqualified kind and returns back a Group qualified GroupKind
@@ -39,4 +46,14 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 
 func init() {
 	SchemeBuilder.Register(SchemeBuilder...)
+}
+
+// addInfrastructureControlPlaneTypes adds the list of known types for the
+// infrastructure control plane to the scheme.
+func addInfrastructureControlPlaneTypes(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(GroupVersion,
+		&ProjectControlPlane{},
+		&ProjectControlPlaneList{},
+	)
+	return nil
 }
