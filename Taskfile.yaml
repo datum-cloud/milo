@@ -24,10 +24,10 @@ tasks:
           VERSION: "{{.CONTROLLER_TOOLS_VERSION}}"
     cmds:
       - echo "Generating deepcopy and object files..."
-      - "{{.TOOL_DIR}}/controller-gen object paths=\"./pkg/apis/...\""
+      - "\"{{.TOOL_DIR}}/controller-gen\" object paths=\"./pkg/apis/...\""
       - echo "Generating CRD manifests..."
       # Output CRDs to config/crd/bases. You can change this path.
-      - "{{.TOOL_DIR}}/controller-gen crd paths=\"./pkg/apis/...\" output:dir=./config/crd/bases"
+      - "\"{{.TOOL_DIR}}/controller-gen\" crd paths=\"./pkg/apis/...\" output:dir=./config/crd/bases"
     silent: true
 
   api-docs:
