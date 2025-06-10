@@ -23,7 +23,7 @@ spec:
       containers:
       - name: datum-controller-manager
         image: ghcr.io/datum-cloud/milo:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         args:
           - controller-manager
           - --leader-elect=true
