@@ -33,7 +33,7 @@ spec:
           - --leader-elect-resource-namespace=$(LEADER_ELECT_RESOURCE_NAMESPACE)
           - --secure-port=6443
           - --kubeconfig=/etc/kubernetes/config/kubeconfig
-          - --v=$LOG_LEVEL
+          - --v=$(LOG_LEVEL)
         env:
           - name: LEADER_ELECT_RESOURCE_NAMESPACE
             value: milo-system
