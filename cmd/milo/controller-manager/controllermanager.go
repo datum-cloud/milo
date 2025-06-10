@@ -34,6 +34,7 @@ import (
 	metadatainformer "k8s.io/client-go/metadata/metadatainformer"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	certutil "k8s.io/client-go/util/cert"
@@ -65,10 +66,15 @@ import (
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 
 	// Datum webhook and API type imports
+	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
+	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	"go.miloapis.com/milo/internal/webhooks/resourcemanager"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 var (
@@ -92,6 +98,7 @@ func init() {
 
 	// Add Datum API types to the global scheme
 	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(resourcemanagerv1alpha1.InfrastructureAddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
 }
 
@@ -117,7 +124,7 @@ func NewCommand() *cobra.Command {
 	_, _ = featuregate.DefaultComponentGlobalsRegistry.ComponentGlobalsOrRegister(
 		featuregate.DefaultKubeComponent, utilversion.DefaultBuildEffectiveVersion(), utilfeature.DefaultMutableFeatureGate)
 
-	s, err := options.NewKubeControllerManagerOptions()
+	s, err := NewOptions()
 	if err != nil {
 		klog.Background().Error(err, "Unable to initialize command options")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
@@ -155,7 +162,7 @@ func NewCommand() *cobra.Command {
 			// add feature enablement metrics
 			fg := s.ComponentGlobalsRegistry.FeatureGateFor(featuregate.DefaultKubeComponent)
 			fg.(featuregate.MutableFeatureGate).AddMetrics()
-			return Run(context.Background(), c.Complete())
+			return Run(context.Background(), c.Complete(), s)
 		},
 		Args: func(cmd *cobra.Command, args []string) error {
 			for _, arg := range args {
@@ -191,6 +198,8 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&OrganizationOwnerRoleName, "organization-owner-role-name", "resourcemanager.miloapis.com-organizationowner", "The name of the role that will be used to grant organization owner permissions.")
 	fs.StringVar(&ProjectOwnerRoleName, "project-owner-role-name", "resourcemanager.miloapis.com-projectowner", "The name of the role that will be used to grant project owner permissions.")
 
+	s.InfraCluster.AddFlags(namedFlagSets.FlagSet("Infrastructure Cluster"))
+
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
 	for _, f := range namedFlagSets.FlagSets {
@@ -213,8 +222,32 @@ func ResyncPeriod(c *config.CompletedConfig) func() time.Duration {
 	}
 }
 
+// Options defines the configuration options available for modifying the
+// behavior of the controller manager.
+type Options struct {
+	*options.KubeControllerManagerOptions
+
+	InfraCluster *infracluster.Options
+}
+
+// NewOptions creates a new Options object with default values.
+func NewOptions() (*Options, error) {
+	baseOpts, err := options.NewKubeControllerManagerOptions()
+	if err != nil {
+		return nil, err
+	}
+
+	opts := &Options{
+		KubeControllerManagerOptions: baseOpts,
+		InfraCluster: &infracluster.Options{
+			KubeconfigFile: baseOpts.Generic.ClientConnection.Kubeconfig,
+		},
+	}
+	return opts, nil
+}
+
 // Run runs the KubeControllerManagerOptions.
-func Run(ctx context.Context, c *config.CompletedConfig) error {
+func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 	logger := klog.FromContext(ctx)
 	stopCh := ctx.Done()
 
@@ -265,6 +298,20 @@ func Run(ctx context.Context, c *config.CompletedConfig) error {
 		}
 	}
 
+	// Get a client for the infrastructure cluster and start the cluster's cache informers.
+	// This allows controllers to manage resources and watch for changes in the infrastructure
+	// cluster.
+	infraClient, err := opts.InfraCluster.GetClient()
+	if err != nil {
+		logger.Error(err, "Error building infrastructure cluster client")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	}
+	infraCluster, err := cluster.New(infraClient)
+	if err != nil {
+		logger.Error(err, "Error building infrastructure cluster")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	}
+
 	clientBuilder, rootClientBuilder := createClientBuilders(logger, c)
 
 	run := func(ctx context.Context, controllerDescriptors map[string]*ControllerDescriptor) {
@@ -274,10 +321,64 @@ func Run(ctx context.Context, c *config.CompletedConfig) error {
 			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 
+		// We intentionally use a new configuration here because the one built into
+		// the legacy controller manager component leverages protobuf encoding. The
+		// controller runtime uses JSON encoding when managing CRDs.
+		ctrlConfig, err := clientcmd.BuildConfigFromFlags(opts.Master, opts.Generic.ClientConnection.Kubeconfig)
+		if err != nil {
+			logger.Error(err, "Error building controller manager config")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		}
+
+		// TODO: This is a hack to get the controller manager to start. We should
+		//       find a better way to use the controller manager framework to manage
+		//       controllers.
+		ctrl, err := controllerruntime.NewManager(
+			ctrlConfig,
+			controllerruntime.Options{
+				// Leader election is handled further up the stack.
+				LeaderElection: false,
+				Scheme:         Scheme,
+				// The existing controller manage endpoint already exposes a health
+				// probe endpoint. We can disable this one to avoid conflicts.
+				HealthProbeBindAddress: "0",
+				// The existing controller manage endpoint already exposes a metrics
+				// endpoint. We can disable this one to avoid conflicts.
+				Metrics: server.Options{
+					BindAddress: "0",
+				},
+			},
+		)
+		if err != nil {
+			logger.Error(err, "Error building controller manager")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		}
+
+		projectCtrl := resourcemanagercontroller.ProjectController{
+			ControlPlaneClient: ctrl.GetClient(),
+			InfraClient:        infraCluster.GetClient(),
+		}
+		if err := projectCtrl.SetupWithManager(ctrl, infraCluster); err != nil {
+			logger.Error(err, "Error setting up project controller")
+			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		}
+
 		if err := StartControllers(ctx, controllerContext, controllerDescriptors, unsecuredMux, healthzHandler); err != nil {
 			logger.Error(err, "Error starting controllers")
 			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
+
+		go func() {
+			if err := infraCluster.Start(ctx); err != nil {
+				panic(err)
+			}
+		}()
+
+		go func() {
+			if err := ctrl.Start(ctx); err != nil {
+				panic(err)
+			}
+		}()
 
 		controllerContext.InformerFactory.Start(stopCh)
 		controllerContext.ObjectOrMetadataInformerFactory.Start(stopCh)
