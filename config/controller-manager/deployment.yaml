@@ -43,10 +43,10 @@ spec:
         resources:
           requests:
             cpu: 100m
-            memory: 100Mi
+            memory: 128Mi
           limits:
             cpu: 1
-            memory: 512MiB
+            memory: 512Mi
         ports:
         - containerPort: 6443
           name: https
