@@ -8,7 +8,7 @@ import (
 
 var (
 	// SchemeGroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "resourcemanager.miloapis.com", Version: "v1alpha1"}
+	GroupVersion = schema.GroupVersion{Group: "infrastructure.miloapis.com", Version: "v1alpha1"}
 	// SchemeBuilder initializes a scheme builder
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 	// AddToScheme is a global function that registers this API group & version to a scheme
@@ -28,10 +28,8 @@ func Resource(resource string) schema.GroupResource {
 // Adds the list of known types to Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(GroupVersion,
-		&Project{},
-		&ProjectList{},
-		&Organization{},
-		&OrganizationList{},
+		&ProjectControlPlane{},
+		&ProjectControlPlaneList{},
 	)
 	metav1.AddToGroupVersion(scheme, GroupVersion)
 	return nil

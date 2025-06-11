@@ -25,9 +25,15 @@ tasks:
     cmds:
       - echo "Generating deepcopy and object files..."
       - "\"{{.TOOL_DIR}}/controller-gen\" object paths=\"./pkg/apis/...\""
-      - echo "Generating CRD manifests..."
-      # Output CRDs to config/crd/bases. You can change this path.
-      - "\"{{.TOOL_DIR}}/controller-gen\" crd paths=\"./pkg/apis/...\" output:dir=./config/crd/bases"
+      - echo "Generating CRD manifests for each package..."
+      - |
+        set -e
+        for package_dir in pkg/apis/*/; do
+          package_name=$(basename "$package_dir")
+          echo "Generating CRDs for package: $package_name"
+          mkdir -p "config/crd/bases/$package_name"
+          "{{.TOOL_DIR}}/controller-gen" crd paths="./$package_dir..." output:dir="./config/crd/bases/$package_name"
+        done
     silent: true
 
   api-docs:

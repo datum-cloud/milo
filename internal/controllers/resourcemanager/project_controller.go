@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"go.miloapis.com/milo/internal/crossclusterutil"
+	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	resourcemanagerv1alpha "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 )
 
@@ -93,14 +94,14 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 
 	// Create a ProjectControlPlane in the infra control plane for this project if
 	// one does not exist. The name will be identical to the Project's name.
-	var projectControlPlane resourcemanagerv1alpha.ProjectControlPlane
+	var projectControlPlane infrastructurev1alpha1.ProjectControlPlane
 	if err := r.InfraClient.Get(ctx, req.NamespacedName, &projectControlPlane); client.IgnoreNotFound(err) != nil {
 		return ctrl.Result{}, err
 	}
 
 	if projectControlPlane.CreationTimestamp.IsZero() {
 		logger.Info("creating project control plane")
-		projectControlPlane = resourcemanagerv1alpha.ProjectControlPlane{
+		projectControlPlane = infrastructurev1alpha1.ProjectControlPlane{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: project.Namespace,
 				Name:      project.Name,
@@ -111,7 +112,7 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 					crossclusterutil.OwnerNameLabel: project.Spec.OwnerRef.Name,
 				},
 			},
-			Spec: resourcemanagerv1alpha.ProjectControlPlaneSpec{},
+			Spec: infrastructurev1alpha1.ProjectControlPlaneSpec{},
 		}
 
 		if err := r.InfraClient.Create(ctx, &projectControlPlane); err != nil {
@@ -119,7 +120,7 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 		}
 	}
 
-	projectControlPlaneReadyCondition := apimeta.FindStatusCondition(projectControlPlane.Status.Conditions, resourcemanagerv1alpha.ProjectControlPlaneReady)
+	projectControlPlaneReadyCondition := apimeta.FindStatusCondition(projectControlPlane.Status.Conditions, infrastructurev1alpha1.ProjectControlPlaneReady)
 
 	if projectControlPlaneReadyCondition == nil || projectControlPlaneReadyCondition.Status == metav1.ConditionFalse {
 		logger.Info("project control plane is not ready")
@@ -160,7 +161,7 @@ func (r *ProjectController) Finalize(
 ) (finalizer.Result, error) {
 	project := obj.(*resourcemanagerv1alpha.Project)
 
-	var projectControlPlane resourcemanagerv1alpha.ProjectControlPlane
+	var projectControlPlane infrastructurev1alpha1.ProjectControlPlane
 	projectControlPlaneObjectKey := client.ObjectKeyFromObject(project)
 	if err := r.InfraClient.Get(ctx, projectControlPlaneObjectKey, &projectControlPlane); client.IgnoreNotFound(err) != nil {
 		return finalizer.Result{}, fmt.Errorf("failed fetching project control plane: %w", err)
@@ -189,8 +190,8 @@ func (r *ProjectController) SetupWithManager(mgr ctrl.Manager, infraCluster clus
 		For(&resourcemanagerv1alpha.Project{}).
 		WatchesRawSource(source.TypedKind(
 			infraCluster.GetCache(),
-			&resourcemanagerv1alpha.ProjectControlPlane{},
-			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, projectControlPlane *resourcemanagerv1alpha.ProjectControlPlane) []ctrl.Request {
+			&infrastructurev1alpha1.ProjectControlPlane{},
+			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, projectControlPlane *infrastructurev1alpha1.ProjectControlPlane) []ctrl.Request {
 				projectName, ok := projectControlPlane.Labels[crossclusterutil.ProjectNameLabel]
 				if !ok {
 					return nil
