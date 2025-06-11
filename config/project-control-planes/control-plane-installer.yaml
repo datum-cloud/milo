@@ -79,7 +79,7 @@ spec:
       all:
       - resources:
           kinds:
-          - resourcemanager.miloapis.com/v1alpha1/ProjectControlPlane
+          - infrastructure.miloapis.com/v1alpha1/ProjectControlPlane
     generate:
       generateExisting: true
       orphanDownstreamOnPolicyDelete: true
@@ -95,7 +95,7 @@ spec:
           ownerReferences:
           # Make sure this route is automatically deleted when the project
           # control plane is deleted.
-          - apiVersion: resourcemanager.miloapis.com/v1alpha
+          - apiVersion: infrastructure.miloapis.com/v1alpha1
             kind: ProjectControlPlane
             name: "{{ request.object.metadata.name }}"
             uid: "{{ request.object.metadata.uid }}"

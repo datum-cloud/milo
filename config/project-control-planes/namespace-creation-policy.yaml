@@ -24,7 +24,7 @@ spec:
           labels:
             resourcemanager.miloapis.com/project-name: "{{ request.object.metadata.name }}"
           ownerReferences:
-          - apiVersion: resourcemanager.miloapis.com/v1alpha1
+          - apiVersion: infrastructure.miloapis.com/v1alpha1
             kind: ProjectControlPlane
             name: "{{ request.object.metadata.name }}"
             uid: "{{ request.object.metadata.uid }}"

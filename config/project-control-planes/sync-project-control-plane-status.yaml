@@ -34,7 +34,7 @@ spec:
             jmesPath: metadata.labels."resourcemanager.miloapis.com/project-name" || ''
         - name: projectControlPlaneReady
           apiCall:
-            urlPath: "/apis/resourcemanager.miloapis.com/v1alpha1/ProjectControlPlanes/{{ projectControlPlaneName }}"
+            urlPath: "/apis/infrastructure.miloapis.com/v1alpha1/ProjectControlPlanes/{{ projectControlPlaneName }}"
             jmesPath: status.conditions[?type=='ControlPlaneReady'] | [0].status || ''
         # Collect the status of the milo-apiserver installation.
         - name: miloAPIServerInstallationReady
@@ -78,7 +78,7 @@ spec:
           value: ""
       mutate:
         targets:
-          - apiVersion: resourcemanager.miloapis.com/v1alpha1
+          - apiVersion: infrastructure.miloapis.com/v1alpha1
             kind: ProjectControlPlane/status
             name: "{{ projectControlPlaneName }}"
         patchStrategicMerge:
