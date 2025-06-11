@@ -1,0 +1,117 @@
+# This policy is used to install the milo-apiserver into each project control plane.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: generate-milo-apiserver-installation
+spec:
+  useServerSideApply: true
+  rules:
+  - name: install-project-control-plane
+    skipBackgroundRequests: false
+    match:
+      all:
+      - resources:
+          kinds:
+          - v1/Namespace
+          selector:
+            matchExpressions:
+            - key: resourcemanager.miloapis.com/project-name
+              operator: Exists
+    generate:
+      generateExisting: true
+      orphanDownstreamOnPolicyDelete: true
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      name: "datum-project-control-plane"
+      namespace: "{{ request.object.metadata.name }}"
+      synchronize: true
+      data:
+        metadata:
+          labels:
+            resourcemanager.miloapis.com/project-name: "{{ lookup(request.object.metadata.labels, 'resourcemanager.miloapis.com/project-name') }}"
+        spec:
+          force: false
+          interval: 10m
+          prune: true
+          retryInterval: 2m
+          deletionPolicy: Orphan
+          sourceRef:
+            kind: GitRepository
+            name: flux-system
+            namespace: flux-system
+          targetNamespace: "{{ request.object.metadata.name }}"
+          timeout: 2m
+          wait: true
+          path: apps/datum-control-plane-system/components/project-control-plane
+          # Components are used to install additional services and resources
+          # into the project control plane. The file paths are relative to the
+          # `path` parameter above.
+          components:
+          - ../custom-resource-metrics
+          - ../../../telemetry-services/components/project-control-plane
+          - ../../../datum-workload-operator/components/project-control-plane
+          dependsOn:
+          # This kustomization must depends on the higher level kustomization so
+          # that updates are applied to the parent kustomization first.
+          - name: datum-control-plane-system
+            namespace: flux-system
+          postBuild:
+            substitute:
+              project_namespace: "{{ request.object.metadata.name }}"
+              project_name: "{{ lookup(request.object.metadata.labels, 'resourcemanager.miloapis.com/project-name') }}"
+              etcd_clients_issuer_name: "${etcd_clients_issuer_name}"
+              etcd_clients_trust_bundle_config_map_name: "${etcd_clients_trust_bundle_config_map_name}"
+              datum_control_plane_trust_bundle_config_map_name: "${datum_control_plane_trust_bundle_config_map_name}"
+              datum_control_plane_system_trust_bundle_config_map_name: "${datum_control_plane_system_trust_bundle_config_map_name}"
+              datum_control_plane_issuer_name: "${datum_control_plane_issuer_name}"
+              datum_cloud_jwt_issuer_url: "${datum_cloud_jwt_issuer_url}"
+              datum_cloud_jwt_audience: "${datum_cloud_jwt_audience}"
+              workload_operator_tag: "${workload_operator_tag}"
+
+  # Create a new HTTPProxy resource for the project control plane in the
+  # datum-system namespace because the core control plane is deployed there.
+  # This will allow users to retrieve the project resource from the core control
+  # plane without specifying the organization name the project belongs to.
+  #
+  # TODO: Remove when we migrate to the Gateway API.
+  - name: install-datum-project-route
+    match:
+      all:
+      - resources:
+          kinds:
+          - resourcemanager.miloapis.com/v1alpha1/ProjectControlPlane
+    generate:
+      generateExisting: true
+      orphanDownstreamOnPolicyDelete: true
+      synchronize: true
+      apiVersion: projectcontour.io/v1
+      kind: HTTPProxy
+      name: "direct-project-route-{{ request.object.metadata.name }}"
+      namespace: "datum-system"
+      data:
+        metadata:
+          labels:
+            resourcemanager.miloapis.com/project-apiserver: ""
+          ownerReferences:
+          # Make sure this route is automatically deleted when the project
+          # control plane is deleted.
+          - apiVersion: resourcemanager.miloapis.com/v1alpha
+            kind: ProjectControlPlane
+            name: "{{ request.object.metadata.name }}"
+            uid: "{{ request.object.metadata.uid }}"
+            blockOwnerDeletion: false
+            controller: false
+        spec:
+          ingressClassName: contour
+          routes:
+          - conditions:
+            - prefix: "/apis/resourcemanager.miloapis.com/v1alpha1/projects/{{ request.object.metadata.name }}"
+            pathRewritePolicy:
+              replacePrefix:
+              - replacement: "/apis/resourcemanager.miloapis.com/v1alpha1/organizations/{{ trim_prefix(lookup(request.object.metadata.annotations, 'resourcemanager.miloapis.com/parent-name'), '//resourcemanager.miloapis.com/organizations/') }}/control-plane/apis/resourcemanager.miloapis.com/v1alpha1/projects/{{ request.object.metadata.name }}"
+            services:
+            - name: milo-apiserver
+              port: 6443
+              protocol: tls
+            timeoutPolicy:
+              response: infinity

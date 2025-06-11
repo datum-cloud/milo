@@ -1,0 +1,31 @@
+# Create a new namespace for each project control plane that can be used to
+# deploy the project control plane components.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: generate-project-control-plane-namespace
+spec:
+  rules:
+  - name: generate-namespace
+    match:
+      all:
+      - resources:
+          kinds:
+          - ProjectControlPlane
+    generate:
+      generateExisting: true
+      orphanDownstreamOnPolicyDelete: true
+      apiVersion: v1
+      kind: Namespace
+      name: "project-{{request.object.metadata.uid}}"
+      synchronize: true
+      data:
+        metadata:
+          labels:
+            resourcemanager.miloapis.com/project-name: "{{ request.object.metadata.name }}"
+          ownerReferences:
+          - apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: ProjectControlPlane
+            name: "{{ request.object.metadata.name }}"
+            uid: "{{ request.object.metadata.uid }}"
+            blockOwnerDeletion: true

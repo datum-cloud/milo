@@ -1,0 +1,5 @@
+resources:
+  - namespace-creation-policy.yaml
+  - kubeconfig-creation-policy.yaml
+  - control-plane-installer.yaml
+  - sync-project-control-plane-status.yaml

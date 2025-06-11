@@ -1,0 +1,91 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: sync-project-control-plane-status
+spec:
+  useServerSideApply: true
+  admission: true
+  background: true
+  rules:
+    - name: sync-project-control-plane-status
+      skipBackgroundRequests: false
+      # Reconcile project control plane status on any changes to Kustomizations
+      # in project namespaces.
+      match:
+        any:
+          - resources:
+              kinds:
+                - kustomize.toolkit.fluxcd.io/v1/Kustomization/status
+              namespaces:
+                - "project-*"
+              names:
+                - milo-apiserver
+                - datum-workload-crd-installer
+                - network-services-operator-crd-installation
+                - telemetry-services-crd-installer
+              operations:
+                - UPDATE
+      context:
+        # Collect the namespace for the Kustomization so that the project control
+        # plane name can be determined.
+        - name: projectControlPlaneName
+          apiCall:
+            urlPath: "/api/v1/namespaces/{{ request.object.metadata.namespace }}"
+            jmesPath: metadata.labels."resourcemanager.miloapis.com/project-name" || ''
+        - name: projectControlPlaneReady
+          apiCall:
+            urlPath: "/apis/resourcemanager.miloapis.com/v1alpha1/ProjectControlPlanes/{{ projectControlPlaneName }}"
+            jmesPath: status.conditions[?type=='ControlPlaneReady'] | [0].status || ''
+        # Collect the status of the milo-apiserver installation.
+        - name: miloAPIServerInstallationReady
+          apiCall:
+            urlPath: "/apis/kustomize.toolkit.fluxcd.io/v1/namespaces/{{ request.object.metadata.namespace }}/kustomizations/milo-apiserver"
+            jmesPath: status.lastAppliedRevision || ''
+        # Collect the status of CRD installation Kustomizations
+        - name: datumWorkloadCRDsReady
+          apiCall:
+            urlPath: "/apis/kustomize.toolkit.fluxcd.io/v1/namespaces/{{ request.object.metadata.namespace }}/kustomizations/datum-workload-crd-installer"
+            jmesPath: status.lastAppliedRevision || ''
+        - name: networkServicesCRDsReady
+          apiCall:
+            urlPath: "/apis/kustomize.toolkit.fluxcd.io/v1/namespaces/{{ request.object.metadata.namespace }}/kustomizations/network-services-operator-crd-installation"
+            jmesPath: status.lastAppliedRevision || ''
+        - name: telemetryServicesCRDsReady
+          apiCall:
+            urlPath: "/apis/kustomize.toolkit.fluxcd.io/v1/namespaces/{{ request.object.metadata.namespace }}/kustomizations/telemetry-services-crd-installer"
+            jmesPath: status.lastAppliedRevision || ''
+      preconditions:
+        # Ensure that the project control plane name is set and that all
+        # referenced Kustomizations are ready.
+        all:
+        - key: "{{ projectControlPlaneName }}"
+          operator: NotEquals
+          value: ""
+        - key: "{{ projectControlPlaneReady }}"
+          operator: Equals
+          value: ""
+        - key: "{{ miloAPIServerInstallationReady }}"
+          operator: NotEquals
+          value: ""
+        - key: "{{ datumWorkloadCRDsReady }}"
+          operator: NotEquals
+          value: ""
+        - key: "{{ networkServicesCRDsReady }}"
+          operator: NotEquals
+          value: ""
+        - key: "{{ telemetryServicesCRDsReady }}"
+          operator: NotEquals
+          value: ""
+      mutate:
+        targets:
+          - apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: ProjectControlPlane/status
+            name: "{{ projectControlPlaneName }}"
+        patchStrategicMerge:
+          status:
+            conditions:
+              - type: ControlPlaneReady
+                status: "True"
+                reason: Ready
+                message: Control plane is ready.
+                lastTransitionTime: "{{ time_now() }}"
