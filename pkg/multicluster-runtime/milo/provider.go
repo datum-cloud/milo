@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -34,9 +34,8 @@ import (
 
 var _ multicluster.Provider = &Provider{}
 
-var resourceManagerGV = schema.GroupVersion{Group: "resourcemanager.miloapis.com", Version: "v1alpha1"}
-var projectGVK = resourceManagerGV.WithKind("Project")
-var projectControlPlaneGVK = resourceManagerGV.WithKind("ProjectControlPlane")
+var projectGVK = v1alpha1.GroupVersion.WithKind("Project")
+var projectControlPlaneGVK = v1alpha1.GroupVersion.WithKind("ProjectControlPlane")
 
 // Options are the options for the Datum cluster Provider.
 type Options struct {

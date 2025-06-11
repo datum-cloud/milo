@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/scheme"
 	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
 )
 
@@ -31,7 +31,7 @@ func (m *testMultiClusterManager) Engage(context.Context, string, cluster.Cluste
 var runtimeScheme = runtime.NewScheme()
 
 func init() {
-	utilruntime.Must((&scheme.Builder{GroupVersion: resourceManagerGV}).AddToScheme(runtimeScheme))
+	utilruntime.Must(v1alpha1.AddToScheme(runtimeScheme))
 }
 
 func TestNotReadyProject(t *testing.T) {
