@@ -21,7 +21,7 @@ import (
 // log is for logging in this package.
 var projectlog = logf.Log.WithName("project-resource")
 
-//+kubebuilder:webhook:path=/webhooks/resourcemanager/validate-v1alpha1-project,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=vproject.datum.net,admissionReviewVersions={v1,v1beta1}
+// +kubebuilder:webhook:path=/webhooks/resourcemanager/validate-v1alpha1-project,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=vproject.datum.net,admissionReviewVersions={v1,v1beta1}
 
 // ProjectValidator validates Projects and creates associated PolicyBindings for owners.
 type ProjectValidator struct {
@@ -31,7 +31,7 @@ type ProjectValidator struct {
 	ProjectOwnerRoleName string
 }
 
-//+kubebuilder:webhook:path=/webhooks/resourcemanager/mutate-v1alpha1-project,mutating=true,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=mproject.datum.net,admissionReviewVersions={v1,v1beta1}
+// +kubebuilder:webhook:path=/webhooks/resourcemanager/mutate-v1alpha1-project,mutating=true,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=mproject.datum.net,admissionReviewVersions={v1,v1beta1}
 
 // ProjectMutator mutates Projects to add owner references.
 type ProjectMutator struct {

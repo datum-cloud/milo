@@ -25,25 +25,25 @@ type UserInvitation struct {
 // UserInvitationSpec defines the desired state of UserInvitation
 type UserInvitationSpec struct {
 	// The email of the user being invited.
-	//+kubebuilder:validation:Required
+	// +kubebuilder:validation:Required
 	Email string `json:"email"`
 	// The first name of the user being invited.
-	//+kubebuilder:validation:Optional
+	// +kubebuilder:validation:Optional
 	GivenName string `json:"givenName,omitempty"`
 	// The last name of the user being invited.
-	//+kubebuilder:validation:Optional
+	// +kubebuilder:validation:Optional
 	FamilyName string `json:"familyName,omitempty"`
 
 	// The roles that will be assigned to the user when they accept the invitation.
-	//+kubebuilder:validation:Optional
+	// +kubebuilder:validation:Optional
 	Roles []RoleReference `json:"roles,omitempty"`
 }
 
 // UserInvitationStatus defines the observed state of UserInvitation
 type UserInvitationStatus struct {
 	// Conditions provide conditions that represent the current status of the UserInvitation.
-	//+kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
-	//+kubebuilder:validation:Optional
+	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
+	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

@@ -7,16 +7,16 @@ package v1alpha1
 // +kubebuilder:object:generate=true
 type ScopedRoleReference struct {
 	// Name of the referenced Role.
-	//+kubebuilder:validation:Required
+	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
 	// Namespace of the referenced Role.
 	// If not specified, it defaults to the namespace of the resource containing this reference.
-	//+kubebuilder:validation:Optional
+	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
 }
 
-//+kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
-//+kubebuilder:resource:scope=Cluster
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:resource:scope=Cluster
 
 // IAMSetting is the Schema for the iamsettings API

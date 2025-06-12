@@ -8,7 +8,7 @@ import (
 type ProjectSpec struct {
 	// OwnerRef is a reference to the owner of the project. Must be a valid
 	// resource.
-	//+kubebuilder:validation:Required
+	// +kubebuilder:validation:Required
 	OwnerRef OwnerReference `json:"ownerRef"`
 }
 
@@ -16,7 +16,7 @@ type ProjectSpec struct {
 type ProjectStatus struct {
 	// Represents the observations of a project's current state.
 	// Known condition types are: "Ready"
-	//+kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
+	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
@@ -37,9 +37,9 @@ const (
 	ProjectNameConflictReason = "ProjectNameConflict"
 )
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
 
 // Project is the Schema for the projects API.
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
@@ -48,12 +48,12 @@ type Project struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	//+kubebuilder:validation:Required
+	// +kubebuilder:validation:Required
 	Spec   ProjectSpec   `json:"spec,omitempty"`
 	Status ProjectStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // ProjectList contains a list of Project.
 type ProjectList struct {
@@ -66,12 +66,12 @@ type ProjectList struct {
 type OwnerReference struct {
 	// Kind is the kind of the resource.
 	//
-	//+kubebuilder:validation:Required
-	//+kubebuilder:validation:Enum=Organization
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Organization
 	Kind string `json:"kind"`
 
 	// Name is the name of the resource.
 	//
-	//+kubebuilder:validation:Required
+	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 }

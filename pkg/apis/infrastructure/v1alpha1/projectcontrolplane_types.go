@@ -33,23 +33,23 @@ const (
 	ProjectControlPlaneCreatingReason = "Creating"
 )
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
 
 // ProjectControlPlane is the Schema for the projectcontrolplanes API.
 type ProjectControlPlane struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	//+kubebuilder:validation:Required
+	// +kubebuilder:validation:Required
 	Spec ProjectControlPlaneSpec `json:"spec,omitempty"`
 
-	//+kubebuilder:default={conditions:{{type:"ControlPlaneReady",status:"False",reason:"Creating",message:"Creating a new control plane for the project", lastTransitionTime: "1970-01-01T00:00:00Z"}}}
+	// +kubebuilder:default={conditions:{{type:"ControlPlaneReady",status:"False",reason:"Creating",message:"Creating a new control plane for the project", lastTransitionTime: "1970-01-01T00:00:00Z"}}}
 	Status ProjectControlPlaneStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // ProjectControlPlaneList contains a list of ProjectControlPlane.
 type ProjectControlPlaneList struct {
