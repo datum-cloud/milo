@@ -307,7 +307,9 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 		logger.Error(err, "Error building infrastructure cluster client")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
-	infraCluster, err := cluster.New(infraClient)
+	infraCluster, err := cluster.New(infraClient, func(o *cluster.Options) {
+		o.Scheme = Scheme
+	})
 	if err != nil {
 		logger.Error(err, "Error building infrastructure cluster")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
