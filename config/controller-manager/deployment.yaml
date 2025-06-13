@@ -32,6 +32,7 @@ spec:
           - --leader-elect-renew-deadline=10s
           - --leader-elect-retry-period=2s
           - --leader-elect-resource-namespace=$(LEADER_ELECT_RESOURCE_NAMESPACE)
+          - --authentication-skip-lookup
           - --secure-port=6443
           - --kubeconfig=$(KUBECONFIG)
           - --infra-cluster-kubeconfig=$(INFRA_CLUSTER_KUBECONFIG)
