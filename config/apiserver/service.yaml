@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: apiserver
+  name: milo-apiserver
   labels:
-    app: apiserver
+    app: milo-apiserver
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: apiserver
+    app.kubernetes.io/name: milo-apiserver
   ports:
   - name: https
     port: 6443

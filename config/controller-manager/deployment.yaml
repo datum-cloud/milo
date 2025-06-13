@@ -1,13 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: controller-manager
+  name: milo-controller-manager
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: datum-controller-manager
-      app.kubernetes.io/part-of: datum-control-plane
+      app.kubernetes.io/name: milo-controller-manager
+      app.kubernetes.io/part-of: milo-control-plane
   strategy:
     rollingUpdate:
       maxSurge: 25%
@@ -16,12 +16,13 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: datum-controller-manager
-        app.kubernetes.io/part-of: datum-control-plane
+        app.kubernetes.io/name: milo-controller-manager
+        app.kubernetes.io/part-of: milo-control-plane
     spec:
-      automountServiceAccountToken: false
+      automountServiceAccountToken: true
+      serviceAccountName: milo-controller-manager
       containers:
-      - name: datum-controller-manager
+      - name: milo-controller-manager
         image: ghcr.io/datum-cloud/milo:latest
         imagePullPolicy: Always
         args:

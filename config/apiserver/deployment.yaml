@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: apiserver
+  name: milo-apiserver
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: apiserver
+      app.kubernetes.io/name: milo-apiserver
       app.kubernetes.io/part-of: milo-control-plane
   strategy:
     rollingUpdate:
@@ -16,7 +16,7 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: apiserver
+        app.kubernetes.io/name: milo-apiserver
         app.kubernetes.io/part-of: milo-control-plane
     spec:
       automountServiceAccountToken: false
