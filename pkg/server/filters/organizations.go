@@ -7,10 +7,10 @@ import (
 	"net/url"
 	"strings"
 
+	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -22,24 +22,22 @@ type key int
 
 const orgId key = iota
 
-const organizationIdKey = "resourcemanager.miloapis.com/organization-id"
-
 // OrganizationContextHandler will react to requests sent to a pseudo API path
-// of `/apis/resourcemanager.miloapis.com/v1alpha/organizations/` and injects
+// of `/apis/resourcemanager.miloapis.com/v1alpha1/organizations/` and injects
 // the provided organization ID into a request context value. This value will
 // then be used by `organizationContextAuthorizationDecorator` to inject the
 // org ID into the authenticated user's Extra field. It will then rewrite the
-// request path to strip the prefix of `/apis/resourcemanager.miloapis.com/v1alpha/organizations/{organization}/control-plane`,
+// request path to strip the prefix of `/apis/resourcemanager.miloapis.com/v1alpha1/organizations/{organization}/control-plane`,
 // which will result in the next set of handlers seeing a typical API request.
 func OrganizationContextHandler(handler http.Handler, s runtime.NegotiatedSerializer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		const prefix = "/apis/resourcemanager.miloapis.com/v1alpha/organizations/"
+		const prefix = "/apis/resourcemanager.miloapis.com/v1alpha1/organizations/"
 		if strings.HasPrefix(req.URL.Path, prefix) {
 			// Extract the organization ID and the remaining path
 			rest := strings.TrimPrefix(req.URL.Path, prefix)
 			parts := strings.SplitN(rest, "/", 2)
 
-			gv := schema.GroupVersion{Group: "resourcemanager.miloapis.com", Version: "v1alpha"}
+			gv := v1alpha1.GroupVersion
 			if len(parts) != 2 {
 				responsewriters.ErrorNegotiated(apierrors.NewBadRequest(
 					"invalid request",
@@ -50,7 +48,6 @@ func OrganizationContextHandler(handler http.Handler, s runtime.NegotiatedSerial
 			organizationID := parts[0]
 
 			if errs := validation.IsValidLabelValue(organizationID); len(errs) > 0 {
-
 				// Return a text/plain response for discovery so that kubectl
 				// prints a useful error. If a structured response is given, it will
 				// swallow all useful error information.
@@ -113,7 +110,7 @@ func OrganizationContextAuthorizationDecorator(handler http.Handler) http.Handle
 			u.Extra = map[string][]string{}
 		}
 
-		u.Extra[organizationIdKey] = []string{orgId}
+		u.Extra[v1alpha1.OrganizationNameLabel] = []string{orgId}
 
 		handler.ServeHTTP(w, req)
 	})
@@ -143,7 +140,7 @@ func OrganizationProjectListConstraintDecorator(handler http.Handler) http.Handl
 					return
 				}
 
-				orgConstraint, err := labels.NewRequirement(organizationIdKey, selection.Equals, []string{organizationID})
+				orgConstraint, err := labels.NewRequirement(v1alpha1.OrganizationNameLabel, selection.Equals, []string{organizationID})
 				if err != nil {
 					responsewriters.InternalError(w, req, fmt.Errorf("failed to parse label selector: %w", err))
 					return
@@ -154,7 +151,7 @@ func OrganizationProjectListConstraintDecorator(handler http.Handler) http.Handl
 				selector := labels.NewSelector()
 				selector = selector.Add(*orgConstraint)
 				for _, r := range requirements {
-					if r.Key() == organizationIdKey {
+					if r.Key() == v1alpha1.OrganizationNameLabel {
 						continue
 					}
 					selector = selector.Add(r)
