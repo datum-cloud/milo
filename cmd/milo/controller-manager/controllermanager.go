@@ -328,40 +328,44 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 
-		// We intentionally use a new configuration here because the one built into
-		// the legacy controller manager component leverages protobuf encoding. The
-		// controller runtime uses JSON encoding when managing CRDs.
-		ctrlConfig, err := clientcmd.BuildConfigFromFlags(opts.Master, opts.Generic.ClientConnection.Kubeconfig)
-		if err != nil {
-			logger.Error(err, "Error building controller manager config")
-			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-		}
-
-		// TODO: This is a hack to get the controller manager to start. We should
-		//       find a better way to use the controller manager framework to manage
-		//       controllers.
-		ctrl, err := controllerruntime.NewManager(
-			ctrlConfig,
-			controllerruntime.Options{
-				// Leader election is handled further up the stack.
-				LeaderElection: false,
-				Scheme:         Scheme,
-				// The existing controller manage endpoint already exposes a health
-				// probe endpoint. We can disable this one to avoid conflicts.
-				HealthProbeBindAddress: "0",
-				// The existing controller manage endpoint already exposes a metrics
-				// endpoint. We can disable this one to avoid conflicts.
-				Metrics: server.Options{
-					BindAddress: "0",
-				},
-			},
-		)
-		if err != nil {
-			logger.Error(err, "Error building controller manager")
-			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-		}
-
+		// Create a controller manager for the core control plane.
+		//
+		// TODO: Refactor how we handle controller registration so we can easily
+		//       scope controllers to a specific control plane.
 		if opts.ControlPlane.Scope == controlplane.ScopeCore {
+			// We intentionally use a new configuration here because the one built into
+			// the legacy controller manager component leverages protobuf encoding. The
+			// controller runtime uses JSON encoding when managing CRDs.
+			ctrlConfig, err := clientcmd.BuildConfigFromFlags(opts.Master, opts.Generic.ClientConnection.Kubeconfig)
+			if err != nil {
+				logger.Error(err, "Error building controller manager config")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// TODO: This is a hack to get the controller manager to start. We should
+			//       find a better way to use the controller manager framework to manage
+			//       controllers.
+			ctrl, err := controllerruntime.NewManager(
+				ctrlConfig,
+				controllerruntime.Options{
+					// Leader election is handled further up the stack.
+					LeaderElection: false,
+					Scheme:         Scheme,
+					// The existing controller manage endpoint already exposes a health
+					// probe endpoint. We can disable this one to avoid conflicts.
+					HealthProbeBindAddress: "0",
+					// The existing controller manage endpoint already exposes a metrics
+					// endpoint. We can disable this one to avoid conflicts.
+					Metrics: server.Options{
+						BindAddress: "0",
+					},
+				},
+			)
+			if err != nil {
+				logger.Error(err, "Error building controller manager")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
 				InfraClient:        infraCluster.GetClient(),
@@ -370,24 +374,24 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up project controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+
+			go func() {
+				if err := infraCluster.Start(ctx); err != nil {
+					panic(err)
+				}
+			}()
+
+			go func() {
+				if err := ctrl.Start(ctx); err != nil {
+					panic(err)
+				}
+			}()
 		}
 
 		if err := StartControllers(ctx, controllerContext, controllerDescriptors, unsecuredMux, healthzHandler); err != nil {
 			logger.Error(err, "Error starting controllers")
 			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
-
-		go func() {
-			if err := infraCluster.Start(ctx); err != nil {
-				panic(err)
-			}
-		}()
-
-		go func() {
-			if err := ctrl.Start(ctx); err != nil {
-				panic(err)
-			}
-		}()
 
 		controllerContext.InformerFactory.Start(stopCh)
 		controllerContext.ObjectOrMetadataInformerFactory.Start(stopCh)
