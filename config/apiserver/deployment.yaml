@@ -22,9 +22,67 @@ spec:
       automountServiceAccountToken: false
       containers:
       - image: ghcr.io/datum-cloud/milo:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         args:
-        - apiserver
+          - apiserver
+          - --authorization-mode=$(AUTHORIZATION_MODE)
+          - --authentication-config=$(AUTHENTICATION_CONFIG)
+          - --authentication-token-webhook-version=$(AUTHENTICATION_TOKEN_WEBHOOK_VERSION)
+          - --authorization-webhook-config-file=$(AUTHORIZATION_WEBHOOK_CONFIG_FILE)
+          - --authorization-webhook-version=$(AUTHORIZATION_WEBHOOK_VERSION)
+          - --bind-address=$(BIND_ADDRESS)
+          - --secure-port=$(SECURE_PORT)
+          - --etcd-servers=$(ETCD_SERVERS)
+          - --etcd-cafile=$(ETCD_CAFILE)
+          - --etcd-certfile=$(ETCD_CERTFILE)
+          - --etcd-keyfile=$(ETCD_KEYFILE)
+          - --etcd-prefix=$(ETCD_PREFIX)
+          - --tls-cert-file=$(TLS_CERT_FILE)
+          - --tls-private-key-file=$(TLS_PRIVATE_KEY_FILE)
+          - --service-account-key-file=$(SERVICE_ACCOUNT_KEY_FILE)
+          - --service-account-issuer=$(SERVICE_ACCOUNT_ISSUER)
+          - --client-ca-file=$(CLIENT_CA_FILE)
+          - --tracing-config-file=$(TRACING_CONFIG_FILE)
+          - --v=$(LOG_LEVEL)
+        env:
+          - name: LOG_LEVEL
+            value: "4"
+          - name: AUTHORIZATION_MODE
+            value: "RBAC,Webhook"
+          - name: AUTHENTICATION_CONFIG
+            value: "/etc/kubernetes/config/authentication-config.yaml"
+          - name: AUTHENTICATION_TOKEN_WEBHOOK_VERSION
+            value: "v1"
+          - name: AUTHORIZATION_WEBHOOK_CONFIG_FILE
+            value: "/etc/kubernetes/config/authorization-config.yaml"
+          - name: AUTHORIZATION_WEBHOOK_VERSION
+            value: "v1"
+          - name: BIND_ADDRESS
+            value: "0.0.0.0"
+          - name: SECURE_PORT
+            value: "6443"
+          - name: ETCD_SERVERS
+            value: "https://etcd-headless.etcd-system.svc.cluster.local:2379"
+          - name: ETCD_CAFILE
+            value: "/etc/kubernetes/pki/trust/etcd/ca.crt"
+          - name: ETCD_CERTFILE
+            value: "/etc/kubernetes/pki/etcd/tls.crt"
+          - name: ETCD_KEYFILE
+            value: "/etc/kubernetes/pki/etcd/tls.key"
+          - name: ETCD_PREFIX
+            value: "/datum-core"
+          - name: TLS_CERT_FILE
+            value: "/etc/kubernetes/pki/apiserver/tls.crt"
+          - name: TLS_PRIVATE_KEY_FILE
+            value: "/etc/kubernetes/pki/apiserver/tls.key"
+          - name: CLIENT_CA_FILE
+            value: /etc/kubernetes/pki/trust/control-plane/ca.crt
+          - name: SERVICE_ACCOUNT_KEY_FILE
+            value: /etc/kubernetes/pki/trust/control-plane/ca.crt
+          - name: SERVICE_ACCOUNT_ISSUER
+            value: https://milo-apiserver.milo-system.svc.cluster.local
+          - name: TRACING_CONFIG_FILE
+            value: /etc/kubernetes/config/tracing-config.yaml
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -35,7 +93,7 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 15
-        name: apiserver
+        name: milo-apiserver
         ports:
         - containerPort: 6443
           name: https
@@ -50,7 +108,13 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 15
-        resources: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
         startupProbe:
           failureThreshold: 3
           httpGet:
@@ -66,5 +130,11 @@ spec:
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
-      securityContext: {}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       terminationGracePeriodSeconds: 30
