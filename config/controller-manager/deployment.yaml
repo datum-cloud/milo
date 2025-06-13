@@ -1,13 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: controller-manager
+  name: milo-controller-manager
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: datum-controller-manager
-      app.kubernetes.io/part-of: datum-control-plane
+      app.kubernetes.io/name: milo-controller-manager
+      app.kubernetes.io/part-of: milo-control-plane
   strategy:
     rollingUpdate:
       maxSurge: 25%
@@ -16,18 +16,60 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: datum-controller-manager
-        app.kubernetes.io/part-of: datum-control-plane
+        app.kubernetes.io/name: milo-controller-manager
+        app.kubernetes.io/part-of: milo-control-plane
     spec:
-      automountServiceAccountToken: false
+      automountServiceAccountToken: true
+      serviceAccountName: milo-controller-manager
       containers:
-      - name: datum-controller-manager
+      - name: milo-controller-manager
         image: ghcr.io/datum-cloud/milo:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         args:
-        - manager
+          - controller-manager
+          - --leader-elect=true
+          - --leader-elect-lease-duration=15s
+          - --leader-elect-renew-deadline=10s
+          - --leader-elect-retry-period=2s
+          - --leader-elect-resource-namespace=$(LEADER_ELECT_RESOURCE_NAMESPACE)
+          - --authentication-skip-lookup
+          - --secure-port=443
+          - --kubeconfig=$(KUBECONFIG)
+          - --infra-cluster-kubeconfig=$(INFRA_CLUSTER_KUBECONFIG)
+          - --cert-dir=$(CERT_DIR)
+          - --tls-cert-file=$(TLS_CERT_FILE)
+          - --tls-private-key-file=$(TLS_PRIVATE_KEY_FILE)
+          - --v=$(LOG_LEVEL)
+          - --control-plane-scope=$(CONTROL_PLANE_SCOPE)
+        env:
+          - name: LEADER_ELECT_RESOURCE_NAMESPACE
+            value: milo-system
+          # Default to INFO level logging
+          - name: LOG_LEVEL
+            value: "4"
+          - name: KUBECONFIG
+            value: /etc/kubernetes/config/kubeconfig
+          # Default to using the in-cluster config to connect to the
+          # infrastructure cluster.
+          - name: INFRA_CLUSTER_KUBECONFIG
+            value: "-"
+          - name: CERT_DIR
+            value: /etc/kubernetes/pki/webhook
+          - name: TLS_CERT_FILE
+            value: /etc/kubernetes/pki/webhook/tls.crt
+          - name: TLS_PRIVATE_KEY_FILE
+            value: /etc/kubernetes/pki/webhook/tls.key
+          - name: CONTROL_PLANE_SCOPE
+            value: "core"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1
+            memory: 512Mi
         ports:
-        - containerPort: 6443
+        - containerPort: 443
           name: https
           protocol: TCP
         livenessProbe:

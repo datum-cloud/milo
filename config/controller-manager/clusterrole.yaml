@@ -1,0 +1,8 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:controller:milo-controller-manager
+rules:
+  - apiGroups: ["infrastructure.miloapis.com"]
+    resources: ["projectcontrolplanes"]
+    verbs: ["*"]

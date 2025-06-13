@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -14,9 +16,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
-	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 )
 
 // log is for logging in this package.
@@ -68,8 +67,8 @@ func (v *ProjectValidator) Handle(ctx context.Context, req admission.Request) ad
 
 // validateProject performs basic validation of the project structure
 func (v *ProjectValidator) validateProject(project *v1alpha1.Project) admission.Response {
-	if project.Spec.Parent == nil {
-		err := fmt.Errorf("project %s must have a parent reference", project.Name)
+	if project.Spec.OwnerRef.Kind == "" {
+		err := fmt.Errorf("project %s must have an owner reference", project.Name)
 		projectlog.Error(err, "Validation failed for project", "name", project.Name)
 		return admission.Denied(err.Error())
 	}
@@ -79,14 +78,8 @@ func (v *ProjectValidator) validateProject(project *v1alpha1.Project) admission.
 
 // validateParentReference validates the parent reference
 func (v *ProjectValidator) validateParentReference(project *v1alpha1.Project) admission.Response {
-	if project.Spec.Parent.ResourceRef.Kind != "Organization" {
-		err := fmt.Errorf("project parent reference kind must be 'Organization', got '%s'", project.Spec.Parent.ResourceRef.Kind)
-		projectlog.Error(err, "Validation failed for project", "name", project.Name)
-		return admission.Denied(err.Error())
-	}
-
-	if project.Spec.Parent.ResourceRef.APIGroup != v1alpha1.GroupVersion.Group {
-		err := fmt.Errorf("parent reference apiGroup must be '%s', got '%s'", v1alpha1.GroupVersion.Group, project.Spec.Parent.ResourceRef.APIGroup)
+	if project.Spec.OwnerRef.Kind != "Organization" {
+		err := fmt.Errorf("project owner reference kind must be 'Organization', got '%s'", project.Spec.OwnerRef.Kind)
 		projectlog.Error(err, "Validation failed for project", "name", project.Name)
 		return admission.Denied(err.Error())
 	}
@@ -153,7 +146,7 @@ func (v *ProjectValidator) buildPolicyBinding(req admission.Request, project *v1
 			//
 			// TODO: Will need to re-consider this when the folder type can be
 			//       introduced as a parent. Maybe we have an Owner field in the spec?
-			Namespace: fmt.Sprintf("organization-%s", project.Spec.Parent.ResourceRef.Name),
+			Namespace: fmt.Sprintf("organization-%s", project.Spec.OwnerRef.Name),
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: v1alpha1.GroupVersion.String(),
@@ -244,15 +237,27 @@ func (m *ProjectMutator) Handle(ctx context.Context, req admission.Request) admi
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// Only add owner reference if parent is specified and it's an Organization
-	if project.Spec.Parent != nil &&
-		project.Spec.Parent.ResourceRef.Kind == "Organization" &&
-		project.Spec.Parent.ResourceRef.APIGroup == v1alpha1.GroupVersion.Group {
-
-		resp := m.addOrganizationOwnerReference(ctx, project)
-		if !resp.Allowed {
-			return resp
+	requestContextOrgID, ok := req.UserInfo.Extra[v1alpha1.OrganizationNameLabel]
+	if ok {
+		// If the request context has had an org id injected, default the parent to
+		// the org. Once we introduce folders, this will need to change to leave the
+		// value alone, and allow validation to ensure it's a valid parent folder.
+		project.Spec.OwnerRef = v1alpha1.OwnerReference{
+			Kind: "Organization",
+			Name: requestContextOrgID[0],
 		}
+	} else {
+		// Return an error that the request context does not have the required
+		// organization name label.
+		errMsg := fmt.Sprintf("request context does not have the required organization name label '%s'", v1alpha1.OrganizationNameLabel)
+		projectlog.Error(fmt.Errorf(errMsg), errMsg)
+		return admission.Denied(errMsg)
+	}
+
+	// Only add owner reference if parent is specified and it's an Organization
+	resp := m.addOrganizationOwnerReference(ctx, project)
+	if !resp.Allowed {
+		return resp
 	}
 
 	// Convert the modified project back to raw bytes
@@ -268,7 +273,7 @@ func (m *ProjectMutator) Handle(ctx context.Context, req admission.Request) admi
 
 // addOrganizationOwnerReference adds an owner reference to the parent organization
 func (m *ProjectMutator) addOrganizationOwnerReference(ctx context.Context, project *v1alpha1.Project) admission.Response {
-	orgName := project.Spec.Parent.ResourceRef.Name
+	orgName := project.Spec.OwnerRef.Name
 
 	// Look up the organization to get its UID
 	orgGVR := schema.GroupVersionResource{

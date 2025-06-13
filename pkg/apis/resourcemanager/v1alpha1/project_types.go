@@ -6,10 +6,10 @@ import (
 
 // ProjectSpec defines the desired state of Project.
 type ProjectSpec struct {
-	// A reference to the project's parent in the resource hierarchy.
-	//
+	// OwnerRef is a reference to the owner of the project. Must be a valid
+	// resource.
 	// +kubebuilder:validation:Required
-	Parent *ProjectParentReference `json:"parent,omitempty"`
+	OwnerRef OwnerReference `json:"ownerRef"`
 }
 
 // ProjectStatus defines the observed state of Project.
@@ -44,7 +44,6 @@ const (
 // Project is the Schema for the projects API.
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:scope=Cluster
 type Project struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -63,34 +62,16 @@ type ProjectList struct {
 	Items           []Project `json:"items"`
 }
 
-type ProjectParentReference struct {
-	// External is a reference to the parent of the project. Must be a valid
-	// resource name.
-	//
-	// +kubebuilder:validation:Optional
-	External string `json:"external,omitempty"`
-
-	// Resource is a reference to the parent of the project. Must be a valid
-	// resource.
-	//
-	// +kubebuilder:validation:Required
-	ResourceRef ResourceReference `json:"resourceRef"`
-}
-
-type ResourceReference struct {
-	// Group is the group of the resource.
-	//
-	// +kubebuilder:validation:Required
-	APIGroup string `json:"apiGroup,omitempty"`
-
+// OwnerReference is a reference to the owner of the project.
+type OwnerReference struct {
 	// Kind is the kind of the resource.
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=Organization
-	Kind string `json:"kind,omitempty"`
+	Kind string `json:"kind"`
 
 	// Name is the name of the resource.
 	//
 	// +kubebuilder:validation:Required
-	Name string `json:"name,omitempty"`
+	Name string `json:"name"`
 }
