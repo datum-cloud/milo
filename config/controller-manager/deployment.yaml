@@ -23,9 +23,37 @@ spec:
       containers:
       - name: datum-controller-manager
         image: ghcr.io/datum-cloud/milo:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         args:
-        - manager
+          - controller-manager
+          - --leader-elect=true
+          - --leader-elect-lease-duration=15s
+          - --leader-elect-renew-deadline=10s
+          - --leader-elect-retry-period=2s
+          - --leader-elect-resource-namespace=$(LEADER_ELECT_RESOURCE_NAMESPACE)
+          - --secure-port=6443
+          - --kubeconfig=$(KUBECONFIG)
+          - --infra-cluster-kubeconfig=$(INFRA_CLUSTER_KUBECONFIG)
+          - --v=$(LOG_LEVEL)
+        env:
+          - name: LEADER_ELECT_RESOURCE_NAMESPACE
+            value: milo-system
+          # Default to INFO level logging
+          - name: LOG_LEVEL
+            value: "4"
+          - name: KUBECONFIG
+            value: /etc/kubernetes/config/kubeconfig
+          # Default to using the in-cluster config to connect to the
+          # infrastructure cluster.
+          - name: INFRA_CLUSTER_KUBECONFIG
+            value: "-"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1
+            memory: 512Mi
         ports:
         - containerPort: 6443
           name: https
