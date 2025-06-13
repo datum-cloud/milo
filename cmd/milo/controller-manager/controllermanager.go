@@ -246,6 +246,7 @@ func NewOptions() (*Options, error) {
 		InfraCluster: &infracluster.Options{
 			KubeconfigFile: baseOpts.Generic.ClientConnection.Kubeconfig,
 		},
+		ControlPlane: &controlplane.Options{},
 	}
 	return opts, nil
 }
