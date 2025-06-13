@@ -33,7 +33,7 @@ spec:
           - --leader-elect-retry-period=2s
           - --leader-elect-resource-namespace=$(LEADER_ELECT_RESOURCE_NAMESPACE)
           - --authentication-skip-lookup
-          - --secure-port=6443
+          - --secure-port=443
           - --kubeconfig=$(KUBECONFIG)
           - --infra-cluster-kubeconfig=$(INFRA_CLUSTER_KUBECONFIG)
           - --v=$(LOG_LEVEL)
@@ -57,7 +57,7 @@ spec:
             cpu: 1
             memory: 512Mi
         ports:
-        - containerPort: 6443
+        - containerPort: 443
           name: https
           protocol: TCP
         livenessProbe:
