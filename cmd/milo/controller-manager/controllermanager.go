@@ -66,6 +66,7 @@ import (
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 
 	// Datum webhook and API type imports
+	controlplane "go.miloapis.com/milo/internal/control-plane"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	"go.miloapis.com/milo/internal/webhooks/resourcemanager"
@@ -200,6 +201,7 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&ProjectOwnerRoleName, "project-owner-role-name", "resourcemanager.miloapis.com-projectowner", "The name of the role that will be used to grant project owner permissions.")
 
 	s.InfraCluster.AddFlags(namedFlagSets.FlagSet("Infrastructure Cluster"))
+	s.ControlPlane.AddFlags(namedFlagSets.FlagSet("Control Plane"))
 
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
@@ -229,6 +231,7 @@ type Options struct {
 	*options.KubeControllerManagerOptions
 
 	InfraCluster *infracluster.Options
+	ControlPlane *controlplane.Options
 }
 
 // NewOptions creates a new Options object with default values.
@@ -357,13 +360,15 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 		}
 
-		projectCtrl := resourcemanagercontroller.ProjectController{
-			ControlPlaneClient: ctrl.GetClient(),
-			InfraClient:        infraCluster.GetClient(),
-		}
-		if err := projectCtrl.SetupWithManager(ctrl, infraCluster); err != nil {
-			logger.Error(err, "Error setting up project controller")
-			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		if opts.ControlPlane.Scope == controlplane.ScopeCore {
+			projectCtrl := resourcemanagercontroller.ProjectController{
+				ControlPlaneClient: ctrl.GetClient(),
+				InfraClient:        infraCluster.GetClient(),
+			}
+			if err := projectCtrl.SetupWithManager(ctrl, infraCluster); err != nil {
+				logger.Error(err, "Error setting up project controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 		}
 
 		if err := StartControllers(ctx, controllerContext, controllerDescriptors, unsecuredMux, healthzHandler); err != nil {

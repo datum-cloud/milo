@@ -40,6 +40,7 @@ spec:
           - --tls-cert-file=$(TLS_CERT_FILE)
           - --tls-private-key-file=$(TLS_PRIVATE_KEY_FILE)
           - --v=$(LOG_LEVEL)
+          - --control-plane-scope=$(CONTROL_PLANE_SCOPE)
         env:
           - name: LEADER_ELECT_RESOURCE_NAMESPACE
             value: milo-system
@@ -58,6 +59,8 @@ spec:
             value: /etc/kubernetes/pki/webhook/tls.crt
           - name: TLS_PRIVATE_KEY_FILE
             value: /etc/kubernetes/pki/webhook/tls.key
+          - name: CONTROL_PLANE_SCOPE
+            value: "core"
         resources:
           requests:
             cpu: 100m
