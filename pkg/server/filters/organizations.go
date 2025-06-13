@@ -37,13 +37,9 @@ func OrganizationContextHandler(handler http.Handler, s runtime.NegotiatedSerial
 			rest := strings.TrimPrefix(req.URL.Path, prefix)
 			parts := strings.SplitN(rest, "/", 2)
 
+			// Set the group version for the response based on the resource manager
+			// API scheme.
 			gv := v1alpha1.GroupVersion
-			if len(parts) != 2 {
-				responsewriters.ErrorNegotiated(apierrors.NewBadRequest(
-					"invalid request",
-				), s, gv, w, req)
-				return
-			}
 
 			organizationID := parts[0]
 
@@ -67,6 +63,14 @@ func OrganizationContextHandler(handler http.Handler, s runtime.NegotiatedSerial
 
 			ctx := context.WithValue(req.Context(), orgId, organizationID)
 			req = req.WithContext(ctx)
+
+			// Check to see if the request is a direct request for the organization
+			// resource. If so, we need to allow the request to continue without any
+			// additional processing.
+			if len(parts) == 1 {
+				handler.ServeHTTP(w, req)
+				return
+			}
 
 			remainingPath := strings.TrimPrefix(parts[1], "control-plane")
 
