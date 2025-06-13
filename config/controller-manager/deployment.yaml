@@ -36,6 +36,9 @@ spec:
           - --secure-port=443
           - --kubeconfig=$(KUBECONFIG)
           - --infra-cluster-kubeconfig=$(INFRA_CLUSTER_KUBECONFIG)
+          - --cert-dir=$(CERT_DIR)
+          - --tls-cert-file=$(TLS_CERT_FILE)
+          - --tls-private-key-file=$(TLS_PRIVATE_KEY_FILE)
           - --v=$(LOG_LEVEL)
         env:
           - name: LEADER_ELECT_RESOURCE_NAMESPACE
@@ -49,6 +52,12 @@ spec:
           # infrastructure cluster.
           - name: INFRA_CLUSTER_KUBECONFIG
             value: "-"
+          - name: CERT_DIR
+            value: /etc/kubernetes/pki/webhook
+          - name: TLS_CERT_FILE
+            value: /etc/kubernetes/pki/webhook/tls.crt
+          - name: TLS_PRIVATE_KEY_FILE
+            value: /etc/kubernetes/pki/webhook/tls.key
         resources:
           requests:
             cpu: 100m
