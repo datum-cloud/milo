@@ -130,11 +130,9 @@ spec:
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
-      securityContext:
+      podSecurityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
         runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-        seccompProfile:
-          type: RuntimeDefault
       terminationGracePeriodSeconds: 30
