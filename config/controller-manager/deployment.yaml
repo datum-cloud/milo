@@ -66,11 +66,18 @@ spec:
             cpu: 100m
             memory: 128Mi
           limits:
-            cpu: 1
+            cpu: "1"
             memory: 512Mi
         ports:
         - containerPort: 443
           name: https
+          protocol: TCP
+        # The controller manager webhook is exposed on a separate port than the
+        # webhook server provided by the k8s native controller webhooks so we
+        # can leverage the controller runtime library to manage and implement
+        # webhooks.
+        - containerPort: 9443
+          name: ctrl-mgr
           protocol: TCP
         livenessProbe:
           httpGet:

@@ -1,7 +1,7 @@
 apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: Project
 metadata:
-  name: project-sample
+  name: datum-cloud
 spec:
   ownerRef:
     kind: Organization

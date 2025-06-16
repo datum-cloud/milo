@@ -13,3 +13,7 @@ spec:
     port: 443
     protocol: TCP
     targetPort: https
+  - name: ctrl-mgr
+    port: 9443
+    protocol: TCP
+    targetPort: ctrl-mgr
