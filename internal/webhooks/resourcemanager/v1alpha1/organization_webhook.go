@@ -98,7 +98,9 @@ func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, or
 	// Build the PolicyBinding
 	policyBinding := &iamv1alpha1.PolicyBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-owner", org.Name),
+			// Don't worry about uniqueness here because the namespace will have just
+			// been created for the organization.
+			Name:      "organization-owner",
 			Namespace: fmt.Sprintf("organization-%s", org.Name),
 		},
 		Spec: iamv1alpha1.PolicyBindingSpec{
