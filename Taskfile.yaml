@@ -2,6 +2,7 @@ version: '3'
 
 vars:
   TOOL_DIR: "{{.USER_WORKING_DIR}}/bin"
+  CERTS_DIR: "{{.USER_WORKING_DIR}}/certs"
   # renovate: datasource=go depName=sigs.k8s.io/controller-tools
   CONTROLLER_TOOLS_VERSION: v0.18.0
   # renovate: datasource=go depName=fybrik.io/crdoc
@@ -14,6 +15,36 @@ tasks:
       - task --list
     silent: true
 
+  generate-dev-certs:
+    desc: Generate self-signed certificates for local webhook development
+    cmds:
+      - mkdir -p "{{.CERTS_DIR}}"
+      - |
+        set -e
+        echo "Generating self-signed certificates for local development..."
+
+        CERTS_DIR="{{.CERTS_DIR}}"
+
+        # Generate private key
+        openssl genrsa -out "$CERTS_DIR/tls.key" 2048
+
+        # Generate certificate signing request and self-signed certificate
+        # Using localhost and 127.0.0.1 for local development
+        openssl req -new -x509 -key "$CERTS_DIR/tls.key" -out "$CERTS_DIR/tls.crt" -days 365 \
+          -subj "/C=US/ST=Development/L=Local/O=Milo/OU=Development/CN=localhost" \
+          -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:::1"
+
+        echo "Certificates generated in $CERTS_DIR/"
+        echo "  - Private key: $CERTS_DIR/tls.key"
+        echo "  - Certificate: $CERTS_DIR/tls.crt"
+        echo ""
+        echo "To use these certificates, run the controller manager with:"
+        echo "  --tls-cert-file=$CERTS_DIR/tls.crt --tls-private-key-file=$CERTS_DIR/tls.key"
+    status:
+      - test -f "{{.CERTS_DIR}}/tls.key"
+      - test -f "{{.CERTS_DIR}}/tls.crt"
+    silent: true
+
   generate:
     desc: Generate code including deepcopy, objects, CRDs, and potentially protobuf marshallers
     deps:
@@ -24,10 +55,16 @@ tasks:
           VERSION: "{{.CONTROLLER_TOOLS_VERSION}}"
     cmds:
       - echo "Generating deepcopy and object files..."
-      - "{{.TOOL_DIR}}/controller-gen object paths=\"./pkg/apis/...\""
-      - echo "Generating CRD manifests..."
-      # Output CRDs to config/crd/bases. You can change this path.
-      - "{{.TOOL_DIR}}/controller-gen crd paths=\"./pkg/apis/...\" output:dir=./config/crd/bases"
+      - "\"{{.TOOL_DIR}}/controller-gen\" object paths=\"./pkg/apis/...\""
+      - echo "Generating CRD manifests for each package..."
+      - |
+        set -e
+        for package_dir in pkg/apis/*/; do
+          package_name=$(basename "$package_dir")
+          echo "Generating CRDs for package: $package_name"
+          mkdir -p "config/crd/bases/$package_name"
+          "{{.TOOL_DIR}}/controller-gen" crd paths="./$package_dir..." output:dir="./config/crd/bases/$package_name"
+        done
     silent: true
 
   api-docs:

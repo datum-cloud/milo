@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/install"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,18 +31,18 @@ func TestOrganizationContextHandler(t *testing.T) {
 		assertRequest func(*testing.T, *http.Request)
 	}{
 		"bad request: missing org id": {
-			path:         "/apis/resourcemanager.miloapis.com/v1alpha/organizations/",
+			path:         "/apis/resourcemanager.miloapis.com/v1alpha1/organizations/",
 			expectedCode: http.StatusBadRequest,
 		},
 		"internal error: org request with no user": {
-			path: "/apis/resourcemanager.miloapis.com/v1alpha/organizations/some-org/control-plane",
+			path: "/apis/resourcemanager.miloapis.com/v1alpha1/organizations/some-org/control-plane",
 			assertRequest: func(t *testing.T, req *http.Request) {
 				assert.Equal(t, "", req.URL.Path)
 			},
 			expectedCode: http.StatusInternalServerError,
 		},
 		"org request succeeds": {
-			path:         "/apis/resourcemanager.miloapis.com/v1alpha/organizations/some-org/control-plane",
+			path:         "/apis/resourcemanager.miloapis.com/v1alpha1/organizations/some-org/control-plane",
 			reqUser:      &user.DefaultInfo{},
 			expectedCode: http.StatusOK,
 			assertRequest: func(t *testing.T, req *http.Request) {
@@ -52,12 +53,12 @@ func TestOrganizationContextHandler(t *testing.T) {
 				u, ok := reqUser.(*user.DefaultInfo)
 				assert.True(t, ok, "user in request context is not *user.DefaultInfo")
 
-				assert.Contains(t, u.Extra, organizationIdKey)
-				assert.Equal(t, "some-org", u.Extra[organizationIdKey][0])
+				assert.Contains(t, u.Extra, v1alpha1.OrganizationNameLabel)
+				assert.Equal(t, "some-org", u.Extra[v1alpha1.OrganizationNameLabel][0])
 			},
 		},
 		"org project list label selector injected": {
-			path:         "/apis/resourcemanager.miloapis.com/v1alpha/organizations/some-org/control-plane/apis/resourcemanager.miloapis.com/v1alpha/projects?labelSelector=resourcemanager.miloapis.com/organization-id=notvalid,other=value",
+			path:         "/apis/resourcemanager.miloapis.com/v1alpha1/organizations/some-org/control-plane/apis/resourcemanager.miloapis.com/v1alpha/projects?labelSelector=resourcemanager.miloapis.com/organization-id=notvalid,other=value",
 			reqUser:      &user.DefaultInfo{},
 			expectedCode: http.StatusOK,
 			assertRequest: func(t *testing.T, req *http.Request) {
@@ -71,8 +72,8 @@ func TestOrganizationContextHandler(t *testing.T) {
 
 					// Ensure that the org constraint exists and has the value in the URL
 					// instead of the value provided in the query parameter.
-					v, ok := selector.RequiresExactMatch(organizationIdKey)
-					assert.True(t, ok, "organization-id constraint not found")
+					v, ok := selector.RequiresExactMatch(v1alpha1.OrganizationNameLabel)
+					assert.True(t, ok, "organization-name constraint not found")
 					assert.Equal(t, "some-org", v)
 
 					// Ensure other constraints still exist

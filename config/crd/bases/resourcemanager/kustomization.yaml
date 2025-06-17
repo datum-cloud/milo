@@ -1,0 +1,3 @@
+resources:
+- resourcemanager.miloapis.com_organizations.yaml
+- resourcemanager.miloapis.com_projects.yaml
