@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"go.miloapis.com/milo/internal/crossclusterutil"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	resourcemanagerv1alpha "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 )
@@ -106,10 +105,10 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 				Namespace: project.Namespace,
 				Name:      project.Name,
 				Labels: map[string]string{
-					crossclusterutil.ProjectNameLabel: project.Name,
+					resourcemanagerv1alpha.ProjectNameLabel: project.Name,
 				},
 				Annotations: map[string]string{
-					crossclusterutil.OwnerNameLabel: project.Spec.OwnerRef.Name,
+					resourcemanagerv1alpha.OwnerNameLabel: project.Spec.OwnerRef.Name,
 				},
 			},
 			Spec: infrastructurev1alpha1.ProjectControlPlaneSpec{},
@@ -192,7 +191,7 @@ func (r *ProjectController) SetupWithManager(mgr ctrl.Manager, infraCluster clus
 			infraCluster.GetCache(),
 			&infrastructurev1alpha1.ProjectControlPlane{},
 			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, projectControlPlane *infrastructurev1alpha1.ProjectControlPlane) []ctrl.Request {
-				projectName, ok := projectControlPlane.Labels[crossclusterutil.ProjectNameLabel]
+				projectName, ok := projectControlPlane.Labels[resourcemanagerv1alpha.ProjectNameLabel]
 				if !ok {
 					return nil
 				}
