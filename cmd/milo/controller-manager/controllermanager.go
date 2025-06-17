@@ -204,6 +204,8 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&OrganizationOwnerRoleName, "organization-owner-role-name", "resourcemanager.miloapis.com-organizationowner", "The name of the role that will be used to grant organization owner permissions.")
 	fs.StringVar(&ProjectOwnerRoleName, "project-owner-role-name", "resourcemanager.miloapis.com-projectowner", "The name of the role that will be used to grant project owner permissions.")
 
+	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
+
 	s.InfraCluster.AddFlags(namedFlagSets.FlagSet("Infrastructure Cluster"))
 	s.ControlPlane.AddFlags(namedFlagSets.FlagSet("Control Plane"))
 
@@ -236,6 +238,9 @@ type Options struct {
 
 	InfraCluster *infracluster.Options
 	ControlPlane *controlplane.Options
+
+	// The port to use for the controller-runtime webhook server.
+	ControllerRuntimeWebhookPort int
 }
 
 // NewOptions creates a new Options object with default values.
@@ -359,7 +364,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					},
 					WebhookServer: webhook.NewServer(webhook.Options{
 						// TODO: Make the webhook server port configurable.
-						Port:    9443,
+						Port:    opts.ControllerRuntimeWebhookPort,
 						CertDir: opts.SecureServing.ServerCert.CertDirectory,
 						// The webhook server expects the key and cert files to be in the
 						// cert directory. This is different from how the webhook server
