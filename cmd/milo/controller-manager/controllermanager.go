@@ -363,7 +363,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 						BindAddress: "0",
 					},
 					WebhookServer: webhook.NewServer(webhook.Options{
-						// TODO: Make the webhook server port configurable.
 						Port:    opts.ControllerRuntimeWebhookPort,
 						CertDir: opts.SecureServing.ServerCert.CertDirectory,
 						// The webhook server expects the key and cert files to be in the
