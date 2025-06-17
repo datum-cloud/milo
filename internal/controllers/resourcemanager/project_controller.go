@@ -2,14 +2,12 @@ package resourcemanager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -22,9 +20,7 @@ import (
 	resourcemanagerv1alpha "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 )
 
-const projectFinalizer = "resourcemanager.datumapis.com/project-controller"
-
-var namespaceNotDeletedErr = errors.New("namespace has not been fully deleted")
+const projectFinalizer = "resourcemanager.miloapis.com/project-controller"
 
 // ProjectController reconciles a Project object
 type ProjectController struct {
@@ -50,11 +46,6 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 
 	finalizationResult, err := r.finalizers.Finalize(ctx, &project)
 	if err != nil {
-		if v, ok := err.(kerrors.Aggregate); ok && v.Is(namespaceNotDeletedErr) {
-			logger.Info(err.Error())
-			return ctrl.Result{}, nil
-		}
-
 		return ctrl.Result{}, fmt.Errorf("failed to finalize: %w", err)
 	}
 
