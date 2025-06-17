@@ -11,11 +11,13 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/blang/semver/v4"
 	"github.com/spf13/cobra"
 	coordinationv1 "k8s.io/api/coordination/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -69,7 +71,7 @@ import (
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
-	"go.miloapis.com/milo/internal/webhooks/resourcemanager"
+	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
@@ -77,6 +79,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 var (
@@ -97,8 +100,9 @@ var (
 func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 	utilruntime.Must(metricsfeatures.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+	utilruntime.Must(corev1.AddToScheme(Scheme))
 
-	// Add Datum API types to the global scheme
+	// Add Milo API types to the global scheme
 	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
@@ -200,6 +204,8 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&OrganizationOwnerRoleName, "organization-owner-role-name", "resourcemanager.miloapis.com-organizationowner", "The name of the role that will be used to grant organization owner permissions.")
 	fs.StringVar(&ProjectOwnerRoleName, "project-owner-role-name", "resourcemanager.miloapis.com-projectowner", "The name of the role that will be used to grant project owner permissions.")
 
+	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
+
 	s.InfraCluster.AddFlags(namedFlagSets.FlagSet("Infrastructure Cluster"))
 	s.ControlPlane.AddFlags(namedFlagSets.FlagSet("Control Plane"))
 
@@ -232,6 +238,9 @@ type Options struct {
 
 	InfraCluster *infracluster.Options
 	ControlPlane *controlplane.Options
+
+	// The port to use for the controller-runtime webhook server.
+	ControllerRuntimeWebhookPort int
 }
 
 // NewOptions creates a new Options object with default values.
@@ -289,12 +298,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 	if c.SecureServing != nil {
 		unsecuredMux = genericcontrollermanager.NewBaseHandler(&c.ComponentConfig.Generic.Debugging, healthzHandler)
 		slis.SLIMetricsWithReset{}.Install(unsecuredMux)
-
-		// Initialize and register webhooks here
-		if err := setupWebhooks(logger, c.Kubeconfig, unsecuredMux, Scheme, SystemNamespace, OrganizationOwnerRoleName, ProjectOwnerRoleName); err != nil {
-			logger.Error(err, "Failed to setup webhooks")
-			return err
-		}
 
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
 		// TODO: handle stoppedCh and listenerStoppedCh returned by c.SecureServing.Serve
@@ -359,10 +362,30 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					Metrics: server.Options{
 						BindAddress: "0",
 					},
+					WebhookServer: webhook.NewServer(webhook.Options{
+						Port:    opts.ControllerRuntimeWebhookPort,
+						CertDir: opts.SecureServing.ServerCert.CertDirectory,
+						// The webhook server expects the key and cert files to be in the
+						// cert directory. This is different from how the webhook server
+						// built into the k8s controller manager component expects them to
+						// be configured so we need to trim the cert directory from the
+						// key and cert file names.
+						KeyName:  strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.KeyFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
+						CertName: strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.CertFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
+					}),
 				},
 			)
 			if err != nil {
 				logger.Error(err, "Error building controller manager")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			if err := resourcemanagerv1alpha1webhook.SetupProjectWebhooksWithManager(ctrl, SystemNamespace, ProjectOwnerRoleName); err != nil {
+				logger.Error(err, "Error setting up project webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := resourcemanagerv1alpha1webhook.SetupOrganizationWebhooksWithManager(ctrl, SystemNamespace, OrganizationOwnerRoleName); err != nil {
+				logger.Error(err, "Error setting up organization webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
@@ -904,19 +927,6 @@ func leaderElectAndRun(ctx context.Context, c *config.CompletedConfig, lockIdent
 	})
 
 	panic("unreachable")
-}
-
-// setupWebhooks initializes and registers the validation webhooks.
-func setupWebhooks(logger klog.Logger, kubeConfig *restclient.Config, mux *mux.PathRecorderMux, scheme *runtime.Scheme, systemNamespace string, organizationOwnerRoleName string, projectOwnerRoleName string) error {
-	logger.Info("Setting up webhooks")
-
-	// Setup resourcemanager.miloapis.com webhooks
-	if err := resourcemanager.SetupWebhooksWithManager(kubeConfig, mux, scheme, systemNamespace, organizationOwnerRoleName, projectOwnerRoleName); err != nil {
-		return fmt.Errorf("failed to setup resourcemanager.miloapis.com webhooks: %w", err)
-	}
-
-	logger.Info("Webhooks setup complete")
-	return nil
 }
 
 // filteredControllerDescriptors returns all controllerDescriptors after filtering through filterFunc.
