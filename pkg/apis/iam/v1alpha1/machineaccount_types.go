@@ -68,13 +68,18 @@ type MachineAccountStatus struct {
 // OwnerReference contains information that points to the Project being referenced.
 // Project is a cluster-scoped resource, so Namespace is not needed.
 type OwnerReference struct {
-	// Name is the name of the Project being referenced.
+	// Name is the name of the resource being referenced.
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
-	// UID is the UID of the Project being referenced.
+	// UID is the UID of the resource being referenced.
 	// +kubebuilder:validation:Required
 	UID string `json:"uid"`
+
+	// Kind is the kind of the resource.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Project
+	Kind string `json:"kind"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
