@@ -6,10 +6,11 @@ import (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:subresource:status
+// +kubebuilder:object:root=true
 
 // MachineAccount is the Schema for the machine accounts API
 // +k8s:openapi-gen=true
-// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Email",type="string",JSONPath=".spec.email"
 // +kubebuilder:printcolumn:name="Project Name",type="string",JSONPath=".spec.ownerRef.name"
 // +kubebuilder:printcolumn:name="Description",type="string",JSONPath=".spec.description"
@@ -27,6 +28,7 @@ type MachineAccount struct {
 }
 
 // MachineAccountSpec defines the desired state of MachineAccount
+// +k8s:openapi-gen=true
 type MachineAccountSpec struct {
 	// OwnerRef is a reference to the Project where the machine will be used.
 	// Project is a cluster-scoped resource.
@@ -58,6 +60,7 @@ type MachineAccountSpec struct {
 }
 
 // MachineAccountStatus defines the observed state of MachineAccount
+// +k8s:openapi-gen=true
 type MachineAccountStatus struct {
 	// Conditions provide conditions that represent the current status of the MachineAccount.
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
@@ -67,6 +70,7 @@ type MachineAccountStatus struct {
 
 // OwnerReference contains information that points to the Project being referenced.
 // Project is a cluster-scoped resource, so Namespace is not needed.
+// +k8s:openapi-gen=true
 type OwnerReference struct {
 	// Name is the name of the resource being referenced.
 	// +kubebuilder:validation:Required
@@ -83,8 +87,10 @@ type OwnerReference struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // MachineAccountList contains a list of MachineAccount
+// +k8s:openapi-gen=true
 type MachineAccountList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
