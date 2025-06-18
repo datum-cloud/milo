@@ -35,6 +35,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&UserList{},
 		&MachineAccount{},
 		&MachineAccountList{},
+		&MachineAccountKey{},
+		&MachineAccountKeyList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
