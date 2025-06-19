@@ -213,7 +213,7 @@ func (r *GroupController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			log.Error(updateErr, "Failed to update Group after finalizer update")
 			return ctrl.Result{}, updateErr
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{}, nil
 	}
 
 	if group.GetDeletionTimestamp() != nil {
