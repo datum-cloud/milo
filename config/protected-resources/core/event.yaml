@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: core-event
+spec:
+  serviceRef:
+    name: "core"
+  kind: Event
+  plural: events
+  singular: event
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch

@@ -4,3 +4,5 @@ kind: Component
 resources:
   - iam/
   - resourcemanager/
+  - core/
+  - apiextensions/

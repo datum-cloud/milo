@@ -4,12 +4,11 @@ metadata:
   name: owner
 spec:
   launchStage: Beta
-  # TODO: Remove this being a required field.
+  inheritedRoles:
+    - name: iam-admin
+    - name: resourcemanager-admin
+    - name: core-admin
+    - name: apiextensions-reader
   includedPermissions:
-    - resourcemanager.miloapis.com/projects.create
-    - resourcemanager.miloapis.com/projects.get
-    - resourcemanager.miloapis.com/projects.list
-    - resourcemanager.miloapis.com/projects.update
-    - resourcemanager.miloapis.com/projects.delete
-    - resourcemanager.miloapis.com/projects.patch
-    - resourcemanager.miloapis.com/projects.watch
+    # Owner inherits all permissions from admin roles
+    # No additional permissions needed

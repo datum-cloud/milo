@@ -1,0 +1,17 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: core-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    # Read-only permissions for core Kubernetes resources
+    - core/secrets.get
+    - core/secrets.list
+    - core/secrets.watch
+    - core/configmaps.get
+    - core/configmaps.list
+    - core/configmaps.watch
+    - core/events.get
+    - core/events.list
+    - core/events.watch

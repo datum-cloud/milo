@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: apiextensions-customresourcedefinition
+spec:
+  serviceRef:
+    name: "apiextensions.k8s.io"
+  kind: CustomResourceDefinition
+  plural: customresourcedefinitions
+  singular: customresourcedefinition
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch

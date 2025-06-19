@@ -1,0 +1,11 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: core-admin
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: core-editor
+  includedPermissions:
+    # Core admin has all permissions through inheritance
+    # No additional permissions needed beyond editor level

@@ -1,0 +1,14 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: resourcemanager-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    # Read-only permissions for ResourceManager resources
+    - resourcemanager.miloapis.com/organizations.get
+    - resourcemanager.miloapis.com/organizations.list
+    - resourcemanager.miloapis.com/organizations.watch
+    - resourcemanager.miloapis.com/projects.get
+    - resourcemanager.miloapis.com/projects.list
+    - resourcemanager.miloapis.com/projects.watch

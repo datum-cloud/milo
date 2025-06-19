@@ -5,5 +5,15 @@ resources:
   - owner.yaml
   - organization-manager.yaml
   - project-manager.yaml
+  - iam-reader.yaml
+  - iam-editor.yaml
+  - iam-admin.yaml
+  - resourcemanager-reader.yaml
+  - resourcemanager-editor.yaml
+  - resourcemanager-admin.yaml
+  - core-reader.yaml
+  - core-editor.yaml
+  - core-admin.yaml
+  - apiextensions-reader.yaml
 
 namespace: milo-system
