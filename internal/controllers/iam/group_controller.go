@@ -20,7 +20,7 @@ const (
 
 // GroupReconciler reconciles a Group object
 type GroupController struct {
-	client.Client
+	Client     client.Client
 	Finalizers finalizer.Finalizers
 }
 
@@ -188,7 +188,7 @@ func (r *GroupController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// Get the Group resource
 	group := &iamv1alpha1.Group{}
-	err := r.Get(ctx, req.NamespacedName, group)
+	err := r.Client.Get(ctx, req.NamespacedName, group)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Group resource not found. Ignoring since object must be deleted")
@@ -209,7 +209,7 @@ func (r *GroupController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	if finalizeResult.Updated {
 		log.Info("finalizer updated the group object, updating API server")
-		if updateErr := r.Update(ctx, group); updateErr != nil {
+		if updateErr := r.Client.Update(ctx, group); updateErr != nil {
 			log.Error(updateErr, "Failed to update Group after finalizer update")
 			return ctrl.Result{}, updateErr
 		}
@@ -231,7 +231,7 @@ func (r *GroupController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 	meta.SetStatusCondition(&group.Status.Conditions, groupCondition)
 
-	if err := r.Status().Update(ctx, group); err != nil {
+	if err := r.Client.Status().Update(ctx, group); err != nil {
 		log.Error(err, "Failed to update Group status")
 		return ctrl.Result{}, err
 	}
