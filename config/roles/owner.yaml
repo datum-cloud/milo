@@ -7,3 +7,7 @@ spec:
   inheritedRoles:
     - name: project-manager
       namespace: milo-system
+
+  # TODO: Remove this being a required field.
+  includedPermissions:
+    - resourcemanager.miloapis.com/projects.get
