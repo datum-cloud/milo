@@ -65,6 +65,15 @@ tasks:
           mkdir -p "config/crd/bases/$package_name"
           "{{.TOOL_DIR}}/controller-gen" crd paths="./$package_dir..." output:dir="./config/crd/bases/$package_name"
         done
+      - echo "Generating RBAC manifests for controller manager..."
+      - |
+        set -e
+        RBAC_OUTPUT_DIR="config/controller-manager"
+        "{{.TOOL_DIR}}/controller-gen" rbac:roleName=milo-controller-manager paths="./..." output:dir="$RBAC_OUTPUT_DIR"
+        # controller-gen outputs "role.yaml" by default; rename for consistency with existing kustomization reference
+        if [ -f "$RBAC_OUTPUT_DIR/role.yaml" ]; then
+          mv -f "$RBAC_OUTPUT_DIR/role.yaml" "$RBAC_OUTPUT_DIR/clusterrole.yaml"
+        fi
     silent: true
 
   api-docs:

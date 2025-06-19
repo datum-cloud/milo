@@ -1,0 +1,12 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: sample-test-group-binding
+spec:
+  subjects:
+    - kind: Group
+      name: "test-group"
+      namespace: ($namespace)
+    - kind: Group
+      name: "test-persistant-group"
+      namespace: ($namespace)

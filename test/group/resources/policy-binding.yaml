@@ -1,0 +1,22 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: sample-test-group-binding
+spec:
+  roleRef:
+    name: group.miloapis.com-test-group-role
+    namespace: ($namespace)
+  subjects:
+    - kind: Group
+      name: "test-group"
+      uid: ($grp.metadata.uid)
+      namespace: ($namespace)
+    - kind: Group
+      name: "test-persistant-group"
+      uid: ($testPersistantGroup.metadata.uid)
+      namespace: ($namespace)
+  targetRef:
+    apiGroup: "resourcemanager.miloapis.com"
+    kind: Organization
+    name: "test-group-org"
+    uid: ($testGroupOrg.metadata.uid)

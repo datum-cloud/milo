@@ -1,0 +1,14 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Group
+metadata:
+  name: test-group
+  namespace: ($namespace)
+status:
+  conditions:
+  - type: Ready 
+    status: "True"
+    reason: Reconciled
+    message: Group successfully reconciled
+    
+    
+   

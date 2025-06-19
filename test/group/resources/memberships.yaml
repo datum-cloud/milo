@@ -1,0 +1,23 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: GroupMembership
+metadata:
+  name: test-membership-1
+  namespace: ($namespace)
+spec:
+  userRef:
+    name: test-user-1
+  groupRef:
+    name: test-group
+    namespace: ($namespace)
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: GroupMembership
+metadata:
+  name: test-membership-2
+  namespace: ($namespace)
+spec:
+  userRef:
+    name: test-user-2
+  groupRef:
+    name: test-group
+    namespace: ($namespace)
