@@ -24,9 +24,9 @@ type GroupController struct {
 	Finalizers finalizer.Finalizers
 }
 
-// UserGroupFinalizer implements the finalizer.Finalizer interface for GroupMembership cleanup.
-// This is used to remove the group membership tuple from the OpenFGA store when the GroupMembership is deleted.
-type GroupFinalizer struct {
+// groupFinalizer implements the finalizer.Finalizer interface for Group cleanup.
+// This is used to clean up associated GroupMemberships and PolicyBindings when a Group is deleted.
+type groupFinalizer struct {
 	K8sClient client.Client
 }
 
@@ -45,7 +45,7 @@ type PolicyBindingUpdate struct {
 }
 
 // cleanupAssociatedResources is a helper function to update/delete resources associated with a group
-func (f *GroupFinalizer) cleanupAssociatedResources(ctx context.Context, params UpdateResourcesParams) error {
+func (f *groupFinalizer) cleanupAssociatedResources(ctx context.Context, params UpdateResourcesParams) error {
 	log := logf.FromContext(ctx)
 	log.Info("Deleting associated resources associated with group", "groupName", params.Group.Name, "resourceType", params.ResourceType)
 
@@ -126,7 +126,7 @@ func (f *GroupFinalizer) cleanupAssociatedResources(ctx context.Context, params 
 }
 
 // deleteGroupMemberships deletes all GroupMembership objects associated with the given group
-func (f *GroupFinalizer) deleteGroupMemberships(ctx context.Context, group *iamv1alpha1.Group) error {
+func (f *groupFinalizer) deleteGroupMemberships(ctx context.Context, group *iamv1alpha1.Group) error {
 	return f.cleanupAssociatedResources(ctx, UpdateResourcesParams{
 		Group:        group,
 		List:         &iamv1alpha1.GroupMembershipList{},
@@ -135,7 +135,7 @@ func (f *GroupFinalizer) deleteGroupMemberships(ctx context.Context, group *iamv
 }
 
 // deletePolicyBindings deletes all PolicyBinding objects associated with the given group
-func (f *GroupFinalizer) updatePolicyBindings(ctx context.Context, group *iamv1alpha1.Group) error {
+func (f *groupFinalizer) updatePolicyBindings(ctx context.Context, group *iamv1alpha1.Group) error {
 	return f.cleanupAssociatedResources(ctx, UpdateResourcesParams{
 		Group:        group,
 		List:         &iamv1alpha1.PolicyBindingList{},
@@ -143,7 +143,7 @@ func (f *GroupFinalizer) updatePolicyBindings(ctx context.Context, group *iamv1a
 	})
 }
 
-func (f *GroupFinalizer) Finalize(ctx context.Context, obj client.Object) (finalizer.Result, error) {
+func (f *groupFinalizer) Finalize(ctx context.Context, obj client.Object) (finalizer.Result, error) {
 	log := logf.FromContext(ctx)
 
 	// Type assertion to check if the object is a Group
@@ -244,7 +244,7 @@ func (r *GroupController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 // SetupWithManager sets up the controller with the Manager.
 func (r *GroupController) SetupWithManager(mgr ctrl.Manager) error {
 	r.Finalizers = finalizer.NewFinalizers()
-	if err := r.Finalizers.Register(groupFinalizerKey, &GroupFinalizer{
+	if err := r.Finalizers.Register(groupFinalizerKey, &groupFinalizer{
 		K8sClient: r.Client,
 	}); err != nil {
 		return fmt.Errorf("failed to register group finalizer: %w", err)
