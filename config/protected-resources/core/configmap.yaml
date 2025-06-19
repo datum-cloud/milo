@@ -4,7 +4,7 @@ metadata:
   name: core-configmap
 spec:
   serviceRef:
-    name: "core"
+    name: "core.miloapis.com"
   kind: ConfigMap
   plural: configmaps
   singular: configmap

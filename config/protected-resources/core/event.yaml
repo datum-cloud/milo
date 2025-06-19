@@ -4,7 +4,7 @@ metadata:
   name: core-event
 spec:
   serviceRef:
-    name: "core"
+    name: "core.miloapis.com"
   kind: Event
   plural: events
   singular: event
