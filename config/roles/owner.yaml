@@ -4,10 +4,12 @@ metadata:
   name: owner
 spec:
   launchStage: Beta
-  inheritedRoles:
-    - name: project-manager
-      namespace: milo-system
-
   # TODO: Remove this being a required field.
   includedPermissions:
+    - resourcemanager.miloapis.com/projects.create
     - resourcemanager.miloapis.com/projects.get
+    - resourcemanager.miloapis.com/projects.list
+    - resourcemanager.miloapis.com/projects.update
+    - resourcemanager.miloapis.com/projects.delete
+    - resourcemanager.miloapis.com/projects.patch
+    - resourcemanager.miloapis.com/projects.watch
