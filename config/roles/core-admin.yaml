@@ -6,6 +6,3 @@ spec:
   launchStage: Beta
   inheritedRoles:
     - name: core-editor
-  includedPermissions:
-    # Core admin has all permissions through inheritance
-    # No additional permissions needed beyond editor level
