@@ -9,6 +9,3 @@ spec:
     - name: resourcemanager-admin
     - name: core-admin
     - name: apiextensions-reader
-  includedPermissions:
-    # Owner inherits all permissions from admin roles
-    # No additional permissions needed
