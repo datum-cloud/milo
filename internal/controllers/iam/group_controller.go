@@ -173,6 +173,8 @@ func (f *groupFinalizer) Finalize(ctx context.Context, obj client.Object) (final
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=groups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=groups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=groups/finalizers,verbs=update
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=groupmemberships,verbs=list;delete
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=list;update;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
