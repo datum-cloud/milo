@@ -44,103 +44,92 @@ type PolicyBindingUpdate struct {
 	Subjects      []iamv1alpha1.Subject
 }
 
-// cleanupAssociatedResources is a helper function to update/delete resources associated with a group
-func (f *groupFinalizer) cleanupAssociatedResources(ctx context.Context, params UpdateResourcesParams) error {
+// deleteGroupMemberships deletes all GroupMembership objects associated with the given group
+func (f *groupFinalizer) deleteGroupMemberships(ctx context.Context, group *iamv1alpha1.Group) error {
 	log := logf.FromContext(ctx)
-	log.Info("Deleting associated resources associated with group", "groupName", params.Group.Name, "resourceType", params.ResourceType)
+	log.Info("Deleting GroupMemberships associated with group", "groupName", group.Name)
 
-	// List all resources in the namespace
-	err := f.K8sClient.List(ctx, params.List, client.InNamespace(params.Group.Namespace))
-	if err != nil {
-		log.Error(err, fmt.Sprintf("Failed to list %s", params.ResourceType), "groupName", params.Group.Name)
+	var gmList iamv1alpha1.GroupMembershipList
+	if err := f.K8sClient.List(ctx, &gmList, client.InNamespace(group.Namespace)); err != nil {
+		log.Error(err, "Failed to list GroupMemberships", "groupName", group.Name)
 		return err
 	}
 
-	// Get the items as a slice of client.Object, filtering based on resource type
-	var itemsToDelete []client.Object
-	var policiesToUpdate []PolicyBindingUpdate
-
-	switch v := params.List.(type) {
-	case *iamv1alpha1.GroupMembershipList:
-		// Delete all GroupMemberships that reference this group
-		for _, gm := range v.Items {
-			if gm.Spec.GroupRef.Name == params.Group.Name {
-				itemsToDelete = append(itemsToDelete, &gm)
-			}
+	for _, gm := range gmList.Items {
+		if gm.Spec.GroupRef.Name != group.Name {
+			continue
 		}
-	case *iamv1alpha1.PolicyBindingList:
-		// Update all PolicyBindings that reference this group
-		for _, pb := range v.Items {
-			var updatedSubjects []iamv1alpha1.Subject
-			hasGroupRef := false
 
-			// Keep only subjects that don't reference this group
-			for _, subject := range pb.Spec.Subjects {
-				if subject.Kind == "Group" && subject.Name == params.Group.Name {
-					hasGroupRef = true
-					continue
-				}
-				updatedSubjects = append(updatedSubjects, subject)
-			}
-			// If the policy binding has a group reference
-			if hasGroupRef {
-				if len(updatedSubjects) == 0 {
-					// If there are no subjects left, delete the policy binding
-					itemsToDelete = append(itemsToDelete, &pb)
-				} else {
-					// Otherwise, update the policy binding with the remaining subjects
-					policiesToUpdate = append(policiesToUpdate, PolicyBindingUpdate{
-						PolicyBinding: pb.DeepCopy(),
-						Subjects:      updatedSubjects,
-					})
-				}
-			}
-		}
-	default:
-		return fmt.Errorf("unsupported list type: %T", params.List)
-	}
-
-	// Delete each filtered item
-	for _, item := range itemsToDelete {
-		if err := f.K8sClient.Delete(ctx, item); err != nil {
+		if err := f.K8sClient.Delete(ctx, &gm); err != nil {
 			if !errors.IsNotFound(err) {
-				log.Error(err, fmt.Sprintf("Failed to delete %s", params.ResourceType), "name", item.GetName())
+				log.Error(err, "Failed to delete GroupMembership", "name", gm.Name)
 				return err
 			}
+		} else {
+			log.Info("Deleted GroupMembership associated with group", "groupName", group.Name, "groupMembershipName", gm.Name)
 		}
-		log.Info("Deleted associated resource to group", "groupName", params.Group.Name, "resourceType", params.ResourceType, "name", item.GetName())
 	}
 
-	// Update policies with filtered subjects
-	for _, update := range policiesToUpdate {
-		update.PolicyBinding.Spec.Subjects = update.Subjects
-		if err := f.K8sClient.Update(ctx, update.PolicyBinding); err != nil {
-			log.Error(err, "Failed to update PolicyBinding", "name", update.PolicyBinding.GetName())
-			return err
-		}
-		log.Info("Updated PolicyBinding associated with group", "groupName", params.Group.Name, "policyBindingName", update.PolicyBinding.GetName())
-	}
-
-	log.Info("Successfully deleted associated resources", "groupName", params.Group.Name, "resourceType", params.ResourceType)
+	log.Info("Successfully deleted GroupMemberships associated with group", "groupName", group.Name)
 	return nil
 }
 
-// deleteGroupMemberships deletes all GroupMembership objects associated with the given group
-func (f *groupFinalizer) deleteGroupMemberships(ctx context.Context, group *iamv1alpha1.Group) error {
-	return f.cleanupAssociatedResources(ctx, UpdateResourcesParams{
-		Group:        group,
-		List:         &iamv1alpha1.GroupMembershipList{},
-		ResourceType: "GroupMembership",
-	})
-}
-
-// deletePolicyBindings deletes all PolicyBinding objects associated with the given group
+// updatePolicyBindings updates/deletes all PolicyBinding objects associated with the given group.
+// If a PolicyBinding has no subjects left, it will be deleted.
+// Otherwise, the PolicyBinding will be updated with the remaining subjects.
 func (f *groupFinalizer) updatePolicyBindings(ctx context.Context, group *iamv1alpha1.Group) error {
-	return f.cleanupAssociatedResources(ctx, UpdateResourcesParams{
-		Group:        group,
-		List:         &iamv1alpha1.PolicyBindingList{},
-		ResourceType: "PolicyBinding",
-	})
+	log := logf.FromContext(ctx)
+	log.Info("Updating PolicyBindings associated with group", "groupName", group.Name)
+
+	var pbList iamv1alpha1.PolicyBindingList
+	if err := f.K8sClient.List(ctx, &pbList, client.InNamespace(group.Namespace)); err != nil {
+		log.Error(err, "Failed to list PolicyBindings", "groupName", group.Name)
+		return err
+	}
+
+	// Update/delete all PolicyBindings that reference this group
+	for _, pb := range pbList.Items {
+		var updatedSubjects []iamv1alpha1.Subject
+		hasGroupRef := false
+
+		// Keep only subjects that don't reference this group
+		for _, subject := range pb.Spec.Subjects {
+			if subject.Kind == "Group" && subject.Name == group.Name {
+				hasGroupRef = true
+				continue
+			}
+			updatedSubjects = append(updatedSubjects, subject)
+		}
+
+		if !hasGroupRef {
+			continue
+		}
+
+		// If there are no subjects left, delete the PolicyBinding
+		if len(updatedSubjects) == 0 {
+			if err := f.K8sClient.Delete(ctx, &pb); err != nil {
+				if !errors.IsNotFound(err) {
+					log.Error(err, "Failed to delete PolicyBinding", "name", pb.Name)
+					return err
+				}
+			} else {
+				log.Info("Deleted PolicyBinding associated with group", "groupName", group.Name, "policyBindingName", pb.Name)
+			}
+			continue
+		}
+
+		// Otherwise update the PolicyBinding with the remaining subjects
+		pbCopy := pb.DeepCopy()
+		pbCopy.Spec.Subjects = updatedSubjects
+		if err := f.K8sClient.Update(ctx, pbCopy); err != nil {
+			log.Error(err, "Failed to update PolicyBinding", "name", pbCopy.Name)
+			return err
+		}
+		log.Info("Updated PolicyBinding associated with group", "groupName", group.Name, "policyBindingName", pbCopy.Name)
+	}
+
+	log.Info("Successfully updated PolicyBindings associated with group", "groupName", group.Name)
+	return nil
 }
 
 func (f *groupFinalizer) Finalize(ctx context.Context, obj client.Object) (finalizer.Result, error) {
