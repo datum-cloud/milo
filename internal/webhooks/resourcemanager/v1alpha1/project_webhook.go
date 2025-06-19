@@ -162,7 +162,7 @@ func (v *ProjectValidator) createOwnerPolicyBinding(ctx context.Context, project
 	}
 
 	// Look up the user in the iam API
-	foundUser, err := v.lookupUser(ctx, req.UserInfo.Username)
+	foundUser, err := v.lookupUser(ctx, req.UserInfo.UID)
 	if err != nil {
 		return fmt.Errorf("failed to lookup user: %w", err)
 	}
