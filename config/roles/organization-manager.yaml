@@ -1,0 +1,14 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: organization-manager
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - resourcemanager.miloapis.com/organizations.create
+    - resourcemanager.miloapis.com/organizations.get
+    - resourcemanager.miloapis.com/organizations.list
+    - resourcemanager.miloapis.com/organizations.update
+    - resourcemanager.miloapis.com/organizations.delete
+    - resourcemanager.miloapis.com/organizations.patch
+    - resourcemanager.miloapis.com/organizations.watch

@@ -1,0 +1,6 @@
+resources:
+  - owner.yaml
+  - organization-manager.yaml
+  - project-manager.yaml
+
+namespace: milo-system

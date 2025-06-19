@@ -1,0 +1,9 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: owner
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: project-manager
+      namespace: milo-system
