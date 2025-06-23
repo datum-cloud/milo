@@ -110,12 +110,6 @@ spec:
             description: MachineAccountStatus defines the observed state of MachineAccount
             properties:
               conditions:
-                default:
-                - lastTransitionTime: "1970-01-01T00:00:00Z"
-                  message: Waiting for control plane to reconcile
-                  reason: Unknown
-                  status: Unknown
-                  type: Ready
                 description: Conditions provide conditions that represent the current
                   status of the MachineAccount.
                 items:

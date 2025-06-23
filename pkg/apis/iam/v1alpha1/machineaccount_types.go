@@ -59,8 +59,6 @@ type MachineAccountSpec struct {
 // +k8s:openapi-gen=true
 type MachineAccountStatus struct {
 	// Conditions provide conditions that represent the current status of the MachineAccount.
-	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
-	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
