@@ -12,7 +12,6 @@ import (
 // MachineAccount is the Schema for the machine accounts API
 // +k8s:openapi-gen=true
 // +kubebuilder:printcolumn:name="Email",type="string",JSONPath=".spec.email"
-// +kubebuilder:printcolumn:name="Project Name",type="string",JSONPath=".spec.ownerRef.name"
 // +kubebuilder:printcolumn:name="Description",type="string",JSONPath=".metadata.annotations['kubernetes\\.io/description']"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".spec.state"
 // +kubebuilder:printcolumn:name="Access Token Type",type="string",JSONPath=".spec.accessTokenType"
@@ -30,11 +29,6 @@ type MachineAccount struct {
 // MachineAccountSpec defines the desired state of MachineAccount
 // +k8s:openapi-gen=true
 type MachineAccountSpec struct {
-	// OwnerRef is a reference to the Project where the machine will be used.
-	// Project is a cluster-scoped resource.
-	// +kubebuilder:validation:Required
-	OwnerRef OwnerReference `json:"ownerRef"`
-
 	// The email of the machine account.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MaxLength=200
@@ -60,24 +54,6 @@ type MachineAccountSpec struct {
 type MachineAccountStatus struct {
 	// Conditions provide conditions that represent the current status of the MachineAccount.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-}
-
-// OwnerReference contains information that points to the Project being referenced.
-// Project is a cluster-scoped resource, so Namespace is not needed.
-// +k8s:openapi-gen=true
-type OwnerReference struct {
-	// Name is the name of the resource being referenced.
-	// +kubebuilder:validation:Required
-	Name string `json:"name"`
-
-	// UID is the UID of the resource being referenced.
-	// +kubebuilder:validation:Required
-	UID string `json:"uid"`
-
-	// Kind is the kind of the resource.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=Project
-	Kind string `json:"kind"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

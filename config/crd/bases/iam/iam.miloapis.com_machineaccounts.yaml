@@ -18,9 +18,6 @@ spec:
     - jsonPath: .spec.email
       name: Email
       type: string
-    - jsonPath: .spec.ownerRef.name
-      name: Project Name
-      type: string
     - jsonPath: .metadata.annotations['kubernetes\.io/description']
       name: Description
       type: string
@@ -74,27 +71,6 @@ spec:
                 format: email
                 maxLength: 200
                 type: string
-              ownerRef:
-                description: |-
-                  OwnerRef is a reference to the Project where the machine will be used.
-                  Project is a cluster-scoped resource.
-                properties:
-                  kind:
-                    description: Kind is the kind of the resource.
-                    enum:
-                    - Project
-                    type: string
-                  name:
-                    description: Name is the name of the resource being referenced.
-                    type: string
-                  uid:
-                    description: UID is the UID of the resource being referenced.
-                    type: string
-                required:
-                - kind
-                - name
-                - uid
-                type: object
               state:
                 default: Active
                 description: The state of the machine account.
@@ -104,7 +80,6 @@ spec:
                 type: string
             required:
             - email
-            - ownerRef
             type: object
           status:
             description: MachineAccountStatus defines the observed state of MachineAccount
