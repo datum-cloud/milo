@@ -24,9 +24,9 @@ spec:
     - jsonPath: .spec.description
       name: Description
       type: string
-    - jsonPath: .spec.active
-      name: Active
-      type: boolean
+    - jsonPath: .spec.state
+      name: State
+      type: string
     - jsonPath: .spec.accessTokenType
       name: Access Token Type
       type: string
@@ -69,10 +69,6 @@ spec:
                 enum:
                 - jwt
                 type: string
-              active:
-                default: true
-                description: Whether the machine account should be active upon creation.
-                type: boolean
               description:
                 description: The description of the machine account.
                 maxLength: 500
@@ -87,16 +83,29 @@ spec:
                   OwnerRef is a reference to the Project where the machine will be used.
                   Project is a cluster-scoped resource.
                 properties:
+                  kind:
+                    description: Kind is the kind of the resource.
+                    enum:
+                    - Project
+                    type: string
                   name:
-                    description: Name is the name of the Project being referenced.
+                    description: Name is the name of the resource being referenced.
                     type: string
                   uid:
-                    description: UID is the UID of the Project being referenced.
+                    description: UID is the UID of the resource being referenced.
                     type: string
                 required:
+                - kind
                 - name
                 - uid
                 type: object
+              state:
+                default: Active
+                description: The state of the machine account.
+                enum:
+                - Active
+                - Inactive
+                type: string
             required:
             - email
             - ownerRef

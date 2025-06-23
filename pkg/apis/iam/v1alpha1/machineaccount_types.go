@@ -14,7 +14,7 @@ import (
 // +kubebuilder:printcolumn:name="Email",type="string",JSONPath=".spec.email"
 // +kubebuilder:printcolumn:name="Project Name",type="string",JSONPath=".spec.ownerRef.name"
 // +kubebuilder:printcolumn:name="Description",type="string",JSONPath=".spec.description"
-// +kubebuilder:printcolumn:name="Active",type="boolean",JSONPath=".spec.active"
+// +kubebuilder:printcolumn:name="State",type="string",JSONPath=".spec.state"
 // +kubebuilder:printcolumn:name="Access Token Type",type="string",JSONPath=".spec.accessTokenType"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
@@ -53,10 +53,11 @@ type MachineAccountSpec struct {
 	// +kubebuilder:validation:Optional
 	AccessTokenType string `json:"accessTokenType,omitempty"`
 
-	// Whether the machine account should be active upon creation.
-	// +kubebuilder:default=true
+	// The state of the machine account.
+	// +kubebuilder:validation:Enum=Active;Inactive
+	// +kubebuilder:default=Active
 	// +kubebuilder:validation:Optional
-	Active bool `json:"active,omitempty"`
+	State string `json:"state,omitempty"`
 }
 
 // MachineAccountStatus defines the observed state of MachineAccount
