@@ -21,7 +21,7 @@ spec:
     - jsonPath: .spec.ownerRef.name
       name: Project Name
       type: string
-    - jsonPath: .spec.description
+    - jsonPath: .metadata.annotations['kubernetes\.io/description']
       name: Description
       type: string
     - jsonPath: .spec.state
@@ -68,10 +68,6 @@ spec:
                   JWT is the only supported access token type at the moment.
                 enum:
                 - jwt
-                type: string
-              description:
-                description: The description of the machine account.
-                maxLength: 500
                 type: string
               email:
                 description: The email of the machine account.

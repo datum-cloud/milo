@@ -13,7 +13,7 @@ import (
 // +k8s:openapi-gen=true
 // +kubebuilder:printcolumn:name="Email",type="string",JSONPath=".spec.email"
 // +kubebuilder:printcolumn:name="Project Name",type="string",JSONPath=".spec.ownerRef.name"
-// +kubebuilder:printcolumn:name="Description",type="string",JSONPath=".spec.description"
+// +kubebuilder:printcolumn:name="Description",type="string",JSONPath=".metadata.annotations['kubernetes\\.io/description']"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".spec.state"
 // +kubebuilder:printcolumn:name="Access Token Type",type="string",JSONPath=".spec.accessTokenType"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
@@ -40,11 +40,6 @@ type MachineAccountSpec struct {
 	// +kubebuilder:validation:MaxLength=200
 	// +kubebuilder:validation:Format=email
 	Email string `json:"email"`
-
-	// The description of the machine account.
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:MaxLength=500
-	Description string `json:"description,omitempty"`
 
 	// The access token type for the machine account.
 	// JWT is the only supported access token type at the moment.
