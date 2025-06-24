@@ -24,8 +24,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&GroupMembership{},
 		&GroupMembershipList{},
 		&PolicyBinding{},
-		&ProtectedResource{},
-		&ProtectedResourceList{},
 		&PolicyBindingList{},
 		&UserInvitation{},
 		&UserInvitationList{},
@@ -33,6 +31,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&RoleList{},
 		&User{},
 		&UserList{},
+		&OrganizationMembership{},
+		&OrganizationMembershipList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

@@ -5,7 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/install"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -53,8 +54,12 @@ func TestOrganizationContextHandler(t *testing.T) {
 				u, ok := reqUser.(*user.DefaultInfo)
 				assert.True(t, ok, "user in request context is not *user.DefaultInfo")
 
-				assert.Contains(t, u.Extra, v1alpha1.OrganizationNameLabel)
-				assert.Equal(t, "some-org", u.Extra[v1alpha1.OrganizationNameLabel][0])
+				assert.Contains(t, u.Extra, iamv1alpha1.ParentAPIGroupExtraKey)
+				assert.Contains(t, u.Extra, iamv1alpha1.ParentKindExtraKey)
+				assert.Contains(t, u.Extra, iamv1alpha1.ParentNameExtraKey)
+				assert.Equal(t, resourcemanagerv1alpha1.GroupVersion.Group, u.Extra[iamv1alpha1.ParentAPIGroupExtraKey][0])
+				assert.Equal(t, "Organization", u.Extra[iamv1alpha1.ParentKindExtraKey][0])
+				assert.Equal(t, "some-org", u.Extra[iamv1alpha1.ParentNameExtraKey][0])
 			},
 		},
 		"org project list label selector injected": {
@@ -72,7 +77,7 @@ func TestOrganizationContextHandler(t *testing.T) {
 
 					// Ensure that the org constraint exists and has the value in the URL
 					// instead of the value provided in the query parameter.
-					v, ok := selector.RequiresExactMatch(v1alpha1.OrganizationNameLabel)
+					v, ok := selector.RequiresExactMatch(resourcemanagerv1alpha1.OrganizationNameLabel)
 					assert.True(t, ok, "organization-name constraint not found")
 					assert.Equal(t, "some-org", v)
 
