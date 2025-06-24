@@ -12,7 +12,7 @@ spec:
     listKind: OrganizationMembershipList
     plural: organizationmemberships
     singular: organizationmembership
-  scope: Cluster
+  scope: Namespaced
   versions:
   - additionalPrinterColumns:
     - jsonPath: .spec.organizationRef.name

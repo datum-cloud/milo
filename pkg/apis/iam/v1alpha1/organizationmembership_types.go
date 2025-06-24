@@ -19,7 +19,7 @@ import (
 // +kubebuilder:printcolumn:name="User Family Name",type="string",JSONPath=".status.user.familyName",priority=1
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:path=organizationmemberships,scope=Cluster,singular=organizationmembership
+// +kubebuilder:resource:path=organizationmemberships,scope=Namespaced,singular=organizationmembership
 type OrganizationMembership struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
