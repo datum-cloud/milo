@@ -35,13 +35,6 @@ type MachineAccountSpec struct {
 	// +kubebuilder:validation:Format=email
 	Email string `json:"email"`
 
-	// The access token type for the machine account.
-	// JWT is the only supported access token type at the moment.
-	// +kubebuilder:validation:Enum=jwt
-	// +kubebuilder:default=jwt
-	// +kubebuilder:validation:Optional
-	AccessTokenType string `json:"accessTokenType,omitempty"`
-
 	// The state of the machine account.
 	// +kubebuilder:validation:Enum=Active;Inactive
 	// +kubebuilder:default=Active

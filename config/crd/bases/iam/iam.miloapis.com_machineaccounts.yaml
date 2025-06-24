@@ -58,14 +58,6 @@ spec:
           spec:
             description: MachineAccountSpec defines the desired state of MachineAccount
             properties:
-              accessTokenType:
-                default: jwt
-                description: |-
-                  The access token type for the machine account.
-                  JWT is the only supported access token type at the moment.
-                enum:
-                - jwt
-                type: string
               email:
                 description: The email of the machine account.
                 format: email
