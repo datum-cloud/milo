@@ -161,6 +161,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 
 	handler = filterlatency.TrackCompleted(handler)
 	handler = genericapifilters.WithAuthorization(handler, c.Authorization.Authorizer, c.Serializer)
+	handler = datumfilters.WithOrganizationMembership(handler)
 	handler = datumfilters.OrganizationContextAuthorizationDecorator(handler)
 	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "authorization")
 

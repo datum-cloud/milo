@@ -170,7 +170,9 @@ func (v *ProjectValidator) createOwnerPolicyBinding(ctx context.Context, project
 	// Build the PolicyBinding
 	policyBinding := &iamv1alpha1.PolicyBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s-owner", project.Name),
+			// Generate a unique name for the policy binding in case there's a
+			// conflict with other policy bindings that were created by the user.
+			GenerateName: fmt.Sprintf("project-%s-owner-", project.Name),
 			// Create the policy binding in the organization's namespace that the
 			// project belongs to.
 			//
