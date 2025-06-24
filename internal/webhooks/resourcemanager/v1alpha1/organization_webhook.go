@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,6 +51,20 @@ func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.
 	// Create namespace and PolicyBinding on Organization Create operation
 	if err := v.createOrganizationNamespace(ctx, org); err != nil {
 		return nil, fmt.Errorf("failed to create organization namespace: %w", err)
+	}
+
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get request from context: %w", err)
+	}
+
+	// Organizations created by system:masters shouldn't have a policy binding
+	// or organization membership created because they're creating the organization
+	// for another user in the system. It's expected those organizations will
+	// create the necessary policy binding and organization membership to provide
+	// the user access.
+	if slices.Contains(req.UserInfo.Groups, "system:masters") {
+		return nil, nil
 	}
 
 	// Look up the user in the iam API
