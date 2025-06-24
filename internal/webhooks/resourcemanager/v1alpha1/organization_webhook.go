@@ -52,8 +52,19 @@ func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.
 		return nil, fmt.Errorf("failed to create organization namespace: %w", err)
 	}
 
-	if err := v.createOwnerPolicyBinding(ctx, org); err != nil {
+	// Look up the user in the iam API
+	user, err := v.lookupUser(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup user: %w", err)
+	}
+
+	if err := v.createOwnerPolicyBinding(ctx, org, user); err != nil {
 		return nil, fmt.Errorf("failed to create owner policy binding: %w", err)
+	}
+
+	// Create OrganizationMembership for the organization owner
+	if err := v.createOrganizationMembership(ctx, org, user); err != nil {
+		return nil, fmt.Errorf("failed to create organization membership: %w", err)
 	}
 
 	return nil, nil
@@ -68,32 +79,26 @@ func (v *OrganizationValidator) ValidateDelete(ctx context.Context, obj runtime.
 }
 
 // lookupUser retrieves the User resource from the iam.miloapis.com API
-func (v *OrganizationValidator) lookupUser(ctx context.Context, username string) (*iamv1alpha1.User, error) {
+func (v *OrganizationValidator) lookupUser(ctx context.Context) (*iamv1alpha1.User, error) {
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get request from context: %w", err)
 	}
 
-	// Find the user in the iam.miloapis.com API. The UID of the value in the
-	// authenticated claims is expected to line up with the name of the user in
-	// the API.
+	// TODO: Determine if we can actually use the UID from the User object in
+	//       the UserInfo of the request. Likely need to configure the OIDC
+	//       authorization to map the UID from the JWT claims.
 	foundUser := &iamv1alpha1.User{}
 	if err := v.client.Get(ctx, client.ObjectKey{Name: req.UserInfo.Username}, foundUser); err != nil {
-		return nil, fmt.Errorf("failed to get user '%s' from iam.miloapis.com API: %w", username, err)
+		return nil, fmt.Errorf("failed to get user '%s' from iam.miloapis.com API: %w", req.UserInfo.Username, err)
 	}
 
 	return foundUser, nil
 }
 
 // createOwnerPolicyBinding creates a PolicyBinding for the organization owner
-func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, org *v1alpha1.Organization) error {
+func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, org *v1alpha1.Organization, user *iamv1alpha1.User) error {
 	organizationlog.Info("Attempting to create PolicyBinding for new organization", "organization", org.Name)
-
-	// Look up the user in the iam API
-	user, err := v.lookupUser(ctx, org.Name)
-	if err != nil {
-		return fmt.Errorf("failed to lookup user: %w", err)
-	}
 
 	// Build the PolicyBinding
 	policyBinding := &iamv1alpha1.PolicyBinding{
@@ -149,6 +154,32 @@ func (v *OrganizationValidator) createOrganizationNamespace(ctx context.Context,
 
 	if err := v.client.Create(ctx, namespace); err != nil {
 		return fmt.Errorf("failed to create namespace resource: %w", err)
+	}
+
+	return nil
+}
+
+func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context, org *v1alpha1.Organization, user *iamv1alpha1.User) error {
+	organizationlog.Info("Creating OrganizationMembership for organization owner", "organization", org.Name)
+
+	// Build the OrganizationMembership object
+	organizationMembership := &iamv1alpha1.OrganizationMembership{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("organization-owner-%s", org.Name),
+			Namespace: fmt.Sprintf("organization-%s", org.Name),
+		},
+		Spec: iamv1alpha1.OrganizationMembershipSpec{
+			OrganizationRef: iamv1alpha1.OrganizationReference{
+				Name: org.Name,
+			},
+			UserRef: iamv1alpha1.MemberReference{
+				Name: user.Name,
+			},
+		},
+	}
+
+	if err := v.client.Create(ctx, organizationMembership); err != nil {
+		return fmt.Errorf("failed to create organization membership resource: %w", err)
 	}
 
 	return nil
