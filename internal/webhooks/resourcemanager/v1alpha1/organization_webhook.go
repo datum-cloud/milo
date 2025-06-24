@@ -165,7 +165,7 @@ func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context
 	// Build the OrganizationMembership object
 	organizationMembership := &iamv1alpha1.OrganizationMembership{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("organization-owner-%s", org.Name),
+			Name:      fmt.Sprintf("member-%s", user.Name),
 			Namespace: fmt.Sprintf("organization-%s", org.Name),
 		},
 		Spec: iamv1alpha1.OrganizationMembershipSpec{
