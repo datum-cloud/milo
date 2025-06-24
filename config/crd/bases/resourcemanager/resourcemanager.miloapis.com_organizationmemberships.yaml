@@ -81,11 +81,6 @@ spec:
                 required:
                 - name
                 type: object
-              roles:
-                description: Roles is a list of roles that the user has in the organization.
-                items:
-                  type: string
-                type: array
               userRef:
                 description: UserRef is a reference to the User that is a member of
                   the Organization.
@@ -98,7 +93,6 @@ spec:
                 type: object
             required:
             - organizationRef
-            - roles
             - userRef
             type: object
           status:

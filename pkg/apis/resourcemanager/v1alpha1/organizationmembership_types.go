@@ -36,9 +36,6 @@ type OrganizationMembershipSpec struct {
 	// UserRef is a reference to the User that is a member of the Organization.
 	// +kubebuilder:validation:Required
 	UserRef MemberReference `json:"userRef"`
-	// Roles is a list of roles that the user has in the organization.
-	// +kubebuilder:validation:Required
-	Roles []string `json:"roles"`
 }
 
 // OrganizationReference contains information that points to the Organization being referenced.
