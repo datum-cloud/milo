@@ -4,13 +4,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:object:root=true
 
 // MachineAccount is the Schema for the machine accounts API
-// +k8s:openapi-gen=true
 // +kubebuilder:printcolumn:name="Email",type="string",JSONPath=".spec.email"
 // +kubebuilder:printcolumn:name="Description",type="string",JSONPath=".metadata.annotations['kubernetes\\.io/description']"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".spec.state"
@@ -27,7 +25,6 @@ type MachineAccount struct {
 }
 
 // MachineAccountSpec defines the desired state of MachineAccount
-// +k8s:openapi-gen=true
 type MachineAccountSpec struct {
 	// The email of the machine account.
 	// +kubebuilder:validation:Required
@@ -43,7 +40,6 @@ type MachineAccountSpec struct {
 }
 
 // MachineAccountStatus defines the observed state of MachineAccount
-// +k8s:openapi-gen=true
 type MachineAccountStatus struct {
 	// Conditions provide conditions that represent the current status of the MachineAccount.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
@@ -53,7 +49,6 @@ type MachineAccountStatus struct {
 // +kubebuilder:object:root=true
 
 // MachineAccountList contains a list of MachineAccount
-// +k8s:openapi-gen=true
 type MachineAccountList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

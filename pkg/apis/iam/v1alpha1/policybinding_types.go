@@ -5,7 +5,6 @@ import (
 )
 
 // RoleReference contains information that points to the Role being used
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=true
 type RoleReference struct {
 	// Name is the name of resource being referenced
@@ -18,7 +17,6 @@ type RoleReference struct {
 
 // Subject contains a reference to the object or user identities a role binding applies to.
 // This can be a User or Group.
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=true
 type Subject struct {
 	// Kind of object being referenced. Values defined in Kind constants.
@@ -38,7 +36,6 @@ type Subject struct {
 }
 
 // TargetReference contains enough information to let you identify an API resource.
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=true
 type TargetReference struct {
 	// APIGroup is the group for the resource being referenced.
@@ -61,13 +58,11 @@ type TargetReference struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
 // PolicyBinding is the Schema for the policybindings API
-// +k8s:openapi-gen=true
 // +kubebuilder:printcolumn:name="Role",type="string",JSONPath=".spec.roleRef.name"
 // +kubebuilder:printcolumn:name="Target API Group",type="string",JSONPath=".spec.targetRef.apiGroup"
 // +kubebuilder:printcolumn:name="Target Kind",type="string",JSONPath=".spec.targetRef.kind"
@@ -85,7 +80,6 @@ type PolicyBinding struct {
 
 // PolicyBindingSpec defines the desired state of PolicyBinding
 // +k8s:deepcopy-gen=true
-// +k8s:openapi-gen=true
 type PolicyBindingSpec struct {
 	// RoleRef is a reference to the Role that is being bound.
 	// This can be a reference to a Role custom resource.
@@ -105,7 +99,6 @@ type PolicyBindingSpec struct {
 
 // PolicyBindingStatus defines the observed state of PolicyBinding
 // +k8s:deepcopy-gen=true
-// +k8s:openapi-gen=true
 type PolicyBindingStatus struct {
 	// ObservedGeneration is the most recent generation observed for this PolicyBinding by the controller.
 	// +kubebuilder:validation:Optional
