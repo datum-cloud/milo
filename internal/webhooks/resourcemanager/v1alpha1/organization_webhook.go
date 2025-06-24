@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
-	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 )
 
 // log is for logging in this package.
@@ -26,7 +26,7 @@ func SetupOrganizationWebhooksWithManager(mgr ctrl.Manager, systemNamespace stri
 	organizationlog.Info("Setting up resourcemanager.miloapis.com organization webhooks")
 
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&v1alpha1.Organization{}).
+		For(&resourcemanagerv1alpha1.Organization{}).
 		WithValidator(&OrganizationValidator{
 			client:          mgr.GetClient(),
 			systemNamespace: systemNamespace,
@@ -44,7 +44,7 @@ type OrganizationValidator struct {
 }
 
 func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	org := obj.(*v1alpha1.Organization)
+	org := obj.(*resourcemanagerv1alpha1.Organization)
 	organizationlog.Info("Validating Organization", "name", org.Name)
 
 	// Create namespace and PolicyBinding on Organization Create operation
@@ -97,7 +97,7 @@ func (v *OrganizationValidator) lookupUser(ctx context.Context) (*iamv1alpha1.Us
 }
 
 // createOwnerPolicyBinding creates a PolicyBinding for the organization owner
-func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, org *v1alpha1.Organization, user *iamv1alpha1.User) error {
+func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, org *resourcemanagerv1alpha1.Organization, user *iamv1alpha1.User) error {
 	organizationlog.Info("Attempting to create PolicyBinding for new organization", "organization", org.Name)
 
 	// Build the PolicyBinding
@@ -121,7 +121,7 @@ func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, or
 				},
 			},
 			TargetRef: iamv1alpha1.TargetReference{
-				APIGroup: v1alpha1.GroupVersion.Group,
+				APIGroup: resourcemanagerv1alpha1.GroupVersion.Group,
 				Kind:     "Organization",
 				Name:     org.Name,
 				UID:      string(org.UID),
@@ -137,7 +137,7 @@ func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, or
 }
 
 // createOrganizationNamespace creates a namespace for organization-scoped resources
-func (v *OrganizationValidator) createOrganizationNamespace(ctx context.Context, org *v1alpha1.Organization) error {
+func (v *OrganizationValidator) createOrganizationNamespace(ctx context.Context, org *resourcemanagerv1alpha1.Organization) error {
 	namespaceName := fmt.Sprintf("organization-%s", org.Name)
 	organizationlog.Info("Creating namespace for organization", "organization", org.Name, "namespace", namespaceName)
 
@@ -159,20 +159,20 @@ func (v *OrganizationValidator) createOrganizationNamespace(ctx context.Context,
 	return nil
 }
 
-func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context, org *v1alpha1.Organization, user *iamv1alpha1.User) error {
+func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context, org *resourcemanagerv1alpha1.Organization, user *iamv1alpha1.User) error {
 	organizationlog.Info("Creating OrganizationMembership for organization owner", "organization", org.Name)
 
 	// Build the OrganizationMembership object
-	organizationMembership := &iamv1alpha1.OrganizationMembership{
+	organizationMembership := &resourcemanagerv1alpha1.OrganizationMembership{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("member-%s", user.Name),
 			Namespace: fmt.Sprintf("organization-%s", org.Name),
 		},
-		Spec: iamv1alpha1.OrganizationMembershipSpec{
-			OrganizationRef: iamv1alpha1.OrganizationReference{
+		Spec: resourcemanagerv1alpha1.OrganizationMembershipSpec{
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
 				Name: org.Name,
 			},
-			UserRef: iamv1alpha1.MemberReference{
+			UserRef: resourcemanagerv1alpha1.MemberReference{
 				Name: user.Name,
 			},
 		},

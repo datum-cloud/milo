@@ -31,8 +31,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&RoleList{},
 		&User{},
 		&UserList{},
-		&OrganizationMembership{},
-		&OrganizationMembershipList{},
 		&ProtectedResource{},
 		&ProtectedResourceList{},
 	)

@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: organizationmemberships.iam.miloapis.com
+  name: organizationmemberships.resourcemanager.miloapis.com
 spec:
-  group: iam.miloapis.com
+  group: resourcemanager.miloapis.com
   names:
     kind: OrganizationMembership
     listKind: OrganizationMembershipList
