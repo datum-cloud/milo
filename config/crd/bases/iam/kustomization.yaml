@@ -6,3 +6,4 @@ resources:
 - iam.miloapis.com_protectedresources.yaml
 - iam.miloapis.com_users.yaml
 - iam.miloapis.com_userinvitations.yaml
+- iam.miloapis.com_organizationmemberships.yaml
