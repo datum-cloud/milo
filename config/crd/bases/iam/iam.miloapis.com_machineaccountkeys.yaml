@@ -77,6 +77,7 @@ spec:
                 description: |-
                   AuthProviderKeyID is the unique identifier for the key in the auth provider.
                   This field is populated by the controller after the key is created in the auth provider.
+                  For example, when using Zitadel, a typical value might be: "326102453042806786"
                 type: string
               conditions:
                 default:

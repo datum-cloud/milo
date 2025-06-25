@@ -44,7 +44,7 @@ type MachineAccountKeySpec struct {
 type MachineAccountKeyStatus struct {
 	// AuthProviderKeyID is the unique identifier for the key in the auth provider.
 	// This field is populated by the controller after the key is created in the auth provider.
-	// +kubebuilder:validation:Optional
+	// For example, when using Zitadel, a typical value might be: "326102453042806786"
 	AuthProviderKeyID string `json:"authProviderKeyId,omitempty"`
 
 	// Conditions provide conditions that represent the current status of the MachineAccountKey.
