@@ -15,7 +15,7 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.email
+    - jsonPath: .status.email
       name: Email
       type: string
     - jsonPath: .metadata.annotations['kubernetes\.io/description']
@@ -58,20 +58,17 @@ spec:
           spec:
             description: MachineAccountSpec defines the desired state of MachineAccount
             properties:
-              email:
-                description: The email of the machine account.
-                format: email
-                maxLength: 200
-                type: string
               state:
                 default: Active
-                description: The state of the machine account.
+                description: |-
+                  The state of the machine account. This state can be safely changed as needed.
+                  States:
+                    - Active: The machine account can be used to authenticate.
+                    - Inactive: The machine account is prohibited to be used to authenticate, and revokes all existing sessions.
                 enum:
                 - Active
                 - Inactive
                 type: string
-            required:
-            - email
             type: object
           status:
             description: MachineAccountStatus defines the observed state of MachineAccount
@@ -134,6 +131,11 @@ spec:
                   - type
                   type: object
                 type: array
+              email:
+                description: |-
+                  The computed email of the machine account following the pattern:
+                  {metadata.name}@{metadata.namespace}.{project.metadata.name}.{global-suffix}
+                type: string
             type: object
         type: object
     served: true
