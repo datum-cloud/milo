@@ -15,5 +15,6 @@ resources:
   - core-editor.yaml
   - core-admin.yaml
   - apiextensions-reader.yaml
+  - iam-user-self-manage.yaml
 
 namespace: milo-system

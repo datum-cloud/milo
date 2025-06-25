@@ -1,0 +1,16 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam-user-self-manage
+  annotations:
+    kubernetes.io/description: "Allows users to manage their own user account."
+spec:
+  launchStage: Beta
+  includedPermissions:
+  - iam.miloapis.com/users.get
+  - iam.miloapis.com/users.update
+  - iam.miloapis.com/users.patch
+  - iam.miloapis.com/users.delete
+  - resourcemanager.miloapis.com/organizationmemberships.list
+  - resourcemanager.miloapis.com/organizationmemberships.get
+  - resourcemanager.miloapis.com/organizationmemberships.delete
