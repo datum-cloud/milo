@@ -26,8 +26,6 @@ import (
 const (
 	// OrganizationMembershipUserFieldSelector is the field selector for the user in an organization membership.
 	OrganizationMembershipUserFieldSelector = "spec.userRef.name"
-	// OrganizationMembershipOrganizationFieldSelector is the field selector for the organization in an organization membership.
-	OrganizationMembershipOrganizationFieldSelector = "spec.organizationRef.name"
 )
 
 const (
