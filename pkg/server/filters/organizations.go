@@ -122,6 +122,8 @@ func OrganizationContextAuthorizationDecorator(handler http.Handler) http.Handle
 		u.Extra[iamv1alpha1.ParentKindExtraKey] = []string{"Organization"}
 		u.Extra[iamv1alpha1.ParentNameExtraKey] = []string{orgId}
 
+		req = req.WithContext(request.WithUser(ctx, u))
+
 		handler.ServeHTTP(w, req)
 	})
 }

@@ -13,6 +13,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
@@ -37,32 +38,41 @@ const (
 func OrganizationMembershipContextHandler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
+		log := logf.FromContext(ctx)
 
 		info, ok := request.RequestInfoFrom(ctx)
 		if !ok {
+			log.Error(nil, "request info not found in context")
 			// if this happens, the request info resolver is missing from the chain
 			handler.ServeHTTP(w, req)
 			return
 		}
 
+		log = log.WithValues("request_info", info)
+		log.Info("processing organization membership request")
+
 		if !info.IsResourceRequest {
+			log.Info("not a resource request")
 			handler.ServeHTTP(w, req)
 			return
 		}
 
 		if info.APIGroup != "iam.miloapis.com" || info.Resource != "organizationmemberships" {
+			log.Info("not an organization membership request")
 			handler.ServeHTTP(w, req)
 			return
 		}
 
 		fieldSelector := req.URL.Query().Get("fieldSelector")
 		if fieldSelector == "" {
+			log.Info("no field selector provided")
 			handler.ServeHTTP(w, req)
 			return
 		}
 
 		selector, err := fields.ParseSelector(fieldSelector)
 		if err != nil {
+			log.Error(err, "invalid field selector")
 			// malformed field selector, let the validation handle it
 			handler.ServeHTTP(w, req)
 			return
@@ -70,7 +80,7 @@ func OrganizationMembershipContextHandler(handler http.Handler) http.Handler {
 
 		requirements := selector.Requirements()
 		if len(requirements) != 1 {
-			// TODO: return a 400 error
+			log.Info("multiple field selectors provided")
 			handler.ServeHTTP(w, req)
 			return
 		}
@@ -87,6 +97,7 @@ func OrganizationMembershipContextHandler(handler http.Handler) http.Handler {
 				ctx = context.WithValue(ctx, ParentKindContextKey, "Organization")
 				ctx = context.WithValue(ctx, ParentNameContextKey, requirement.Value)
 			}
+			log.Info("added parent info to context", "parent_api_group", ctx.Value(ParentAPIGroupContextKey), "parent_kind", ctx.Value(ParentKindContextKey), "parent_name", ctx.Value(ParentNameContextKey))
 		}
 
 		req = req.WithContext(ctx)
@@ -103,18 +114,24 @@ func OrganizationMembershipContextHandler(handler http.Handler) http.Handler {
 func OrganizationMembershipContextAuthorizationDecorator(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
+		log := logf.FromContext(ctx)
 
 		info, ok := request.RequestInfoFrom(ctx)
 		if !ok {
+			log.Error(nil, "request info not found in context")
 			// if this happens, the request info resolver is missing from the chain
 			handler.ServeHTTP(w, req)
 			return
 		}
 
 		if !info.IsResourceRequest {
+			log.Info("not a resource request")
 			handler.ServeHTTP(w, req)
 			return
 		}
+
+		log = log.WithValues("request_info", info)
+		log.Info("processing organization membership authorization")
 
 		parentAPIGroup, parentAPIGroupOk := ctx.Value(ParentAPIGroupContextKey).(string)
 		parentKind, parentKindOk := ctx.Value(ParentKindContextKey).(string)
@@ -122,12 +139,14 @@ func OrganizationMembershipContextAuthorizationDecorator(handler http.Handler) h
 
 		if !parentAPIGroupOk || !parentKindOk || !parentNameOk {
 			// Not an org scoped request
+			log.Info("not an org scoped request")
 			handler.ServeHTTP(w, req)
 			return
 		}
 
 		reqUser, ok := request.UserFrom(ctx)
 		if !ok {
+			log.Error(nil, "failed to extract user info from context")
 			// error handling
 			responsewriters.InternalError(w, req, fmt.Errorf("failed to extract user info from context"))
 			return
@@ -135,6 +154,7 @@ func OrganizationMembershipContextAuthorizationDecorator(handler http.Handler) h
 
 		u, ok := reqUser.(*user.DefaultInfo)
 		if !ok {
+			log.Error(nil, "unexpected user.Info type", "user_info_type", fmt.Sprintf("%T", reqUser))
 			responsewriters.InternalError(w, req, fmt.Errorf("unexpected user.Info type. Expected *user.DefaultInfo, got %T", reqUser))
 			return
 		}
@@ -148,6 +168,8 @@ func OrganizationMembershipContextAuthorizationDecorator(handler http.Handler) h
 		u.Extra[iamv1alpha1.ParentAPIGroupExtraKey] = []string{parentAPIGroup}
 		u.Extra[iamv1alpha1.ParentKindExtraKey] = []string{parentKind}
 		u.Extra[iamv1alpha1.ParentNameExtraKey] = []string{parentName}
+
+		req = req.WithContext(request.WithUser(ctx, u))
 
 		handler.ServeHTTP(w, req)
 	})
