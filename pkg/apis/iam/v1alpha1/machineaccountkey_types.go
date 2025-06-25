@@ -4,13 +4,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:object:root=true
 
 // MachineAccountKey is the Schema for the machineaccountkeys API
-// +k8s:openapi-gen=true
 // +kubebuilder:printcolumn:name="Machine Account",type="string",JSONPath=".spec.ownerRef.name"
 // +kubebuilder:printcolumn:name="Expiration Date",type="string",JSONPath=".spec.expirationDate"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
@@ -25,7 +23,6 @@ type MachineAccountKey struct {
 }
 
 // MachineAccountKeySpec defines the desired state of MachineAccountKey
-// +k8s:openapi-gen=true
 type MachineAccountKeySpec struct {
 	// OwnerRef is a reference to the resource that owns the MachineAccountKey.
 	// MachineAccountKey is a namespaced resource.
@@ -44,7 +41,6 @@ type MachineAccountKeySpec struct {
 }
 
 // MachineAccountKeyStatus defines the observed state of MachineAccountKey
-// +k8s:openapi-gen=true
 type MachineAccountKeyStatus struct {
 	// AuthProviderKeyID is the unique identifier for the key in the auth provider.
 	// This field is populated by the controller after the key is created in the auth provider.
@@ -58,7 +54,6 @@ type MachineAccountKeyStatus struct {
 }
 
 // OwnerReference contains information that points to the MachineAccount being referenced.
-// +k8s:openapi-gen=true
 type OwnerReference struct {
 	// Name is the name of the resource being referenced.
 	// +kubebuilder:validation:Required
