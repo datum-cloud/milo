@@ -8,14 +8,17 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	"k8s.io/apiserver/pkg/endpoints/request"
-	"k8s.io/klog/v2"
 
-	"go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 )
@@ -28,125 +31,88 @@ const (
 )
 
 const (
-	ParentAPIGroupContextKey = "parentAPIGroup"
-	ParentKindContextKey     = "parentKind"
-	ParentNameContextKey     = "parentName"
+	UserIDContextKey = "userID"
 )
 
-// OrganizationMembershipContextHandler is a filter that inspects requests for OrganizationMembership resources
-// and augments the user's authentication information with the values from the field selectors.
-func OrganizationMembershipContextHandler(handler http.Handler) http.Handler {
+// UserContextHandler will react to requests sent to a pseudo API path of
+// `/apis/iam.miloapis.com/v1alpha1/users/` and injects the provided user ID
+// into a request context value. This value will then be used by
+// `UserContextAuthorizationDecorator` to inject the user ID into the
+// authenticated user's Extra field.
+//
+// It will then rewrite the request path to strip the prefix of
+// `/apis/iam.miloapis.com/v1alpha1/users/{user}/control-plane`, which will
+// result in the next set of handlers seeing a typical API request.
+func UserContextHandler(handler http.Handler, s runtime.NegotiatedSerializer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		ctx := req.Context()
-		log := klog.FromContext(ctx)
+		const prefix = "/apis/iam.miloapis.com/v1alpha1/users/"
+		if strings.HasPrefix(req.URL.Path, prefix) {
+			// Extract the organization ID and the remaining path
+			rest := strings.TrimPrefix(req.URL.Path, prefix)
+			parts := strings.SplitN(rest, "/", 2)
 
-		info, ok := request.RequestInfoFrom(ctx)
-		if !ok {
-			klog.Error(nil, "request info not found in context")
-			// if this happens, the request info resolver is missing from the chain
-			handler.ServeHTTP(w, req)
-			return
-		}
+			// Set the group version for the response based on the iam
+			// API scheme.
+			gv := iamv1alpha1.SchemeGroupVersion
 
-		log = log.WithValues("request_info", info)
-		log.Info("processing organization membership request")
+			userID := parts[0]
 
-		if !info.IsResourceRequest {
-			log.Info("not a resource request")
-			handler.ServeHTTP(w, req)
-			return
-		}
-
-		if info.APIGroup != "iam.miloapis.com" || info.Resource != "organizationmemberships" {
-			log.Info("not an organization membership request")
-			handler.ServeHTTP(w, req)
-			return
-		}
-
-		fieldSelector := req.URL.Query().Get("fieldSelector")
-		if fieldSelector == "" {
-			log.Info("no field selector provided")
-			handler.ServeHTTP(w, req)
-			return
-		}
-
-		selector, err := fields.ParseSelector(fieldSelector)
-		if err != nil {
-			log.Error(err, "invalid field selector")
-			// malformed field selector, let the validation handle it
-			handler.ServeHTTP(w, req)
-			return
-		}
-
-		requirements := selector.Requirements()
-		if len(requirements) != 1 {
-			log.Info("multiple field selectors provided")
-			handler.ServeHTTP(w, req)
-			return
-		}
-
-		for _, requirement := range requirements {
-			switch requirement.Field {
-			case OrganizationMembershipUserFieldSelector:
-				ctx = context.WithValue(ctx, ParentAPIGroupContextKey, v1alpha1.SchemeGroupVersion.Group)
-				ctx = context.WithValue(ctx, ParentKindContextKey, "User")
-				ctx = context.WithValue(ctx, ParentNameContextKey, requirement.Value)
-
-			case OrganizationMembershipOrganizationFieldSelector:
-				ctx = context.WithValue(ctx, ParentAPIGroupContextKey, resourcemanagerv1alpha1.GroupVersion.Group)
-				ctx = context.WithValue(ctx, ParentKindContextKey, "Organization")
-				ctx = context.WithValue(ctx, ParentNameContextKey, requirement.Value)
+			if errs := validation.IsValidLabelValue(userID); len(errs) > 0 {
+				// Return a text/plain response for discovery so that kubectl
+				// prints a useful error. If a structured response is given, it will
+				// swallow all useful error information.
+				if strings.HasSuffix(req.URL.Path, "control-plane/api") {
+					w.Header().Add("Content-Type", "text/plain")
+					w.WriteHeader(http.StatusForbidden)
+					if _, err := w.Write([]byte(fmt.Sprintf("invalid user ID %q", userID))); err != nil {
+						responsewriters.InternalError(w, req, fmt.Errorf("failed to write response: %w", err))
+					}
+				} else {
+					responsewriters.ErrorNegotiated(apierrors.NewBadRequest(
+						fmt.Sprintf("invalid user ID %q", userID),
+					), s, gv, w, req)
+				}
+				return
 			}
-			log.Info("added parent info to context", "parent_api_group", ctx.Value(ParentAPIGroupContextKey), "parent_kind", ctx.Value(ParentKindContextKey), "parent_name", ctx.Value(ParentNameContextKey))
-		}
 
-		req = req.WithContext(ctx)
+			ctx := context.WithValue(req.Context(), UserIDContextKey, userID)
+			req = req.WithContext(ctx)
+
+			// Check to see if the request is a direct request for the user
+			// resource. If so, we need to allow the request to continue without
+			// any additional processing.
+			if len(parts) == 1 {
+				handler.ServeHTTP(w, req)
+				return
+			}
+
+			remainingPath := strings.TrimPrefix(parts[1], "control-plane")
+
+			req.URL.Path = strings.SplitN(remainingPath, "?", 2)[0]
+
+		}
 		handler.ServeHTTP(w, req)
 	})
 }
 
-// OrganizationContextAuthorizationDecorator needs to run after authentication,
-// but prior to authorization.
+// UserContextAuthorizationDecorator needs to run after authentication, but
+// prior to authorization.
 //
-// This handler injects organization information into the authenticated user's
-// Extra information that's made available in the request context by
-// the `organizationContextHandler` handler.
-func OrganizationMembershipContextAuthorizationDecorator(handler http.Handler) http.Handler {
+// This handler injects user information into the authenticated user's Extra
+// information that's made available in the request context by the
+// `UserContextHandler` handler.
+func UserContextAuthorizationDecorator(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
-		log := klog.FromContext(ctx)
-
-		info, ok := request.RequestInfoFrom(ctx)
+		userID, ok := ctx.Value(UserIDContextKey).(string)
 		if !ok {
-			log.Error(nil, "request info not found in context")
-			// if this happens, the request info resolver is missing from the chain
-			handler.ServeHTTP(w, req)
-			return
-		}
-
-		if !info.IsResourceRequest {
-			log.Info("not a resource request")
-			handler.ServeHTTP(w, req)
-			return
-		}
-
-		log = log.WithValues("request_info", info)
-		log.Info("processing organization membership authorization")
-
-		parentAPIGroup, parentAPIGroupOk := ctx.Value(ParentAPIGroupContextKey).(string)
-		parentKind, parentKindOk := ctx.Value(ParentKindContextKey).(string)
-		parentName, parentNameOk := ctx.Value(ParentNameContextKey).(string)
-
-		if !parentAPIGroupOk || !parentKindOk || !parentNameOk {
-			// Not an org scoped request
-			log.Info("not an org scoped request")
+			// Not a user scoped request
 			handler.ServeHTTP(w, req)
 			return
 		}
 
 		reqUser, ok := request.UserFrom(ctx)
 		if !ok {
-			log.Error(nil, "failed to extract user info from context")
 			// error handling
 			responsewriters.InternalError(w, req, fmt.Errorf("failed to extract user info from context"))
 			return
@@ -154,7 +120,6 @@ func OrganizationMembershipContextAuthorizationDecorator(handler http.Handler) h
 
 		u, ok := reqUser.(*user.DefaultInfo)
 		if !ok {
-			log.Error(nil, "unexpected user.Info type", "user_info_type", fmt.Sprintf("%T", reqUser))
 			responsewriters.InternalError(w, req, fmt.Errorf("unexpected user.Info type. Expected *user.DefaultInfo, got %T", reqUser))
 			return
 		}
@@ -163,11 +128,11 @@ func OrganizationMembershipContextAuthorizationDecorator(handler http.Handler) h
 			u.Extra = map[string][]string{}
 		}
 
-		// Set the parent resource information for the authorization check based on
-		// the organization ID that was provided in the request context.
-		u.Extra[iamv1alpha1.ParentAPIGroupExtraKey] = []string{parentAPIGroup}
-		u.Extra[iamv1alpha1.ParentKindExtraKey] = []string{parentKind}
-		u.Extra[iamv1alpha1.ParentNameExtraKey] = []string{parentName}
+		// Set the user information for the authorization check based on the user
+		// ID that was provided in the request context.
+		u.Extra[iamv1alpha1.ParentAPIGroupExtraKey] = []string{iamv1alpha1.SchemeGroupVersion.Group}
+		u.Extra[iamv1alpha1.ParentKindExtraKey] = []string{"User"}
+		u.Extra[iamv1alpha1.ParentNameExtraKey] = []string{userID}
 
 		req = req.WithContext(request.WithUser(ctx, u))
 
@@ -175,16 +140,64 @@ func OrganizationMembershipContextAuthorizationDecorator(handler http.Handler) h
 	})
 }
 
-func augmentUser(u user.Info, selector fields.Selector) user.Info {
-	extra := u.GetExtra()
-	if extra == nil {
-		extra = make(map[string][]string)
-	}
+// UserOrganizationListConstraintDecorator intercepts requests to list
+// organization memberships, which are an organization scoped resource, and
+// injects a field selector to limit organization memberships to the user
+// provided in the request context.
+//
+// This is done so that end users can execute `kubectl get
+// organizationmemberships` and not need to provide a field selector.
+func UserOrganizationMembershipListConstraintDecorator(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
+		info, ok := request.RequestInfoFrom(ctx)
+		if !ok {
+			responsewriters.InternalError(w, req, fmt.Errorf("failed to get RequestInfo from context"))
+			return
+		}
 
-	return &user.DefaultInfo{
-		Name:   u.GetName(),
-		UID:    u.GetUID(),
-		Groups: u.GetGroups(),
-		Extra:  extra,
-	}
+		if info.APIGroup == resourcemanagerv1alpha1.GroupVersion.Group && info.Resource == "organizationmemberships" && info.Verb == "list" {
+			userID, ok := ctx.Value(UserIDContextKey).(string)
+			if ok {
+				currentSelector, err := fields.ParseSelector(info.FieldSelector)
+				if err != nil {
+					responsewriters.InternalError(w, req, fmt.Errorf("failed to parse label selector: %w", err))
+					return
+				}
+
+				// Filter out any user-id constraints that may have been provided
+				// in the request.
+				newRequirements := fields.Requirements{}
+				for _, r := range currentSelector.Requirements() {
+					if r.Field == OrganizationMembershipUserFieldSelector {
+						continue
+					}
+					newRequirements = append(newRequirements, r)
+				}
+
+				// Build new selector, filtering out any user-id constraint that
+				// may have been provided in the request
+				newSelector := fields.AndSelectors(currentSelector, fields.SelectorFromSet(fields.Set{
+					OrganizationMembershipUserFieldSelector: userID,
+				}))
+
+				// Set the new field selector on the request info.
+				info.FieldSelector = newSelector.String()
+
+				// Inject the new selector into the request
+				query, err := url.ParseQuery(req.URL.RawQuery)
+				if err != nil {
+					responsewriters.InternalError(w, req, fmt.Errorf("failed to parse url query: %w", err))
+				}
+				query.Del("fieldSelector")
+				query.Add("fieldSelector", info.FieldSelector)
+
+				req.URL.RawQuery = query.Encode()
+			}
+		}
+
+		req = req.WithContext(request.WithRequestInfo(ctx, info))
+
+		handler.ServeHTTP(w, req)
+	})
 }
