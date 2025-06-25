@@ -47,24 +47,6 @@ type MachineAccountKeyStatus struct {
 	// For example, when using Zitadel, a typical value might be: "326102453042806786"
 	AuthProviderKeyID string `json:"authProviderKeyId,omitempty"`
 
-	// PrivateKey contains the private key material returned by the auth provider, base64-encoded
-	// for safe transport in JSON. The actual content and format depend on the auth provider
-	// implementation—some providers return raw key material, others include metadata or structured
-	// payloads.
-	//
-	// The controller sets this value only once, immediately after key creation. Callers MUST
-	// download and persist it securely because it will be wiped from the status during the
-	// next reconciliation cycle to avoid persisting sensitive data in the cluster.
-	//
-	// Example (Zitadel decoded key material):
-	// {
-	//   "type": "serviceaccount",
-	//   "keyId": "100509901696068329",
-	//   "key": "-----BEGIN RSA PRIVATE KEY----- [...] -----END RSA PRIVATE KEY-----\n",
-	//   "userId": "100507859606888466"
-	// }
-	PrivateKey string `json:"privateKey,omitempty"`
-
 	// Conditions provide conditions that represent the current status of the MachineAccountKey.
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +kubebuilder:validation:Optional
