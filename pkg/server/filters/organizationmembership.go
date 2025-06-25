@@ -13,7 +13,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	"k8s.io/apiserver/pkg/endpoints/request"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"k8s.io/klog/v2"
 
 	"go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
@@ -38,11 +38,11 @@ const (
 func OrganizationMembershipContextHandler(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
-		log := logf.FromContext(ctx)
+		log := klog.FromContext(ctx)
 
 		info, ok := request.RequestInfoFrom(ctx)
 		if !ok {
-			log.Error(nil, "request info not found in context")
+			klog.Error(nil, "request info not found in context")
 			// if this happens, the request info resolver is missing from the chain
 			handler.ServeHTTP(w, req)
 			return
@@ -114,7 +114,7 @@ func OrganizationMembershipContextHandler(handler http.Handler) http.Handler {
 func OrganizationMembershipContextAuthorizationDecorator(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
-		log := logf.FromContext(ctx)
+		log := klog.FromContext(ctx)
 
 		info, ok := request.RequestInfoFrom(ctx)
 		if !ok {
