@@ -9,7 +9,7 @@ import (
 // +kubebuilder:object:root=true
 
 // MachineAccount is the Schema for the machine accounts API
-// +kubebuilder:printcolumn:name="Email",type="string",JSONPath=".spec.email"
+// +kubebuilder:printcolumn:name="Email",type="string",JSONPath=".status.email"
 // +kubebuilder:printcolumn:name="Description",type="string",JSONPath=".metadata.annotations['kubernetes\\.io/description']"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".spec.state"
 // +kubebuilder:printcolumn:name="Access Token Type",type="string",JSONPath=".spec.accessTokenType"
@@ -26,11 +26,6 @@ type MachineAccount struct {
 
 // MachineAccountSpec defines the desired state of MachineAccount
 type MachineAccountSpec struct {
-	// The email of the machine account.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MaxLength=200
-	// +kubebuilder:validation:Format=email
-	Email string `json:"email"`
 
 	// The state of the machine account.
 	// +kubebuilder:validation:Enum=Active;Inactive
@@ -41,6 +36,10 @@ type MachineAccountSpec struct {
 
 // MachineAccountStatus defines the observed state of MachineAccount
 type MachineAccountStatus struct {
+	// The computed email of the machine account following the pattern:
+	// {metadata.name}@{metadata.namespace}.{project.metadata.name}.{global-suffix}
+	Email string `json:"email,omitempty"`
+
 	// Conditions provide conditions that represent the current status of the MachineAccount.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
