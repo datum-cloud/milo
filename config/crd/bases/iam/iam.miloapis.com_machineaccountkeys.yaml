@@ -15,7 +15,7 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.ownerRef.name
+    - jsonPath: .spec.machineAccountName
       name: Machine Account
       type: string
     - jsonPath: .spec.expirationDate
@@ -58,34 +58,17 @@ spec:
                   If not specified, the MachineAccountKey will never expire.
                 format: date-time
                 type: string
-              ownerRef:
-                description: |-
-                  OwnerRef is a reference to the resource that owns the MachineAccountKey.
-                  MachineAccountKey is a namespaced resource.
-                properties:
-                  kind:
-                    description: Kind is the kind of the resource.
-                    enum:
-                    - MachineAccount
-                    type: string
-                  name:
-                    description: Name is the name of the resource being referenced.
-                    type: string
-                  uid:
-                    description: UID is the UID of the resource being referenced.
-                    type: string
-                required:
-                - kind
-                - name
-                - uid
-                type: object
+              machineAccountName:
+                description: MachineAccountName is the name of the MachineAccount
+                  that owns this key.
+                type: string
               publicKey:
                 description: |-
                   PublicKey is the public key of the MachineAccountKey.
                   If not specified, the MachineAccountKey will be created with an auto-generated public key.
                 type: string
             required:
-            - ownerRef
+            - machineAccountName
             type: object
           status:
             description: MachineAccountKeyStatus defines the observed state of MachineAccountKey
@@ -161,6 +144,8 @@ spec:
                 type: array
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.machineAccountName
     served: true
     storage: true
     subresources:

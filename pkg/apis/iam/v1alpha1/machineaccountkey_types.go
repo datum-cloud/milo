@@ -9,10 +9,11 @@ import (
 // +kubebuilder:object:root=true
 
 // MachineAccountKey is the Schema for the machineaccountkeys API
-// +kubebuilder:printcolumn:name="Machine Account",type="string",JSONPath=".spec.ownerRef.name"
+// +kubebuilder:printcolumn:name="Machine Account",type="string",JSONPath=".spec.machineAccountName"
 // +kubebuilder:printcolumn:name="Expiration Date",type="string",JSONPath=".spec.expirationDate"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:selectablefield:JSONPath=".spec.machineAccountName"
 // +kubebuilder:resource:scope=Namespaced
 type MachineAccountKey struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -24,10 +25,9 @@ type MachineAccountKey struct {
 
 // MachineAccountKeySpec defines the desired state of MachineAccountKey
 type MachineAccountKeySpec struct {
-	// OwnerRef is a reference to the resource that owns the MachineAccountKey.
-	// MachineAccountKey is a namespaced resource.
+	// MachineAccountName is the name of the MachineAccount that owns this key.
 	// +kubebuilder:validation:Required
-	OwnerRef OwnerReference `json:"ownerRef"`
+	MachineAccountName string `json:"machineAccountName"`
 
 	// ExpirationDate is the date and time when the MachineAccountKey will expire.
 	// If not specified, the MachineAccountKey will never expire.
@@ -51,22 +51,6 @@ type MachineAccountKeyStatus struct {
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-}
-
-// OwnerReference contains information that points to the MachineAccount being referenced.
-type OwnerReference struct {
-	// Name is the name of the resource being referenced.
-	// +kubebuilder:validation:Required
-	Name string `json:"name"`
-
-	// UID is the UID of the resource being referenced.
-	// +kubebuilder:validation:Required
-	UID string `json:"uid"`
-
-	// Kind is the kind of the resource.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=MachineAccount
-	Kind string `json:"kind"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
