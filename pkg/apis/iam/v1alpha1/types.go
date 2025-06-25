@@ -5,6 +5,8 @@ package v1alpha1
 // is sufficient to identify the target role.
 // +k8s:deepcopy-gen=true
 // +kubebuilder:object:generate=true
+// +listType=map
+// +listMapKey=name
 type ScopedRoleReference struct {
 	// Name of the referenced Role.
 	// +kubebuilder:validation:Required
