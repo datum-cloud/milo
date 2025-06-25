@@ -398,6 +398,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			organizationMembershipCtrl := resourcemanagercontroller.OrganizationMembershipController{
+				Client: ctrl.GetClient(),
+			}
+			if err := organizationMembershipCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up organization membership controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
 			go func() {
 				if err := infraCluster.Start(ctx); err != nil {
 					panic(err)
