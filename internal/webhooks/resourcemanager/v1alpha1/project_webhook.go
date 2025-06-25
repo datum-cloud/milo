@@ -56,16 +56,30 @@ func (m *ProjectMutator) Default(ctx context.Context, obj runtime.Object) error 
 		return fmt.Errorf("failed to get request from context: %w", err)
 	}
 
-	requestContextOrgID, ok := req.UserInfo.Extra[v1alpha1.OrganizationNameLabel]
-	if !ok {
-		errMsg := fmt.Sprintf("request context does not have the required organization name label '%s'", v1alpha1.OrganizationNameLabel)
+	// The project webhook is always going to have the organization ID as the
+	// parent context in the user's extra fields. Validate that the request
+	// contains the required parent information and it's for an organization.
+	parentName, parentNameOk := req.UserInfo.Extra[iamv1alpha1.ParentNameExtraKey]
+	parentKind, parentKindOk := req.UserInfo.Extra[iamv1alpha1.ParentKindExtraKey]
+	parentAPIGroup, parentAPIGroupOk := req.UserInfo.Extra[iamv1alpha1.ParentAPIGroupExtraKey]
+
+	if !parentNameOk || !parentKindOk || !parentAPIGroupOk {
+		errMsg := "request context does not have the required parent information"
 		projectlog.Error(fmt.Errorf(errMsg), errMsg)
 		return fmt.Errorf(errMsg)
 	}
 
+	if len(parentKind) != 1 || parentKind[0] != "Organization" || parentAPIGroup[0] != v1alpha1.GroupVersion.Group {
+		errMsg := "request context has invalid parent information, must be Organization from the resourcemanager.miloapis.com API group"
+		projectlog.Error(fmt.Errorf(errMsg), errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	requestContextOrgID := parentName[0]
+
 	org := &v1alpha1.Organization{}
-	if err := m.client.Get(ctx, client.ObjectKey{Name: requestContextOrgID[0]}, org); err != nil {
-		return fmt.Errorf("failed to get organization '%s': %w", requestContextOrgID[0], err)
+	if err := m.client.Get(ctx, client.ObjectKey{Name: requestContextOrgID}, org); err != nil {
+		return fmt.Errorf("failed to get organization '%s': %w", requestContextOrgID, err)
 	}
 
 	// If the request context has had an org id injected, default the parent to

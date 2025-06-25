@@ -63,6 +63,10 @@ func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.
 	// for another user in the system. It's expected those organizations will
 	// create the necessary policy binding and organization membership to provide
 	// the user access.
+	//
+	// TODO: Convert this to use a SubjectAccessReview to check if the user has
+	//       permission to create an organization without a policy binding or
+	//       organization membership.
 	if slices.Contains(req.UserInfo.Groups, "system:masters") {
 		return nil, nil
 	}
