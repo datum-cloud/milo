@@ -26,8 +26,10 @@ type MachineAccount struct {
 
 // MachineAccountSpec defines the desired state of MachineAccount
 type MachineAccountSpec struct {
-
-	// The state of the machine account.
+	// The state of the machine account. This state can be safely changed as needed.
+	// States:
+	//   - Active: The machine account can be used to authenticate.
+	//   - Inactive: The machine account is prohibited to be used to authenticate, and revokes all existing sessions.
 	// +kubebuilder:validation:Enum=Active;Inactive
 	// +kubebuilder:default=Active
 	// +kubebuilder:validation:Optional
