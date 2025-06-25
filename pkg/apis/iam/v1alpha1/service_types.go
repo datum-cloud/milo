@@ -5,7 +5,6 @@ import (
 )
 
 // ProtectedResourceSpec defines the desired state of ProtectedResource
-// +k8s:openapi-gen=true
 type ProtectedResourceSpec struct {
 	// ServiceRef references the service definition this protected resource belongs to.
 	// +kubebuilder:validation:Required
@@ -50,11 +49,9 @@ type ProtectedResourceStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ProtectedResource is the Schema for the protectedresources API
-// +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Kind",type="string",JSONPath=".spec.kind"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
@@ -78,7 +75,6 @@ type ProtectedResourceList struct {
 }
 
 // ParentResourceRef defines the reference to a parent resource
-// +k8s:openapi-gen=true
 type ParentResourceRef struct {
 	// APIGroup is the group for the resource being referenced.
 	// If APIGroup is not specified, the specified Kind must be in the core API group.
@@ -91,7 +87,6 @@ type ParentResourceRef struct {
 }
 
 // ServiceReference holds a reference to a service definition.
-// +k8s:openapi-gen=true
 type ServiceReference struct {
 	// Name is the resource name of the service definition.
 	// +kubebuilder:validation:Required
