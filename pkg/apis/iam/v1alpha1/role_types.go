@@ -41,6 +41,8 @@ type RoleSpec struct {
 	// The list of roles from which this role inherits permissions.
 	// Each entry must be a valid role resource name.
 	// +kubebuilder:validation:Optional
+	// +listType=map
+	// +listMapKey=name
 	InheritedRoles []ScopedRoleReference `json:"inheritedRoles,omitempty"`
 }
 

@@ -5,8 +5,6 @@ package v1alpha1
 // is sufficient to identify the target role.
 // +k8s:deepcopy-gen=true
 // +kubebuilder:object:generate=true
-// +listType=map
-// +listMapKey=name
 type ScopedRoleReference struct {
 	// Name of the referenced Role.
 	// +kubebuilder:validation:Required
@@ -17,8 +15,3 @@ type ScopedRoleReference struct {
 	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
 }
-
-// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:scope=Cluster
-
-// IAMSetting is the Schema for the iamsettings API
