@@ -83,11 +83,13 @@ func (v *UserValidator) createSelfManagePolicyBinding(ctx context.Context, user 
 					UID:  string(user.GetUID()),
 				},
 			},
-			TargetRef: iamv1alpha1.TargetReference{
-				APIGroup: iamv1alpha1.SchemeGroupVersion.Group,
-				Kind:     "User",
-				Name:     user.Name,
-				UID:      string(user.GetUID()),
+			ResourceSelector: iamv1alpha1.ResourceSelector{
+				ResourceRef: &iamv1alpha1.ResourceReference{
+					APIGroup: iamv1alpha1.SchemeGroupVersion.Group,
+					Kind:     "User",
+					Name:     user.Name,
+					UID:      string(user.GetUID()),
+				},
 			},
 		},
 	}

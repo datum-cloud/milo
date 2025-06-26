@@ -18,14 +18,11 @@ spec:
     - jsonPath: .spec.roleRef.name
       name: Role
       type: string
-    - jsonPath: .spec.targetRef.apiGroup
-      name: Target API Group
+    - jsonPath: .spec.resourceSelector.resourceRef.kind
+      name: Resource Kind
       type: string
-    - jsonPath: .spec.targetRef.kind
-      name: Target Kind
-      type: string
-    - jsonPath: .spec.targetRef.name
-      name: Target Name
+    - jsonPath: .spec.resourceSelector.resourceRef.name
+      name: Resource Name
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -58,6 +55,67 @@ spec:
           spec:
             description: PolicyBindingSpec defines the desired state of PolicyBinding
             properties:
+              resourceSelector:
+                description: |-
+                  ResourceSelector defines which resources the subjects in the policy binding
+                  should have the role applied to. Options within this struct are mutually
+                  exclusive.
+                properties:
+                  resourceKind:
+                    description: |-
+                      ResourceKind specifies that the policy binding should apply to all resources of a specific kind.
+                      Mutually exclusive with resourceRef.
+                    properties:
+                      apiGroup:
+                        description: |-
+                          APIGroup is the group for the resource type being referenced. If APIGroup
+                          is not specified, the specified Kind must be in the core API group.
+                        type: string
+                      kind:
+                        description: Kind is the type of resource being referenced.
+                        type: string
+                    required:
+                    - kind
+                    type: object
+                  resourceRef:
+                    description: |-
+                      ResourceRef provides a reference to a specific resource instance.
+                      Mutually exclusive with resourceKind.
+                    properties:
+                      apiGroup:
+                        description: |-
+                          APIGroup is the group for the resource being referenced.
+                          If APIGroup is not specified, the specified Kind must be in the core API group.
+                          For any other third-party types, APIGroup is required.
+                        type: string
+                      kind:
+                        description: Kind is the type of resource being referenced.
+                        type: string
+                      name:
+                        description: Name is the name of resource being referenced.
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace is the namespace of resource being referenced.
+                          Required for namespace-scoped resources. Omitted for cluster-scoped resources.
+                        type: string
+                      uid:
+                        description: UID is the unique identifier of the resource
+                          being referenced.
+                        type: string
+                    required:
+                    - kind
+                    - name
+                    - uid
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: ResourceSelector is immutable and cannot be changed after
+                    creation
+                  rule: '!has(oldSelf) || self == oldSelf'
+                - message: exactly one of resourceRef or resourceKind must be specified,
+                    but not both
+                  rule: has(self.resourceRef) != has(self.resourceKind)
               roleRef:
                 description: |-
                   RoleRef is a reference to the Role that is being bound.
@@ -73,6 +131,9 @@ spec:
                 required:
                 - name
                 type: object
+                x-kubernetes-validations:
+                - message: RoleRef is immutable and cannot be changed after creation
+                  rule: '!has(oldSelf) || self == oldSelf'
               subjects:
                 description: Subjects holds references to the objects the role applies
                   to.
@@ -89,7 +150,10 @@ spec:
                       - Group
                       type: string
                     name:
-                      description: Name of the object being referenced.
+                      description: |-
+                        Name of the object being referenced. A special group name of
+                        "system:authenticated-users" can be used to refer to all authenticated
+                        users.
                       type: string
                     namespace:
                       description: |-
@@ -106,41 +170,10 @@ spec:
                   type: object
                 minItems: 1
                 type: array
-              targetRef:
-                description: |-
-                  TargetRef is a reference to the resource to which this policy binding applies.
-                  This allows the binding to be about a resource in any namespace or a cluster-scoped resource.
-                properties:
-                  apiGroup:
-                    description: |-
-                      APIGroup is the group for the resource being referenced.
-                      If APIGroup is not specified, the specified Kind must be in the core API group.
-                      For any other third-party types, APIGroup is required.
-                    type: string
-                  kind:
-                    description: Kind is the type of resource being referenced.
-                    type: string
-                  name:
-                    description: Name is the name of resource being referenced.
-                    type: string
-                  namespace:
-                    description: |-
-                      Namespace is the namespace of resource being referenced.
-                      Required for namespace-scoped resources. Omitted for cluster-scoped resources.
-                    type: string
-                  uid:
-                    description: UID is the unique identifier of the resource being
-                      referenced.
-                    type: string
-                required:
-                - kind
-                - name
-                - uid
-                type: object
             required:
+            - resourceSelector
             - roleRef
             - subjects
-            - targetRef
             type: object
           status:
             description: PolicyBindingStatus defines the observed state of PolicyBinding

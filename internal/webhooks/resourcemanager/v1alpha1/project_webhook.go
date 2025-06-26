@@ -221,11 +221,13 @@ func (v *ProjectValidator) createOwnerPolicyBinding(ctx context.Context, project
 					UID:  string(foundUser.GetUID()),
 				},
 			},
-			TargetRef: iamv1alpha1.TargetReference{
-				APIGroup: v1alpha1.GroupVersion.Group,
-				Kind:     "Project",
-				Name:     project.Name,
-				UID:      string(project.UID),
+			ResourceSelector: iamv1alpha1.ResourceSelector{
+				ResourceRef: &iamv1alpha1.ResourceReference{
+					APIGroup: v1alpha1.GroupVersion.Group,
+					Kind:     "Project",
+					Name:     project.Name,
+					UID:      string(project.UID),
+				},
 			},
 		},
 	}

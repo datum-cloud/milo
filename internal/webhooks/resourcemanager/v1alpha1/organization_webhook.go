@@ -139,11 +139,13 @@ func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, or
 					UID:  string(user.GetUID()),
 				},
 			},
-			TargetRef: iamv1alpha1.TargetReference{
-				APIGroup: resourcemanagerv1alpha1.GroupVersion.Group,
-				Kind:     "Organization",
-				Name:     org.Name,
-				UID:      string(org.UID),
+			ResourceSelector: iamv1alpha1.ResourceSelector{
+				ResourceRef: &iamv1alpha1.ResourceReference{
+					APIGroup: resourcemanagerv1alpha1.GroupVersion.Group,
+					Kind:     "Organization",
+					Name:     org.Name,
+					UID:      string(org.UID),
+				},
 			},
 		},
 	}
