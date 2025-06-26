@@ -136,6 +136,16 @@ spec:
                   The computed email of the machine account following the pattern:
                   {metadata.name}@{metadata.namespace}.{project.metadata.name}.{global-suffix}
                 type: string
+              state:
+                description: |-
+                  State represents the current activation state of the machine account from the auth provider.
+                  This field tracks the state from the previous generation and is updated when state changes
+                  are successfully propagated to the auth provider. It helps optimize performance by only
+                  updating the auth provider when a state change is detected.
+                enum:
+                - Active
+                - Inactive
+                type: string
             type: object
         type: object
     served: true

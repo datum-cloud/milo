@@ -42,6 +42,13 @@ type MachineAccountStatus struct {
 	// {metadata.name}@{metadata.namespace}.{project.metadata.name}.{global-suffix}
 	Email string `json:"email,omitempty"`
 
+	// State represents the current activation state of the machine account from the auth provider.
+	// This field tracks the state from the previous generation and is updated when state changes
+	// are successfully propagated to the auth provider. It helps optimize performance by only
+	// updating the auth provider when a state change is detected.
+	// +kubebuilder:validation:Enum=Active;Inactive
+	State string `json:"state,omitempty"`
+
 	// Conditions provide conditions that represent the current status of the MachineAccount.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
