@@ -161,13 +161,18 @@ spec:
                         For a User or Group, it is ignored.
                       type: string
                     uid:
-                      description: UID of the referenced object.
+                      description: UID of the referenced object. Optional for system
+                        groups (groups with names starting with "system:").
                       type: string
                   required:
                   - kind
                   - name
-                  - uid
                   type: object
+                  x-kubernetes-validations:
+                  - message: UID is required for all subjects except system groups
+                      (groups with names starting with 'system:')
+                    rule: (self.kind == 'Group' && has(self.name) && self.name.startsWith('system:'))
+                      || (has(self.uid) && size(self.uid) > 0)
                 minItems: 1
                 type: array
             required:

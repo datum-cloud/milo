@@ -20,6 +20,7 @@ type RoleReference struct {
 // This can be a User or Group.
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=true
+// +kubebuilder:validation:XValidation:rule="(self.kind == 'Group' && has(self.name) && self.name.startsWith('system:')) || (has(self.uid) && size(self.uid) > 0)",message="UID is required for all subjects except system groups (groups with names starting with 'system:')"
 type Subject struct {
 	// Kind of object being referenced. Values defined in Kind constants.
 	// +kubebuilder:validation:Required
@@ -34,9 +35,9 @@ type Subject struct {
 	// For a User or Group, it is ignored.
 	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
-	// UID of the referenced object.
-	// +kubebuilder:validation:Required
-	UID string `json:"uid"`
+	// UID of the referenced object. Optional for system groups (groups with names starting with "system:").
+	// +kubebuilder:validation:Optional
+	UID string `json:"uid,omitempty"`
 }
 
 // ResourceReference contains enough information to let you identify a specific
