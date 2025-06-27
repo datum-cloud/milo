@@ -123,7 +123,7 @@ type PolicyBindingSpec struct {
 	// RoleRef is a reference to the Role that is being bound.
 	// This can be a reference to a Role custom resource.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="!has(oldSelf) || self == oldSelf",message="RoleRef is immutable and cannot be changed after creation"
+	// +kubebuilder:validation:XValidation:rule="oldSelf == null || self == oldSelf",message="RoleRef is immutable and cannot be changed after creation"
 	RoleRef RoleReference `json:"roleRef"`
 
 	// Subjects holds references to the objects the role applies to.
@@ -135,7 +135,7 @@ type PolicyBindingSpec struct {
 	// should have the role applied to. Options within this struct are mutually
 	// exclusive.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="!has(oldSelf) || self == oldSelf",message="ResourceSelector is immutable and cannot be changed after creation"
+	// +kubebuilder:validation:XValidation:rule="oldSelf == null || self == oldSelf",message="ResourceSelector is immutable and cannot be changed after creation"
 	ResourceSelector ResourceSelector `json:"resourceSelector"`
 }
 

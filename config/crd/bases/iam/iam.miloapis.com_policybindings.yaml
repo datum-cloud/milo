@@ -112,7 +112,7 @@ spec:
                 x-kubernetes-validations:
                 - message: ResourceSelector is immutable and cannot be changed after
                     creation
-                  rule: '!has(oldSelf) || self == oldSelf'
+                  rule: oldSelf == null || self == oldSelf
                 - message: exactly one of resourceRef or resourceKind must be specified,
                     but not both
                   rule: has(self.resourceRef) != has(self.resourceKind)
@@ -133,7 +133,7 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: RoleRef is immutable and cannot be changed after creation
-                  rule: '!has(oldSelf) || self == oldSelf'
+                  rule: oldSelf == null || self == oldSelf
               subjects:
                 description: Subjects holds references to the objects the role applies
                   to.
