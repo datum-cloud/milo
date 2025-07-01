@@ -154,6 +154,33 @@ func (v *ProjectValidator) ValidateCreate(ctx context.Context, obj runtime.Objec
 }
 
 func (v *ProjectValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	oldProject, ok := oldObj.(*v1alpha1.Project)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast old object to Project")
+	}
+
+	newProject, ok := newObj.(*v1alpha1.Project)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast new object to Project")
+	}
+
+	projectlog.Info("Validating Project update", "name", newProject.Name)
+	errs := field.ErrorList{}
+
+	// Existing projects always have the organization label, so prevent any changes to it
+	oldOrgLabel := oldProject.Labels[v1alpha1.OrganizationNameLabel]
+	newOrgLabel, newExists := newProject.Labels[v1alpha1.OrganizationNameLabel]
+	// The organization label must not be removed or changed
+	if !newExists {
+		errs = append(errs, field.Forbidden(field.NewPath("metadata.labels").Key(v1alpha1.OrganizationNameLabel), "organization label cannot be removed"))
+	} else if oldOrgLabel != newOrgLabel {
+		errs = append(errs, field.Forbidden(field.NewPath("metadata.labels").Key(v1alpha1.OrganizationNameLabel), "organization label cannot be changed"))
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.NewInvalid(newProject.GroupVersionKind().GroupKind(), newProject.Name, errs)
+	}
+
 	return nil, nil
 }
 
