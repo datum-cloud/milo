@@ -109,7 +109,7 @@ func (m *ProjectMutator) Default(ctx context.Context, obj runtime.Object) error 
 	return nil
 }
 
-// +kubebuilder:webhook:path=/validate-resourcemanager-miloapis-com-v1alpha1-project,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create,versions=v1alpha1,name=vproject.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/validate-resourcemanager-miloapis-com-v1alpha1-project,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=vproject.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // ProjectValidator validates Projects and creates associated PolicyBindings for owners.
 type ProjectValidator struct {

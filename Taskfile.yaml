@@ -65,6 +65,8 @@ tasks:
           mkdir -p "config/crd/bases/$package_name"
           "{{.TOOL_DIR}}/controller-gen" crd paths="./$package_dir..." output:dir="./config/crd/bases/$package_name"
         done
+      - echo "Generating webhook files..."
+      - "\"{{.TOOL_DIR}}/controller-gen\" webhook paths=\"./internal/webhooks/...\" output:dir=\"./config/webhook\""
     silent: true
 
   api-docs:
