@@ -48,14 +48,20 @@ func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.
 	org := obj.(*resourcemanagerv1alpha1.Organization)
 	organizationlog.Info("Validating Organization", "name", org.Name)
 
-	// Create namespace and PolicyBinding on Organization Create operation
-	if err := v.createOrganizationNamespace(ctx, org); err != nil {
-		return nil, fmt.Errorf("failed to create organization namespace: %w", err)
-	}
-
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get request from context: %w", err)
+	}
+
+	// Don't create policy binding or organization membership for dry run
+	// requests.
+	if req.DryRun != nil && *req.DryRun {
+		return nil, nil
+	}
+
+	// Create namespace and PolicyBinding on Organization Create operation
+	if err := v.createOrganizationNamespace(ctx, org); err != nil {
+		return nil, fmt.Errorf("failed to create organization namespace: %w", err)
 	}
 
 	// Organizations created by system:masters shouldn't have a policy binding

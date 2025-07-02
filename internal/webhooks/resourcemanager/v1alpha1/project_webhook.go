@@ -146,6 +146,16 @@ func (v *ProjectValidator) ValidateCreate(ctx context.Context, obj runtime.Objec
 		return nil, errors.NewInvalid(project.GroupVersionKind().GroupKind(), project.Name, errs)
 	}
 
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get request from context: %w", err)
+	}
+
+	// Don't create policy binding for dry run requests.
+	if req.DryRun != nil && *req.DryRun {
+		return nil, nil
+	}
+
 	if err := v.createOwnerPolicyBinding(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to create owner policy binding: %w", err)
 	}
