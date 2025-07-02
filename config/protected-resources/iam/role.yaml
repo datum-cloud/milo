@@ -18,5 +18,5 @@ spec:
     - patch
     - watch
   parentResources:
-    - apiGroup: iam.datumapis.com
+    - apiGroup: iam.miloapis.com
       kind: Service
