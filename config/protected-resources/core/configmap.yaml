@@ -16,3 +16,6 @@ spec:
     - delete
     - patch
     - watch
+  parentResources:
+    - apiGroup: resourcemanager.miloapis.com
+      kind: Project
