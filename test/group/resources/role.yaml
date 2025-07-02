@@ -1,0 +1,15 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: group.miloapis.com-test-group-role
+  namespace: ($namespace)
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - compute.miloapis.com/workloads.create
+    - compute.miloapis.com/workloads.get
+    - compute.miloapis.com/workloads.update
+    - compute.miloapis.com/workloads.delete
+    - compute.miloapis.com/workloads.list
+    - compute.miloapis.com/workloads.watch
+    - compute.miloapis.com/workloads.patch

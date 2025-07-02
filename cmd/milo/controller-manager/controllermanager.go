@@ -69,6 +69,7 @@ import (
 
 	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
+	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
@@ -408,6 +409,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := organizationMembershipCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up organization membership controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			groupCtrl := iamcontroller.GroupController{
+				Client: ctrl.GetClient(),
+			}
+			if err := groupCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up group controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

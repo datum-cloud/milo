@@ -1,0 +1,132 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: group
+spec:
+  steps:
+  - name: create-groups-and-policy-binding
+    try:
+    - apply:
+        file: resources/group.yaml
+        outputs:
+          - name: grp
+            value: (@)
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: Group
+        name: test-group
+        namespace: ($namespace)
+        timeout: 5m
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+    - assert:
+        file: resources/assert-group.yaml
+    - apply:
+        file: resources/persistant-group.yaml
+        outputs:
+          - name: testPersistantGroup
+            value: (@)
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: Group
+        name: test-persistant-group
+        namespace: ($namespace)
+        timeout: 5m
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+    - apply:
+        file: resources/role.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: Role
+        namespace: ($namespace)
+        name: group.miloapis.com-test-group-role
+        timeout: 5m
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+    - apply:
+        file: resources/organization.yaml
+        outputs:
+          - name: testGroupOrg
+            value: (@)
+    - apply:
+        file: resources/policy-binding.yaml
+    - assert:
+        file: resources/assert-policy-binding.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: PolicyBinding
+        name: sample-test-group-binding
+        timeout: 5m
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+  - name: create-memberships
+    try:
+    - apply:
+        file: resources/memberships.yaml
+    - assert:
+        file: resources/memberships.yaml
+  - name: delete-groups
+    try:
+    - delete: # Delete first group
+        file: resources/group.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: Group
+        name: test-group
+        namespace: ($namespace)
+        timeout: 5m
+        for:
+          deletion: {}
+    - wait: # GroupMembership that reference the group should be deleted with the group deletion
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: GroupMembership
+        name: test-membership-1
+        namespace: ($namespace)
+        timeout: 5m
+        for:
+          deletion: {}
+    - wait: # GroupMembership that reference the group should be deleted with the group deletion
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: GroupMembership
+        name: test-membership-2
+        namespace: ($namespace)
+        timeout: 5m
+        for:
+          deletion: {}
+    - error: # Assert that the group memberships are deleted
+        file: resources/memberships.yaml
+    - error: # Assert that the group is deleted
+        file: resources/group.yaml
+    - sleep:
+        duration: 5s
+    - assert: # Assert that the policy binding is updated, and reference to previous group is removed
+        file: resources/assert-updated-policy-binding.yaml
+    - delete: # Delete second and last group
+        file: resources/persistant-group.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: Group
+        name: test-persistant-group
+        namespace: ($namespace)
+        timeout: 5m
+        for:
+          deletion: {} 
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: PolicyBinding
+        name: sample-test-group-binding
+        namespace: ($namespace)
+        timeout: 5m
+        for:
+          deletion: {} 
+    - error: # Assert that the policy binding is deleted by the Group Controller, as it does not hold any subjects
+        file: resources/policy-binding.yaml

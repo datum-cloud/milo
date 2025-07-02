@@ -5,7 +5,6 @@ import (
 )
 
 // RoleReference contains information that points to the Role being used
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=true
 type RoleReference struct {
 	// Name is the name of resource being referenced
@@ -18,7 +17,6 @@ type RoleReference struct {
 
 // Subject contains a reference to the object or user identities a role binding applies to.
 // This can be a User or Group.
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=true
 // +kubebuilder:validation:XValidation:rule="(self.kind == 'Group' && has(self.name) && self.name.startsWith('system:')) || (has(self.uid) && size(self.uid) > 0)",message="UID is required for all subjects except system groups (groups with names starting with 'system:')"
 type Subject struct {
@@ -42,7 +40,6 @@ type Subject struct {
 
 // ResourceReference contains enough information to let you identify a specific
 // API resource instance.
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=true
 type ResourceReference struct {
 	// APIGroup is the group for the resource being referenced.
@@ -66,7 +63,6 @@ type ResourceReference struct {
 }
 
 // ResourceKind contains enough information to identify a resource type.
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=true
 type ResourceKind struct {
 	// APIGroup is the group for the resource type being referenced. If APIGroup
@@ -81,7 +77,6 @@ type ResourceKind struct {
 
 // ResourceSelector defines which resources the policy binding applies to.
 // Either resourceRef or resourceKind must be specified, but not both.
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=true
 // +kubebuilder:validation:XValidation:rule="has(self.resourceRef) != has(self.resourceKind)",message="exactly one of resourceRef or resourceKind must be specified, but not both"
 type ResourceSelector struct {
@@ -96,13 +91,11 @@ type ResourceSelector struct {
 	ResourceKind *ResourceKind `json:"resourceKind,omitempty"`
 }
 
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
 // PolicyBinding is the Schema for the policybindings API
-// +k8s:openapi-gen=true
 // +kubebuilder:printcolumn:name="Role",type="string",JSONPath=".spec.roleRef.name"
 // +kubebuilder:printcolumn:name="Resource Kind",type="string",JSONPath=".spec.resourceSelector.resourceRef.kind"
 // +kubebuilder:printcolumn:name="Resource Name",type="string",JSONPath=".spec.resourceSelector.resourceRef.name"
@@ -119,7 +112,6 @@ type PolicyBinding struct {
 
 // PolicyBindingSpec defines the desired state of PolicyBinding
 // +k8s:deepcopy-gen=true
-// +k8s:openapi-gen=true
 type PolicyBindingSpec struct {
 	// RoleRef is a reference to the Role that is being bound.
 	// This can be a reference to a Role custom resource.
@@ -142,7 +134,6 @@ type PolicyBindingSpec struct {
 
 // PolicyBindingStatus defines the observed state of PolicyBinding
 // +k8s:deepcopy-gen=true
-// +k8s:openapi-gen=true
 type PolicyBindingStatus struct {
 	// ObservedGeneration is the most recent generation observed for this PolicyBinding by the controller.
 	// +kubebuilder:validation:Optional
