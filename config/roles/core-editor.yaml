@@ -16,3 +16,7 @@ spec:
     - core.miloapis.com/configmaps.update
     - core.miloapis.com/configmaps.patch
     - core.miloapis.com/configmaps.delete
+    - core.miloapis.com/namespaces.create
+    - core.miloapis.com/namespaces.update
+    - core.miloapis.com/namespaces.patch
+    - core.miloapis.com/namespaces.delete

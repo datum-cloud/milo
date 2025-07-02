@@ -5,3 +5,4 @@ resources:
   - secret.yaml
   - configmap.yaml
   - event.yaml
+  - namespace.yaml
