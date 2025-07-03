@@ -58,8 +58,12 @@ rules:
   resources:
   - projectcontrolplanes
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - resourcemanager.miloapis.com
