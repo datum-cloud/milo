@@ -67,6 +67,9 @@ tasks:
         done
       - echo "Generating webhook files..."
       - "\"{{.TOOL_DIR}}/controller-gen\" webhook paths=\"./internal/webhooks/...\" output:dir=\"./config/webhook\""
+      # Generate RBAC rules for the controllers.
+      - echo "Generating RBAC rules for the controllers..."
+      - "\"{{.TOOL_DIR}}/controller-gen\" rbac:roleName=milo-controller-manager paths=\"./internal/controllers/...\" output:dir=\"./config/controller-manager\""
     silent: true
 
   api-docs:
