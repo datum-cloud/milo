@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: UserPreference
+metadata:
+  name: userpreference-sample
+spec:
+  userRef:
+    name: user-sample
+    namespace: default
+  timezone: "America/New_York"
+  theme: "dark" 
