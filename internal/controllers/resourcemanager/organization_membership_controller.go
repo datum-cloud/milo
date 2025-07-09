@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -153,12 +154,7 @@ func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ct
 	apimeta.SetStatusCondition(&organizationMembership.Status.Conditions, *readyCondition)
 
 	// Update the status only if something changed
-	statusChanged := !apimeta.IsStatusConditionPresentAndEqual(originalStatus.Conditions, readyCondition.Type, readyCondition.Status) ||
-		originalStatus.ObservedGeneration != organizationMembership.Status.ObservedGeneration ||
-		originalStatus.Organization != organizationMembership.Status.Organization ||
-		originalStatus.User != organizationMembership.Status.User
-
-	if statusChanged {
+	if !equality.Semantic.DeepEqual(originalStatus, organizationMembership.Status) {
 		if err := r.Client.Status().Update(ctx, &organizationMembership); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update organization membership status: %w", err)
 		}
