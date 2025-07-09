@@ -21,6 +21,7 @@ import (
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:path=organizationmemberships,scope=Namespaced,singular=organizationmembership
 // +kubebuilder:selectablefield:JSONPath=".spec.userRef.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.organizationRef.name"
 type OrganizationMembership struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

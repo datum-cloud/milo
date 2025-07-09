@@ -181,20 +181,20 @@ func (r *OrganizationMembershipController) findOrganizationMembershipsForOrganiz
 	organization := obj.(*resourcemanagerv1alpha.Organization)
 
 	var organizationMemberships resourcemanagerv1alpha.OrganizationMembershipList
-	if err := r.Client.List(ctx, &organizationMemberships); err != nil {
+	if err := r.Client.List(ctx, &organizationMemberships, client.MatchingFields{
+		"spec.organizationRef.name": organization.Name,
+	}); err != nil {
 		return nil
 	}
 
 	var requests []reconcile.Request
 	for _, membership := range organizationMemberships.Items {
-		if membership.Spec.OrganizationRef.Name == organization.Name {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      membership.Name,
-					Namespace: membership.Namespace,
-				},
-			})
-		}
+		requests = append(requests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      membership.Name,
+				Namespace: membership.Namespace,
+			},
+		})
 	}
 
 	return requests
@@ -205,20 +205,20 @@ func (r *OrganizationMembershipController) findOrganizationMembershipsForUser(ct
 	user := obj.(*iamv1alpha1.User)
 
 	var organizationMemberships resourcemanagerv1alpha.OrganizationMembershipList
-	if err := r.Client.List(ctx, &organizationMemberships); err != nil {
+	if err := r.Client.List(ctx, &organizationMemberships, client.MatchingFields{
+		"spec.userRef.name": user.Name,
+	}); err != nil {
 		return nil
 	}
 
 	var requests []reconcile.Request
 	for _, membership := range organizationMemberships.Items {
-		if membership.Spec.UserRef.Name == user.Name {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      membership.Name,
-					Namespace: membership.Namespace,
-				},
-			})
-		}
+		requests = append(requests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      membership.Name,
+				Namespace: membership.Namespace,
+			},
+		})
 	}
 
 	return requests

@@ -198,6 +198,7 @@ spec:
         type: object
     selectableFields:
     - jsonPath: .spec.userRef.name
+    - jsonPath: .spec.organizationRef.name
     served: true
     storage: true
     subresources:
