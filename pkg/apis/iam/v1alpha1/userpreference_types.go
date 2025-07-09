@@ -26,10 +26,11 @@ type UserPreference struct {
 type UserPreferenceSpec struct {
 	// Reference to the user these preferences belong to.
 	// +kubebuilder:validation:Required
-	UserRef ScopedRoleReference `json:"userRef"`
+	UserRef UserReference `json:"userRef"`
 
 	// The user's timezone preference (e.g., "America/New_York", "Europe/London").
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=America/New_York
 	Timezone string `json:"timezone,omitempty"`
 
 	// The user's theme preference.
