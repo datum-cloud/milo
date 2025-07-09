@@ -83,11 +83,7 @@ func (m *ProjectMutator) Default(ctx context.Context, obj runtime.Object) error 
 	}
 
 	// Set a label on the project to indicate the organization it belongs to.
-	// Initialize the labels map if it's nil.
-	if project.Labels == nil {
-		project.Labels = make(map[string]string)
-	}
-	project.Labels[v1alpha1.OrganizationNameLabel] = requestContextOrgID
+	metav1.SetMetaDataLabel(&project.ObjectMeta, v1alpha1.OrganizationNameLabel, requestContextOrgID)
 
 	// If the request context has had an org id injected, default the parent to
 	// the org. Once we introduce folders, this will need to change to leave the
