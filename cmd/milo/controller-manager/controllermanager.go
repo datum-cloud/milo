@@ -72,6 +72,7 @@ import (
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
+	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
@@ -389,6 +390,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up organization webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupUserWebhooksWithManager(ctrl, SystemNamespace, "iam-user-self-manage"); err != nil {
+				logger.Error(err, "Error setting up user webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
@@ -396,6 +401,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := projectCtrl.SetupWithManager(ctrl, infraCluster); err != nil {
 				logger.Error(err, "Error setting up project controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			organizationMembershipCtrl := resourcemanagercontroller.OrganizationMembershipController{
+				Client: ctrl.GetClient(),
+			}
+			if err := organizationMembershipCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up organization membership controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

@@ -1,0 +1,21 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: iam.miloapis.com-groupmembership
+spec:
+  serviceRef:
+    name: "iam.miloapis.com"
+  kind: GroupMembership
+  plural: groupmemberships
+  singular: groupmembership
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
+  parentResources:
+    - apiGroup: iam.miloapis.com
+      kind: Group

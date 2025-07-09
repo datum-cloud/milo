@@ -24,13 +24,34 @@ webhooks:
     - CREATE
     resources:
     - projects
-  sideEffects: None
+  sideEffects: NoneOnDryRun
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   name: resourcemanager.miloapis.com
 webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-iam-miloapis-com-v1alpha1-user
+      port: 9443
+  failurePolicy: Fail
+  name: vuser.iam.miloapis.com
+  rules:
+  - apiGroups:
+    - iam.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - users
+  sideEffects: NoneOnDryRun
 - admissionReviewVersions:
   - v1
   - v1beta1
@@ -51,7 +72,7 @@ webhooks:
     - CREATE
     resources:
     - organizations
-  sideEffects: None
+  sideEffects: NoneOnDryRun
 - admissionReviewVersions:
   - v1
   - v1beta1
@@ -70,6 +91,7 @@ webhooks:
     - v1alpha1
     operations:
     - CREATE
+    - UPDATE
     resources:
     - projects
   sideEffects: None

@@ -1,0 +1,22 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: core-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: core-reader
+  includedPermissions:
+    # Write permissions for core Kubernetes resources
+    - core.miloapis.com/secrets.create
+    - core.miloapis.com/secrets.update
+    - core.miloapis.com/secrets.patch
+    - core.miloapis.com/secrets.delete
+    - core.miloapis.com/configmaps.create
+    - core.miloapis.com/configmaps.update
+    - core.miloapis.com/configmaps.patch
+    - core.miloapis.com/configmaps.delete
+    - core.miloapis.com/namespaces.create
+    - core.miloapis.com/namespaces.update
+    - core.miloapis.com/namespaces.patch
+    - core.miloapis.com/namespaces.delete

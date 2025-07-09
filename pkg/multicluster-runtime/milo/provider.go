@@ -222,7 +222,7 @@ func (p *Provider) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result
 
 	if p.opts.InternalServiceDiscovery {
 		apiHost.Path = ""
-		apiHost.Host = fmt.Sprintf("milo-apiserver.project-%s.svc.cluster.local:6443", project.GetUID())
+		apiHost.Host = fmt.Sprintf("milo-apiserver.project-%s.svc.cluster.local:6443", project.GetName())
 	} else {
 		apiHost.Path = fmt.Sprintf("/apis/resourcemanager.miloapis.com/v1alpha1/projects/%s/control-plane", project.GetName())
 	}

@@ -1,0 +1,11 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: owner
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: iam-admin
+    - name: resourcemanager-admin
+    - name: core-admin
+    - name: apiextensions-reader

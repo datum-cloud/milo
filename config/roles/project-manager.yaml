@@ -1,0 +1,14 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: project-manager
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - resourcemanager.miloapis.com/projects.create
+    - resourcemanager.miloapis.com/projects.get
+    - resourcemanager.miloapis.com/projects.list
+    - resourcemanager.miloapis.com/projects.update
+    - resourcemanager.miloapis.com/projects.delete
+    - resourcemanager.miloapis.com/projects.patch
+    - resourcemanager.miloapis.com/projects.watch

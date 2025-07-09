@@ -1,0 +1,29 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    # Read-only permissions for all IAM resources
+    - iam.miloapis.com/users.get
+    - iam.miloapis.com/users.list
+    - iam.miloapis.com/users.watch
+    - iam.miloapis.com/roles.get
+    - iam.miloapis.com/roles.list
+    - iam.miloapis.com/roles.watch
+    - iam.miloapis.com/groups.get
+    - iam.miloapis.com/groups.list
+    - iam.miloapis.com/groups.watch
+    - iam.miloapis.com/groupmemberships.get
+    - iam.miloapis.com/groupmemberships.list
+    - iam.miloapis.com/groupmemberships.watch
+    - iam.miloapis.com/userinvitations.get
+    - iam.miloapis.com/userinvitations.list
+    - iam.miloapis.com/userinvitations.watch
+    - iam.miloapis.com/protectedresources.get
+    - iam.miloapis.com/protectedresources.list
+    - iam.miloapis.com/protectedresources.watch
+    - iam.miloapis.com/policybindings.get
+    - iam.miloapis.com/policybindings.list
+    - iam.miloapis.com/policybindings.watch
