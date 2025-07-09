@@ -63,7 +63,7 @@ spec:
                 type: string
                 x-kubernetes-validations:
                 - message: organization type is immutable
-                  rule: oldSelf == null || self == oldSelf
+                  rule: type(oldSelf) == null_type || self == oldSelf
             required:
             - type
             type: object

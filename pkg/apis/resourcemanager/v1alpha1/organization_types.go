@@ -11,7 +11,7 @@ type OrganizationSpec struct {
 	// The type of organization.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=Personal;Business;Government;Research;Education;Nonprofit;Other
-	// +kubebuilder:validation:XValidation:rule="oldSelf == null || self == oldSelf",message="organization type is immutable"
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="organization type is immutable"
 	Type string `json:"type"`
 }
 
