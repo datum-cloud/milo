@@ -200,9 +200,6 @@ func (v *ProjectValidator) ValidateDelete(ctx context.Context, obj runtime.Objec
 
 // lookupUser retrieves the User resource from the iam.miloapis.com API
 func (v *ProjectValidator) lookupUser(ctx context.Context, username string) (*iamv1alpha1.User, error) {
-	// TODO: Determine if we can actually use the UID from the User object in
-	//       the UserInfo of the request. Likely need to configure the OIDC
-	//       authorization to map the UID from the JWT claims.
 	foundUser := &iamv1alpha1.User{}
 	if err := v.Client.Get(ctx, client.ObjectKey{Name: username}, foundUser); err != nil {
 		return nil, fmt.Errorf("failed to get user '%s' from iam.miloapis.com API: %w", username, err)

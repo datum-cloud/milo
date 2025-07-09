@@ -110,9 +110,6 @@ func (v *OrganizationValidator) lookupUser(ctx context.Context) (*iamv1alpha1.Us
 		return nil, fmt.Errorf("failed to get request from context: %w", err)
 	}
 
-	// TODO: Determine if we can actually use the UID from the User object in
-	//       the UserInfo of the request. Likely need to configure the OIDC
-	//       authorization to map the UID from the JWT claims.
 	foundUser := &iamv1alpha1.User{}
 	if err := v.client.Get(ctx, client.ObjectKey{Name: string(req.UserInfo.UID)}, foundUser); err != nil {
 		return nil, fmt.Errorf("failed to get user '%s' from iam.miloapis.com API: %w", string(req.UserInfo.UID), err)
