@@ -11,7 +11,6 @@ spec:
     - resourcemanager.miloapis.com/organizations.create
     - resourcemanager.miloapis.com/organizations.update
     - resourcemanager.miloapis.com/organizations.patch
-    - resourcemanager.miloapis.com/organizations.delete
     - resourcemanager.miloapis.com/projects.create
     - resourcemanager.miloapis.com/projects.update
     - resourcemanager.miloapis.com/projects.patch
