@@ -5,6 +5,5 @@ metadata:
 spec:
   userRef:
     name: user-sample
-    namespace: default
   timezone: "America/New_York"
   theme: "dark" 
