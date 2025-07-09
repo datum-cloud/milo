@@ -64,6 +64,7 @@ spec:
                 - system
                 type: string
               timezone:
+                default: America/New_York
                 description: The user's timezone preference (e.g., "America/New_York",
                   "Europe/London").
                 type: string
@@ -71,12 +72,7 @@ spec:
                 description: Reference to the user these preferences belong to.
                 properties:
                   name:
-                    description: Name of the referenced Role.
-                    type: string
-                  namespace:
-                    description: |-
-                      Namespace of the referenced Role.
-                      If not specified, it defaults to the namespace of the resource containing this reference.
+                    description: Name is the name of the User being referenced.
                     type: string
                 required:
                 - name
