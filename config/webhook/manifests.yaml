@@ -24,7 +24,7 @@ webhooks:
     - CREATE
     resources:
     - projects
-  sideEffects: None
+  sideEffects: NoneOnDryRun
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
@@ -51,7 +51,7 @@ webhooks:
     - CREATE
     resources:
     - users
-  sideEffects: None
+  sideEffects: NoneOnDryRun
 - admissionReviewVersions:
   - v1
   - v1beta1
@@ -72,7 +72,7 @@ webhooks:
     - CREATE
     resources:
     - organizations
-  sideEffects: None
+  sideEffects: NoneOnDryRun
 - admissionReviewVersions:
   - v1
   - v1beta1

@@ -37,7 +37,7 @@ func SetupProjectWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, p
 	return nil
 }
 
-// +kubebuilder:webhook:path=/mutate-resourcemanager-miloapis-com-v1alpha1-project,mutating=true,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create,versions=v1alpha1,name=mproject.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/mutate-resourcemanager-miloapis-com-v1alpha1-project,mutating=true,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=resourcemanager.miloapis.com,resources=projects,verbs=create,versions=v1alpha1,name=mproject.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // ProjectMutator mutates Projects to add owner references and the owning
 // organization based on the request context.

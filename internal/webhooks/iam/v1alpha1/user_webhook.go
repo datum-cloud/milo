@@ -17,7 +17,7 @@ import (
 // log is for logging in this package.
 var userlog = logf.Log.WithName("user-resource")
 
-// +kubebuilder:webhook:path=/validate-iam-miloapis-com-v1alpha1-user,mutating=false,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=users,verbs=create,versions=v1alpha1,name=vuser.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/validate-iam-miloapis-com-v1alpha1-user,mutating=false,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=iam.miloapis.com,resources=users,verbs=create,versions=v1alpha1,name=vuser.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // SetupWebhooksWithManager sets up all iam.miloapis.com webhooks
 func SetupUserWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, userSelfManageRoleName string) error {
@@ -44,6 +44,15 @@ type UserValidator struct {
 func (v *UserValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	user := obj.(*iamv1alpha1.User)
 	userlog.Info("Validating User", "name", user.Name)
+
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get request from context: %w", err)
+	}
+
+	if req.DryRun != nil && *req.DryRun {
+		return nil, nil
+	}
 
 	if err := v.createSelfManagePolicyBinding(ctx, user); err != nil {
 		userlog.Error(err, "Failed to create owner policy binding")
