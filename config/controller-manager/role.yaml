@@ -69,14 +69,10 @@ rules:
   - resourcemanager.miloapis.com
   resources:
   - organizationmemberships
-  - projects
   verbs:
   - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - resourcemanager.miloapis.com
@@ -91,6 +87,7 @@ rules:
   - resourcemanager.miloapis.com
   resources:
   - organizations
+  - projects
   verbs:
   - get
   - list

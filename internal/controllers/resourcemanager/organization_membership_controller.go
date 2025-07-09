@@ -39,7 +39,7 @@ type OrganizationMembershipController struct {
 	Client client.Client
 }
 
-// +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizationmemberships,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizationmemberships,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizationmemberships/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
