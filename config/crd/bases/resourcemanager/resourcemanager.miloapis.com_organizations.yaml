@@ -17,6 +17,12 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .metadata.annotations.kubernetes\.io\/display-name
+      name: Display Name
+      type: string
+    - jsonPath: .spec.type
+      name: Type
+      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string

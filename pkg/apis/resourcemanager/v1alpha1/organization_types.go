@@ -37,6 +37,8 @@ type OrganizationStatus struct {
 // +kubebuilder:subresource:status
 // Use lowercase for path, which influences plural name. Ensure kind is Organization.
 // +kubebuilder:resource:path=organizations,scope=Cluster,categories=datum,singular=organization
+// +kubebuilder:printcolumn:name="Display Name",type="string",JSONPath=".metadata.annotations.kubernetes\\.io\\/display-name"
+// +kubebuilder:printcolumn:name="Type",type="string",JSONPath=".spec.type"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 // Organization is the Schema for the Organizations API
