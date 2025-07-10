@@ -19,8 +19,7 @@ spec:
         app.kubernetes.io/name: milo-controller-manager
         app.kubernetes.io/part-of: milo-control-plane
     spec:
-      automountServiceAccountToken: true
-      serviceAccountName: milo-controller-manager
+      automountServiceAccountToken: false
       containers:
       - name: milo-controller-manager
         image: ghcr.io/datum-cloud/milo:latest

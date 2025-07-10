@@ -1,0 +1,11 @@
+# This overlay is used to install the controller manager into the core control
+# plane.
+resources:
+  # Install the base controller manager resources.
+  - ../../base
+  # Install the RBAC resources for the controller manager that are specific to
+  # the core control plane.
+  - rbac
+
+patches:
+- path: patches/deployment.yaml
