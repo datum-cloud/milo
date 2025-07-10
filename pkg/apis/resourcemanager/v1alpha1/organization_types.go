@@ -45,6 +45,7 @@ type Organization struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	// +kubebuilder:validation:Required
 	Spec   OrganizationSpec   `json:"spec,omitempty"`
 	Status OrganizationStatus `json:"status,omitempty"`
 }
