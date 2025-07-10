@@ -180,6 +180,8 @@ func (r *OrganizationMembershipController) SetupWithManager(mgr ctrl.Manager) er
 func (r *OrganizationMembershipController) findOrganizationMembershipsForOrganization(ctx context.Context, obj client.Object) []reconcile.Request {
 	organization := obj.(*resourcemanagerv1alpha.Organization)
 
+	log.FromContext(ctx).Info("finding organization memberships for organization", "organization", organization.Name)
+
 	var organizationMemberships resourcemanagerv1alpha.OrganizationMembershipList
 	if err := r.Client.List(ctx, &organizationMemberships, client.MatchingFields{
 		"spec.organizationRef.name": organization.Name,
@@ -203,6 +205,8 @@ func (r *OrganizationMembershipController) findOrganizationMembershipsForOrganiz
 // findOrganizationMembershipsForUser finds all OrganizationMembership resources that reference a given User
 func (r *OrganizationMembershipController) findOrganizationMembershipsForUser(ctx context.Context, obj client.Object) []reconcile.Request {
 	user := obj.(*iamv1alpha1.User)
+
+	log.FromContext(ctx).Info("finding organization memberships for user", "user", user.Name)
 
 	var organizationMemberships resourcemanagerv1alpha.OrganizationMembershipList
 	if err := r.Client.List(ctx, &organizationMemberships, client.MatchingFields{
