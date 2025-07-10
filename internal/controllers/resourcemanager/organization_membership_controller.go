@@ -166,6 +166,26 @@ func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ct
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OrganizationMembershipController) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &resourcemanagerv1alpha.OrganizationMembership{}, "spec.organizationRef.name", func(rawObj client.Object) []string {
+		obj := rawObj.(*resourcemanagerv1alpha.OrganizationMembership)
+		if obj.Spec.OrganizationRef.Name == "" {
+			return nil
+		}
+		return []string{obj.Spec.OrganizationRef.Name}
+	}); err != nil {
+		return err
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &resourcemanagerv1alpha.OrganizationMembership{}, "spec.userRef.name", func(rawObj client.Object) []string {
+		obj := rawObj.(*resourcemanagerv1alpha.OrganizationMembership)
+		if obj.Spec.UserRef.Name == "" {
+			return nil
+		}
+		return []string{obj.Spec.UserRef.Name}
+	}); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&resourcemanagerv1alpha.OrganizationMembership{}).
 		Watches(&resourcemanagerv1alpha.Organization{},
