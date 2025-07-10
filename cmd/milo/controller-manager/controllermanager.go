@@ -308,22 +308,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 		}
 	}
 
-	// Get a client for the infrastructure cluster and start the cluster's cache informers.
-	// This allows controllers to manage resources and watch for changes in the infrastructure
-	// cluster.
-	infraClient, err := opts.InfraCluster.GetClient()
-	if err != nil {
-		logger.Error(err, "Error building infrastructure cluster client")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-	}
-	infraCluster, err := cluster.New(infraClient, func(o *cluster.Options) {
-		o.Scheme = Scheme
-	})
-	if err != nil {
-		logger.Error(err, "Error building infrastructure cluster")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-	}
-
 	clientBuilder, rootClientBuilder := createClientBuilders(logger, c)
 
 	run := func(ctx context.Context, controllerDescriptors map[string]*ControllerDescriptor) {
@@ -338,6 +322,22 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 		// TODO: Refactor how we handle controller registration so we can easily
 		//       scope controllers to a specific control plane.
 		if opts.ControlPlane.Scope == controlplane.ScopeCore {
+			// Get a client for the infrastructure cluster and start the cluster's cache informers.
+			// This allows controllers to manage resources and watch for changes in the infrastructure
+			// cluster.
+			infraClient, err := opts.InfraCluster.GetClient()
+			if err != nil {
+				logger.Error(err, "Error building infrastructure cluster client")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			infraCluster, err := cluster.New(infraClient, func(o *cluster.Options) {
+				o.Scheme = Scheme
+			})
+			if err != nil {
+				logger.Error(err, "Error building infrastructure cluster")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
 			// We intentionally use a new configuration here because the one built into
 			// the legacy controller manager component leverages protobuf encoding. The
 			// controller runtime uses JSON encoding when managing CRDs.
