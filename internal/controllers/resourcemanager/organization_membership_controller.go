@@ -186,6 +186,7 @@ func (r *OrganizationMembershipController) findOrganizationMembershipsForOrganiz
 	if err := r.Client.List(ctx, &organizationMemberships, client.MatchingFields{
 		"spec.organizationRef.name": organization.Name,
 	}); err != nil {
+		log.FromContext(ctx).Error(err, "failed to list organization memberships for organization", "organization", organization.Name)
 		return nil
 	}
 
@@ -212,6 +213,7 @@ func (r *OrganizationMembershipController) findOrganizationMembershipsForUser(ct
 	if err := r.Client.List(ctx, &organizationMemberships, client.MatchingFields{
 		"spec.userRef.name": user.Name,
 	}); err != nil {
+		log.FromContext(ctx).Error(err, "failed to list organization memberships for user", "user", user.Name)
 		return nil
 	}
 
