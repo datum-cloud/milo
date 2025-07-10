@@ -60,12 +60,7 @@ spec:
                 description: The type of organization.
                 enum:
                 - Personal
-                - Business
-                - Government
-                - Research
-                - Education
-                - Nonprofit
-                - Other
+                - Standard
                 type: string
                 x-kubernetes-validations:
                 - message: organization type is immutable

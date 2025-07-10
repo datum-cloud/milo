@@ -10,7 +10,7 @@ import (
 type OrganizationSpec struct {
 	// The type of organization.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=Personal;Business;Government;Research;Education;Nonprofit;Other
+	// +kubebuilder:validation:Enum=Personal;Standard
 	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="organization type is immutable"
 	Type string `json:"type"`
 }
