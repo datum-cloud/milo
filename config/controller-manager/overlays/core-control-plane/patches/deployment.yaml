@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milo-controller-manager
+spec:
+  template:
+    spec:
+      serviceAccountName: milo-controller-manager
+      automountServiceAccountToken: true
+      containers:
+      - name: milo-controller-manager
+        env:
+          - name: CONTROL_PLANE_SCOPE
+            value: "core"
