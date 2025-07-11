@@ -166,6 +166,26 @@ func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ct
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OrganizationMembershipController) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &resourcemanagerv1alpha.OrganizationMembership{}, "spec.organizationRef.name", func(rawObj client.Object) []string {
+		obj := rawObj.(*resourcemanagerv1alpha.OrganizationMembership)
+		if obj.Spec.OrganizationRef.Name == "" {
+			return nil
+		}
+		return []string{obj.Spec.OrganizationRef.Name}
+	}); err != nil {
+		return err
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &resourcemanagerv1alpha.OrganizationMembership{}, "spec.userRef.name", func(rawObj client.Object) []string {
+		obj := rawObj.(*resourcemanagerv1alpha.OrganizationMembership)
+		if obj.Spec.UserRef.Name == "" {
+			return nil
+		}
+		return []string{obj.Spec.UserRef.Name}
+	}); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&resourcemanagerv1alpha.OrganizationMembership{}).
 		Watches(&resourcemanagerv1alpha.Organization{},
@@ -180,10 +200,13 @@ func (r *OrganizationMembershipController) SetupWithManager(mgr ctrl.Manager) er
 func (r *OrganizationMembershipController) findOrganizationMembershipsForOrganization(ctx context.Context, obj client.Object) []reconcile.Request {
 	organization := obj.(*resourcemanagerv1alpha.Organization)
 
+	log.FromContext(ctx).Info("finding organization memberships for organization", "organization", organization.Name)
+
 	var organizationMemberships resourcemanagerv1alpha.OrganizationMembershipList
 	if err := r.Client.List(ctx, &organizationMemberships, client.MatchingFields{
 		"spec.organizationRef.name": organization.Name,
 	}); err != nil {
+		log.FromContext(ctx).Error(err, "failed to list organization memberships for organization", "organization", organization.Name)
 		return nil
 	}
 
@@ -204,10 +227,13 @@ func (r *OrganizationMembershipController) findOrganizationMembershipsForOrganiz
 func (r *OrganizationMembershipController) findOrganizationMembershipsForUser(ctx context.Context, obj client.Object) []reconcile.Request {
 	user := obj.(*iamv1alpha1.User)
 
+	log.FromContext(ctx).Info("finding organization memberships for user", "user", user.Name)
+
 	var organizationMemberships resourcemanagerv1alpha.OrganizationMembershipList
 	if err := r.Client.List(ctx, &organizationMemberships, client.MatchingFields{
 		"spec.userRef.name": user.Name,
 	}); err != nil {
+		log.FromContext(ctx).Error(err, "failed to list organization memberships for user", "user", user.Name)
 		return nil
 	}
 
