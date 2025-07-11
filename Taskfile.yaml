@@ -76,6 +76,26 @@ tasks:
         fi
     silent: true
 
+  generate-openapi:
+    desc: Generate OpenAPI definitions for IAM resources and related types
+    deps:
+      - task: install-go-tool
+        vars:
+          NAME: openapi-gen
+          PACKAGE: k8s.io/code-generator/cmd/openapi-gen
+          VERSION: v0.23.0
+    cmds:
+      - echo "Generating OpenAPI definitions for IAM types..."
+      - |
+        set -e
+        "{{.TOOL_DIR}}/openapi-gen" \
+          --input-dirs=go.miloapis.com/milo/pkg/apis/iam/v1alpha1 \
+          --output-package=pkg/apis/iam/v1alpha1 \
+          --output-base=. \
+          --output-file-base=zz_generated.openapi \
+          --go-header-file=hack/boilerplate.go.txt
+    silent: true
+
   api-docs:
     desc: Generate API docs
     deps:

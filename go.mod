@@ -18,6 +18,7 @@ require (
 	k8s.io/controller-manager v0.32.0
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.32.0
+	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
 	k8s.io/kubernetes v1.32.0
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/multicluster-runtime v0.20.4-alpha.6
@@ -125,7 +126,6 @@ require (
 	k8s.io/externaljwt v0.32.0 // indirect
 	k8s.io/kms v0.32.1 // indirect
 	k8s.io/kube-controller-manager v0.32.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/kubelet v0.32.0 // indirect
 	k8s.io/mount-utils v0.32.0 // indirect
 	k8s.io/pod-security-admission v0.32.0 // indirect
