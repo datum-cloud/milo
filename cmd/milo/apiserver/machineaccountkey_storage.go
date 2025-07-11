@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -17,11 +18,17 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/names"
+	"k8s.io/client-go/dynamic"
+	clientrest "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // MachineAccountKeyREST implements a RESTStorage for MachineAccountKey resources.
 type MachineAccountKeyREST struct {
 	*registry.Store
+
+	// dynClient is used to query the core API server for related resources
+	dynClient dynamic.Interface
 }
 
 func NewMachineAccountKeyREST(scheme *runtime.Scheme, optsGetter generic.RESTOptionsGetter) *MachineAccountKeyREST {
@@ -46,7 +53,20 @@ func NewMachineAccountKeyREST(scheme *runtime.Scheme, optsGetter generic.RESTOpt
 	if err := store.CompleteWithOptions(options); err != nil {
 		panic(err)
 	}
-	return &MachineAccountKeyREST{Store: store}
+	// Build an in-cluster dynamic client so we can verify referenced resources.
+	cfg, err := clientrest.InClusterConfig()
+	if err != nil {
+		cfg, err = clientcmd.BuildConfigFromFlags("", KubeconfigPath)
+		if err != nil {
+			panic(fmt.Errorf("failed to build kubeconfig: %w", err))
+		}
+	}
+	dyn, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		panic(fmt.Errorf("failed to build dynamic client: %w", err))
+	}
+	
+	return &MachineAccountKeyREST{Store: store, dynClient: dyn}
 }
 
 // Destroy is currently a no-op because registry.Store does not need explicit cleanup.
