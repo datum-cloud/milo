@@ -45,11 +45,13 @@ type MachineAccountKeyStatus struct {
 	// AuthProviderKeyID is the unique identifier for the key in the auth provider.
 	// This field is populated by the controller after the key is created in the auth provider.
 	// For example, when using Zitadel, a typical value might be: "326102453042806786"
-	AuthProviderKeyID string `json:"authProviderKeyId,omitempty"`
+	AuthProviderKeyId string `json:"authProviderKeyId,omitempty"`
 
 	// Conditions provide conditions that represent the current status of the MachineAccountKey.
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +kubebuilder:validation:Optional
+	// +listType=map
+    // +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
