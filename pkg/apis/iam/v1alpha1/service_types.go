@@ -5,6 +5,7 @@ import (
 )
 
 // ProtectedResourceSpec defines the desired state of ProtectedResource
+// +k8s:openapi-gen=false
 type ProtectedResourceSpec struct {
 	// ServiceRef references the service definition this protected resource belongs to.
 	// +kubebuilder:validation:Required
@@ -37,6 +38,7 @@ type ProtectedResourceSpec struct {
 }
 
 // ProtectedResourceStatus defines the observed state of ProtectedResource
+// +k8s:openapi-gen=false
 type ProtectedResourceStatus struct {
 	// Conditions provide conditions that represent the current status of the ProtectedResource.
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}

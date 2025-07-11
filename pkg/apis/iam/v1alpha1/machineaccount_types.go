@@ -37,6 +37,7 @@ type MachineAccountSpec struct {
 }
 
 // MachineAccountStatus defines the observed state of MachineAccount
+// +k8s:openapi-gen=false
 type MachineAccountStatus struct {
 	// The computed email of the machine account following the pattern:
 	// {metadata.name}@{metadata.namespace}.{project.metadata.name}.{global-suffix}

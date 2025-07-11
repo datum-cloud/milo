@@ -1,0 +1,12 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: MachineAccountKey
+metadata:
+  name: demo-key
+  namespace: default
+spec:
+  machineAccountName: demo-account 
+  # expirationDate: "2026-01-01T00:00:00Z"   # optional ISO-8601 timestamp
+  # publicKey: |
+  #   -----BEGIN PUBLIC KEY-----
+  #   MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A…
+  #   -----END PUBLIC KEY-----

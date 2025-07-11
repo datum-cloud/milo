@@ -37,6 +37,7 @@ type GroupReference struct {
 }
 
 // GroupMembershipStatus defines the observed state of GroupMembership
+// +k8s:openapi-gen=false
 type GroupMembershipStatus struct {
 	// Conditions represent the latest available observations of an object's current state.
 	// +optional

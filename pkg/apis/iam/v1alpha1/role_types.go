@@ -24,6 +24,7 @@ type Role struct {
 }
 
 // RoleSpec defines the desired state of Role
+// +k8s:openapi-gen=false
 type RoleSpec struct {
 	// The names of the permissions this role grants when bound in an IAM policy.
 	// All permissions must be in the format: `{service}.{resource}.{action}`
@@ -45,6 +46,7 @@ type RoleSpec struct {
 }
 
 // RoleStatus defines the observed state of Role
+// +k8s:openapi-gen=false
 type RoleStatus struct {
 	// The resource name of the parent the role was created under.
 	// +kubebuilder:validation:Optional

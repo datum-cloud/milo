@@ -1,0 +1,13 @@
+# kind-etcd-port.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 2379        # etcd client port inside container
+        hostPort: 2380            # exposed to your host at localhost:2380
+        listenAddress: "0.0.0.0"   # optional: binds to all interfaces
+    extraMounts:
+      - hostPath: ./dev/.kind-etcd-certs    # will be populated by kubeadm
+        containerPath: /etc/kubernetes/pki
+        readOnly: false

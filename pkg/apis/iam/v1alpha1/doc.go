@@ -1,6 +1,7 @@
 // Package v1alpha1 contains API Schema definitions for the iam v1alpha1 API group
 // +k8s:deepcopy-gen=package,register
 // +groupName=iam.miloapis.com
+// +k8s:openapi-gen=true
 package v1alpha1
 
 const (

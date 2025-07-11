@@ -36,6 +36,7 @@ type UserSpec struct {
 }
 
 // UserStatus defines the observed state of User
+// +k8s:openapi-gen=false
 type UserStatus struct {
 	// Conditions provide conditions that represent the current status of the User.
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}

@@ -21,6 +21,7 @@ type UserInvitation struct {
 }
 
 // UserInvitationSpec defines the desired state of UserInvitation
+// +k8s:openapi-gen=false
 type UserInvitationSpec struct {
 	// The email of the user being invited.
 	// +kubebuilder:validation:Required
@@ -38,6 +39,7 @@ type UserInvitationSpec struct {
 }
 
 // UserInvitationStatus defines the observed state of UserInvitation
+// +k8s:openapi-gen=false
 type UserInvitationStatus struct {
 	// Conditions provide conditions that represent the current status of the UserInvitation.
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}

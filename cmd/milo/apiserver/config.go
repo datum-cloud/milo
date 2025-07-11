@@ -6,6 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/endpoints/filterlatency"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericfeatures "k8s.io/apiserver/pkg/features"
@@ -18,6 +19,7 @@ import (
 	utilversion "k8s.io/component-base/version"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
 	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
+	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/controlplane"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
@@ -34,8 +36,26 @@ import (
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	svmrest "k8s.io/kubernetes/pkg/registry/storagemigration/rest"
 
+	iam "go.miloapis.com/milo/pkg/apis/iam"
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
+
+// GetCombinedOpenAPIDefinitions combines the standard Kubernetes OpenAPI definitions
+// with the Milo-specific OpenAPI definitions
+func GetCombinedOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+	// Start with the standard Kubernetes OpenAPI definitions
+	definitions := generatedopenapi.GetOpenAPIDefinitions(ref)
+
+	// Add the Milo-specific OpenAPI definitions
+	miloDefinitions := iamv1alpha1.GetOpenAPIDefinitions(ref)
+	for key, value := range miloDefinitions {
+		definitions[key] = value
+	}
+
+	return definitions
+}
 
 type Config struct {
 	Options options.CompletedOptions
@@ -48,6 +68,8 @@ type Config struct {
 }
 
 type ExtraConfig struct {
+	// MiloScheme contains all Milo API types
+	MiloScheme *runtime.Scheme
 }
 
 type completedConfig struct {
@@ -78,6 +100,7 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 		admissionregistrationrest.RESTStorageProvider{Authorizer: c.ControlPlane.Generic.Authorization.Authorizer, DiscoveryClient: discovery},
 		eventsrest.RESTStorageProvider{TTL: c.ControlPlane.EventTTL},
 		discoveryrest.StorageProvider{},
+		&MachineAccountKeyStorageProvider{Scheme: c.ExtraConfig.MiloScheme},
 	}, nil
 }
 
@@ -98,14 +121,21 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		Options: opts,
 	}
 
+	// Initialize the Milo scheme with all API types
+	c.ExtraConfig.MiloScheme = runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(c.ExtraConfig.MiloScheme))
+	utilruntime.Must(iam.Install(c.ExtraConfig.MiloScheme))
+	utilruntime.Must(iam.Install(legacyscheme.Scheme))
+
 	apiResourceConfigSource := controlplane.DefaultAPIResourceConfigSource()
 	apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("serviceaccounts"))
+	apiResourceConfigSource.EnableVersions(iamv1alpha1.SchemeGroupVersion)
 
 	genericConfig, versionedInformers, storageFactory, err := controlplaneapiserver.BuildGenericConfig(
 		opts,
-		[]*runtime.Scheme{legacyscheme.Scheme, apiextensionsapiserver.Scheme, aggregatorscheme.Scheme},
+		[]*runtime.Scheme{legacyscheme.Scheme, apiextensionsapiserver.Scheme, aggregatorscheme.Scheme, c.ExtraConfig.MiloScheme},
 		apiResourceConfigSource,
-		generatedopenapi.GetOpenAPIDefinitions,
+		GetCombinedOpenAPIDefinitions,
 	)
 	if err != nil {
 		return nil, err
