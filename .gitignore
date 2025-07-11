@@ -5,3 +5,6 @@ bin/
 certs/
 # Generated kubeconfig for local development
 .kube/
+# Generated etcd certificates for local development
+dev/.kind-etcd-certs/
+.sample-minimal-controlplane/
