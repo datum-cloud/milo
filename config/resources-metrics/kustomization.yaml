@@ -5,6 +5,7 @@ configMapGenerator:
   - name: milo-resource-metrics
     files:
     - projects.yaml
+    - users.yaml
     options:
       labels:
         telemetry.datumapis.com/core-resource-metrics-config: "true"
