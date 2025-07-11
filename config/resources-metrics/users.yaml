@@ -8,7 +8,7 @@ spec:
       labelsFromPath:
         name: [metadata, name]
         namespace: [metadata, namespace]
-      metricNamePrefix: milo_projects
+      metricNamePrefix: milo_users
       metrics:
         - name: "info"
           each:
@@ -16,7 +16,7 @@ spec:
             info:
               labelsFromPath:
                 "uid": [metadata, uid]
-        - name: "created"
+        - name: "created_timestamp"
           each:
             type: Gauge
             gauge:

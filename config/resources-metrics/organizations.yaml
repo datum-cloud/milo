@@ -3,20 +3,19 @@ spec:
   resources:
     - groupVersionKind:
         group: "resourcemanager.miloapis.com"
-        kind: "Project"
+        kind: "Organization"
         version: "v1alpha1"
       labelsFromPath:
         name: [metadata, name]
         namespace: [metadata, namespace]
-      metricNamePrefix: milo_projects
+      metricNamePrefix: milo_organizations
       metrics:
         - name: "info"
           each:
             type: Info
             info:
               labelsFromPath:
-                owner_kind: ["spec", "ownerRef", "kind"]
-                owner_name: ["spec", "ownerRef", "name"]
+                organization_type: ["spec", "type"]
                 uid: [metadata, uid]
         - name: "created_timestamp"
           each:
