@@ -85,7 +85,8 @@ go run ./cmd/milo/main.go apiserver \
   --service-account-key-file=$(pwd)/dev/service-account-key.pem \
   --token-auth-file=./dev/token.csv \
   --authorization-mode=RBAC \
-  --storage-media-type=application/json
+  --storage-media-type=application/json \
+  --kubeconfig ~/.kube/config
 ```
 
 ### 3. Check for installed API types at runtime
