@@ -42,6 +42,9 @@ var (
 	// Configure the namespace that is used for system components and resources
 	// automatically bootstrapped by the control plane.
 	SystemNamespace string
+
+	// KubeconfigPath allows out-of-cluster API clients to be configured.
+	KubeconfigPath string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters
@@ -132,6 +135,8 @@ func NewCommand() *cobra.Command {
 		"Path to socket where a external JWT signer is listening. This flag is mutually exclusive with --service-account-signing-key-file and --service-account-key-file. Requires enabling feature gate (ExternalServiceAccountTokenSigner)")
 
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
+
+	fs.StringVar(&KubeconfigPath, "kubeconfig", "", "Absolute path to a kubeconfig file for out-of-cluster operations (optional, primarily for development).")
 
 	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cliflag.SetUsageAndHelpFunc(cmd, namedFlagSets, cols)

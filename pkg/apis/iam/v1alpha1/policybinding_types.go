@@ -112,6 +112,7 @@ type PolicyBinding struct {
 
 // PolicyBindingSpec defines the desired state of PolicyBinding
 // +k8s:deepcopy-gen=true
+// +k8s:openapi-gen=false
 type PolicyBindingSpec struct {
 	// RoleRef is a reference to the Role that is being bound.
 	// This can be a reference to a Role custom resource.
@@ -134,6 +135,7 @@ type PolicyBindingSpec struct {
 
 // PolicyBindingStatus defines the observed state of PolicyBinding
 // +k8s:deepcopy-gen=true
+// +k8s:openapi-gen=false
 type PolicyBindingStatus struct {
 	// ObservedGeneration is the most recent generation observed for this PolicyBinding by the controller.
 	// +kubebuilder:validation:Optional

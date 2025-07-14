@@ -60,6 +60,56 @@ assets.
 - Pricing: Transparent pricing models tailored for scalability and flexibility.
 - Entitlements: Management of feature access, quotas and tiering.
 
+## Running the APIServer Locally
+
+To get started with Milo's APIServer locally, follow these steps:
+
+### 1. Create a local Kubernetes cluster with kind
+
+```sh
+kind create cluster --name kind-etcd --config dev/kind-etcd-port.yaml
+```
+
+### 2. Run the Milo APIServer
+
+Make sure you have the required certificates and configuration files in place. This certificates should be automatically populated by the previous command. Then run:
+
+```sh
+go run ./cmd/milo/main.go apiserver \
+  --etcd-servers=https://127.0.0.1:2380 \
+  --etcd-cafile=$(pwd)/dev/.kind-etcd-certs/etcd/ca.crt \
+  --etcd-certfile=$(pwd)/dev/.kind-etcd-certs/apiserver-etcd-client.crt \
+  --etcd-keyfile=$(pwd)/dev/.kind-etcd-certs/apiserver-etcd-client.key \
+  --service-account-issuer=https://kubernetes.default.svc.cluster.local \
+  --service-account-signing-key-file=$(pwd)/dev/service-account-key.pem \
+  --service-account-key-file=$(pwd)/dev/service-account-key.pem \
+  --token-auth-file=./dev/token.csv \
+  --authorization-mode=RBAC \
+  --storage-media-type=application/json \
+  --kubeconfig ~/.kube/config
+```
+
+### 3. Check for installed API types at runtime
+
+To see which custom resources are available in the running API server:
+
+```sh
+kubectl --server=https://127.0.0.1:6443 --insecure-skip-tls-verify \
+        --token=mytoken \
+        api-resources --api-group=iam.miloapis.com
+```
+
+### 4. Apply an example resource
+
+You can create a resource (e.g., a MachineAccountKey) using:
+
+```sh
+kubectl apply -f config/samples/iam/v1alpha1/machineaccountkey.yaml \
+       --server=https://127.0.0.1:6443 \
+       --insecure-skip-tls-verify \
+       --token=mytoken
+```
+
 ## Future Capabilities
 
 We see integrated commercial functionality as the big unlock for scale. Here are
@@ -72,3 +122,4 @@ some areas we're planning to work on:
 - Purchase Orders: An API to support end user procurement tracking
 - Billing: A centralized hub for account statements, two sided ledger, & invoice
   status
+

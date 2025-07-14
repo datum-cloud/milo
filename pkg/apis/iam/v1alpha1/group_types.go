@@ -5,6 +5,7 @@ import (
 )
 
 // GroupStatus defines the observed state of Group
+// +k8s:openapi-gen=false
 type GroupStatus struct {
 	// Conditions represent the latest available observations of an object's current state.
 	// +optional
