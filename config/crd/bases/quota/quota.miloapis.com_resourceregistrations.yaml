@@ -99,6 +99,7 @@ spec:
                 description: |-
                   Fully qualified name of the resource type being registered
 
+                  This must match the actual resource type name used by the owning service.
                   Format: apiGroup/ResourceType or apiGroup/resourceType/subResource
                 pattern: ^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$
                 type: string
