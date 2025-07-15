@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: iam.miloapis.com-policybinding
+spec:
+  serviceRef:
+    name: "iam.miloapis.com"
+  kind: PolicyBinding
+  plural: policybindings
+  singular: policybinding
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - owner.yaml
+  - organization-manager.yaml
+  - project-manager.yaml
+  - iam-reader.yaml
+  - iam-editor.yaml
+  - iam-admin.yaml
+  - resourcemanager-reader.yaml
+  - resourcemanager-editor.yaml
+  - resourcemanager-admin.yaml
+  - core-reader.yaml
+  - core-editor.yaml
+  - core-admin.yaml
+  - apiextensions-reader.yaml
+  - iam-user-self-manage.yaml
+
+namespace: milo-system

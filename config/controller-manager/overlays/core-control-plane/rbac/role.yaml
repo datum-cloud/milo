@@ -46,9 +46,17 @@ rules:
   - list
   - update
 - apiGroups:
-  - resourcemanager.miloapis.com
+  - iam.miloapis.com
   resources:
-  - projects
+  - users
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.miloapis.com
+  resources:
+  - projectcontrolplanes
   verbs:
   - create
   - delete
@@ -60,14 +68,33 @@ rules:
 - apiGroups:
   - resourcemanager.miloapis.com
   resources:
-  - projects/finalizers
+  - organizationmemberships
   verbs:
-  - update
+  - create
+  - get
+  - list
+  - watch
 - apiGroups:
   - resourcemanager.miloapis.com
   resources:
+  - organizationmemberships/status
   - projects/status
   verbs:
   - get
   - patch
+  - update
+- apiGroups:
+  - resourcemanager.miloapis.com
+  resources:
+  - organizations
+  - projects
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - resourcemanager.miloapis.com
+  resources:
+  - projects/finalizers
+  verbs:
   - update

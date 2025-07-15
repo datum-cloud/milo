@@ -82,13 +82,15 @@ spec:
                   - name
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               launchStage:
                 description: |-
                   Defines the launch stage of the IAM Role. Must be one of: Early Access,
                   Alpha, Beta, Stable, Deprecated.
                 type: string
             required:
-            - includedPermissions
             - launchStage
             type: object
           status:

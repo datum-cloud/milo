@@ -1,0 +1,17 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: resourcemanager-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: resourcemanager-reader
+  includedPermissions:
+    # Write permissions for ResourceManager resources
+    - resourcemanager.miloapis.com/organizations.create
+    - resourcemanager.miloapis.com/organizations.update
+    - resourcemanager.miloapis.com/organizations.patch
+    - resourcemanager.miloapis.com/projects.create
+    - resourcemanager.miloapis.com/projects.update
+    - resourcemanager.miloapis.com/projects.patch
+    - resourcemanager.miloapis.com/projects.delete

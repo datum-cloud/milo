@@ -152,7 +152,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 //   - datumfilters.OrganizationContextHandler
 //
 // This is done to improve the UX that customers will experience while
-// interacting with the Datum API server.
+// interacting with the Milo API server.
 //
 // Some handlers have not been added as a result of not having access to
 // lifecycleSignals in server.Config. TODO(jreese) need to look into this more
@@ -161,6 +161,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 
 	handler = filterlatency.TrackCompleted(handler)
 	handler = genericapifilters.WithAuthorization(handler, c.Authorization.Authorizer, c.Serializer)
+	handler = datumfilters.UserContextAuthorizationDecorator(handler)
 	handler = datumfilters.OrganizationContextAuthorizationDecorator(handler)
 	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "authorization")
 
@@ -228,6 +229,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	}
 
 	handler = datumfilters.OrganizationProjectListConstraintDecorator(handler)
+	handler = datumfilters.UserOrganizationMembershipListConstraintDecorator(handler)
 	handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
 	handler = genericapifilters.WithRequestReceivedTimestamp(handler)
 	// handler = genericapifilters.WithMuxAndDiscoveryComplete(handler, c.lifecycleSignals.MuxAndDiscoveryComplete.Signaled())
@@ -235,6 +237,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	handler = genericapifilters.WithAuditInit(handler)
 
 	handler = datumfilters.OrganizationContextHandler(handler, c.Serializer)
+	handler = datumfilters.UserContextHandler(handler, c.Serializer)
 
 	return handler
 }

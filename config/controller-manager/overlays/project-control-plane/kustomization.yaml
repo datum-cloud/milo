@@ -1,0 +1,8 @@
+# This overlay is used to install the controller manager into the project
+# control plane.
+resources:
+  # Install the base controller manager resources.
+  - ../../base
+
+patches:
+- path: patches/deployment.yaml

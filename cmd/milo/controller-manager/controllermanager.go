@@ -72,6 +72,7 @@ import (
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
+	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
@@ -307,22 +308,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 		}
 	}
 
-	// Get a client for the infrastructure cluster and start the cluster's cache informers.
-	// This allows controllers to manage resources and watch for changes in the infrastructure
-	// cluster.
-	infraClient, err := opts.InfraCluster.GetClient()
-	if err != nil {
-		logger.Error(err, "Error building infrastructure cluster client")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-	}
-	infraCluster, err := cluster.New(infraClient, func(o *cluster.Options) {
-		o.Scheme = Scheme
-	})
-	if err != nil {
-		logger.Error(err, "Error building infrastructure cluster")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-	}
-
 	clientBuilder, rootClientBuilder := createClientBuilders(logger, c)
 
 	run := func(ctx context.Context, controllerDescriptors map[string]*ControllerDescriptor) {
@@ -337,6 +322,22 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 		// TODO: Refactor how we handle controller registration so we can easily
 		//       scope controllers to a specific control plane.
 		if opts.ControlPlane.Scope == controlplane.ScopeCore {
+			// Get a client for the infrastructure cluster and start the cluster's cache informers.
+			// This allows controllers to manage resources and watch for changes in the infrastructure
+			// cluster.
+			infraClient, err := opts.InfraCluster.GetClient()
+			if err != nil {
+				logger.Error(err, "Error building infrastructure cluster client")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			infraCluster, err := cluster.New(infraClient, func(o *cluster.Options) {
+				o.Scheme = Scheme
+			})
+			if err != nil {
+				logger.Error(err, "Error building infrastructure cluster")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
 			// We intentionally use a new configuration here because the one built into
 			// the legacy controller manager component leverages protobuf encoding. The
 			// controller runtime uses JSON encoding when managing CRDs.
@@ -389,6 +390,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up organization webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupUserWebhooksWithManager(ctrl, SystemNamespace, "iam-user-self-manage"); err != nil {
+				logger.Error(err, "Error setting up user webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
@@ -396,6 +401,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := projectCtrl.SetupWithManager(ctrl, infraCluster); err != nil {
 				logger.Error(err, "Error setting up project controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			organizationMembershipCtrl := resourcemanagercontroller.OrganizationMembershipController{
+				Client: ctrl.GetClient(),
+			}
+			if err := organizationMembershipCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up organization membership controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

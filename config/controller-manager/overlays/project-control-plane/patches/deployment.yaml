@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milo-controller-manager
+spec:
+  template:
+    spec:
+      containers:
+      - name: milo-controller-manager
+        env:
+          - name: CONTROL_PLANE_SCOPE
+            value: "project"

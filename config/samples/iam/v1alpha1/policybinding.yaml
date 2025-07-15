@@ -11,8 +11,9 @@ spec:
     - kind: User
       name: "kubernetes-admin"
       uid: "34f31881-14ce-4234-8a6c-aeee52c3191e"
-  targetRef:
-    apiGroup: "resourcemanager.miloapis.com"
-    kind: Organization
-    name: "datum"
-    uid: "c399429c-47c0-4181-9068-80670ac5a6c0"
+  resourceSelector:
+    resourceRef:
+      apiGroup: "resourcemanager.miloapis.com"
+      kind: Organization
+      name: "datum"
+      uid: "c399429c-47c0-4181-9068-80670ac5a6c0"

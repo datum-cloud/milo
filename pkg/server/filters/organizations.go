@@ -7,7 +7,9 @@ import (
 	"net/url"
 	"strings"
 
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	"go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -114,7 +116,13 @@ func OrganizationContextAuthorizationDecorator(handler http.Handler) http.Handle
 			u.Extra = map[string][]string{}
 		}
 
-		u.Extra[v1alpha1.OrganizationNameLabel] = []string{orgId}
+		// Set the parent resource information for the authorization check based on
+		// the organization ID that was provided in the request context.
+		u.Extra[iamv1alpha1.ParentAPIGroupExtraKey] = []string{resourcemanagerv1alpha1.GroupVersion.Group}
+		u.Extra[iamv1alpha1.ParentKindExtraKey] = []string{"Organization"}
+		u.Extra[iamv1alpha1.ParentNameExtraKey] = []string{orgId}
+
+		req = req.WithContext(request.WithUser(ctx, u))
 
 		handler.ServeHTTP(w, req)
 	})

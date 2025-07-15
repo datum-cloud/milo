@@ -1,0 +1,11 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: resourcemanager-admin
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: resourcemanager-editor
+  includedPermissions:
+    # Administrative permissions for ResourceManager resources
+    - resourcemanager.miloapis.com/organizations.use

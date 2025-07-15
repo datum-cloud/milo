@@ -37,7 +37,7 @@ func SetupProjectWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, p
 	return nil
 }
 
-// +kubebuilder:webhook:path=/mutate-resourcemanager-miloapis-com-v1alpha1-project,mutating=true,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create,versions=v1alpha1,name=mproject.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/mutate-resourcemanager-miloapis-com-v1alpha1-project,mutating=true,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=resourcemanager.miloapis.com,resources=projects,verbs=create,versions=v1alpha1,name=mproject.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // ProjectMutator mutates Projects to add owner references and the owning
 // organization based on the request context.
@@ -56,17 +56,34 @@ func (m *ProjectMutator) Default(ctx context.Context, obj runtime.Object) error 
 		return fmt.Errorf("failed to get request from context: %w", err)
 	}
 
-	requestContextOrgID, ok := req.UserInfo.Extra[v1alpha1.OrganizationNameLabel]
-	if !ok {
-		errMsg := fmt.Sprintf("request context does not have the required organization name label '%s'", v1alpha1.OrganizationNameLabel)
+	// The project webhook is always going to have the organization ID as the
+	// parent context in the user's extra fields. Validate that the request
+	// contains the required parent information and it's for an organization.
+	parentName, parentNameOk := req.UserInfo.Extra[iamv1alpha1.ParentNameExtraKey]
+	parentKind, parentKindOk := req.UserInfo.Extra[iamv1alpha1.ParentKindExtraKey]
+	parentAPIGroup, parentAPIGroupOk := req.UserInfo.Extra[iamv1alpha1.ParentAPIGroupExtraKey]
+
+	if !parentNameOk || !parentKindOk || !parentAPIGroupOk {
+		errMsg := "request context does not have the required parent information"
 		projectlog.Error(fmt.Errorf(errMsg), errMsg)
 		return fmt.Errorf(errMsg)
 	}
 
-	org := &v1alpha1.Organization{}
-	if err := m.client.Get(ctx, client.ObjectKey{Name: requestContextOrgID[0]}, org); err != nil {
-		return fmt.Errorf("failed to get organization '%s': %w", requestContextOrgID[0], err)
+	if len(parentKind) != 1 || parentKind[0] != "Organization" || parentAPIGroup[0] != v1alpha1.GroupVersion.Group {
+		errMsg := "request context has invalid parent information, must be Organization from the resourcemanager.miloapis.com API group"
+		projectlog.Error(fmt.Errorf(errMsg), errMsg)
+		return fmt.Errorf(errMsg)
 	}
+
+	requestContextOrgID := parentName[0]
+
+	org := &v1alpha1.Organization{}
+	if err := m.client.Get(ctx, client.ObjectKey{Name: requestContextOrgID}, org); err != nil {
+		return fmt.Errorf("failed to get organization '%s': %w", requestContextOrgID, err)
+	}
+
+	// Set a label on the project to indicate the organization it belongs to.
+	metav1.SetMetaDataLabel(&project.ObjectMeta, v1alpha1.OrganizationNameLabel, requestContextOrgID)
 
 	// If the request context has had an org id injected, default the parent to
 	// the org. Once we introduce folders, this will need to change to leave the
@@ -88,7 +105,7 @@ func (m *ProjectMutator) Default(ctx context.Context, obj runtime.Object) error 
 	return nil
 }
 
-// +kubebuilder:webhook:path=/validate-resourcemanager-miloapis-com-v1alpha1-project,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create,versions=v1alpha1,name=vproject.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/validate-resourcemanager-miloapis-com-v1alpha1-project,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=projects,verbs=create;update,versions=v1alpha1,name=vproject.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // ProjectValidator validates Projects and creates associated PolicyBindings for owners.
 type ProjectValidator struct {
@@ -125,6 +142,16 @@ func (v *ProjectValidator) ValidateCreate(ctx context.Context, obj runtime.Objec
 		return nil, errors.NewInvalid(project.GroupVersionKind().GroupKind(), project.Name, errs)
 	}
 
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get request from context: %w", err)
+	}
+
+	// Don't create policy binding for dry run requests.
+	if req.DryRun != nil && *req.DryRun {
+		return nil, nil
+	}
+
 	if err := v.createOwnerPolicyBinding(ctx, project); err != nil {
 		return nil, fmt.Errorf("failed to create owner policy binding: %w", err)
 	}
@@ -133,6 +160,33 @@ func (v *ProjectValidator) ValidateCreate(ctx context.Context, obj runtime.Objec
 }
 
 func (v *ProjectValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	oldProject, ok := oldObj.(*v1alpha1.Project)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast old object to Project")
+	}
+
+	newProject, ok := newObj.(*v1alpha1.Project)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast new object to Project")
+	}
+
+	projectlog.Info("Validating Project update", "name", newProject.Name)
+	errs := field.ErrorList{}
+
+	// Existing projects always have the organization label, so prevent any changes to it
+	oldOrgLabel := oldProject.Labels[v1alpha1.OrganizationNameLabel]
+	newOrgLabel, newExists := newProject.Labels[v1alpha1.OrganizationNameLabel]
+	// The organization label must not be removed or changed
+	if !newExists {
+		errs = append(errs, field.Forbidden(field.NewPath("metadata.labels").Key(v1alpha1.OrganizationNameLabel), "organization label cannot be removed"))
+	} else if oldOrgLabel != newOrgLabel {
+		errs = append(errs, field.Forbidden(field.NewPath("metadata.labels").Key(v1alpha1.OrganizationNameLabel), "organization label cannot be changed"))
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.NewInvalid(newProject.GroupVersionKind().GroupKind(), newProject.Name, errs)
+	}
+
 	return nil, nil
 }
 
@@ -142,9 +196,6 @@ func (v *ProjectValidator) ValidateDelete(ctx context.Context, obj runtime.Objec
 
 // lookupUser retrieves the User resource from the iam.miloapis.com API
 func (v *ProjectValidator) lookupUser(ctx context.Context, username string) (*iamv1alpha1.User, error) {
-	// TODO: Determine if we can actually use the UID from the User object in
-	//       the UserInfo of the request. Likely need to configure the OIDC
-	//       authorization to map the UID from the JWT claims.
 	foundUser := &iamv1alpha1.User{}
 	if err := v.Client.Get(ctx, client.ObjectKey{Name: username}, foundUser); err != nil {
 		return nil, fmt.Errorf("failed to get user '%s' from iam.miloapis.com API: %w", username, err)
@@ -162,7 +213,7 @@ func (v *ProjectValidator) createOwnerPolicyBinding(ctx context.Context, project
 	}
 
 	// Look up the user in the iam API
-	foundUser, err := v.lookupUser(ctx, req.UserInfo.Username)
+	foundUser, err := v.lookupUser(ctx, req.UserInfo.UID)
 	if err != nil {
 		return fmt.Errorf("failed to lookup user: %w", err)
 	}
@@ -200,11 +251,13 @@ func (v *ProjectValidator) createOwnerPolicyBinding(ctx context.Context, project
 					UID:  string(foundUser.GetUID()),
 				},
 			},
-			TargetRef: iamv1alpha1.TargetReference{
-				APIGroup: v1alpha1.GroupVersion.Group,
-				Kind:     "Project",
-				Name:     project.Name,
-				UID:      string(project.UID),
+			ResourceSelector: iamv1alpha1.ResourceSelector{
+				ResourceRef: &iamv1alpha1.ResourceReference{
+					APIGroup: v1alpha1.GroupVersion.Group,
+					Kind:     "Project",
+					Name:     project.Name,
+					UID:      string(project.UID),
+				},
 			},
 		},
 	}

@@ -18,26 +18,30 @@ type RoleReference struct {
 // Subject contains a reference to the object or user identities a role binding applies to.
 // This can be a User or Group.
 // +k8s:deepcopy-gen=true
+// +kubebuilder:validation:XValidation:rule="(self.kind == 'Group' && has(self.name) && self.name.startsWith('system:')) || (has(self.uid) && size(self.uid) > 0)",message="UID is required for all subjects except system groups (groups with names starting with 'system:')"
 type Subject struct {
 	// Kind of object being referenced. Values defined in Kind constants.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=User;Group
 	Kind string `json:"kind"`
-	// Name of the object being referenced.
+	// Name of the object being referenced. A special group name of
+	// "system:authenticated-users" can be used to refer to all authenticated
+	// users.
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 	// Namespace of the referenced object. If DNE, then for an SA it refers to the PolicyBinding resource's namespace.
 	// For a User or Group, it is ignored.
 	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
-	// UID of the referenced object.
-	// +kubebuilder:validation:Required
-	UID string `json:"uid"`
+	// UID of the referenced object. Optional for system groups (groups with names starting with "system:").
+	// +kubebuilder:validation:Optional
+	UID string `json:"uid,omitempty"`
 }
 
-// TargetReference contains enough information to let you identify an API resource.
+// ResourceReference contains enough information to let you identify a specific
+// API resource instance.
 // +k8s:deepcopy-gen=true
-type TargetReference struct {
+type ResourceReference struct {
 	// APIGroup is the group for the resource being referenced.
 	// If APIGroup is not specified, the specified Kind must be in the core API group.
 	// For any other third-party types, APIGroup is required.
@@ -58,15 +62,43 @@ type TargetReference struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
+// ResourceKind contains enough information to identify a resource type.
+// +k8s:deepcopy-gen=true
+type ResourceKind struct {
+	// APIGroup is the group for the resource type being referenced. If APIGroup
+	// is not specified, the specified Kind must be in the core API group.
+	// +kubebuilder:validation:Optional
+	APIGroup string `json:"apiGroup,omitempty"`
+
+	// Kind is the type of resource being referenced.
+	// +kubebuilder:validation:Required
+	Kind string `json:"kind"`
+}
+
+// ResourceSelector defines which resources the policy binding applies to.
+// Either resourceRef or resourceKind must be specified, but not both.
+// +k8s:deepcopy-gen=true
+// +kubebuilder:validation:XValidation:rule="has(self.resourceRef) != has(self.resourceKind)",message="exactly one of resourceRef or resourceKind must be specified, but not both"
+type ResourceSelector struct {
+	// ResourceRef provides a reference to a specific resource instance.
+	// Mutually exclusive with resourceKind.
+	// +kubebuilder:validation:Optional
+	ResourceRef *ResourceReference `json:"resourceRef,omitempty"`
+
+	// ResourceKind specifies that the policy binding should apply to all resources of a specific kind.
+	// Mutually exclusive with resourceRef.
+	// +kubebuilder:validation:Optional
+	ResourceKind *ResourceKind `json:"resourceKind,omitempty"`
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
 // PolicyBinding is the Schema for the policybindings API
 // +kubebuilder:printcolumn:name="Role",type="string",JSONPath=".spec.roleRef.name"
-// +kubebuilder:printcolumn:name="Target API Group",type="string",JSONPath=".spec.targetRef.apiGroup"
-// +kubebuilder:printcolumn:name="Target Kind",type="string",JSONPath=".spec.targetRef.kind"
-// +kubebuilder:printcolumn:name="Target Name",type="string",JSONPath=".spec.targetRef.name"
+// +kubebuilder:printcolumn:name="Resource Kind",type="string",JSONPath=".spec.resourceSelector.resourceRef.kind"
+// +kubebuilder:printcolumn:name="Resource Name",type="string",JSONPath=".spec.resourceSelector.resourceRef.name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:path=policybindings,scope=Namespaced
@@ -84,6 +116,7 @@ type PolicyBindingSpec struct {
 	// RoleRef is a reference to the Role that is being bound.
 	// This can be a reference to a Role custom resource.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="oldSelf == null || self == oldSelf",message="RoleRef is immutable and cannot be changed after creation"
 	RoleRef RoleReference `json:"roleRef"`
 
 	// Subjects holds references to the objects the role applies to.
@@ -91,10 +124,12 @@ type PolicyBindingSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	Subjects []Subject `json:"subjects"`
 
-	// TargetRef is a reference to the resource to which this policy binding applies.
-	// This allows the binding to be about a resource in any namespace or a cluster-scoped resource.
+	// ResourceSelector defines which resources the subjects in the policy binding
+	// should have the role applied to. Options within this struct are mutually
+	// exclusive.
 	// +kubebuilder:validation:Required
-	TargetRef TargetReference `json:"targetRef"`
+	// +kubebuilder:validation:XValidation:rule="oldSelf == null || self == oldSelf",message="ResourceSelector is immutable and cannot be changed after creation"
+	ResourceSelector ResourceSelector `json:"resourceSelector"`
 }
 
 // PolicyBindingStatus defines the observed state of PolicyBinding

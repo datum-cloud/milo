@@ -28,8 +28,8 @@ type RoleSpec struct {
 	// The names of the permissions this role grants when bound in an IAM policy.
 	// All permissions must be in the format: `{service}.{resource}.{action}`
 	// (e.g. compute.workloads.create).
-	// +kubebuilder:validation:Required
-	IncludedPermissions []string `json:"includedPermissions"`
+	// +kubebuilder:validation:Optional
+	IncludedPermissions []string `json:"includedPermissions,omitempty"`
 
 	// Defines the launch stage of the IAM Role. Must be one of: Early Access,
 	// Alpha, Beta, Stable, Deprecated.
@@ -39,6 +39,8 @@ type RoleSpec struct {
 	// The list of roles from which this role inherits permissions.
 	// Each entry must be a valid role resource name.
 	// +kubebuilder:validation:Optional
+	// +listType=map
+	// +listMapKey=name
 	InheritedRoles []ScopedRoleReference `json:"inheritedRoles,omitempty"`
 }
 

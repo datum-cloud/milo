@@ -1,0 +1,23 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: resourcemanager.miloapis.com-organizationmembership
+spec:
+  serviceRef:
+    name: "resourcemanager.miloapis.com"
+  kind: OrganizationMembership
+  plural: organizationmemberships
+  singular: organizationmembership
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
+  parentResources:
+    - apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+    - apiGroup: iam.miloapis.com
+      kind: User

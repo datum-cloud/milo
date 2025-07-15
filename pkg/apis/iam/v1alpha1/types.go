@@ -15,8 +15,3 @@ type ScopedRoleReference struct {
 	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
 }
-
-// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:scope=Cluster
-
-// IAMSetting is the Schema for the iamsettings API
