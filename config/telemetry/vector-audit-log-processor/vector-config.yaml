@@ -1,0 +1,200 @@
+api:
+  enabled: false
+sources:
+  internal_metrics:
+    type: internal_metrics
+
+  # Dedicated webhook server for project control plane audit logs
+  project_audit_log_webhook:
+    type: http_server
+    address: 0.0.0.0:8080
+    # Project control planes send to /audit/v1alpha1/projects/{project-name}
+    path: /audit/v1alpha1/projects
+    strict_path: false
+    decoding:
+      codec: json
+
+  # Dedicated webhook server for core control plane audit logs
+  core_audit_log_webhook:
+    type: http_server
+    address: 0.0.0.0:8081
+    # Core control plane sends to /audit/v1alpha1/core
+    path: /audit/v1alpha1/core
+    strict_path: true
+    decoding:
+      codec: json
+
+transforms:
+  # Transform project control plane audit logs
+  project_audit_log_transformer:
+    type: remap
+    inputs:
+      - project_audit_log_webhook
+    source: |
+      # Extract the project name from the path using regex capture
+      project_name = parse_regex!(.path, r'/audit/v1alpha/projects/(?P<project>[^/]+)').project
+
+      if !is_array(.items) {
+        log("failed to convert items to array", level: "error", rate_limit_secs: 0)
+        abort
+      }
+
+      audit_logs = []
+
+      # Transform each item in the items array
+      for_each(array!(.items)) -> |_index, item| {
+        log = object!(item)
+
+        # Default apiGroup based on apiVersion. objectRef is guaranteed to exist.
+        if exists(log.objectRef.apiVersion) && log.objectRef.apiVersion == "v1" {
+          log.objectRef.apiGroup = log.objectRef.apiGroup || "core"
+        } else {
+          log.objectRef.apiGroup = log.objectRef.apiGroup || "unknown"
+        }
+
+        # Initialize annotations if they don't exist
+        if !exists(log.annotations) {
+          log.annotations = {}
+        }
+        annotations = object!(log.annotations)
+
+        # Set project control plane specific metadata
+        annotations = set!(value: annotations, path: ["resourcemanager.miloapis.com/project-name"], data: project_name)
+        annotations = set!(value: annotations, path: ["telemetry.miloapis.com/control-plane-type"], data: "project")
+
+        log.annotations = annotations
+
+        audit_logs = push(audit_logs, log)
+      }
+
+      . = audit_logs
+
+  # Transform core control plane audit logs
+  core_audit_log_transformer:
+    type: remap
+    inputs:
+      - core_audit_log_webhook
+    source: |
+      if !is_array(.items) {
+        log("failed to convert items to array", level: "error", rate_limit_secs: 0)
+        abort
+      }
+
+      audit_logs = []
+
+      # Transform each item in the items array
+      for_each(array!(.items)) -> |_index, item| {
+        log = object!(item)
+
+        # Default apiGroup based on apiVersion. objectRef is guaranteed to exist.
+        if exists(log.objectRef.apiVersion) && log.objectRef.apiVersion == "v1" {
+          log.objectRef.apiGroup = log.objectRef.apiGroup || "core"
+        } else {
+          log.objectRef.apiGroup = log.objectRef.apiGroup || "unknown"
+        }
+
+        # Initialize annotations if they don't exist
+        if !exists(log.annotations) {
+          log.annotations = {}
+        }
+        annotations = object!(log.annotations)
+
+        # Handle organization attribution for core control plane
+        organization_name = null
+
+        # Option 1: Extract from namespace if it follows organization-{org-name} pattern
+        if exists(log.objectRef.namespace) {
+          namespace, err = string(log.objectRef.namespace)
+          if err != null {
+            log("failed to convert namespace to string", level: "error", rate_limit_secs: 0)
+            abort
+          }
+          org_match = parse_regex!(namespace, r'^organization-(?P<org>.+)$')
+          if org_match != null {
+            organization_name = org_match.org
+          }
+        }
+
+        # The user extra data will contain the following keys when the parent
+        # resource is provided in the request.
+        #
+        # - iam.miloapis.com/parent-name: Is the metadata.name of the parent
+        #   resource
+        # - iam.miloapis.com/parent-type: Is the kind of the parent resource
+        # - iam.miloapis.com/parent-api-group: Is the apiGroup of the parent
+        #   resource
+        #
+        # When the parent resource is an Organization, the user extra data we
+        # should extract the organization name from the parent resource. The
+        # user extra data keys will be an array of strings.
+        if exists(log.user.extra."iam.miloapis.com/parent-type") && exists(log.user.extra."iam.miloapis.com/parent-name") {
+          parent_type = array!(log.user.extra."iam.miloapis.com/parent-type")
+          parent_name = array!(log.user.extra."iam.miloapis.com/parent-name")
+
+          if length(parent_type) > 0 {
+            if parent_type[0] == "Organization" {
+              if length(parent_name) > 0 {
+                organization_name = parent_name[0]
+              } else {
+                log("failed to extract organization name from parent resource as parent-name is empty for parent-type Organization", level: "error", rate_limit_secs: 0)
+                abort
+              }
+
+              # Set organization name if determined
+              if organization_name != null {
+                annotations = set!(value: annotations, path: ["resourcemanager.miloapis.com/organization-name"], data: organization_name)
+              }
+
+            } else if parent_type[0] == "User" {
+              user_name = null
+
+              if length(parent_name) > 0 {
+                user_name = parent_name[0]
+              } else {
+                log("failed to extract user name from parent resource as parent-name is empty for parent-type User", level: "error", rate_limit_secs: 0)
+                abort
+              }
+
+              # Set user name if determined
+              if user_name != null {
+                annotations = set!(value: annotations, path: ["iam.miloapis.com/user-name"], data: user_name)
+              }
+            }
+          }
+        }
+
+        # Set core control plane specific metadata
+        annotations = set!(value: annotations, path: ["telemetry.miloapis.com/control-plane-type"], data: "core")
+
+        log.annotations = annotations
+
+        audit_logs = push(audit_logs, log)
+      }
+
+      . = audit_logs
+
+sinks:
+
+  prometheus_export:
+    type: prometheus_exporter
+    inputs:
+      - internal_metrics
+    address: 0.0.0.0:9598
+
+  loki:
+    type: loki
+    inputs:
+      - project_audit_log_transformer
+      - core_audit_log_transformer
+    endpoint: http://loki-single-binary.telemetry-system.svc.cluster.local:3100
+    encoding:
+      codec: json
+    labels:
+      telemetry_datumapis_com_audit_log: "true"
+      resource_api_group: "{{ objectRef.apiGroup }}"
+      resource_api_version: "{{ objectRef.apiVersion }}"
+      resource_kind: "{{ objectRef.resource }}"
+      user_name: "{{ user.username }}"
+      organization_name: '{{ annotations."resourcemanager.miloapis.com/organization-name" }}'
+      project_name: '{{ annotations."resourcemanager.miloapis.com/project-name" }}'
+      control_plane_type: '{{ annotations."telemetry.miloapis.com/control-plane-type" }}'

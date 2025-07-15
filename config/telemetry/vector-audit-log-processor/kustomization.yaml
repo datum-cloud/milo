@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - monitoring.yaml
+
+images:
+  - name: timberio/vector
+    newTag: 0.45.0-distroless-static
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: vector-audit-log-processor
+      app.kubernetes.io/component: telemetry-processor
+    includeSelectors: true
+    includeTemplates: true
+
+configurations:
+  - kustomizeconfig.yaml
+
+configMapGenerator:
+  - name: vector-config
+    options:
+      disableNameSuffixHash: true
+    files:
+      - vector-config.yaml
