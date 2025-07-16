@@ -82,13 +82,15 @@ tasks:
           VERSION: "{{.CRDOC_VERSION}}"
     cmds:
       - |
-        set -e ;
-        mkdir -p docs/api ;
-        for crdmanifest in config/crd/bases/*; do
-          filename="$(basename -s .resourcemanager.miloapis.com.yaml $crdmanifest)" ;
-          filename="${filename#apiextensions.k8s.io_v1_customresourcedefinition_}" ;
-          bin/crdoc --resources $crdmanifest --output docs/api/$filename.md ;
-        done;
+        set -e
+        mkdir -p docs/api
+        for group_dir in config/crd/bases/*; do
+          if [ -d "$group_dir" ]; then
+            group_name=$(basename "$group_dir")
+            echo "Generating API documentation for $group_name..."
+            "{{.TOOL_DIR}}/crdoc" --resources "$group_dir" --output "docs/api/$group_name.md"
+          fi
+        done
     silent: true
 
   install-go-tool:
