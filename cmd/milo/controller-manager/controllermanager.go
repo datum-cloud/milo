@@ -404,6 +404,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			organizationCtrl := resourcemanagercontroller.OrganizationController{
+				Client: ctrl.GetClient(),
+			}
+			if err := organizationCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up organization controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
 			organizationMembershipCtrl := resourcemanagercontroller.OrganizationMembershipController{
 				Client: ctrl.GetClient(),
 			}
