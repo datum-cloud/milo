@@ -36,7 +36,14 @@ transforms:
       - project_audit_log_webhook
     source: |
       # Extract the project name from the path using regex capture
-      project_name = parse_regex!(.path, r'/audit/v1alpha1/projects/(?P<project>[^/]+)').project
+      project_matches, err = parse_regex(.path, r'/audit/v1alpha1/projects/(?P<project>[^/]+)')
+      if err != null {
+        log("failed to extract project name from path", level: "error", rate_limit_secs: 0)
+        log(encode_json(.), level: "error", rate_limit_secs: 0)
+        abort
+      }
+
+      project_name = project_matches.project
 
       if !is_array(.items) {
         log("failed to convert items to array", level: "error", rate_limit_secs: 0)
