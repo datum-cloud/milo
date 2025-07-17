@@ -28,11 +28,15 @@ transforms:
   # Transform project control plane audit logs
   project_audit_log_transformer:
     type: remap
+    # When errors occur, we don't want to send bad data upstream. We'd prefer to
+    # have a log of the error and drop it. Alerts should file to notify us when
+    # the vector configuration is not working as expected.
+    drop_on_error: true
     inputs:
       - project_audit_log_webhook
     source: |
       # Extract the project name from the path using regex capture
-      project_name = parse_regex!(.path, r'/audit/v1alpha/projects/(?P<project>[^/]+)').project
+      project_name = parse_regex!(.path, r'/audit/v1alpha1/projects/(?P<project>[^/]+)').project
 
       if !is_array(.items) {
         log("failed to convert items to array", level: "error", rate_limit_secs: 0)
