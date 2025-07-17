@@ -1,0 +1,44 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "resourcemanager.miloapis.com"
+        kind: "Project"
+        version: "v1alpha1"
+      labelsFromPath:
+        name: [metadata, name]
+        namespace: [metadata, namespace]
+      metricNamePrefix: milo_projects
+      metrics:
+        - name: "info"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                owner_kind: ["spec", "ownerRef", "kind"]
+                owner_name: ["spec", "ownerRef", "name"]
+                uid: [metadata, uid]
+        - name: "created_timestamp"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+        - name: "status_condition"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, conditions]
+              labelsFromPath:
+                type: ["type"]
+                reason: ["reason"]
+              valueFrom: ["status"]
+        - name: "status_condition_last_transition_time"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, conditions]
+              labelsFromPath:
+                type: ["type"]
+                reason: ["reason"]
+                status: ["status"]
+              valueFrom: ["lastTransitionTime"]
