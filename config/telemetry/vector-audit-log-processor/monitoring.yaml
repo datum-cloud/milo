@@ -1,0 +1,9 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vector-audit-log-processor
+spec:
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 5s

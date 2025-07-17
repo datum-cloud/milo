@@ -161,8 +161,6 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 
 	handler = filterlatency.TrackCompleted(handler)
 	handler = genericapifilters.WithAuthorization(handler, c.Authorization.Authorizer, c.Serializer)
-	handler = datumfilters.UserContextAuthorizationDecorator(handler)
-	handler = datumfilters.OrganizationContextAuthorizationDecorator(handler)
 	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "authorization")
 
 	if c.FlowControl != nil {
@@ -183,6 +181,12 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	handler = filterlatency.TrackCompleted(handler)
 	handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator, c.LongRunningFunc)
 	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "audit")
+
+	// These decorators are added after the audit filter to ensure they're run
+	// prior to the audit filter being run so they will include the user and
+	// organization contexts.
+	handler = datumfilters.UserContextAuthorizationDecorator(handler)
+	handler = datumfilters.OrganizationContextAuthorizationDecorator(handler)
 
 	failedHandler := genericapifilters.Unauthorized(c.Serializer)
 	failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyRuleEvaluator)
