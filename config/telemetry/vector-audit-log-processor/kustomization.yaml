@@ -5,6 +5,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - monitoring.yaml
+  - prometheus-rules.yaml
 
 images:
   - name: timberio/vector

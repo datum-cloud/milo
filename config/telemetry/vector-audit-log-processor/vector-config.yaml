@@ -28,6 +28,10 @@ transforms:
   # Transform project control plane audit logs
   project_audit_log_transformer:
     type: remap
+    # When errors occur, we don't want to send bad data upstream. We'd prefer to
+    # have a log of the error and drop it. Alerts should file to notify us when
+    # the vector configuration is not working as expected.
+    drop_on_error: true
     inputs:
       - project_audit_log_webhook
     source: |
