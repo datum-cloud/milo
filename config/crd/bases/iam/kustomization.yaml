@@ -9,3 +9,4 @@ resources:
 - iam.miloapis.com_userinvitations.yaml
 - iam.miloapis.com_machineaccountkeys.yaml
 - iam.miloapis.com_userpreferences.yaml
+- iam.miloapis.com_userdeactivations.yaml
