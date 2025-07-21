@@ -20,7 +20,7 @@ require (
 	k8s.io/kube-aggregator v0.32.0
 	k8s.io/kubernetes v1.32.0
 	sigs.k8s.io/controller-runtime v0.20.4
-	sigs.k8s.io/multicluster-runtime v0.20.4-alpha.6
+	sigs.k8s.io/multicluster-runtime v0.20.4-alpha.7
 )
 
 require (
