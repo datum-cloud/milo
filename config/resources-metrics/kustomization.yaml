@@ -1,22 +1,4 @@
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Component
-namespace: milo-system
-configMapGenerator:
-  - name: milo-resource-metrics
-    files:
-    - ./resources-manager/projects.yaml
-    - ./resources-manager/organizations.yaml
-    - ./resources-manager/organization_memberships.yaml 
-    - ./iam/users.yaml
-    - ./iam/groups.yaml
-    - ./iam/group_memberships.yaml
-    - ./iam/machine_accounts.yaml
-    - ./iam/machine_account_keys.yaml
-    - ./iam/policybindings.yaml
-    - ./iam/roles.yaml
-    - ./iam/services.yaml
-    - ./iam/user_invitations.yaml
-    - ./infrastructure/project_control_planes.yaml
-    options:
-      labels:
-        telemetry.datumapis.com/core-resource-metrics-config: "true"
+resources:
+  - iam/
+  - resources-manager/
+  - infrastructure/
