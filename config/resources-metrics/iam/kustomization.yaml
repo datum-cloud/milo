@@ -12,6 +12,7 @@ configMapGenerator:
     - policybindings.yaml
     - roles.yaml
     - user_invitations.yaml
+    - protected_resources.yaml
     options:
       labels:
         telemetry.datumapis.com/core-resource-metrics-config: "true"
