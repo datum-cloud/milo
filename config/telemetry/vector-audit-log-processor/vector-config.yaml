@@ -233,6 +233,4 @@ sinks:
       resource_api_version: "{{ objectRef.apiVersion }}"
       resource_kind: "{{ objectRef.resource }}"
       user_name: "{{ user.username }}"
-      organization_name: '{{ annotations."resourcemanager.miloapis.com/organization-name" }}'
-      project_name: '{{ annotations."resourcemanager.miloapis.com/project-name" }}'
       control_plane_type: '{{ annotations."telemetry.miloapis.com/control-plane-type" }}'
