@@ -1,0 +1,30 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: userpreference-john-doe-binding
+  namespace: milo-system
+spec:
+  roleRef:
+    name: iam-user-preferences-manager
+    namespace: milo-system
+  subjects:
+    - kind: User
+      name: "john-doe"
+      uid: "12345678-1234-1234-1234-123456789abc"
+  resourceSelector:
+    resourceRef:
+      apiGroup: "iam.miloapis.com"
+      kind: UserPreference
+      name: "userpreference-john-doe"
+      uid: "87654321-4321-4321-4321-cba987654321"
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: UserPreference
+metadata:
+  name: userpreference-john-doe
+  namespace: milo-system
+spec:
+  userRef:
+    name: "john-doe"
+  timezone: "America/New_York"
+  theme: "dark" 
