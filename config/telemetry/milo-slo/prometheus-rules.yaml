@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: milo-slo
+spec:
+  groups:
+    - name: milo-slo
+      rules:
+        - alert: ProjectReadyStatusSLOViolation
+          expr: |
+            (sum by (resource_name) (milo_projects_status_condition_last_transition_time{type="Ready"}) - sum by (resource_name) (milo_projects_created_timestamp)) > 60
+          for: 0s
+          labels:
+            severity: critical
+            slo_violation: "true"
+          annotations:
+            summary: "Project {{ $labels.resource_name }} is taking too long to reach Ready status"
+            description: "Project {{ $labels.resource_name }} has taken {{ $value }} seconds to reach Ready status, which exceeds the 60-second SLO threshold. This violates our service level objective and requires immediate attention."
