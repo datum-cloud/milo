@@ -10,9 +10,6 @@ spec:
   - iam.miloapis.com/users.get
   - iam.miloapis.com/users.update
   - iam.miloapis.com/users.patch
-  - iam.miloapis.com/userpreferences.get
-  - iam.miloapis.com/userpreferences.update
-  - iam.miloapis.com/userpreferences.patch
   - resourcemanager.miloapis.com/organizationmemberships.list
   - resourcemanager.miloapis.com/organizationmemberships.get
   - resourcemanager.miloapis.com/organizationmemberships.delete
