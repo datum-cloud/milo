@@ -335,7 +335,7 @@ func (r *EffectiveResourceGrantReconciler) ensureAllowanceBucket(ctx context.Con
 			log.Error(err, "Failed to create AllowanceBucket", "name", bucketName)
 			return err
 		}
-		// log.Info("Created AllowanceBucket", "name", bucketName)
+		log.Info("Created AllowanceBucket", "name", bucketName)
 	} else if err != nil {
 		return err
 	}
