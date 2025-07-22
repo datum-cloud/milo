@@ -14,7 +14,6 @@ metadata, and forwards them to downstream observability systems.
 
 ```mermaid
 
-
 graph TB
     subgraph "Milo Control Planes"
         CoreAPI["Core API Server<br/>(milo-apiserver)"]
@@ -29,6 +28,7 @@ graph TB
         subgraph "Transformers"
             CoreTransform["Core Log Transformer"]
             ProjTransform["Project Log Transformer"]
+            CommonProcessor["Common Log Processor"]
         end
 
         Metrics["Prometheus Metrics<br/>:9598/metrics"]
@@ -47,10 +47,11 @@ graph TB
     %% Vector processing flow
     CoreWebhook --> CoreTransform
     ProjWebhook --> ProjTransform
+    CoreTransform --> |Sends individual audit logs to| CommonProcessor
+    ProjTransform --> |Sends individual audit logs to| CommonProcessor
 
     %% Output to downstream systems
-    CoreTransform -->|"JSON logs with labels<br/>telemetry_datumapis_com_audit_log=true<br/>service_name={apiGroup}"| Loki
-    ProjTransform -->|"JSON logs with labels<br/>telemetry_datumapis_com_audit_log=true<br/>service_name={apiGroup}"| Loki
+    CommonProcessor --> Loki
 
     Metrics --> Prometheus
 
@@ -60,7 +61,7 @@ graph TB
     classDef downstream fill:#e8f5e8
 
     class CoreAPI,ProjAPI1,ProjAPI2 apiServer
-    class CoreWebhook,ProjWebhook,CoreTransform,ProjTransform,Metrics vector
+    class CoreWebhook,ProjWebhook,CoreTransform,ProjTransform,CommonProcessor,Metrics vector
     class Loki,Prometheus downstream
 ```
 
@@ -68,6 +69,7 @@ graph TB
 
 - **HTTP Webhook Servers**: Two dedicated endpoints for receiving audit logs
 - **Log Transformers**: VRL (Vector Remap Language) scripts that enrich audit logs with contextual information
+- **Common Log Processor**: Shared processing step that applies IP filtering and API group defaults
 - **Loki Sink**: Forwards processed logs to Loki with rich contextual labels for efficient querying
 - **Prometheus Metrics**: Exposes operational metrics for monitoring
 
@@ -81,16 +83,20 @@ The core control plane transformer processes audit logs from the main Milo API s
   - Namespace patterns (e.g., `organization-{org-name}`)
   - User extra data when parent resource type is "Organization"
 - **User Context**: Extracts user names from user extra data when parent resource type is "User"
-- **API Group Defaulting**: Defaults core Kubernetes resources (apiVersion: v1) to "core" API group
 
 #### Project Log Transformer
 The project control plane transformer processes audit logs from project-specific API servers:
 
 - **Control Plane Type**: Adds `telemetry.miloapis.com/control-plane-type: "project"`
 - **Project Context**: Extracts project name from the webhook URL path (`/audit/v1alpha1/projects/{project-name}`)
+
+#### Common Log Processor
+The common processor applies shared transformations to all audit logs from both control planes:
+
+- **IP Filtering**: Removes internal cluster IP addresses from `sourceIPs` arrays (RFC 1918 private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, localhost, IPv6 link-local)
 - **API Group Defaulting**: Defaults core Kubernetes resources (apiVersion: v1) to "core" API group
 
-Both transformers ensure that audit logs are structured with consistent metadata for downstream querying and analysis.
+This consolidates duplicate logic and ensures consistent processing across all audit events.
 
 ## Data Flow
 
