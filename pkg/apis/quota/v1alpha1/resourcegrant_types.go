@@ -49,7 +49,7 @@ type ResourceGrantStatus struct {
 	// +kubebuilder:validation:Optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// Known condition types: "Active"
-	// +kubebuilder:validation:XValidation:rule="self.all(c, c.type == 'Active' ? c.reason in ['GrantActivated', 'GrantDeactivated', 'ValidationFailed', 'GrantPending'] : true)",message="Active condition reason must be valid"
+	// +kubebuilder:validation:XValidation:rule="self.all(c, c.type == 'Active' ? c.reason in ['GrantActive', 'ValidationFailed', 'GrantPending'] : true)",message="Active condition reason must be valid"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
@@ -61,9 +61,7 @@ const (
 const (
 	// Indicates the ResourceGrant is active and its
 	// allowances will be taken into account in claim evaluation.
-	ResourceGrantActivatedReason = "GrantActivated"
-	// Indicates that the grant is deactivated.
-	ResourceGrantDeactivatedReason = "GrantDeactivated"
+	ResourceGrantActiveReason = "GrantActive"
 	// Indicates that the status update validation failed.
 	ResourceGrantValidationFailedReason = "ValidationFailed"
 	// Indicates that the grant is pending activation.

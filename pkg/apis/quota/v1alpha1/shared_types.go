@@ -12,6 +12,10 @@ type OwnerRef struct {
 	Kind string `json:"kind"`
 
 	// Name of the specific resource instance
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	Name string `json:"name"`
+
+	// UID of the specific resource instance
+	// +kubebuilder:validation:Optional
+	UID string `json:"uid"`
 }
