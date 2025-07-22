@@ -48,16 +48,6 @@ func (r *ResourceClaimReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
-	return ctrl.Result{}, r.updateResourceClaimStatus(ctx, &claim)
-}
-
-// reconcileResourceClaimStatus handles the status reconciliation and quota evaluation for a ResourceClaim.
-// It iterates through each request in the claim, evaluates it, and sets the overall status condition.
-func (r *ResourceClaimReconciler) updateResourceClaimStatus(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
-	logger := log.FromContext(ctx)
-
-	originalStatus := claim.Status.DeepCopy()
-
 	// Always update the observed generation in the status to match the current generation of the spec.
 	claim.Status.ObservedGeneration = claim.Generation
 
@@ -66,7 +56,7 @@ func (r *ResourceClaimReconciler) updateResourceClaimStatus(ctx context.Context,
 	// Variable to store the outcome message for each request evaluation.
 	var evaluationMessages []string
 
-	// Iterate through the requests in the claim's spec
+	// Iterate through the requests in the claim's spec and evaluate them
 	for i, request := range claim.Spec.Requests {
 		// Log the start of the evaluation for the current request
 		logger.Info("evaluating resource request",
@@ -140,7 +130,7 @@ func (r *ResourceClaimReconciler) updateResourceClaimStatus(ctx context.Context,
 			"requestCount", len(claim.Spec.Requests))
 	}
 
-	return nil
+	return ctrl.Result{}, nil
 }
 
 // evaluateResourceRequest evaluates a single resource request against the available quota
