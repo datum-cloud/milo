@@ -6,13 +6,25 @@ spec:
   groups:
     - name: milo-slo
       rules:
-        - alert: ProjectReadyStatusSLOViolation
+        - alert: ProjectStuckCreatingSLOViolation
           expr: |
-            (sum by (resource_name) (milo_projects_status_condition_last_transition_time{type="Ready"}) - sum by (resource_name) (milo_projects_created_timestamp)) > 60
+            (time() - milo_projects_created_timestamp) > 60
+            unless ignoring(type, reason, status) (milo_projects_status_condition{type="Ready", status="True"} == 1)
           for: 0s
           labels:
             severity: critical
             slo_violation: "true"
           annotations:
-            summary: "Project {{ $labels.resource_name }} is taking too long to reach Ready status"
-            description: "Project {{ $labels.resource_name }} has taken {{ $value }} seconds to reach Ready status, which exceeds the 60-second SLO threshold. This violates our service level objective and requires immediate attention."
+            summary: "Project {{ $labels.name }} is stuck creating for over 60 seconds"
+            description: "Project {{ $labels.name }} has been in creation state for {{ $value }} seconds without reaching Ready status, which exceeds the 60-second SLO threshold."
+
+        - alert: ProjectReadyStatusSLOViolation
+          expr: |
+            (sum by (name, namespace) (milo_projects_status_condition_last_transition_time{type="Ready"}) - sum by (name, namespace) (milo_projects_created_timestamp)) > 60
+          for: 0s
+          labels:
+            severity: critical
+            slo_violation: "true"
+          annotations:
+            summary: "Project {{ $labels.name }} took too long to reach Ready status"
+            description: "Project {{ $labels.name }} took {{ $value }} seconds to reach Ready status, exceeding the 60-second SLO threshold."
