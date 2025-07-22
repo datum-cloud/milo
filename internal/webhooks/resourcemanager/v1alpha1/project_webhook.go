@@ -247,7 +247,7 @@ func (v *ProjectValidator) createOwnerPolicyBinding(ctx context.Context, project
 			Subjects: []iamv1alpha1.Subject{
 				{
 					Kind: "User",
-					Name: req.UserInfo.Username,
+					Name: foundUser.Name,
 					UID:  string(foundUser.GetUID()),
 				},
 			},
