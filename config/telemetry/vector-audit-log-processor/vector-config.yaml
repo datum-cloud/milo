@@ -110,6 +110,13 @@ transforms:
         }
         annotations = object!(log.annotations)
 
+        # Requests for projects are always made in the core control plane. Make
+        # sure that any project-specific requests are tagged with the project
+        # name so they show up in a project's activity logs.
+        if log.objectRef.apiGroup == "resourcemanager.miloapis.com" && log.objectRef.resource == "projects" && log.objectRef.name != null {
+          annotations = set!(value: annotations, path: ["resourcemanager.miloapis.com/project-name"], data: log.objectRef.name)
+        }
+
         # Handle organization attribution for core control plane
         organization_name = null
 
