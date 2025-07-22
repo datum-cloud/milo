@@ -57,10 +57,12 @@ spec:
                   name:
                     description: Name of the specific resource instance
                     type: string
+                  uid:
+                    description: UID of the specific resource instance
+                    type: string
                 required:
                 - apiGroup
                 - kind
-                - name
                 type: object
               requests:
                 description: List of resource requests defined by this claim

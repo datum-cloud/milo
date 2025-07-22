@@ -12,7 +12,7 @@ spec:
     listKind: ResourceRegistrationList
     plural: resourceregistrations
     singular: resourceregistration
-  scope: Namespaced
+  scope: Cluster
   versions:
   - additionalPrinterColumns:
     - jsonPath: .spec.type
@@ -29,7 +29,7 @@ spec:
       openAPIV3Schema:
         description: |-
           ResourceRegistration is the Schema for the resourceregistrations API.
-          Defines quotable resource types, enabling them for quota management
+          Defines quotable resource types, enabling them for quota management.
         properties:
           apiVersion:
             description: |-
@@ -56,50 +56,43 @@ spec:
                   Base unit of measurement for the resource (e.g., "projects",
                   "millicores", "bytes")
                 maxLength: 50
-                minLength: 1
                 type: string
               description:
                 description: Human-readable description of the registration
-                maxLength: 500
                 minLength: 1
                 type: string
               dimensions:
                 description: |-
-                  List of dimension names that can be used in ResourceGrant selectors for this resource type.
-                  Each dimension should be a fully qualified name matching the pattern:
-                  apiGroup/resourceTypeName
+                  List of dimension names that can be used in ResourceGrant selectors for
+                  this resource type. Each dimension should be a fully qualified name
+                  matching the pattern: apiGroup/resourceTypeName
                 items:
                   type: string
                 type: array
               displayUnit:
                 description: Unit of measurement that user interfaces should present
                 maxLength: 50
-                minLength: 1
                 type: string
-              ownerRef:
-                description: Reference to the resource that owns the registration
+              objectRef:
+                description: |-
+                  Reference to the resource type that will create grant and claim objects
+                  for this registration.
+                  For example, if creating a registration that defines the max number of
+                  "Project"s, the object ref will reference the "Organization" resource
+                  type as projects are created within an organization.
                 properties:
                   apiGroup:
-                    description: API group of the resource
-                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                   kind:
-                    description: Kubernetes resource type - Must be PascalCase
-                    pattern: ^[A-Z][a-zA-Z]*$
-                    type: string
-                  name:
-                    description: Name of the specific resource instance
                     type: string
                 required:
                 - apiGroup
                 - kind
-                - name
                 type: object
               resourceTypeName:
                 description: |-
                   Fully qualified name of the resource type being registered
 
-                  This must match the actual resource type name used by the owning service.
                   Format: apiGroup/ResourceType or apiGroup/resourceType/subResource
                 pattern: ^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$
                 type: string
@@ -111,8 +104,8 @@ spec:
                 type: string
               unitConversionFactor:
                 description: |-
-                  Factor to convert baseUnit to displayUnit (e.g., 1073741824 for bytes to GiB).
-                  Must be a positive integer. Formula: displayValue = baseValue /
+                  Factor to convert baseUnit to displayUnit (e.g., 1073741824 for bytes to
+                  GiB). Must be a positive integer. Formula: displayValue = baseValue /
                   unitConversionFactor
                 format: int64
                 minimum: 1
@@ -120,21 +113,21 @@ spec:
             required:
             - baseUnit
             - displayUnit
-            - ownerRef
+            - objectRef
             - resourceTypeName
             - type
             - unitConversionFactor
             type: object
           status:
-            description: ResourceRegistrationStatus defines the observed state of
+            description: |-
+              ResourceRegistrationStatus defines the observed state of
               ResourceRegistration.
             properties:
               conditions:
                 description: |-
-                  Current status conditions.
-                  Known condition types: "Active"
-                  below marker ensures controllers set a correct and standardized status
-                  and an external client can't set the status to bypass validation.
+                  Current status conditions. Known condition types: "Active" below marker
+                  ensures controllers set a correct and standardized status and an external
+                  client can't set the status to bypass validation.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -193,8 +186,7 @@ spec:
                 x-kubernetes-validations:
                 - message: Active condition reason must be valid
                   rule: 'self.all(c, c.type == ''Active'' ? c.reason in [''RegistrationActive'',
-                    ''RegistrationInactive'', ''ValidationFailed'', ''RegistrationPending'']
-                    : true)'
+                    ''ValidationFailed'', ''RegistrationPending''] : true)'
               observedGeneration:
                 description: Most recent generation observed by the controller.
                 format: int64

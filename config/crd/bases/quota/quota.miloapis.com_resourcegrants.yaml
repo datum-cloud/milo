@@ -134,10 +134,12 @@ spec:
                   name:
                     description: Name of the specific resource instance
                     type: string
+                  uid:
+                    description: UID of the specific resource instance
+                    type: string
                 required:
                 - apiGroup
                 - kind
-                - name
                 type: object
             required:
             - allowances
@@ -205,9 +207,8 @@ spec:
                 type: array
                 x-kubernetes-validations:
                 - message: Active condition reason must be valid
-                  rule: 'self.all(c, c.type == ''Active'' ? c.reason in [''GrantActivated'',
-                    ''GrantDeactivated'', ''ValidationFailed'', ''GrantPending'']
-                    : true)'
+                  rule: 'self.all(c, c.type == ''Active'' ? c.reason in [''GrantActive'',
+                    ''ValidationFailed'', ''GrantPending''] : true)'
               observedGeneration:
                 description: Most recent generation observed.
                 format: int64

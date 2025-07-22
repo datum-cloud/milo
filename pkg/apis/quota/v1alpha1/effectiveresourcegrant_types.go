@@ -62,7 +62,28 @@ type EffectiveResourceGrantStatus struct {
 	//
 	// +kubebuilder:validation:Optional
 	AllowanceBucketRefs []AllowanceBucketRef `json:"allowanceBucketRefs,omitempty"`
+	// Known condition types: "Ready"
+	//
+	// +kubebuilder:validation:XValidation:rule="self.all(c, c.type == 'Ready' ? c.reason in ['AggregationComplete', 'AggregationFailed', 'AggregationPending'] : true)",message="Ready condition reason must be valid"
+	// +kubebuilder:validation:Optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
+
+// Condition type constants for EffectiveResourceGrant
+const (
+	// Indicates that the EffectiveResourceGrant has completed aggregation and is ready
+	EffectiveResourceGrantReady = "Ready"
+)
+
+// Condition reason constants for EffectiveResourceGrant
+const (
+	// Indicates that aggregation has completed successfully
+	EffectiveResourceGrantAggregationCompleteReason = "AggregationComplete"
+	// Indicates that aggregation failed
+	EffectiveResourceGrantAggregationFailedReason = "AggregationFailed"
+	// Indicates that aggregation is pending
+	EffectiveResourceGrantAggregationPendingReason = "AggregationPending"
+)
 
 // EffectiveResourceGrant is the Schema for the effectiveresourcegrants API.
 //
@@ -74,7 +95,7 @@ type EffectiveResourceGrantStatus struct {
 // +kubebuilder:printcolumn:name="Total Limit",type=integer,JSONPath=`.status.totalLimit`
 // +kubebuilder:printcolumn:name="Allocated",type=integer,JSONPath=`.status.totalAllocated`
 // +kubebuilder:printcolumn:name="Available",type=integer,JSONPath=`.status.available`
-// +kubebuilder:printcolumn:name="Buckets",type=integer,JSONPath=`.status.allowanceBucketRefs[*].name`
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type EffectiveResourceGrant struct {
 	metav1.TypeMeta   `json:",inline"`

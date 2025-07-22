@@ -71,10 +71,12 @@ spec:
                   name:
                     description: Name of the specific resource instance
                     type: string
+                  uid:
+                    description: UID of the specific resource instance
+                    type: string
                 required:
                 - apiGroup
                 - kind
-                - name
                 type: object
               resourceTypeName:
                 description: The resource type this bucket tracks quota usage for
@@ -121,10 +123,12 @@ spec:
                         name:
                           description: Name of the specific resource instance
                           type: string
+                        uid:
+                          description: UID of the specific resource instance
+                          type: string
                       required:
                       - apiGroup
                       - kind
-                      - name
                       type: object
                   required:
                   - amount
