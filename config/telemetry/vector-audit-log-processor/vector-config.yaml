@@ -36,7 +36,14 @@ transforms:
       - project_audit_log_webhook
     source: |
       # Extract the project name from the path using regex capture
-      project_name = parse_regex!(.path, r'/audit/v1alpha1/projects/(?P<project>[^/]+)').project
+      project_matches, err = parse_regex(.path, r'/audit/v1alpha1/projects/(?P<project>[^/]+)')
+      if err != null {
+        log("failed to extract project name from path", level: "error", rate_limit_secs: 0)
+        log(encode_json(.), level: "error", rate_limit_secs: 0)
+        abort
+      }
+
+      project_name = project_matches.project
 
       if !is_array(.items) {
         log("failed to convert items to array", level: "error", rate_limit_secs: 0)
@@ -48,13 +55,6 @@ transforms:
       # Transform each item in the items array
       for_each(array!(.items)) -> |_index, item| {
         log = object!(item)
-
-        # Default apiGroup based on apiVersion. objectRef is guaranteed to exist.
-        if exists(log.objectRef.apiVersion) && log.objectRef.apiVersion == "v1" {
-          log.objectRef.apiGroup = log.objectRef.apiGroup || "core"
-        } else {
-          log.objectRef.apiGroup = log.objectRef.apiGroup || "unknown"
-        }
 
         # Initialize annotations if they don't exist
         if !exists(log.annotations) {
@@ -90,18 +90,18 @@ transforms:
       for_each(array!(.items)) -> |_index, item| {
         log = object!(item)
 
-        # Default apiGroup based on apiVersion. objectRef is guaranteed to exist.
-        if exists(log.objectRef.apiVersion) && log.objectRef.apiVersion == "v1" {
-          log.objectRef.apiGroup = log.objectRef.apiGroup || "core"
-        } else {
-          log.objectRef.apiGroup = log.objectRef.apiGroup || "unknown"
-        }
-
         # Initialize annotations if they don't exist
         if !exists(log.annotations) {
           log.annotations = {}
         }
         annotations = object!(log.annotations)
+
+        # Requests for projects are always made in the core control plane. Make
+        # sure that any project-specific requests are tagged with the project
+        # name so they show up in a project's activity logs.
+        if log.objectRef.apiGroup == "resourcemanager.miloapis.com" && log.objectRef.resource == "projects" && log.objectRef.name != null {
+          annotations = set!(value: annotations, path: ["resourcemanager.miloapis.com/project-name"], data: log.objectRef.name)
+        }
 
         # Handle organization attribution for core control plane
         organization_name = null
@@ -177,6 +177,41 @@ transforms:
 
       . = audit_logs
 
+  # Common post-processing for all audit logs
+  audit_log_common_processor:
+    type: remap
+    drop_on_error: true
+    inputs:
+      - project_audit_log_transformer
+      - core_audit_log_transformer
+    source: |
+      # Filter internal cluster IPs from sourceIPs array
+      if exists(.sourceIPs) && is_array(.sourceIPs) {
+        filtered_source_ips = []
+        for_each(array!(.sourceIPs)) -> |_ip_index, source_ip| {
+          ip_str = string!(source_ip)
+          # Filter out internal cluster IP ranges (RFC 1918 private addresses)
+          # 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, and localhost
+          if !match(ip_str, r'^10\.') &&
+             !match(ip_str, r'^172\.(1[6-9]|2[0-9]|3[0-1])\.') &&
+             !match(ip_str, r'^192\.168\.') &&
+             !match(ip_str, r'^127\.') &&
+             !match(ip_str, r'^::1$') &&
+             !match(ip_str, r'^fc[0-9a-f][0-9a-f]:') &&
+             !match(ip_str, r'^fe80:') {
+            filtered_source_ips = push(filtered_source_ips, source_ip)
+          }
+        }
+        .sourceIPs = filtered_source_ips
+      }
+
+      # Default apiGroup based on apiVersion. objectRef is guaranteed to exist.
+      if exists(.objectRef.apiVersion) && .objectRef.apiVersion == "v1" {
+        .objectRef.apiGroup = .objectRef.apiGroup || "core"
+      } else {
+        .objectRef.apiGroup = .objectRef.apiGroup || "unknown"
+      }
+
 sinks:
 
   prometheus_export:
@@ -188,8 +223,7 @@ sinks:
   loki:
     type: loki
     inputs:
-      - project_audit_log_transformer
-      - core_audit_log_transformer
+      - audit_log_common_processor
     endpoint: http://loki-single-binary.telemetry-system.svc.cluster.local:3100
     encoding:
       codec: json
