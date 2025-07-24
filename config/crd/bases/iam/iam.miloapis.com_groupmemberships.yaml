@@ -30,7 +30,33 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: GroupMembership is the Schema for the groupmemberships API
+        description: "GroupMembership establishes a relationship between a User and
+          a Group in the Milo IAM system.\nThis resource is the primary mechanism
+          for adding users to groups, enabling organized\npermission management through
+          group-based role assignments.\n\nGroupMembership resources are namespaced
+          and should typically be created in the same\nnamespace as the target group.
+          Each GroupMembership represents a single user-to-group\nrelationship - to
+          add multiple users to a group, create multiple GroupMembership resources.\n\nKey
+          characteristics:\n- Namespaced: Created in the same namespace as the target
+          group\n- One-to-one relationship: Each resource links exactly one user to
+          one group\n- Cross-namespace references: Can reference cluster-scoped users
+          from any namespace\n- Bidirectional effect: Affects both user's group memberships
+          and group's member list\n\nCommon usage patterns:\n- Team onboarding: Add
+          new team members to appropriate groups\n- Role changes: Move users between
+          groups as their responsibilities change\n- Project assignments: Add users
+          to project-specific groups\n- Temporary access: Grant temporary group membership
+          for specific tasks\n\nBest practices:\n- Use descriptive names that indicate
+          the user-group relationship\n- Create memberships in the same namespace
+          as the target group\n- Monitor membership status through conditions before
+          relying on permissions\n- Use groups rather than direct user-role bindings
+          for scalability\n\nExample:\n\n\tapiVersion: iam.miloapis.com/v1alpha1\n\tkind:
+          GroupMembership\n\tmetadata:\n\t  name: jane-doe-developers\n\t  namespace:
+          project-alpha\n\tspec:\n\t  userRef:\n\t    name: jane-doe\n\t  groupRef:\n\t
+          \   name: developers\n\t    namespace: project-alpha\n\nRelated resources:\n-
+          User: The cluster-scoped user being added to the group\n- Group: The namespaced
+          group that will contain the user\n- PolicyBinding: Can reference the group
+          to grant roles to all members\n\nGroupMembership is the Schema for the groupmemberships
+          API"
         properties:
           apiVersion:
             description: |-
@@ -50,18 +76,32 @@ spec:
           metadata:
             type: object
           spec:
-            description: GroupMembershipSpec defines the desired state of GroupMembership
+            description: |-
+              GroupMembershipSpec defines the desired state of GroupMembership, establishing
+              the relationship between a specific user and a group within the IAM system.
             properties:
               groupRef:
                 description: |-
-                  GroupRef is a reference to the Group.
-                  Group is a namespaced resource.
+                  GroupRef is a reference to the Group that the user should be added to.
+                  Groups are namespaced resources, so both name and namespace are required.
+                  The referenced group must exist in the specified namespace before the
+                  GroupMembership can be successfully reconciled.
+
+                  Example: { name: "developers", namespace: "project-alpha" }
                 properties:
                   name:
-                    description: Name is the name of the Group being referenced.
+                    description: |-
+                      Name is the name of the Group being referenced. This must match the metadata.name
+                      of an existing Group resource in the specified namespace.
+
+                      Example: "developers"
                     type: string
                   namespace:
-                    description: Namespace of the referenced Group.
+                    description: |-
+                      Namespace is the namespace where the referenced Group exists. This must match
+                      the metadata.namespace of an existing Group resource.
+
+                      Example: "project-alpha"
                     type: string
                 required:
                 - name
@@ -69,11 +109,19 @@ spec:
                 type: object
               userRef:
                 description: |-
-                  UserRef is a reference to the User that is a member of the Group.
-                  User is a cluster-scoped resource.
+                  UserRef is a reference to the User that should be a member of the specified Group.
+                  Users are cluster-scoped resources, so only the name is required for identification.
+                  The referenced user must exist in the cluster before the GroupMembership can be
+                  successfully reconciled.
+
+                  Example: { name: "jane-doe" }
                 properties:
                   name:
-                    description: Name is the name of the User being referenced.
+                    description: |-
+                      Name is the name of the User being referenced. This must match the metadata.name
+                      of an existing User resource in the cluster.
+
+                      Example: "jane-doe"
                     type: string
                 required:
                 - name
@@ -83,11 +131,26 @@ spec:
             - userRef
             type: object
           status:
-            description: GroupMembershipStatus defines the observed state of GroupMembership
+            description: |-
+              GroupMembershipStatus defines the observed state of GroupMembership, indicating
+              whether the user has been successfully added to the group.
             properties:
               conditions:
-                description: Conditions represent the latest available observations
-                  of an object's current state.
+                description: |-
+                  Conditions represent the latest available observations of the GroupMembership's current state.
+                  The primary condition type is "Ready" which indicates whether the user has been
+                  successfully added to the group and the membership is active.
+
+                  Common condition types:
+                  - Ready: Indicates the user is successfully a member of the group
+                  - UserFound: Indicates the referenced user exists
+                  - GroupFound: Indicates the referenced group exists
+
+                  Example condition:
+                    - type: Ready
+                      status: "True"
+                      reason: MembershipActive
+                      message: User successfully added to group
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

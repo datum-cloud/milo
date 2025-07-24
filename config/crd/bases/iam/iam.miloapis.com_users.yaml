@@ -33,7 +33,22 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: User is the Schema for the users API
+        description: "User represents an individual identity in the Milo IAM system.
+          Users are cluster-scoped\nresources that exist globally across the entire
+          Milo deployment and serve as the foundation\nfor identity and access management.\n\nUsers
+          are automatically created when a person authenticates or registers with
+          the Milo\nplatform for the first time, though they can also be created manually
+          by administrators.\nEach user is uniquely identified by their email address
+          and integrates with external\nidentity providers for authentication.\n\nKey
+          characteristics:\n- Cluster-scoped: Users exist globally and can be referenced
+          from any namespace\n- Email-based identity: Each user is uniquely identified
+          by their email address\n- Automatic lifecycle: Created during first authentication/registration\n-
+          Cross-namespace access: Can be granted permissions across different projects/namespaces\n\nCommon
+          usage patterns:\n- New user onboarding when team members join\n- Permission
+          management through groups or direct role bindings\n- Audit trails for tracking
+          user activities across the system\n- Identity foundation for all IAM operations\n\nExample:\n\n\tapiVersion:
+          iam.miloapis.com/v1alpha1\n\tkind: User\n\tmetadata:\n\t  name: jane-doe\n\tspec:\n\t
+          \ email: jane.doe@company.com\n\t  givenName: Jane\n\t  familyName: Doe"
         properties:
           apiVersion:
             description: |-
@@ -53,22 +68,39 @@ spec:
           metadata:
             type: object
           spec:
-            description: UserSpec defines the desired state of User
+            description: |-
+              UserSpec defines the desired state of User, containing the core identity information
+              that uniquely identifies and describes a user in the system.
             properties:
               email:
-                description: The email of the user.
+                description: |-
+                  Email is the unique email address that identifies this user in the system.
+                  This field is required and serves as the primary identifier for the user.
+                  The email must be unique across all users in the cluster.
+
+                  Example: "jane.doe@company.com"
                 type: string
               familyName:
-                description: The last name of the user.
+                description: |-
+                  FamilyName is the user's last name or family name. This field is optional
+                  and is used for display purposes and user identification in UI contexts.
+
+                  Example: "Doe"
                 type: string
               givenName:
-                description: The first name of the user.
+                description: |-
+                  GivenName is the user's first name or given name. This field is optional
+                  and is used for display purposes and user identification in UI contexts.
+
+                  Example: "Jane"
                 type: string
             required:
             - email
             type: object
           status:
-            description: UserStatus defines the observed state of User
+            description: |-
+              UserStatus defines the observed state of User, indicating the current status
+              of the user's synchronization with external systems and overall readiness.
             properties:
               conditions:
                 default:
@@ -77,8 +109,21 @@ spec:
                   reason: Unknown
                   status: Unknown
                   type: Ready
-                description: Conditions provide conditions that represent the current
-                  status of the User.
+                description: |-
+                  Conditions provide detailed status information about the User resource.
+                  The primary condition type is "Ready" which indicates whether the user
+                  has been successfully synchronized with the authentication provider and
+                  is ready for use in the IAM system.
+
+                  Common condition types:
+                  - Ready: Indicates the user is properly synchronized and available
+                  - Synced: Indicates successful synchronization with external auth provider
+
+                  Example condition:
+                    - type: Ready
+                      status: "True"
+                      reason: UserReady
+                      message: User successfully synchronized with auth provider
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

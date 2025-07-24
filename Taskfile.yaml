@@ -80,6 +80,7 @@ tasks:
           NAME: crdoc
           PACKAGE: fybrik.io/crdoc
           VERSION: "{{.CRDOC_VERSION}}"
+      - task: generate
     cmds:
       - |
         set -e
@@ -88,7 +89,7 @@ tasks:
           if [ -d "$group_dir" ]; then
             group_name=$(basename "$group_dir")
             echo "Generating API documentation for $group_name..."
-            "{{.TOOL_DIR}}/crdoc" --resources "$group_dir" --output "docs/api/$group_name.md"
+            "{{.TOOL_DIR}}/crdoc" --resources "$group_dir" --output "docs/reference/api/$group_name.md"
           fi
         done
     silent: true

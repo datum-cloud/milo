@@ -1,4 +1,4 @@
-package resourcemanager
+package iam
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"

@@ -33,7 +33,48 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: PolicyBinding is the Schema for the policybindings API
+        description: "PolicyBinding grants roles to users or groups on specific resources
+          in the Milo IAM system.\nThis is the central resource that connects the
+          three core IAM concepts: subjects (users/groups),\nroles (permission sets),
+          and resources (the things being protected).\n\nPolicyBindings are the mechanism
+          through which access control is actually enforced. They\nspecify which users
+          or groups should receive which permissions (via roles) on which resources\nor
+          resource types. This follows the \"who can do what on which resource\" model
+          of access control.\n\nKey characteristics:\n- Namespaced: PolicyBindings
+          exist within a specific namespace context\n- Immutable references: Role
+          and resource references cannot be changed after creation\n- Flexible resource
+          targeting: Can target specific resource instances or all resources of a
+          type\n- Cross-namespace capability: Can reference roles from any namespace\n-
+          Multiple subjects: Can grant the same role to multiple users/groups in a
+          single binding\n\nResource targeting modes:\n1. Specific resource (resourceRef):
+          Grants permissions on a single, specific resource instance\n2. Resource
+          kind (resourceKind): Grants permissions on ALL resources of a particular
+          type\n\nCommon usage patterns:\n- Project access: Grant team members access
+          to all resources in a project\n- Resource-specific permissions: Grant access
+          to individual workloads, databases, etc.\n- Administrative access: Grant
+          admin roles on resource types for operational teams\n- Temporary access:
+          Create time-limited bindings for contractor or temporary access\n\nBest
+          practices:\n- Use groups as subjects rather than individual users for easier
+          management\n- Prefer resource kind bindings for broad access, specific resource
+          refs for targeted access\n- Use descriptive names that indicate the purpose
+          of the binding\n- Regularly audit PolicyBindings to ensure appropriate access
+          levels\n- Leverage the principle of least privilege when designing role
+          assignments\n\nExample - Grant developers access to all workloads in a project:\n\n\tapiVersion:
+          iam.miloapis.com/v1alpha1\n\tkind: PolicyBinding\n\tmetadata:\n\t  name:
+          developers-workload-access\n\t  namespace: project-alpha\n\tspec:\n\t  roleRef:\n\t
+          \   name: workload-developer\n\t    namespace: project-alpha\n\t  subjects:\n\t
+          \ - kind: Group\n\t    name: developers\n\t  resourceSelector:\n\t    resourceKind:\n\t
+          \     apiGroup: compute.miloapis.com\n\t      kind: Workload\n\nExample
+          - Grant specific user access to a specific database:\n\n\tapiVersion: iam.miloapis.com/v1alpha1\n\tkind:
+          PolicyBinding\n\tmetadata:\n\t  name: alice-prod-db-access\n\t  namespace:
+          production\n\tspec:\n\t  roleRef:\n\t    name: database-admin\n\t  subjects:\n\t
+          \ - kind: User\n\t    name: alice-smith\n\t    uid: user-123-abc\n\t  resourceSelector:\n\t
+          \   resourceRef:\n\t      apiGroup: data.miloapis.com\n\t      kind: Database\n\t
+          \     name: production-primary\n\t      uid: db-456-def\n\t      namespace:
+          production\n\nRelated resources:\n- Role: Defines the permissions being
+          granted\n- User/Group: The subjects receiving the permissions\n- Resource:
+          The target resource(s) being protected\n\nPolicyBinding is the Schema for
+          the policybindings API"
         properties:
           apiVersion:
             description: |-
@@ -53,13 +94,42 @@ spec:
           metadata:
             type: object
           spec:
-            description: PolicyBindingSpec defines the desired state of PolicyBinding
+            description: |-
+              PolicyBindingSpec defines the desired state of PolicyBinding, specifying which
+              subjects (users/groups) should receive which role on which resources.
+
+              This spec contains three key components that together define the complete
+              access control policy:
+              1. RoleRef: The role being granted (defines the permissions)
+              2. Subjects: Who is receiving the role (users and/or groups)
+              3. ResourceSelector: What resources the role applies to (specific or by type)
             properties:
               resourceSelector:
                 description: |-
-                  ResourceSelector defines which resources the subjects in the policy binding
-                  should have the role applied to. Options within this struct are mutually
-                  exclusive.
+                  ResourceSelector specifies which resources the role should be applied to.
+                  This is an immutable field that cannot be changed after creation.
+
+                  Exactly one of the following must be specified:
+                  - resourceRef: Grants permissions on a specific resource instance
+                  - resourceKind: Grants permissions on all resources of a specific type
+
+                  Use resourceRef for targeted access to individual resources.
+                  Use resourceKind for broad access across all resources of a type.
+
+                  Examples:
+                    # Grant access to all workloads
+                    resourceSelector:
+                      resourceKind:
+                        apiGroup: compute.miloapis.com
+                        kind: Workload
+
+                    # Grant access to specific workload
+                    resourceSelector:
+                      resourceRef:
+                        apiGroup: compute.miloapis.com
+                        kind: Workload
+                        name: my-workload
+                        uid: workload-456-def
                 properties:
                   resourceKind:
                     description: |-
@@ -118,8 +188,17 @@ spec:
                   rule: has(self.resourceRef) != has(self.resourceKind)
               roleRef:
                 description: |-
-                  RoleRef is a reference to the Role that is being bound.
-                  This can be a reference to a Role custom resource.
+                  RoleRef specifies the Role that should be granted to the subjects.
+                  This is an immutable field that cannot be changed after the PolicyBinding
+                  is created - to change the role, you must delete and recreate the binding.
+
+                  The role can exist in any namespace, enabling cross-namespace role sharing.
+                  If no namespace is specified, it defaults to the PolicyBinding's namespace.
+
+                  Example:
+                    roleRef:
+                      name: workload-developer
+                      namespace: shared-roles  # optional, defaults to current namespace
                 properties:
                   name:
                     description: Name is the name of resource being referenced
@@ -135,8 +214,28 @@ spec:
                 - message: RoleRef is immutable and cannot be changed after creation
                   rule: oldSelf == null || self == oldSelf
               subjects:
-                description: Subjects holds references to the objects the role applies
-                  to.
+                description: |-
+                  Subjects specifies the users and/or groups that should receive the role.
+                  Multiple subjects can be listed to grant the same role to multiple entities
+                  in a single PolicyBinding.
+
+                  Each subject must specify:
+                  - kind: Either "User" or "Group"
+                  - name: The name of the user or group
+                  - uid: The unique identifier (required for users, optional for system groups)
+
+                  Special group "system:authenticated-users" can be used to grant access
+                  to all authenticated users in the system.
+
+                  Examples:
+                    subjects:
+                    - kind: User
+                      name: alice-smith
+                      uid: user-123-abc
+                    - kind: Group
+                      name: developers
+                    - kind: Group
+                      name: system:authenticated-users  # special system group
                 items:
                   description: |-
                     Subject contains a reference to the object or user identities a role binding applies to.
@@ -181,7 +280,9 @@ spec:
             - subjects
             type: object
           status:
-            description: PolicyBindingStatus defines the observed state of PolicyBinding
+            description: |-
+              PolicyBindingStatus defines the observed state of PolicyBinding, indicating
+              whether the access control policy has been successfully applied and is active.
             properties:
               conditions:
                 default:
@@ -190,8 +291,22 @@ spec:
                   reason: Unknown
                   status: Unknown
                   type: Ready
-                description: Conditions provide conditions that represent the current
-                  status of the PolicyBinding.
+                description: |-
+                  Conditions provide detailed status information about the PolicyBinding resource.
+                  The primary condition type is "Ready" which indicates whether the policy
+                  binding has been successfully applied and is actively enforcing access control.
+
+                  Common condition types:
+                  - Ready: Indicates the policy binding is active and enforcing access
+                  - RoleFound: Indicates the referenced role exists and is valid
+                  - SubjectsValid: Indicates all referenced subjects (users/groups) exist
+                  - ResourceValid: Indicates the target resource or resource type is valid
+
+                  Example condition:
+                    - type: Ready
+                      status: "True"
+                      reason: PolicyActive
+                      message: Policy binding successfully applied and enforcing access
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -248,8 +363,10 @@ spec:
                   type: object
                 type: array
               observedGeneration:
-                description: ObservedGeneration is the most recent generation observed
-                  for this PolicyBinding by the controller.
+                description: |-
+                  ObservedGeneration represents the most recent generation that has been
+                  observed and processed by the PolicyBinding controller. This is used to
+                  track whether the controller has processed the latest changes to the spec.
                 format: int64
                 type: integer
             type: object
