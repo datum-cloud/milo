@@ -76,6 +76,10 @@ transforms:
   # Transform core control plane audit logs
   core_audit_log_transformer:
     type: remap
+    # When errors occur, we don't want to send bad data upstream. We'd prefer to
+    # have a log of the error and drop it. Alerts should file to notify us when
+    # the vector configuration is not working as expected.
+    drop_on_error: true
     inputs:
       - core_audit_log_webhook
     source: |
@@ -113,8 +117,8 @@ transforms:
             log("failed to convert namespace to string", level: "error", rate_limit_secs: 0)
             abort
           }
-          org_match = parse_regex!(namespace, r'^organization-(?P<org>.+)$')
-          if org_match != null {
+          org_match, err = parse_regex(namespace, r'^organization-(?P<org>.+)$')
+          if err == null && org_match != null {
             organization_name = org_match.org
           }
         }
@@ -180,6 +184,9 @@ transforms:
   # Common post-processing for all audit logs
   audit_log_common_processor:
     type: remap
+    # When errors occur, we don't want to send bad data upstream. We'd prefer to
+    # have a log of the error and drop it. Alerts should file to notify us when
+    # the vector configuration is not working as expected.
     drop_on_error: true
     inputs:
       - project_audit_log_transformer
