@@ -32,9 +32,36 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: |-
-          Use lowercase for path, which influences plural name. Ensure kind is Organization.
-          Organization is the Schema for the Organizations API
+        description: "Organization represents the top-level tenant boundary in Milo's
+          control plane\nfor consumers of services. Organizations provide complete
+          isolation and serve\nas the root of the resource hierarchy for access control
+          and resource management.\n\nOrganizations are cluster-scoped resources that
+          automatically create an\nassociated namespace named \"organization-{name}\"
+          for organizing related\nresources. All projects must be owned by an organization.\n\nChoose
+          the organization type based on your use case:\n- Personal: Individual developers
+          and small projects\n- Standard: Teams, businesses, and production workloads\n\nKey
+          characteristics:\n- Cluster-scoped: Organizations exist globally across
+          the Milo deployment\n- Immutable type: Organization type cannot be changed
+          after creation\n- Automatic namespacing: Creates \"organization-{name}\"
+          namespace\n- Resource hierarchy root: Contains projects and user memberships\n-
+          Tenant isolation: Complete isolation between different organizations\n\nCommon
+          workflows:\n1. Create organization for your team or business\n2. Add organization
+          members using OrganizationMembership resources\n3. Create projects within
+          the organization\n4. Deploy resources within organization projects\n\nPrerequisites:\n-
+          None (organizations are the root of the resource hierarchy)\n\nExample -
+          Personal organization:\n\n\tapiVersion: resourcemanager.miloapis.com/v1alpha1\n\tkind:
+          Organization\n\tmetadata:\n\t  name: jane-doe-personal\n\t  annotations:\n\t
+          \   kubernetes.io/display-name: \"Jane's Personal Projects\"\n\tspec:\n\t
+          \ type: Personal\n\nExample - Standard business organization:\n\n\tapiVersion:
+          resourcemanager.miloapis.com/v1alpha1\n\tkind: Organization\n\tmetadata:\n\t
+          \ name: acme-corp\n\t  annotations:\n\t    kubernetes.io/display-name: \"ACME
+          Corporation\"\n\tspec:\n\t  type: Standard\n\nRelated resources:\n- Project:
+          Projects must be owned by an organization\n- OrganizationMembership: Links
+          users to organizations\n- IAM resources: Inherit permissions from organization
+          level\n\nTroubleshooting:\n- Check the Ready condition in status to verify
+          successful creation\n- List all organizations to verify creation and status\n-
+          Display names are set via the kubernetes.io/display-name annotation\n\nOrganization
+          is the Schema for the Organizations API"
         properties:
           apiVersion:
             description: |-
@@ -54,10 +81,21 @@ spec:
           metadata:
             type: object
           spec:
-            description: OrganizationSpec defines the desired state of Organization
+            description: |-
+              OrganizationSpec defines the desired state of Organization, specifying the
+              business characteristics that determine how the organization operates.
             properties:
               type:
-                description: The type of organization.
+                description: |-
+                  Type specifies the business model for this organization.
+                  This field determines resource limits, billing, and available features.
+
+                  Choose "Personal" for individual users and small projects.
+                  Choose "Standard" for teams and business use cases.
+
+                  Warning: The type cannot be changed after organization creation.
+
+                  Example: "Standard"
                 enum:
                 - Personal
                 - Standard
@@ -69,7 +107,9 @@ spec:
             - type
             type: object
           status:
-            description: OrganizationStatus defines the observed state of Organization
+            description: |-
+              OrganizationStatus defines the observed state of Organization, indicating
+              whether the organization has been successfully created and is ready for use.
             properties:
               conditions:
                 default:
@@ -79,8 +119,18 @@ spec:
                   status: Unknown
                   type: Ready
                 description: |-
-                  Conditions represents the observations of an organization's current state.
-                  Known condition types are: "Ready"
+                  Conditions describe the current state of organization provisioning.
+                  Check the "Ready" condition to determine if the organization is
+                  available for creating projects and adding members.
+
+                  Common condition types:
+                  - Ready: Organization is provisioned and ready for use
+
+                  Example ready condition:
+                    - type: Ready
+                      status: "True"
+                      reason: OrganizationReady
+                      message: Organization successfully created
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -137,8 +187,10 @@ spec:
                   type: object
                 type: array
               observedGeneration:
-                description: ObservedGeneration is the most recent generation observed
-                  for this Organization by the controller.
+                description: |-
+                  ObservedGeneration tracks the most recent organization spec that the
+                  controller has processed. Use this to determine if status reflects
+                  the latest changes.
                 format: int64
                 type: integer
             type: object

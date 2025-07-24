@@ -15,6 +15,9 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .spec.ownerRef.name
+      name: Owner
+      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -24,7 +27,31 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Project is the Schema for the projects API.
+        description: "Project represents a logical container for related resources
+          within an\norganization. Projects provide resource organization and access
+          control\nboundaries for your applications and workloads.\n\nProjects are
+          cluster-scoped resources that must be owned by an organization.\nThey serve
+          as the primary unit for organizing and managing resources in Milo.\n\nKey
+          characteristics:\n- Cluster-scoped: Projects exist globally across the Milo
+          deployment\n- Organization-owned: Each project must reference a valid organization\n-
+          Resource container: Groups related resources for management\n- Access control
+          boundary: Inherits permissions from the owning organization\n\nCommon workflows:\n1.
+          Ensure the owning organization exists and is ready\n2. Create the project
+          with a reference to the organization\n3. Wait for the Ready condition to
+          become True\n4. Deploy your applications and resources within the project\n\nPrerequisites:\n-
+          Organization: The referenced organization must exist and be ready\n\nExample
+          - Development project:\n\n\tapiVersion: resourcemanager.miloapis.com/v1alpha1\n\tkind:
+          Project\n\tmetadata:\n\t  name: web-app-dev\n\t  annotations:\n\t    kubernetes.io/display-name:
+          \"Web App Development\"\n\tspec:\n\t  ownerRef:\n\t    kind: Organization\n\t
+          \   name: acme-corp\n\nExample - Production project:\n\n\tapiVersion: resourcemanager.miloapis.com/v1alpha1\n\tkind:
+          Project\n\tmetadata:\n\t  name: web-app-prod\n\t  annotations:\n\t    kubernetes.io/display-name:
+          \"Web App Production\"\n\tspec:\n\t  ownerRef:\n\t    kind: Organization\n\t
+          \   name: acme-corp\n\nRelated resources:\n- Organization: Must exist before
+          creating projects\n- IAM resources: Projects inherit permissions from organizations\n\nTroubleshooting:\n-
+          Check the Ready condition in status to verify successful provisioning\n-
+          Ensure the referenced organization exists and is ready\n- List all projects
+          to verify creation and status\n- Display names are set via the kubernetes.io/display-name
+          annotation\n\nProject is the Schema for the projects API."
         properties:
           apiVersion:
             description: |-
@@ -44,20 +71,38 @@ spec:
           metadata:
             type: object
           spec:
-            description: ProjectSpec defines the desired state of Project.
+            description: |-
+              ProjectSpec defines the configuration for a project, specifying which
+              organization owns it.
             properties:
               ownerRef:
                 description: |-
-                  OwnerRef is a reference to the owner of the project. Must be a valid
-                  resource.
+                  OwnerRef references the organization that owns this project.
+                  Projects must be owned by an organization and inherit its permissions.
+
+                  The organization must exist before creating the project.
+                  Currently only Organization resources are supported as owners.
+
+                  Example:
+                    ownerRef:
+                      kind: Organization
+                      name: acme-corp
                 properties:
                   kind:
-                    description: Kind is the kind of the resource.
+                    description: |-
+                      Kind specifies the type of resource that owns this project.
+                      Currently only "Organization" is supported.
+
+                      Example: "Organization"
                     enum:
                     - Organization
                     type: string
                   name:
-                    description: Name is the name of the resource.
+                    description: |-
+                      Name is the name of the organization that owns this project.
+                      The organization must exist before creating the project.
+
+                      Example: "acme-corp"
                     type: string
                 required:
                 - kind
@@ -67,7 +112,9 @@ spec:
             - ownerRef
             type: object
           status:
-            description: ProjectStatus defines the observed state of Project.
+            description: |-
+              ProjectStatus defines the observed state of Project, indicating whether
+              the project has been successfully provisioned and is ready for use.
             properties:
               conditions:
                 default:
@@ -77,8 +124,18 @@ spec:
                   status: Unknown
                   type: Ready
                 description: |-
-                  Represents the observations of a project's current state.
-                  Known condition types are: "Ready"
+                  Conditions describe the current state of project provisioning.
+                  Check the "Ready" condition to determine if the project is
+                  available for deploying resources.
+
+                  Common condition types:
+                  - Ready: Project is provisioned and ready for use
+
+                  Example ready condition:
+                    - type: Ready
+                      status: "True"
+                      reason: ProjectReady
+                      message: Project successfully provisioned
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
