@@ -1,0 +1,17 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceClaim
+metadata:
+  name: org-abc-project-count-claim
+  namespace: org-abc
+
+spec:
+  # Reference to the owner of the claim request
+  ownerRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: org-abc
+  requests:
+    # Project entity count (must reference an active ResourceRegistration)
+    - resourceTypeName: "resourcemanager.miloapis.com/Project"
+      amount: 1
+      dimensions: {}

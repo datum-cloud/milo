@@ -1,0 +1,18 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: org-abc-max-project-default-grant
+  namespace: org-abc
+spec:
+  # Reference to the organization this grant applies to
+  ownerRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: org-abc
+  # List of allowances this grant contains
+  allowances:
+    # Default number of projects allowed in this organization
+    - resourceTypeName: "resourcemanager.miloapis.com/Project"
+      buckets:
+        - amount: 5
+          dimensionSelector: {}
