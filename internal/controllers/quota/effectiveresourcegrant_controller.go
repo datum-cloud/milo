@@ -43,7 +43,7 @@ func (r *EffectiveResourceGrantReconciler) Reconcile(ctx context.Context, req ct
 		if errors.IsNotFound(err) {
 			// EffectiveResourceGrant doesn't exist - check if we should create it
 			// This can happen when a ResourceGrant references a new resource type
-			return r.handleMissingEffectiveResourceGrant(ctx, req.NamespacedName)
+			return r.createEffectiveResourceGrants(ctx, req.NamespacedName)
 		}
 		logger.Error(err, "Failed to get EffectiveResourceGrant")
 		return ctrl.Result{}, err
@@ -70,17 +70,17 @@ func (r *EffectiveResourceGrantReconciler) Reconcile(ctx context.Context, req ct
 		readyCondition.ObservedGeneration = effectiveGrant.Generation
 	}
 
-	// Ensure AllowanceBuckets exist for all relevant ResourceGrants and ResourceClaims
-	if err := r.ensureRequiredAllowanceBuckets(ctx, &effectiveGrant); err != nil {
+	// Create AllowanceBuckets for all granted ResourceClaims
+	if err := r.createAllowanceBucketsForGrantedClaims(ctx, &effectiveGrant); err != nil {
 		readyCondition.Status = metav1.ConditionFalse
 		readyCondition.Reason = quotav1alpha1.EffectiveResourceGrantAggregationFailedReason
-		readyCondition.Message = fmt.Sprintf("Failed to ensure AllowanceBuckets: %v", err)
+		readyCondition.Message = fmt.Sprintf("Failed to create AllowanceBuckets: %v", err)
 		apimeta.SetStatusCondition(&effectiveGrant.Status.Conditions, *readyCondition)
 
 		if err := r.Status().Update(ctx, &effectiveGrant); err != nil {
 			logger.Error(err, "Failed to update EffectiveResourceGrant status after bucket creation failure")
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to ensure AllowanceBuckets: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to create AllowanceBuckets: %w", err)
 	}
 
 	// Aggregate total limit from all active ResourceGrants in the same namespace with matching resourceTypeName
@@ -139,9 +139,9 @@ func (r *EffectiveResourceGrantReconciler) Reconcile(ctx context.Context, req ct
 	return ctrl.Result{}, nil
 }
 
-// handleMissingEffectiveResourceGrant handles the case where an EffectiveResourceGrant doesn't exist
-// but should be created based on existing ResourceGrants
-func (r *EffectiveResourceGrantReconciler) handleMissingEffectiveResourceGrant(ctx context.Context, namespacedName types.NamespacedName) (ctrl.Result, error) {
+// Handles the case where an EffectiveResourceGrant doesn't exist but should be
+// created based on existing ResourceGrants
+func (r *EffectiveResourceGrantReconciler) createEffectiveResourceGrants(ctx context.Context, namespacedName types.NamespacedName) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// Extract resource type name from the EffectiveResourceGrant name
@@ -161,10 +161,6 @@ func (r *EffectiveResourceGrantReconciler) handleMissingEffectiveResourceGrant(c
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      namespacedName.Name,
 						Namespace: namespacedName.Namespace,
-						Labels: map[string]string{
-							"quota.miloapis.com/resource-type": "managed",
-							"quota.miloapis.com/namespace":     namespacedName.Namespace,
-						},
 					},
 					Spec: quotav1alpha1.EffectiveResourceGrantSpec{
 						ResourceTypeName: allowance.ResourceTypeName,
@@ -187,26 +183,8 @@ func (r *EffectiveResourceGrantReconciler) handleMissingEffectiveResourceGrant(c
 }
 
 // ensureRequiredAllowanceBuckets ensures that all necessary AllowanceBuckets exist
-// for ResourceGrants and ResourceClaims affecting this EffectiveResourceGrant
-func (r *EffectiveResourceGrantReconciler) ensureRequiredAllowanceBuckets(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant) error {
-	// Ensure buckets for ResourceGrants
-	var grants quotav1alpha1.ResourceGrantList
-	if err := r.List(ctx, &grants, client.InNamespace(effectiveGrant.Namespace)); err != nil {
-		return fmt.Errorf("failed to list ResourceGrants: %w", err)
-	}
-
-	for _, grant := range grants.Items {
-		for _, allowance := range grant.Spec.Allowances {
-			if allowance.ResourceTypeName == effectiveGrant.Spec.ResourceTypeName {
-				for _, bucket := range allowance.Buckets {
-					if err := r.ensureAllowanceBucket(ctx, effectiveGrant, allowance.ResourceTypeName, bucket.DimensionSelector.MatchLabels); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-
+// for granted ResourceClaims affecting this EffectiveResourceGrant
+func (r *EffectiveResourceGrantReconciler) createAllowanceBucketsForGrantedClaims(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant) error {
 	// Ensure buckets for ResourceClaims
 	var claims quotav1alpha1.ResourceClaimList
 	if err := r.List(ctx, &claims, client.InNamespace(effectiveGrant.Namespace)); err != nil {
@@ -214,9 +192,14 @@ func (r *EffectiveResourceGrantReconciler) ensureRequiredAllowanceBuckets(ctx co
 	}
 
 	for _, claim := range claims.Items {
+		// Check if claim is granted and continue to next claim if not, as allowance buckets are only created for granted claims
+		if !r.isResourceClaimGranted(&claim) {
+			continue
+		}
+
 		for _, request := range claim.Spec.Requests {
 			if request.ResourceTypeName == effectiveGrant.Spec.ResourceTypeName {
-				if err := r.ensureAllowanceBucket(ctx, effectiveGrant, request.ResourceTypeName, request.Dimensions); err != nil {
+				if err := r.createAllowanceBucket(ctx, effectiveGrant, request.ResourceTypeName, request.Dimensions); err != nil {
 					return err
 				}
 				// Recalculate bucket allocation for this request
@@ -283,7 +266,8 @@ func (r *EffectiveResourceGrantReconciler) calculateTotalAllocated(ctx context.C
 	return totalAllocated, bucketRefs, nil
 }
 
-// isResourceGrantActive checks if a ResourceGrant has an Active condition with status True
+// isResourceGrantActive checks if a ResourceGrant has an Active condition with
+// a status of True
 func (r *EffectiveResourceGrantReconciler) isResourceGrantActive(grant *quotav1alpha1.ResourceGrant) bool {
 	for _, condition := range grant.Status.Conditions {
 		if condition.Type == quotav1alpha1.ResourceGrantActive && condition.Status == metav1.ConditionTrue {
@@ -293,8 +277,18 @@ func (r *EffectiveResourceGrantReconciler) isResourceGrantActive(grant *quotav1a
 	return false
 }
 
-// ensureAllowanceBucket creates an AllowanceBucket if it doesn't exist
-func (r *EffectiveResourceGrantReconciler) ensureAllowanceBucket(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant, resourceTypeName string, dimensions map[string]string) error {
+// Determines if a ResourceClaim has been granted
+func (r *EffectiveResourceGrantReconciler) isResourceClaimGranted(claim *quotav1alpha1.ResourceClaim) bool {
+	for _, condition := range claim.Status.Conditions {
+		if condition.Type == quotav1alpha1.ResourceClaimGranted && condition.Status == metav1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+// Creates an AllowanceBucket if it doesn't exist
+func (r *EffectiveResourceGrantReconciler) createAllowanceBucket(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant, resourceTypeName string, dimensions map[string]string) error {
 	log := log.FromContext(ctx)
 
 	bucketName := r.generateAllowanceBucketName(effectiveGrant.Namespace, resourceTypeName, dimensions)
@@ -311,17 +305,12 @@ func (r *EffectiveResourceGrantReconciler) ensureAllowanceBucket(ctx context.Con
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      bucketName,
 				Namespace: effectiveGrant.Namespace,
-				Labels: map[string]string{
-					"quota.miloapis.com/resource-type": "bucket",
-					"quota.miloapis.com/namespace":     effectiveGrant.Namespace,
-				},
 			},
 			Spec: quotav1alpha1.AllowanceBucketSpec{
 				OwnerRef: quotav1alpha1.OwnerRef{
 					APIGroup: "quota.miloapis.com",
 					Kind:     "EffectiveResourceGrant",
 					Name:     effectiveGrant.Name,
-					UID:      string(effectiveGrant.UID),
 				},
 				ResourceTypeName: resourceTypeName,
 				Dimensions:       dimensions,
@@ -343,8 +332,7 @@ func (r *EffectiveResourceGrantReconciler) ensureAllowanceBucket(ctx context.Con
 	return nil
 }
 
-// recalculateBucketAllocation is now recalculateBucketAllocation to reflect its new behavior.
-// It recalculates the entire allocation for a bucket by scanning all claims.
+// Recalculates the entire allocation for a bucket by scanning all claims.
 func (r *EffectiveResourceGrantReconciler) recalculateBucketAllocation(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant, resourceTypeName string, dimensions map[string]string) error {
 	log := log.FromContext(ctx)
 	bucketName := r.generateAllowanceBucketName(effectiveGrant.Namespace, resourceTypeName, dimensions)
@@ -353,7 +341,7 @@ func (r *EffectiveResourceGrantReconciler) recalculateBucketAllocation(ctx conte
 	if err := r.Get(ctx, types.NamespacedName{Name: bucketName, Namespace: effectiveGrant.Namespace}, &bucket); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("AllowanceBucket not found during recalculation, skipping", "name", bucketName)
-			return nil // Bucket might have been deleted, nothing to do
+			return nil
 		}
 		return fmt.Errorf("failed to get AllowanceBucket %s: %w", bucketName, err)
 	}
@@ -388,10 +376,6 @@ func (r *EffectiveResourceGrantReconciler) recalculateBucketAllocation(ctx conte
 		if err := r.Status().Update(ctx, &bucket); err != nil {
 			return fmt.Errorf("failed to update AllowanceBucket status for %s: %w", bucketName, err)
 		}
-		// log.Info("Recalculated and updated bucket allocation",
-		// 	"bucketName", bucketName,
-		// 	"oldAllocated", originalAllocated,
-		// 	"newAllocated", newAllocated)
 	}
 
 	return nil
@@ -408,16 +392,6 @@ func (r *EffectiveResourceGrantReconciler) dimensionsMatch(d1, d2 map[string]str
 		}
 	}
 	return true
-}
-
-// isResourceClaimGranted checks if a ResourceClaim has been granted
-func (r *EffectiveResourceGrantReconciler) isResourceClaimGranted(claim *quotav1alpha1.ResourceClaim) bool {
-	for _, condition := range claim.Status.Conditions {
-		if condition.Type == quotav1alpha1.ResourceClaimGranted && condition.Status == metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
 }
 
 // generateEffectiveResourceGrantName creates a deterministic name for EffectiveResourceGrant
