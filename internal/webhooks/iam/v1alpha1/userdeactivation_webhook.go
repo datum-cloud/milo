@@ -99,6 +99,19 @@ func (v *UserDeactivationValidator) ValidateCreate(ctx context.Context, obj runt
 		return nil, fmt.Errorf("failed to validate user reference '%s': %w", userName, err)
 	}
 
+	// Ensure there is no existing UserDeactivation for the same user
+	var existingUDList iamv1alpha1.UserDeactivationList
+	if err := v.client.List(ctx, &existingUDList); err != nil {
+		userdeactivationlog.Error(err, "failed to list existing UserDeactivations", "userName", userName)
+		return nil, fmt.Errorf("failed to list existing UserDeactivations for user '%s': %w", userName, err)
+	}
+	for _, existing := range existingUDList.Items {
+		if existing.Spec.UserRef.Name == userName && existing.DeletionTimestamp == nil {
+			userdeactivationlog.Error(fmt.Errorf("a UserDeactivation already exists for user '%s'", userName), "existing UserDeactivation", "name", existing.Name)
+			return nil, fmt.Errorf("a UserDeactivation already exists for user '%s'", userName)
+		}
+	}
+
 	userdeactivationlog.Info("User reference validation successful", "userName", userName)
 
 	return nil, nil
