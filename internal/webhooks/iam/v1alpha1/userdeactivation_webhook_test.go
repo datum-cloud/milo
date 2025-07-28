@@ -107,15 +107,44 @@ func TestUserDeactivationValidator_ValidateCreate(t *testing.T) {
 			expectError:   true,
 			errorContains: "spec.deactivatedBy is managed by the system",
 		},
+		"error when deactivation already exists for user": {
+			userDeactivation: &iamv1alpha1.UserDeactivation{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "second-deactivate-test-user",
+				},
+				Spec: iamv1alpha1.UserDeactivationSpec{
+					UserRef:       iamv1alpha1.UserReference{Name: testUser.Name},
+					Reason:        "Testing duplicate",
+					DeactivatedBy: "tester",
+				},
+			},
+			includeUser:   true,
+			expectError:   true,
+			errorContains: "UserDeactivation already exists",
+		},
 	}
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Build fake client with or without the user object depending on the test case
+			// Build fake client with required objects for the test case
 			builder := fake.NewClientBuilder().WithScheme(runtimeScheme)
 			if tt.includeUser {
 				builder = builder.WithObjects(testUser)
 			}
+
+			// If this test case is for duplicate validation, seed an existing UserDeactivation for the same user
+			if tt.errorContains == "UserDeactivation already exists" {
+				existingUD := &iamv1alpha1.UserDeactivation{
+					ObjectMeta: metav1.ObjectMeta{Name: "first-deactivate-test-user"},
+					Spec: iamv1alpha1.UserDeactivationSpec{
+						UserRef:       iamv1alpha1.UserReference{Name: testUser.Name},
+						Reason:        "Existing",
+						DeactivatedBy: "tester",
+					},
+				}
+				builder = builder.WithObjects(existingUD)
+			}
+
 			fakeClient := builder.Build()
 
 			validator := &UserDeactivationValidator{
