@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-// Provenance-includes-location: https://github.com/kubernetes/kubernetes/blob/v1.31.3/cmd/kube-controller-manager/app/controllermanager.go
-// Provenance-includes-license: Apache-2.0
-// Provenance-includes-copyright: The Kubernetes Authors.
+// SPDX-License-Identifier: AGPL-3.0-only Provenance-includes-location:
+// https://github.com/kubernetes/kubernetes/blob/v1.31.3/cmd/kube-controller-manager/app/controllermanager.go
+// Provenance-includes-license: Apache-2.0 Provenance-includes-copyright: The
+// Kubernetes Authors.
 package app
 
 import (
@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	// Datum webhook and API type imports
 
 	"github.com/blang/semver/v4"
 	"github.com/spf13/cobra"
@@ -66,8 +68,12 @@ import (
 	kubectrlmgrconfig "k8s.io/kubernetes/pkg/controller/apis/config"
 	garbagecollector "k8s.io/kubernetes/pkg/controller/garbagecollector"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
+	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
@@ -76,26 +82,24 @@ import (
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
+	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
-	controllerruntime "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 var (
 	// Scheme is the runtime Scheme to which all API types are registered.
 	Scheme = runtime.NewScheme()
 
-	// SystemNamespace is the namespace to use for system components and resources
-	// that are automatically created to run the system.
+	// SystemNamespace is the namespace to use for system components and
+	// resources that are automatically created to run the system.
 	SystemNamespace string
 
-	// OrganizationOwnerRoleName is the name of the role that will be used to grant organization owner permissions.
+	// OrganizationOwnerRoleName is the name of the role that will be used to
+	// grant organization owner permissions.
 	OrganizationOwnerRoleName string
 
-	// ProjectOwnerRoleName is the name of the role that will be used to grant project owner permissions.
+	// ProjectOwnerRoleName is the name of the role that will be used to grant
+	// project owner permissions.
 	ProjectOwnerRoleName string
 )
 
@@ -108,22 +112,28 @@ func init() {
 	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(quotav1alpha1.AddToScheme(Scheme))
 }
 
 const (
-	// ControllerStartJitter is the Jitter used when starting controller managers
+	// ControllerStartJitter is the Jitter used when starting controller
+	// managers
 	ControllerStartJitter = 1.0
-	// ConfigzName is the name used for registering datum-controller-manager /configz.
+	// ConfigzName is the name used for registering datum-controller-manager
+	// /configz.
 	ConfigzName = "datumcontrollermanager.config.k8s.io"
 )
 
-// ControllerLoopMode is the datum-controller-manager's mode of running controller loops that are cloud provider dependent
+// ControllerLoopMode is the datum-controller-manager's mode of running
+// controller loops that are cloud provider dependent
 type ControllerLoopMode int
 
 const (
-	// IncludeCloudLoops means the datum-controller-manager include the controller loops that are cloud provider dependent
+	// IncludeCloudLoops means the datum-controller-manager include the
+	// controller loops that are cloud provider dependent
 	IncludeCloudLoops ControllerLoopMode = iota
-	// ExternalLoops means the datum-controller-manager exclude the controller loops that are cloud provider dependent
+	// ExternalLoops means the datum-controller-manager exclude the controller
+	// loops that are cloud provider dependent
 	ExternalLoops
 )
 
@@ -145,9 +155,9 @@ func NewCommand() *cobra.Command {
 		Short: "Manages all Milo API resources",
 		Long:  `The Milo controller manager is responsible for running controllers that manage Milo resources.`,
 		PersistentPreRunE: func(*cobra.Command, []string) error {
-			// silence client-go warnings.
-			// datum-controller-manager generically watches APIs (including deprecated ones),
-			// and CI ensures it works properly against matching kube-apiserver versions.
+			// silence client-go warnings. datum-controller-manager generically
+			// watches APIs (including deprecated ones), and CI ensures it works
+			// properly against matching kube-apiserver versions.
 			restclient.SetDefaultWarningHandler(restclient.NoWarnings{})
 			// makes sure feature gates are set before RunE.
 			return s.ComponentGlobalsRegistry.Set()
@@ -155,8 +165,8 @@ func NewCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
 
-			// Activate logging as soon as possible, after that
-			// show flags with the final logging configuration.
+			// Activate logging as soon as possible, after that show flags with
+			// the final logging configuration.
 			if err := logsapi.ValidateAndApply(s.Logs, utilfeature.DefaultFeatureGate); err != nil {
 				return err
 			}
@@ -224,8 +234,8 @@ func NewCommand() *cobra.Command {
 }
 
 // ResyncPeriod returns a function which generates a duration each time it is
-// invoked; this is so that multiple controllers don't get into lock-step and all
-// hammer the apiserver with list requests simultaneously.
+// invoked; this is so that multiple controllers don't get into lock-step and
+// all hammer the apiserver with list requests simultaneously.
 func ResyncPeriod(c *config.CompletedConfig) func() time.Duration {
 	return func() time.Duration {
 		factor := rand.Float64() + 1
@@ -294,15 +304,16 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 	}
 	healthzHandler := controllerhealthz.NewMutableHealthzHandler(checks...)
 
-	// Start the controller manager HTTP server
-	// unsecuredMux is the handler for these controller *after* authn/authz filters have been applied
+	// Start the controller manager HTTP server unsecuredMux is the handler for
+	// these controller *after* authn/authz filters have been applied
 	var unsecuredMux *mux.PathRecorderMux
 	if c.SecureServing != nil {
 		unsecuredMux = genericcontrollermanager.NewBaseHandler(&c.ComponentConfig.Generic.Debugging, healthzHandler)
 		slis.SLIMetricsWithReset{}.Install(unsecuredMux)
 
 		handler := genericcontrollermanager.BuildHandlerChain(unsecuredMux, &c.Authorization, &c.Authentication)
-		// TODO: handle stoppedCh and listenerStoppedCh returned by c.SecureServing.Serve
+		// TODO: handle stoppedCh and listenerStoppedCh returned by
+		// c.SecureServing.Serve
 		if _, _, err := c.SecureServing.Serve(handler, 0, stopCh); err != nil {
 			return err
 		}
@@ -322,9 +333,9 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 		// TODO: Refactor how we handle controller registration so we can easily
 		//       scope controllers to a specific control plane.
 		if opts.ControlPlane.Scope == controlplane.ScopeCore {
-			// Get a client for the infrastructure cluster and start the cluster's cache informers.
-			// This allows controllers to manage resources and watch for changes in the infrastructure
-			// cluster.
+			// Get a client for the infrastructure cluster and start the
+			// cluster's cache informers. This allows controllers to manage
+			// resources and watch for changes in the infrastructure cluster.
 			infraClient, err := opts.InfraCluster.GetClient()
 			if err != nil {
 				logger.Error(err, "Error building infrastructure cluster client")
@@ -338,16 +349,18 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			// We intentionally use a new configuration here because the one built into
-			// the legacy controller manager component leverages protobuf encoding. The
-			// controller runtime uses JSON encoding when managing CRDs.
+			// We intentionally use a new configuration here because the one
+			// built into the legacy controller manager component leverages
+			// protobuf encoding. The controller runtime uses JSON encoding when
+			// managing CRDs.
 			ctrlConfig, err := clientcmd.BuildConfigFromFlags(opts.Master, opts.Generic.ClientConnection.Kubeconfig)
 			if err != nil {
 				logger.Error(err, "Error building controller manager config")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			// TODO: This is a hack to get the controller manager to start. We should
+			// TODO: This is a hack to get the controller manager to start. We
+			// should
 			//       find a better way to use the controller manager framework to manage
 			//       controllers.
 			ctrl, err := controllerruntime.NewManager(
@@ -356,22 +369,25 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					// Leader election is handled further up the stack.
 					LeaderElection: false,
 					Scheme:         Scheme,
-					// The existing controller manage endpoint already exposes a health
-					// probe endpoint. We can disable this one to avoid conflicts.
+					// The existing controller manage endpoint already exposes a
+					// health probe endpoint. We can disable this one to avoid
+					// conflicts.
 					HealthProbeBindAddress: "0",
-					// The existing controller manage endpoint already exposes a metrics
-					// endpoint. We can disable this one to avoid conflicts.
+					// The existing controller manage endpoint already exposes a
+					// metrics endpoint. We can disable this one to avoid
+					// conflicts.
 					Metrics: server.Options{
 						BindAddress: "0",
 					},
 					WebhookServer: webhook.NewServer(webhook.Options{
 						Port:    opts.ControllerRuntimeWebhookPort,
 						CertDir: opts.SecureServing.ServerCert.CertDirectory,
-						// The webhook server expects the key and cert files to be in the
-						// cert directory. This is different from how the webhook server
-						// built into the k8s controller manager component expects them to
-						// be configured so we need to trim the cert directory from the
-						// key and cert file names.
+						// The webhook server expects the key and cert files to
+						// be in the cert directory. This is different from how
+						// the webhook server built into the k8s controller
+						// manager component expects them to be configured so we
+						// need to trim the cert directory from the key and cert
+						// file names.
 						KeyName:  strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.KeyFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
 						CertName: strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.CertFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
 					}),
@@ -457,13 +473,16 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 		return err
 	}
 
-	// add a uniquifier so that two processes on the same host don't accidentally both become active
+	// add a uniquifier so that two processes on the same host don't
+	// accidentally both become active
 	id = id + "_" + string(uuid.NewUUID())
 
-	// leaderMigrator will be non-nil if and only if Leader Migration is enabled.
+	// leaderMigrator will be non-nil if and only if Leader Migration is
+	// enabled.
 	var leaderMigrator *leadermigration.LeaderMigrator = nil
 
-	// If leader migration is enabled, create the LeaderMigrator and prepare for migration
+	// If leader migration is enabled, create the LeaderMigrator and prepare for
+	// migration
 	if leadermigration.Enabled(&c.ComponentConfig.Generic) {
 		logger.Info("starting leader migration")
 
@@ -507,7 +526,8 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			OnStartedLeading: func(ctx context.Context) {
 				controllerDescriptors := NewControllerDescriptors()
 				if leaderMigrator != nil {
-					// If leader migration is enabled, we should start only non-migrated controllers
+					// If leader migration is enabled, we should start only
+					// non-migrated controllers
 					//  for the main lock.
 					controllerDescriptors = filteredControllerDescriptors(controllerDescriptors, leaderMigrator.FilterFunc, leadermigration.ControllerNonMigrated)
 					logger.Info("leader migration: starting main controllers.")
@@ -522,9 +542,11 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 
 	// If Leader Migration is enabled, proceed to attempt the migration lock.
 	if leaderMigrator != nil {
-		// Wait for Service Account Token Controller to start before acquiring the migration lock.
-		// At this point, the main lock must have already been acquired, or the KCM process already exited.
-		// We wait for the main lock before acquiring the migration lock to prevent the situation
+		// Wait for Service Account Token Controller to start before acquiring
+		// the migration lock. At this point, the main lock must have already
+		// been acquired, or the KCM process already exited. We wait for the
+		// main lock before acquiring the migration lock to prevent the
+		// situation
 		//  where KCM instance A holds the main lock while KCM instance B holds the migration lock.
 		<-leaderMigrator.MigrationReady
 
@@ -560,33 +582,37 @@ type ControllerContext struct {
 	// InformerFactory gives access to informers for the controller.
 	InformerFactory informers.SharedInformerFactory
 
-	// ObjectOrMetadataInformerFactory gives access to informers for typed resources
-	// and dynamic resources by their metadata. All generic controllers currently use
-	// object metadata - if a future controller needs access to the full object this
-	// would become GenericInformerFactory and take a dynamic client.
+	// ObjectOrMetadataInformerFactory gives access to informers for typed
+	// resources and dynamic resources by their metadata. All generic
+	// controllers currently use object metadata - if a future controller needs
+	// access to the full object this would become GenericInformerFactory and
+	// take a dynamic client.
 	ObjectOrMetadataInformerFactory informerfactory.InformerFactory
 
 	// ComponentConfig provides access to init options for a given controller
 	ComponentConfig kubectrlmgrconfig.KubeControllerManagerConfiguration
 
 	// DeferredDiscoveryRESTMapper is a RESTMapper that will defer
-	// initialization of the RESTMapper until the first mapping is
-	// requested.
+	// initialization of the RESTMapper until the first mapping is requested.
 	RESTMapper *restmapper.DeferredDiscoveryRESTMapper
 
-	// InformersStarted is closed after all of the controllers have been initialized and are running.  After this point it is safe,
-	// for an individual controller to start the shared informers. Before it is closed, they should not.
+	// InformersStarted is closed after all of the controllers have been
+	// initialized and are running.  After this point it is safe, for an
+	// individual controller to start the shared informers. Before it is closed,
+	// they should not.
 	InformersStarted chan struct{}
 
-	// ResyncPeriod generates a duration each time it is invoked; this is so that
-	// multiple controllers don't get into lock-step and all hammer the apiserver
-	// with list requests simultaneously.
+	// ResyncPeriod generates a duration each time it is invoked; this is so
+	// that multiple controllers don't get into lock-step and all hammer the
+	// apiserver with list requests simultaneously.
 	ResyncPeriod func() time.Duration
 
-	// ControllerManagerMetrics provides a proxy to set controller manager specific metrics.
+	// ControllerManagerMetrics provides a proxy to set controller manager
+	// specific metrics.
 	ControllerManagerMetrics *controllersmetrics.ControllerManagerMetrics
 
-	// GraphBuilder gives an access to dependencyGraphBuilder which keeps tracks of resources in the cluster
+	// GraphBuilder gives an access to dependencyGraphBuilder which keeps tracks
+	// of resources in the cluster
 	GraphBuilder *garbagecollector.GraphBuilder
 }
 
@@ -601,11 +627,11 @@ func (c ControllerContext) IsControllerEnabled(controllerDescriptor *ControllerD
 
 // InitFunc is used to launch a particular controller. It returns a controller
 // that can optionally implement other interfaces so that the controller manager
-// can support the requested features.
-// The returned controller may be nil, which will be considered an anonymous controller
-// that requests no additional features from the controller manager.
-// Any error returned will cause the controller process to `Fatal`
-// The bool indicates whether the controller was enabled.
+// can support the requested features. The returned controller may be nil, which
+// will be considered an anonymous controller that requests no additional
+// features from the controller manager. Any error returned will cause the
+// controller process to `Fatal` The bool indicates whether the controller was
+// enabled.
 type InitFunc func(ctx context.Context, controllerContext ControllerContext, controllerName string) (controller controller.Interface, enabled bool, err error)
 
 type ControllerDescriptor struct {
@@ -630,8 +656,9 @@ func (r *ControllerDescriptor) GetRequiredFeatureGates() []featuregate.Feature {
 	return append([]featuregate.Feature(nil), r.requiredFeatureGates...)
 }
 
-// GetAliases returns aliases to ensure backwards compatibility and should never be removed!
-// Only addition of new aliases is allowed, and only when a canonical name is changed (please see CHANGE POLICY of controller names)
+// GetAliases returns aliases to ensure backwards compatibility and should never
+// be removed! Only addition of new aliases is allowed, and only when a
+// canonical name is changed (please see CHANGE POLICY of controller names)
 func (r *ControllerDescriptor) GetAliases() []string {
 	return append([]string(nil), r.aliases...)
 }
@@ -670,14 +697,16 @@ func ControllersDisabledByDefault() []string {
 	return controllersDisabledByDefault
 }
 
-// NewControllerDescriptors is a public map of named controller groups (you can start more than one in an init func)
-// paired to their ControllerDescriptor wrapper object that includes InitFunc.
-// This allows for structured downstream composition and subdivision.
+// NewControllerDescriptors is a public map of named controller groups (you can
+// start more than one in an init func) paired to their ControllerDescriptor
+// wrapper object that includes InitFunc. This allows for structured downstream
+// composition and subdivision.
 func NewControllerDescriptors() map[string]*ControllerDescriptor {
 	controllers := map[string]*ControllerDescriptor{}
 	aliases := sets.NewString()
 
-	// All the controllers must fulfil common constraints, or else we will explode.
+	// All the controllers must fulfil common constraints, or else we will
+	// explode.
 	register := func(controllerDesc *ControllerDescriptor) {
 		if controllerDesc == nil {
 			panic("received nil controller for a registration")
@@ -719,9 +748,10 @@ func NewControllerDescriptors() map[string]*ControllerDescriptor {
 	return controllers
 }
 
-// CreateControllerContext creates a context struct containing references to resources needed by the
-// controllers such as the cloud provider and clientBuilder. rootClientBuilder is only used for
-// the shared-informers client and token controller.
+// CreateControllerContext creates a context struct containing references to
+// resources needed by the controllers such as the cloud provider and
+// clientBuilder. rootClientBuilder is only used for the shared-informers client
+// and token controller.
 func CreateControllerContext(ctx context.Context, s *config.CompletedConfig, rootClientBuilder, clientBuilder clientbuilder.ControllerClientBuilder) (ControllerContext, error) {
 	// Informer transform to trim ManagedFields for memory efficiency.
 	trim := func(obj interface{}) (interface{}, error) {
@@ -739,8 +769,9 @@ func CreateControllerContext(ctx context.Context, s *config.CompletedConfig, roo
 	metadataClient := metadata.NewForConfigOrDie(rootClientBuilder.ConfigOrDie("metadata-informers"))
 	metadataInformers := metadatainformer.NewSharedInformerFactoryWithOptions(metadataClient, ResyncPeriod(s)(), metadatainformer.WithTransform(trim))
 
-	// If apiserver is not running we should wait for some time and fail only then. This is particularly
-	// important when we start apiserver and controller manager at the same time.
+	// If apiserver is not running we should wait for some time and fail only
+	// then. This is particularly important when we start apiserver and
+	// controller manager at the same time.
 	if err := genericcontrollermanager.WaitForAPIServer(versionedClient, 10*time.Second); err != nil {
 		return ControllerContext{}, fmt.Errorf("failed to wait for apiserver being healthy: %v", err)
 	}
@@ -785,13 +816,15 @@ func CreateControllerContext(ctx context.Context, s *config.CompletedConfig, roo
 	return controllerContext, nil
 }
 
-// StartControllers starts a set of controllers with a specified ControllerContext
+// StartControllers starts a set of controllers with a specified
+// ControllerContext
 func StartControllers(ctx context.Context, controllerCtx ControllerContext, controllerDescriptors map[string]*ControllerDescriptor,
 	unsecuredMux *mux.PathRecorderMux, healthzHandler *controllerhealthz.MutableHealthzHandler) error {
 	var controllerChecks []healthz.HealthChecker
 
-	// Always start the SA token controller first using a full-power client, since it needs to mint tokens for the rest
-	// If this fails, just return here and fail since other controllers won't be able to get credentials.
+	// Always start the SA token controller first using a full-power client,
+	// since it needs to mint tokens for the rest If this fails, just return
+	// here and fail since other controllers won't be able to get credentials.
 	if serviceAccountTokenControllerDescriptor, ok := controllerDescriptors[names.ServiceAccountTokenController]; ok {
 		check, err := StartController(ctx, controllerCtx, serviceAccountTokenControllerDescriptor, unsecuredMux)
 		if err != nil {
@@ -803,12 +836,13 @@ func StartControllers(ctx context.Context, controllerCtx ControllerContext, cont
 		}
 	}
 
-	// Each controller is passed a context where the logger has the name of
-	// the controller set through WithName. That name then becomes the prefix of
-	// of all log messages emitted by that controller.
+	// Each controller is passed a context where the logger has the name of the
+	// controller set through WithName. That name then becomes the prefix of of
+	// all log messages emitted by that controller.
 	//
-	// In StartController, an explicit "controller" key is used instead, for two reasons:
-	// - while contextual logging is alpha, klog.LoggerWithName is still a no-op,
+	// In StartController, an explicit "controller" key is used instead, for two
+	// reasons: - while contextual logging is alpha, klog.LoggerWithName is
+	// still a no-op,
 	//   so we cannot rely on it yet to add the name
 	// - it allows distinguishing between log entries emitted by the controller
 	//   and those emitted for it - this is a bit debatable and could be revised.
@@ -829,8 +863,8 @@ func StartControllers(ctx context.Context, controllerCtx ControllerContext, cont
 	return nil
 }
 
-// StartController starts a controller with a specified ControllerContext
-// and performs required pre- and post- checks/actions
+// StartController starts a controller with a specified ControllerContext and
+// performs required pre- and post- checks/actions
 func StartController(ctx context.Context, controllerCtx ControllerContext, controllerDescriptor *ControllerDescriptor,
 	unsecuredMux *mux.PathRecorderMux) (healthz.HealthChecker, error) {
 	logger := klog.FromContext(ctx)
@@ -865,8 +899,8 @@ func StartController(ctx context.Context, controllerCtx ControllerContext, contr
 
 	check := controllerhealthz.NamedPingChecker(controllerName)
 	if ctrl != nil {
-		// check if the controller supports and requests a debugHandler
-		// and it needs the unsecuredMux to mount the handler onto.
+		// check if the controller supports and requests a debugHandler and it
+		// needs the unsecuredMux to mount the handler onto.
 		if debuggable, ok := ctrl.(controller.Debuggable); ok && unsecuredMux != nil {
 			if debugHandler := debuggable.DebuggingHandler(); debugHandler != nil {
 				basePath := "/debug/controllers/" + controllerName
@@ -897,15 +931,17 @@ func readCA(file string) ([]byte, error) {
 	return rootCA, err
 }
 
-// createClientBuilders creates clientBuilder and rootClientBuilder from the given configuration
+// createClientBuilders creates clientBuilder and rootClientBuilder from the
+// given configuration
 func createClientBuilders(logger klog.Logger, c *config.CompletedConfig) (clientBuilder clientbuilder.ControllerClientBuilder, rootClientBuilder clientbuilder.ControllerClientBuilder) {
 	rootClientBuilder = clientbuilder.SimpleControllerClientBuilder{
 		ClientConfig: c.Kubeconfig,
 	}
 	if c.ComponentConfig.KubeCloudShared.UseServiceAccountCredentials {
 		if len(c.ComponentConfig.SAController.ServiceAccountKeyFile) == 0 {
-			// It's possible another controller process is creating the tokens for us.
-			// If one isn't, we'll timeout and exit when our client builder is unable to create the tokens.
+			// It's possible another controller process is creating the tokens
+			// for us. If one isn't, we'll timeout and exit when our client
+			// builder is unable to create the tokens.
 			logger.Info("Warning: --use-service-account-credentials was specified without providing a --service-account-private-key-file")
 		}
 
@@ -919,8 +955,9 @@ func createClientBuilders(logger klog.Logger, c *config.CompletedConfig) (client
 	return
 }
 
-// leaderElectAndRun runs the leader election, and runs the callbacks once the leader lease is acquired.
-// TODO: extract this function into staging/controller-manager
+// leaderElectAndRun runs the leader election, and runs the callbacks once the
+// leader lease is acquired. TODO: extract this function into
+// staging/controller-manager
 func leaderElectAndRun(ctx context.Context, c *config.CompletedConfig, lockIdentity string, electionChecker *leaderelection.HealthzAdaptor, resourceLock string, leaseName string, callbacks leaderelection.LeaderCallbacks) {
 	logger := klog.FromContext(ctx)
 	rl, err := resourcelock.NewFromKubeconfig(resourceLock,
@@ -951,7 +988,8 @@ func leaderElectAndRun(ctx context.Context, c *config.CompletedConfig, lockIdent
 	panic("unreachable")
 }
 
-// filteredControllerDescriptors returns all controllerDescriptors after filtering through filterFunc.
+// filteredControllerDescriptors returns all controllerDescriptors after
+// filtering through filterFunc.
 func filteredControllerDescriptors(controllerDescriptors map[string]*ControllerDescriptor, filterFunc leadermigration.FilterFunc, expected leadermigration.FilterResult) map[string]*ControllerDescriptor {
 	resultControllers := make(map[string]*ControllerDescriptor)
 	for name, controllerDesc := range controllerDescriptors {
