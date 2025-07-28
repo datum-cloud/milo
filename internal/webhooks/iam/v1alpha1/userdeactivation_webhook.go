@@ -23,11 +23,43 @@ func SetupUserDeactivationWebhooksWithManager(mgr ctrl.Manager, systemNamespace 
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.UserDeactivation{}).
+		WithDefaulter(&UserDeactivationMutator{}).
 		WithValidator(&UserDeactivationValidator{
 			client:          mgr.GetClient(),
 			systemNamespace: systemNamespace,
 		}).
 		Complete()
+}
+
+// UserDeactivationMutator sets default values on UserDeactivation resources.
+type UserDeactivationMutator struct{}
+
+// Default sets the deactivatedBy field to the username of the requesting user if it is not already set.
+func (m *UserDeactivationMutator) Default(ctx context.Context, obj runtime.Object) error {
+	ud, ok := obj.(*iamv1alpha1.UserDeactivation)
+	if !ok {
+		return fmt.Errorf("failed to cast object to UserDeactivation")
+	}
+	userdeactivationlog.Info("Defaulting UserDeactivation", "name", ud.GetName())
+
+	// If deactivatedBy is already set, respect the provided value.
+	if ud.Spec.DeactivatedBy != "" {
+		userdeactivationlog.Info("DeactivatedBy already set, skipping defaulting", "name", ud.GetName())
+		return nil
+	}
+
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		userdeactivationlog.Error(err, "failed to get admission request from context", "name", ud.GetName())
+		return fmt.Errorf("failed to get request from context: %w", err)
+	}
+
+	// Populate the field with the username present in the access token / UserInfo.
+	ud.Spec.DeactivatedBy = req.UserInfo.Username
+
+	userdeactivationlog.Info("Defaulting deactivatedBy complete", "name", ud.GetName(), "deactivatedBy", ud.Spec.DeactivatedBy)
+
+	return nil
 }
 
 type UserDeactivationValidator struct {
@@ -43,6 +75,18 @@ func (v *UserDeactivationValidator) ValidateCreate(ctx context.Context, obj runt
 	userName := userDeactivation.Spec.UserRef.Name
 	if userName == "" {
 		return nil, fmt.Errorf("userRef.name is required")
+	}
+
+	// Ensure spec.deactivatedBy matches the requesting user (it should have been defaulted by the mutator)
+	req, reqErr := admission.RequestFromContext(ctx)
+	if reqErr != nil {
+		return nil, fmt.Errorf("failed to get request from context: %w", reqErr)
+	}
+	if userDeactivation.Spec.DeactivatedBy == "" {
+		return nil, fmt.Errorf("spec.deactivatedBy must be set by the system")
+	}
+	if userDeactivation.Spec.DeactivatedBy != req.UserInfo.Username {
+		return nil, fmt.Errorf("spec.deactivatedBy is managed by the system and cannot be set by the client; if provided, it must match the authenticated user")
 	}
 
 	user := &iamv1alpha1.User{}
