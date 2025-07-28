@@ -44,7 +44,13 @@ spec:
             description: ResourceGrantSpec defines the desired state of ResourceGrant.
             properties:
               allowances:
-                description: List of allowances this grant contains
+                description: |-
+                  // Flag to determine if this a default grant or one created in the Staff
+                  // Portal
+                  //
+                  // +kubebuilder:validation:Required
+                  DefaultGrant bool `json:"defaultGrant"`
+                  List of allowances this grant contains
                 items:
                   description: Allowance defines a single resource allowance within
                     a grant
@@ -128,14 +134,11 @@ spec:
                     pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                   kind:
-                    description: Kubernetes resource type - Must be PascalCase
+                    description: Resource type
                     pattern: ^[A-Z][a-zA-Z]*$
                     type: string
                   name:
-                    description: Name of the specific resource instance
-                    type: string
-                  uid:
-                    description: UID of the specific resource instance
+                    description: Name of the owning resource if there is one
                     type: string
                 required:
                 - apiGroup
