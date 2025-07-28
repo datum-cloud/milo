@@ -42,12 +42,6 @@ func (m *UserDeactivationMutator) Default(ctx context.Context, obj runtime.Objec
 	}
 	userdeactivationlog.Info("Defaulting UserDeactivation", "name", ud.GetName())
 
-	// If deactivatedBy is already set, respect the provided value.
-	if ud.Spec.DeactivatedBy != "" {
-		userdeactivationlog.Info("DeactivatedBy already set, skipping defaulting", "name", ud.GetName())
-		return nil
-	}
-
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		userdeactivationlog.Error(err, "failed to get admission request from context", "name", ud.GetName())
