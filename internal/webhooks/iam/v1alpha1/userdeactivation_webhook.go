@@ -17,8 +17,6 @@ import (
 
 var userdeactivationlog = logf.Log.WithName("userdeactivation-resource")
 
-// +kubebuilder:webhook:path=/validate-iam-miloapis-com-v1alpha1-userdeactivation,mutating=false,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=iam.miloapis.com,resources=userdeactivations,verbs=create,versions=v1alpha1,name=vuserdeactivation.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
-
 func SetupUserDeactivationWebhooksWithManager(mgr ctrl.Manager, systemNamespace string) error {
 	userdeactivationlog.Info("Setting up iam.miloapis.com userdeactivation webhooks")
 
@@ -31,6 +29,8 @@ func SetupUserDeactivationWebhooksWithManager(mgr ctrl.Manager, systemNamespace 
 		}).
 		Complete()
 }
+
+// +kubebuilder:webhook:path=/mutate-iam-miloapis-com-v1alpha1-userdeactivation,mutating=true,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=userdeactivations,verbs=create,versions=v1alpha1,name=muserdeactivation.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // UserDeactivationMutator sets default values on UserDeactivation resources.
 type UserDeactivationMutator struct{}
@@ -56,6 +56,8 @@ func (m *UserDeactivationMutator) Default(ctx context.Context, obj runtime.Objec
 
 	return nil
 }
+
+// +kubebuilder:webhook:path=/validate-iam-miloapis-com-v1alpha1-userdeactivation,mutating=false,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=userdeactivations,verbs=create,versions=v1alpha1,name=vuserdeactivation.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 type UserDeactivationValidator struct {
 	client          client.Client
