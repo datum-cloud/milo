@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 var userdeactivationlog = logf.Log.WithName("userdeactivation-resource")
@@ -65,32 +66,27 @@ func (v *UserDeactivationValidator) ValidateCreate(ctx context.Context, obj runt
 	userDeactivation := obj.(*iamv1alpha1.UserDeactivation)
 	userdeactivationlog.Info("Validating UserDeactivation", "name", userDeactivation.Name)
 
-	// Validate that the referenced user exists
+	var errs field.ErrorList
+
 	userName := userDeactivation.Spec.UserRef.Name
 	if userName == "" {
-		return nil, fmt.Errorf("userRef.name is required")
+		errs = append(errs, field.Required(field.NewPath("spec").Child("userRef").Child("name"), "userRef.name is required"))
 	}
 
-	// Ensure spec.deactivatedBy matches the requesting user (it should have been defaulted by the mutator)
-	req, reqErr := admission.RequestFromContext(ctx)
-	if reqErr != nil {
-		return nil, fmt.Errorf("failed to get request from context: %w", reqErr)
-	}
-	if userDeactivation.Spec.DeactivatedBy == "" {
-		return nil, fmt.Errorf("spec.deactivatedBy must be set by the system")
-	}
-	if userDeactivation.Spec.DeactivatedBy != req.UserInfo.Username {
-		return nil, fmt.Errorf("spec.deactivatedBy is managed by the system and cannot be set by the client; if provided, it must match the authenticated user")
+	if len(errs) > 0 {
+		return nil, errors.NewInvalid(iamv1alpha1.SchemeGroupVersion.WithKind("UserDeactivation").GroupKind(), userDeactivation.Name, errs)
 	}
 
+	// Validate that the referenced user exists
 	user := &iamv1alpha1.User{}
 	err := v.client.Get(ctx, client.ObjectKey{Name: userName}, user)
 	if errors.IsNotFound(err) {
 		userdeactivationlog.Error(err, "referenced user does not exist", "userName", userName)
-		return nil, fmt.Errorf("referenced user '%s' does not exist", userName)
+		errs = append(errs, field.NotFound(field.NewPath("spec").Child("userRef").Child("name"), userName))
+		return nil, errors.NewNotFound(iamv1alpha1.SchemeGroupVersion.WithResource("users").GroupResource(), userName)
 	} else if err != nil {
 		userdeactivationlog.Error(err, "failed to validate user reference", "userName", userName)
-		return nil, fmt.Errorf("failed to validate user reference '%s': %w", userName, err)
+		return nil, errors.NewInvalid(iamv1alpha1.SchemeGroupVersion.WithKind("UserDeactivation").GroupKind(), userDeactivation.Name, errs)
 	}
 
 	// Ensure there is no existing UserDeactivation for the same user
@@ -102,7 +98,7 @@ func (v *UserDeactivationValidator) ValidateCreate(ctx context.Context, obj runt
 	for _, existing := range existingUDList.Items {
 		if existing.Spec.UserRef.Name == userName && existing.DeletionTimestamp == nil {
 			userdeactivationlog.Error(fmt.Errorf("a UserDeactivation already exists for user '%s'", userName), "existing UserDeactivation", "name", existing.Name)
-			return nil, fmt.Errorf("a UserDeactivation already exists for user '%s'", userName)
+			return nil, errors.NewAlreadyExists(iamv1alpha1.SchemeGroupVersion.WithResource("userdeactivations").GroupResource(), userDeactivation.Name)
 		}
 	}
 
