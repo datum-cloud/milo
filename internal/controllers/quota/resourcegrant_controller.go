@@ -23,6 +23,7 @@ type ResourceGrantReconciler struct {
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
 
 func (r *ResourceGrantReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -76,10 +77,18 @@ func (r *ResourceGrantReconciler) updateResourceGrantStatus(ctx context.Context,
 		activeCondition.ObservedGeneration = grant.Generation
 	}
 
-	// Set the grant status as active
-	activeCondition.Status = metav1.ConditionTrue
-	activeCondition.Reason = quotav1alpha1.ResourceGrantActiveReason
-	activeCondition.Message = "The grant has been successfully activated and will now be taken into account when evaluating future claims."
+	// Validate that all required registrations exist before marking the grant as active
+	if err := r.validateResourceRegistrationsForGrant(ctx, grant); err != nil {
+		logger.Info("ResourceGrant validation failed", "error", err)
+		activeCondition.Status = metav1.ConditionFalse
+		activeCondition.Reason = quotav1alpha1.ResourceGrantValidationFailedReason
+		activeCondition.Message = fmt.Sprintf("Validation failed: %v", err)
+	} else {
+		// Set the grant status as active
+		activeCondition.Status = metav1.ConditionTrue
+		activeCondition.Reason = quotav1alpha1.ResourceGrantActiveReason
+		activeCondition.Message = "The grant has been successfully activated and will now be taken into account when evaluating future claims."
+	}
 
 	// Set the condition on the status
 	apimeta.SetStatusCondition(&grant.Status.Conditions, *activeCondition)
@@ -92,10 +101,23 @@ func (r *ResourceGrantReconciler) updateResourceGrantStatus(ctx context.Context,
 		logger.Info("ResourceGrant status updated",
 			"name", grant.Name,
 			"namespace", grant.Namespace,
-			"ready", activeCondition.Status)
+			"active", activeCondition.Status)
 	}
 
 	return nil
+}
+
+// validateResourceRegistrations validates that all resource types in the grant
+// have corresponding registrations.
+func (r *ResourceGrantReconciler) validateResourceRegistrationsForGrant(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
+	// Collect all unique resource type names from allowances to be passed into
+	// the ValidateResourceRegistrations function.
+	var resourceTypeNames []string
+	for _, allowance := range grant.Spec.Allowances {
+		resourceTypeNames = append(resourceTypeNames, allowance.ResourceTypeName)
+	}
+
+	return ValidateResourceRegistrations(ctx, r.Client, resourceTypeNames)
 }
 
 // SetupWithManager sets up the controller with the Manager.
