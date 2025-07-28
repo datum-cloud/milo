@@ -66,6 +66,41 @@ rules:
   - update
   - watch
 - apiGroups:
+  - quota.miloapis.com
+  resources:
+  - allowancebuckets
+  - effectiveresourcegrants
+  - resourcegrants
+  - resourceclaims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - quota.miloapis.com
+  resources:
+  - effectiveresourcegrants/status
+  - resourcegrants/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - quota.miloapis.com
+  resources:
+  - resourceregistrations
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - resourcemanager.miloapis.com
   resources:
   - organizationmemberships
