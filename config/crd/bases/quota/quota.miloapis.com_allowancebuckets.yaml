@@ -65,14 +65,11 @@ spec:
                     pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                   kind:
-                    description: Kubernetes resource type - Must be PascalCase
+                    description: Resource type
                     pattern: ^[A-Z][a-zA-Z]*$
                     type: string
                   name:
-                    description: Name of the specific resource instance
-                    type: string
-                  uid:
-                    description: UID of the specific resource instance
+                    description: Name of the owning resource if there is one
                     type: string
                 required:
                 - apiGroup
@@ -117,14 +114,11 @@ spec:
                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                           type: string
                         kind:
-                          description: Kubernetes resource type - Must be PascalCase
+                          description: Resource type
                           pattern: ^[A-Z][a-zA-Z]*$
                           type: string
                         name:
-                          description: Name of the specific resource instance
-                          type: string
-                        uid:
-                          description: UID of the specific resource instance
+                          description: Name of the owning resource if there is one
                           type: string
                       required:
                       - apiGroup
