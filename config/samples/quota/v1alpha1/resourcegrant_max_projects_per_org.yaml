@@ -1,14 +1,14 @@
 apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceGrant
 metadata:
-  name: org-abc-max-project-default-grant
-  namespace: org-abc
+  name: datum-max-project-default-grant
+  namespace: datum
 spec:
   # Reference to the organization this grant applies to
   ownerRef:
     apiGroup: resourcemanager.miloapis.com
     kind: Organization
-    name: org-abc
+    name: datum
   # List of allowances this grant contains
   allowances:
     # Default number of projects allowed in this organization
