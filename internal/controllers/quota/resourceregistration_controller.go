@@ -25,7 +25,7 @@ type ResourceRegistrationReconciler struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations/status,verbs=get;update;patch
 //
-// Reconciles a ResourceRegistration object by updating the status to reflect
+// Reconciles a ResourceRegistration object by validating it and updating the status to reflect
 // whether the registration is active and the resource type can be managed by
 // the quota system.
 func (r *ResourceRegistrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
@@ -92,10 +92,9 @@ func (r *ResourceRegistrationReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, nil
 	}
 
-	// Validate that the owner ref, resource type, and dimensions being
-	// registered are valid. In phase 1, this is a placeholder that always
-	// passes. Phase 2 will add cross-system validation to ensure that the
-	// resource type is valid and that the owner ref is valid.
+	// In phase 1, this is a placeholder that always passes. Phase 2 will add
+	// cross-system validation to ensure that the resource type is valid and that
+	// the owner ref is valid.
 	if err := r.validateRegistration(ctx, &registration); err != nil {
 		// Update condition to reflect the failure
 		logger.Info("resource registration validation failed", "error", err)

@@ -27,10 +27,11 @@ type ResourceClaimReconciler struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceclaims/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=allowancebuckets,verbs=get;list;watch
 //
 // Reconciles a ResourceClaim object by evaluating the requests against the available quota.
-func (r *ResourceClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ResourceClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
 	logger := log.FromContext(ctx)
 
 	// Fetch the ResourceClaim
@@ -48,8 +49,31 @@ func (r *ResourceClaimReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
+	// Create a deep copy of the original status to compare against later
+	originalStatus := claim.Status.DeepCopy()
+
 	// Always update the observed generation in the status to match the current generation of the spec.
 	claim.Status.ObservedGeneration = claim.Generation
+
+	// Validate that all required registrations exist before evaluating the claim
+	if err := r.validateResourceRegistrationsForClaim(ctx, &claim); err != nil {
+		logger.Info("ResourceClaim validation failed", "error", err)
+
+		// Set the condition to indicate validation failed
+		validationFailedCondition := metav1.Condition{
+			Type:    quotav1alpha1.ResourceClaimGranted,
+			Status:  metav1.ConditionFalse,
+			Reason:  quotav1alpha1.ResourceClaimValidationFailedReason,
+			Message: fmt.Sprintf("Validation failed: %v", err),
+		}
+		apimeta.SetStatusCondition(&claim.Status.Conditions, validationFailedCondition)
+
+		// Update status and return
+		if err := r.Status().Update(ctx, &claim); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update ResourceClaim status: %w", err)
+		}
+		return ctrl.Result{}, nil
+	}
 
 	// Evaluate each resource request within the claim's spec.
 	allRequestsGranted := true
@@ -66,9 +90,9 @@ func (r *ResourceClaimReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"dimensions", request.Dimensions)
 
 		// Evaluate the request to determine if there is enough quota available
-		granted, message, err := r.evaluateResourceRequest(ctx, claim, request)
+		granted, message, err := r.evaluateResourceRequest(ctx, &claim, request)
 		if err != nil {
-			return fmt.Errorf("failed to evaluate resource request %d: %w", i, err)
+			return ctrl.Result{}, fmt.Errorf("failed to evaluate resource request %d: %w", i, err)
 		}
 
 		// If any single request is not granted, the entire claim is considered not granted.
@@ -119,8 +143,8 @@ func (r *ResourceClaimReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// If the status has changed, update it
 	if statusChanged || conditionChanged {
-		if err := r.Status().Update(ctx, claim); err != nil {
-			return fmt.Errorf("failed to update ResourceClaim status: %w", err)
+		if err := r.Status().Update(ctx, &claim); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update ResourceClaim status: %w", err)
 		}
 
 		logger.Info("updated ResourceClaim status",
@@ -160,7 +184,7 @@ func (r *ResourceClaimReconciler) evaluateResourceRequest(ctx context.Context, c
 		currentUsage = bucket.Status.Allocated
 	}
 
-	// Step 2: Calculate applicable limit from active ResourceGrants
+	// Calculate applicable limit from active ResourceGrants
 	var grants quotav1alpha1.ResourceGrantList
 	if err := r.List(ctx, &grants, client.InNamespace(claim.Namespace)); err != nil {
 		return false, "", fmt.Errorf("failed to list ResourceGrants: %w", err)
@@ -264,6 +288,19 @@ func (r *ResourceClaimReconciler) generateAllowanceBucketName(namespace, resourc
 
 	// Return first part of hex hash for readability
 	return fmt.Sprintf("bucket-%x", hash)[:19]
+}
+
+// validateResourceRegistrations validates that all resource types in the claim
+// have corresponding registrations.
+func (r *ResourceClaimReconciler) validateResourceRegistrationsForClaim(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
+	// Collect all unique resource type names from requests to be passed into
+	// the ValidateResourceRegistrations function.
+	var resourceTypeNames []string
+	for _, request := range claim.Spec.Requests {
+		resourceTypeNames = append(resourceTypeNames, request.ResourceTypeName)
+	}
+
+	return ValidateResourceRegistrations(ctx, r.Client, resourceTypeNames)
 }
 
 // Create and register controller with controller manager
