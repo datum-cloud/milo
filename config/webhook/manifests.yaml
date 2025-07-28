@@ -59,6 +59,27 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
+      path: /validate-iam-miloapis-com-v1alpha1-userdeactivation
+      port: 9443
+  failurePolicy: Fail
+  name: vuserdeactivation.iam.miloapis.com
+  rules:
+  - apiGroups:
+    - iam.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - userdeactivations
+  sideEffects: NoneOnDryRun
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
       path: /validate-resourcemanager-miloapis-com-v1alpha1-organization
       port: 9443
   failurePolicy: Fail
