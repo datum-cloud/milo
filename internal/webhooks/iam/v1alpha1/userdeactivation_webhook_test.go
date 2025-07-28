@@ -6,10 +6,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	admissionv1 "k8s.io/api/admission/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var runtimeScheme = runtime.NewScheme()
@@ -91,6 +94,19 @@ func TestUserDeactivationValidator_ValidateCreate(t *testing.T) {
 			expectError:   true,
 			errorContains: "referenced user 'nonexistent-user' does not exist",
 		},
+		"error when deactivatedBy does not match requester": {
+			userDeactivation: &iamv1alpha1.UserDeactivation{
+				ObjectMeta: metav1.ObjectMeta{Name: "deactivate-test-user-bad"},
+				Spec: iamv1alpha1.UserDeactivationSpec{
+					UserRef:       iamv1alpha1.UserReference{Name: testUser.Name},
+					Reason:        "Testing",
+					DeactivatedBy: "other-user",
+				},
+			},
+			includeUser:   true,
+			expectError:   true,
+			errorContains: "spec.deactivatedBy is managed by the system",
+		},
 	}
 
 	for name, tt := range tests {
@@ -107,7 +123,16 @@ func TestUserDeactivationValidator_ValidateCreate(t *testing.T) {
 				systemNamespace: systemNamespace,
 			}
 
-			ctx := context.Background()
+			// Build admission request context with authenticated user info
+			req := admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					UserInfo: authenticationv1.UserInfo{
+						Username: "tester",
+					},
+				},
+			}
+			ctx := admission.NewContextWithRequest(context.Background(), req)
+
 			warnings, err := validator.ValidateCreate(ctx, tt.userDeactivation)
 
 			if tt.expectError {
@@ -123,4 +148,51 @@ func TestUserDeactivationValidator_ValidateCreate(t *testing.T) {
 			assert.Empty(t, warnings, "expected no validation warnings")
 		})
 	}
+}
+
+// Test the mutator defaulting behavior to ensure deactivatedBy is set correctly before validation.
+func TestUserDeactivationMutator_DefaultsAndValidator(t *testing.T) {
+	systemNamespace := "milo-system"
+
+	// Prepare UserDeactivation without DeactivatedBy
+	ud := &iamv1alpha1.UserDeactivation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "deactivate-test-user",
+		},
+		Spec: iamv1alpha1.UserDeactivationSpec{
+			UserRef: iamv1alpha1.UserReference{
+				Name: "test-user",
+			},
+			Reason: "Testing default",
+		},
+	}
+
+	// Build fake client including referenced user
+	testUser := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-user"},
+		Spec:       iamv1alpha1.UserSpec{Email: "test@example.com"},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(runtimeScheme).WithObjects(testUser).Build()
+
+	// Create admission request context with user "tester"
+	req := admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			UserInfo: authenticationv1.UserInfo{Username: "tester"},
+		},
+	}
+	ctx := admission.NewContextWithRequest(context.Background(), req)
+
+	// Run mutator default
+	mutator := &UserDeactivationMutator{}
+	assert.NoError(t, mutator.Default(ctx, ud))
+
+	// Ensure DeactivatedBy was defaulted to requester username
+	assert.Equal(t, "tester", ud.Spec.DeactivatedBy, "deactivatedBy should be defaulted to requester username")
+
+	// Validate create should now pass
+	validator := &UserDeactivationValidator{client: fakeClient, systemNamespace: systemNamespace}
+	warnings, err := validator.ValidateCreate(ctx, ud)
+	assert.NoError(t, err)
+	assert.Empty(t, warnings)
 }
