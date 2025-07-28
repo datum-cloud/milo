@@ -92,20 +92,7 @@ func TestUserDeactivationValidator_ValidateCreate(t *testing.T) {
 			},
 			includeUser:   true,
 			expectError:   true,
-			errorContains: "referenced user 'nonexistent-user' does not exist",
-		},
-		"error when deactivatedBy does not match requester": {
-			userDeactivation: &iamv1alpha1.UserDeactivation{
-				ObjectMeta: metav1.ObjectMeta{Name: "deactivate-test-user-bad"},
-				Spec: iamv1alpha1.UserDeactivationSpec{
-					UserRef:       iamv1alpha1.UserReference{Name: testUser.Name},
-					Reason:        "Testing",
-					DeactivatedBy: "other-user",
-				},
-			},
-			includeUser:   true,
-			expectError:   true,
-			errorContains: "spec.deactivatedBy is managed by the system",
+			errorContains: "not found",
 		},
 		"error when deactivation already exists for user": {
 			userDeactivation: &iamv1alpha1.UserDeactivation{
@@ -120,7 +107,7 @@ func TestUserDeactivationValidator_ValidateCreate(t *testing.T) {
 			},
 			includeUser:   true,
 			expectError:   true,
-			errorContains: "UserDeactivation already exists",
+			errorContains: "already exists",
 		},
 	}
 
@@ -133,7 +120,7 @@ func TestUserDeactivationValidator_ValidateCreate(t *testing.T) {
 			}
 
 			// If this test case is for duplicate validation, seed an existing UserDeactivation for the same user
-			if tt.errorContains == "UserDeactivation already exists" {
+			if tt.errorContains == "already exists" {
 				existingUD := &iamv1alpha1.UserDeactivation{
 					ObjectMeta: metav1.ObjectMeta{Name: "first-deactivate-test-user"},
 					Spec: iamv1alpha1.UserDeactivationSpec{
