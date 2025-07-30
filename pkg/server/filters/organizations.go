@@ -45,7 +45,7 @@ func OrganizationContextHandler(handler http.Handler, s runtime.NegotiatedSerial
 
 			organizationID := parts[0]
 
-			if errs := validation.IsValidLabelValue(organizationID); len(errs) > 0 {
+			if errs := validation.IsValidLabelValue(organizationID); len(errs) > 0 || len(organizationID) == 0 {
 				// Return a text/plain response for discovery so that kubectl
 				// prints a useful error. If a structured response is given, it will
 				// swallow all useful error information.
@@ -112,17 +112,15 @@ func OrganizationContextAuthorizationDecorator(handler http.Handler) http.Handle
 			return
 		}
 
-		if u.Extra == nil {
-			u.Extra = map[string][]string{}
-		}
-
 		// Set the parent resource information for the authorization check based on
 		// the organization ID that was provided in the request context.
-		u.Extra[iamv1alpha1.ParentAPIGroupExtraKey] = []string{resourcemanagerv1alpha1.GroupVersion.Group}
-		u.Extra[iamv1alpha1.ParentKindExtraKey] = []string{"Organization"}
-		u.Extra[iamv1alpha1.ParentNameExtraKey] = []string{orgId}
+		extra := map[string][]string{
+			iamv1alpha1.ParentAPIGroupExtraKey: {resourcemanagerv1alpha1.GroupVersion.Group},
+			iamv1alpha1.ParentKindExtraKey:     {"Organization"},
+			iamv1alpha1.ParentNameExtraKey:     {orgId},
+		}
 
-		req = req.WithContext(request.WithUser(ctx, u))
+		req = req.WithContext(request.WithUser(ctx, userWithExtra(u, extra)))
 
 		handler.ServeHTTP(w, req)
 	})

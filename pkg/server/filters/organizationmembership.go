@@ -122,17 +122,13 @@ func UserContextAuthorizationDecorator(handler http.Handler) http.Handler {
 			return
 		}
 
-		if u.Extra == nil {
-			u.Extra = map[string][]string{}
+		extra := map[string][]string{
+			iamv1alpha1.ParentAPIGroupExtraKey: {iamv1alpha1.SchemeGroupVersion.Group},
+			iamv1alpha1.ParentKindExtraKey:     {"User"},
+			iamv1alpha1.ParentNameExtraKey:     {userID},
 		}
 
-		// Set the user information for the authorization check based on the user
-		// ID that was provided in the request context.
-		u.Extra[iamv1alpha1.ParentAPIGroupExtraKey] = []string{iamv1alpha1.SchemeGroupVersion.Group}
-		u.Extra[iamv1alpha1.ParentKindExtraKey] = []string{"User"}
-		u.Extra[iamv1alpha1.ParentNameExtraKey] = []string{userID}
-
-		req = req.WithContext(request.WithUser(ctx, u))
+		req = req.WithContext(request.WithUser(ctx, userWithExtra(u, extra)))
 
 		handler.ServeHTTP(w, req)
 	})
