@@ -8,7 +8,6 @@ spec:
   launchStage: Beta
   includedPermissions:
     - resourcemanager.miloapis.com/organizations.get
-    - resourcemanager.miloapis.com/organizations.list
     - resourcemanager.miloapis.com/organizations.update
     - resourcemanager.miloapis.com/organizations.patch
     - resourcemanager.miloapis.com/organizations.watch
