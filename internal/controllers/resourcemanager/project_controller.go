@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/finalizer"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
@@ -77,7 +78,10 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 	if readyCondition.Status == metav1.ConditionTrue {
 		// We don't need to reconcile anything if the project is already in a ready
 		// state.
-		return ctrl.Result{}, nil
+
+		// TODO: Uncomment this once project control plane resources have been
+		//       backfilled with the etcd path annotation and project UID.
+		// return ctrl.Result{}, nil
 	}
 
 	logger.Info("reconciling project")
@@ -98,6 +102,7 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 				Name:      project.Name,
 				Labels: map[string]string{
 					resourcemanagerv1alpha.ProjectNameLabel: project.Name,
+					resourcemanagerv1alpha.ProjectUIDLabel:  string(project.UID),
 				},
 				Annotations: map[string]string{
 					resourcemanagerv1alpha.OwnerNameLabel: project.Spec.OwnerRef.Name,
@@ -108,6 +113,18 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 
 		if err := r.InfraClient.Create(ctx, &projectControlPlane); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to create project control plane: %w", err)
+		}
+
+		// The project control plane will be reconciled once the status has been
+		// updated.
+		return ctrl.Result{}, nil
+	} else {
+		// TODO: Remove this block once project control planes have been backfilled
+		//       with the etcd path and project UID labels.
+		if projectControlPlane.Labels[resourcemanagerv1alpha.ProjectUIDLabel] == "" {
+			projectControlPlane.Labels[resourcemanagerv1alpha.ProjectUIDLabel] = string(project.UID)
+			projectControlPlane.Labels["infrastructure.miloapis.com/etcd-path"] = project.Name
+			return reconcile.Result{}, r.InfraClient.Update(ctx, &projectControlPlane)
 		}
 	}
 
