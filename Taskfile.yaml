@@ -15,6 +15,36 @@ tasks:
       - task --list
     silent: true
 
+  # --------------------------------------------------------------------------------
+  # Development cluster & API server tasks
+  # --------------------------------------------------------------------------------
+  create-kind-etcd:
+    desc: Create a local Kubernetes cluster named "kind-etcd" with the custom etcd port configuration
+    cmds:
+      - kind create cluster --name kind-etcd --config dev/kind-etcd-port.yaml
+    status:
+      - kind get clusters | grep -q "kind-etcd"
+
+  start-apiserver-with-authentication-webhook:
+    desc: Run the Milo API-server locally, configured to use the external authentication webhook
+    deps:
+      - task: create-kind-etcd
+    cmds:
+      - |
+        set -euo pipefail
+        CERT_DIR="$(pwd)/dev/.kind-etcd-certs"
+        go run ./cmd/milo/main.go apiserver \
+          --etcd-servers=https://127.0.0.1:2380 \
+          --etcd-cafile="${CERT_DIR}/etcd/ca.crt" \
+          --etcd-certfile="${CERT_DIR}/apiserver-etcd-client.crt" \
+          --etcd-keyfile="${CERT_DIR}/apiserver-etcd-client.key" \
+          --service-account-issuer=https://kubernetes.default.svc.cluster.local \
+          --service-account-signing-key-file=$(pwd)/dev/service-account-key.pem \
+          --service-account-key-file=$(pwd)/dev/service-account-key.pem \
+          --authorization-mode=RBAC \
+          --authentication-token-webhook-config-file dev/authentication-webhook-kubeconfig.yaml \
+          --authentication-token-webhook-version v1
+    
   generate-dev-certs:
     desc: Generate self-signed certificates for local webhook development
     cmds:
