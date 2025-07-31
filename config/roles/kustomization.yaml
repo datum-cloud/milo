@@ -3,7 +3,6 @@ kind: Component
 
 resources:
   - owner.yaml
-  - organization-manager.yaml
   - project-manager.yaml
   - iam-reader.yaml
   - iam-editor.yaml
