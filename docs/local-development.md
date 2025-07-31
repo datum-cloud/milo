@@ -31,79 +31,22 @@ Run the following command to see all available tasks.
 task --list-all
 ```
 
-## Starting the API Server
+## Starting the API Server with Authentication Webhook
 
-A docker compose testing environment is available to do end-to-end testing of
-the API service locally. The task command `task apiserver:serve` is available to
-quickly start the environment and run the API server.
+To start the API server locally with authentication enabled, follow these steps:
 
-```shell
-task apiserver:serve
-```
+1. **Ensure a kind cluster is running**  
+   The `start-apiserver-with-authentication-webhook` task will automatically create a local kind cluster named `kind-etcd` if it does not already exist. Be sure that the webhook http server is running. This is an external service.
 
-Additional arguments can be passed to the API server after specifying the `--`
-parameter.
+2. **Start the API server with authentication webhook**  
+   Run the following command:
+   ```shell
+   task start-apiserver-with-authentication-webhook
+   ```
 
-```shell
-$ task apiserver:serve -- --help
-```
-
-## Getting an Access Token for the API Server
-
-To obtain an access token for use in Postman, follow these steps:
-
-1. [Create a Zitadel Web
-   App](https://github.com/datum-cloud/auth-playground/blob/main/providers/zitadel/README.md#-setting-up-zitadel-for-auth-playground-with-gogle-identity-provider)
-   and set the Callback URL to `https://oauth.pstmn.io/v1/callback`
-
-2. Get the `Access Token` from Postman
-   1. Go to `Authorization` tab
-   2. Configure the following settings:
-      - Header Prefix: `Bearer`
-      - Grant type: `Authorization Code (With PKCE)
-      - Enable `Authorize using browser`
-      - Auth URL: `http://localhost:8082/oauth/v2/authorize`
-      - Access TOken URL: `http://localhost:8082/oauth/v2/token`
-      -  Client ID: `<The Zitadel App Id>`
-      -  Scope: `email` or the neccesary scope
-      -  Client Authentication: `Send as Basic Auth header`
-   3. Click on `Get New Access Token`
-
-## Accessing the Zitadel Web Interface
-
-The Zitadel web interface is accessible at `http://localhost:8082`.
-
-The default credentials for the preconfigured user are as follows:
-
-- **Login Name**: `datum-admin@datum.localhost`
-- **Password**: `Password1!`
-
-## Accessing Mailhog - Test SMTP Server
-
-Mailhog is a lightweight test SMTP server designed for local development. It captures all outgoing emails, providing a convenient way to test email-related functionality without relying on external email services.
-
-### Web Interface
-
-- **URL**: `http://localhost:8025`
-  Access the Mailhog web interface to view and manage emails sent during development.
-
-### API Access
-
-- **Inbox Data**: `http://localhost:8025/api/v2/messages`
-- 
-  Retrieve all email data programmatically via the Mailhog API.
-
-- **API Documentation**: [Mailhog API v2 Documentation](https://github.com/mailhog/MailHog/tree/master/docs/APIv2)
-
-### Integration with Zitadel
-
-The Zitadel service is preconfigured to route all outgoing emails, such as:
-
-- One-Time Passwords (OTP)
-- Two-Factor Authentication (2FA) messages
-- Verification emails
-
-All emails, regardless of the recipient address, are captured and available for testing within Mailhog.
-
-This setup ensures a seamless and secure way to test email functionality during local development.
-
+3. **Verify authentication**  
+   To check if authentication is working, use the following `curl` command (replace `{token}` with a valid token):
+   ```shell
+   curl -k -H "Authorization: Bearer {token}" https://127.0.0.1:6443/healthz
+   ```
+   If authentication is configured correctly and the token is valid, you should receive a `200 OK` response.
