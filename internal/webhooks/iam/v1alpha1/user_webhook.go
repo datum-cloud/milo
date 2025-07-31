@@ -59,6 +59,11 @@ func (v *UserValidator) ValidateCreate(ctx context.Context, obj runtime.Object) 
 		return nil, fmt.Errorf("failed to create owner policy binding: %w", err)
 	}
 
+	if err := v.createUserPreference(ctx, user); err != nil {
+		userlog.Error(err, "Failed to create user preference")
+		return nil, fmt.Errorf("failed to create user preference: %w", err)
+	}
+
 	return nil, nil
 }
 
@@ -105,6 +110,31 @@ func (v *UserValidator) createSelfManagePolicyBinding(ctx context.Context, user 
 
 	if err := v.client.Create(ctx, policyBinding); err != nil {
 		return fmt.Errorf("failed to create policy binding resource: %w", err)
+	}
+
+	return nil
+}
+
+// createUserPreference creates a UserPreference for the new user
+func (v *UserValidator) createUserPreference(ctx context.Context, user *iamv1alpha1.User) error {
+	userlog.Info("Attempting to create UserPreference for new user", "user", user.Name)
+
+	// Build the UserPreference
+	userPreference := &iamv1alpha1.UserPreference{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("userpreference-%s", user.Name),
+		},
+		Spec: iamv1alpha1.UserPreferenceSpec{
+			UserRef: iamv1alpha1.UserReference{
+				Name: user.Name,
+			},
+			Timezone: "America/New_York", // Default timezone
+			Theme:    "system",           // Default theme
+		},
+	}
+
+	if err := v.client.Create(ctx, userPreference); err != nil {
+		return fmt.Errorf("failed to create user preference resource: %w", err)
 	}
 
 	return nil
