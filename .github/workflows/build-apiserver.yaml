@@ -14,7 +14,7 @@ jobs:
       attestations: write
     uses: datum-cloud/actions/.github/workflows/publish-docker.yaml@v1.5.2
     with:
-      image-name: telemetry-services-operator
+      image-name: milo
     secrets: inherit
 
   publish-kustomize-bundles:
