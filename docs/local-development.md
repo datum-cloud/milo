@@ -31,94 +31,15 @@ Run the following command to see all available tasks.
 task --list-all
 ```
 
-## Manual Setup
+## Local Kind Cluster
 
-The below sections describe the commands to run to create a local kind cluster
+Run the following task to run to create a local kind cluster
 and run the controller manager in the project control plane. This is an
 alternative approach to local development than using
 [devcontainer](https://containers.dev).
 
-
-Create a local kind cluster named `milo-local`, which will be used to run the
-controller manager.
-
 ```shell
-kind create cluster --name milo-local
-```
-
-### Validate Current Context
-
-The current context should be `kind-milo-local`.
-
-```shell
-kubectl config current-context
-```
-
-### Generate Base CRDs
-
-This generates code including deepcopy, objects, CRDs, and potentially protobuf marshallers.
-
-```shell
-task generate
-```
-
-### Setup Overlay CRDs
-
-This applies the core-control-plane and infra-control-plane overlay CRDs to the cluster.
-
-```shell
-kubectl apply -k config/crd/overlays/core-control-plane/
-kubectl apply -k config/crd/overlays/infra-control-plane/
-```
-
-### Generate the Development Certificates
-
-```shell
-task generate-dev-certs
-```
-
-### Build the Project
-
-This builds the project and places the binary in the `bin/milo` directory.
-
-```shell
-go build -o bin/milo ./cmd/milo
-```
-
-### Run the Controller Manager
-
-This runs the controller manager in the project control plane. Ensure that the
-`--cert-dir` is set to the directory where the certificates are stored, which
-should be the `certs` directory in the root of the repo. This also skips
-authentication, which is useful for local development. `$HOME/.kube/config`
-should contain the local kind cluster config and have it set as the current
-context.
-
-```shell
-./bin/milo controller-manager \
-  --leader-elect=false \
-  --authentication-skip-lookup \
-  --secure-port=43271 \
-  --cert-dir=./certs \
-  --tls-cert-file=./certs/tls.crt \
-  --tls-private-key-file=./certs/tls.key \
-  --control-plane-scope=project \
-  --kubeconfig=$HOME/.kube/config \
-  --infra-cluster-kubeconfig=$HOME/.kube/config \
-  --v=4
-```
-
-Then, test the server is running locally on the port specified in the
-`--secure-port` flag above.
-
-```shell
-curl -k https://localhost:43271/healthz
-```
-
-Successful output:
-
-```shell
-ok
+task kind-create-and-serve
 ```
 
 ## Starting the API Server

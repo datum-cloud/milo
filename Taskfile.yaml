@@ -45,6 +45,53 @@ tasks:
       - test -f "{{.CERTS_DIR}}/tls.crt"
     silent: true
 
+  kind-create-and-serve:
+    desc: >-
+      Create a local kind cluster named “milo-local”, apply CRDs,
+      generate dev certificates, build the controller binary,
+      and run the controller manager against the cluster.
+    cmds:
+      # 1. Delete and re-create the kind cluster
+      - kind delete cluster --name milo-local
+      - kind create cluster --name milo-local
+
+      # 2. (Optional) Verify your kube-context is now kind-milo-local
+      - kubectl config current-context
+
+      # 3. Generate base CRDs (deepcopy, client, CRD YAMLs, etc.)
+      - task: generate
+
+      # 4. Apply overlay CRDs for core and infra control-planes
+      - kubectl apply -k config/crd/overlays/core-control-plane/
+      - kubectl apply -k config/crd/overlays/infra-control-plane/
+
+      # 5. Generate the development TLS certificates
+      - task: generate-dev-certs
+
+      # 6. Build the controller binary
+      - go build -o bin/milo ./cmd/milo
+
+      # 7. Free up port 43271 if already in use
+      - |
+        if lsof -i tcp:43271 -t >/dev/null 2>&1; then
+          echo "Port 43271 in use – killing existing process..."
+          kill -9 $(lsof -i tcp:43271 -t)
+        fi
+
+      # 8. Run the controller manager locally
+      - |
+        ./bin/milo controller-manager \
+          --leader-elect=false \
+          --authentication-skip-lookup \
+          --secure-port=43271 \
+          --cert-dir=./certs \
+          --tls-cert-file=./certs/tls.crt \
+          --tls-private-key-file=./certs/tls.key \
+          --control-plane-scope=core \
+          --kubeconfig=$HOME/.kube/config \
+          --infra-cluster-kubeconfig=$HOME/.kube/config \
+          --v=4
+
   generate:
     desc: Generate code including deepcopy, objects, CRDs, and potentially protobuf marshallers
     deps:
