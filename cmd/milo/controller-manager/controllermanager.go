@@ -76,6 +76,7 @@ import (
 
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
+	quotacontroller "go.miloapis.com/milo/internal/controllers/quota"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
@@ -441,6 +442,46 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := groupCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up group controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			resourceRegistrationCtrl := quotacontroller.ResourceRegistrationController{
+				Client: ctrl.GetClient(),
+			}
+			if err := resourceRegistrationCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up resource registration controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			resourceGrantCtrl := quotacontroller.ResourceGrantController{
+				Client: ctrl.GetClient(),
+			}
+			if err := resourceGrantCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up resource grant controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			defaultResourceGrantCtrl := quotacontroller.DefaultResourceGrantController{
+				Client: ctrl.GetClient(),
+			}
+			if err := defaultResourceGrantCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up default resource grant controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			effectiveResourceGrantCtrl := quotacontroller.EffectiveResourceGrantController{
+				Client: ctrl.GetClient(),
+			}
+			if err := effectiveResourceGrantCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up effective resource grant controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			resourceClaimCtrl := quotacontroller.ResourceClaimController{
+				Client: ctrl.GetClient(),
+			}
+			if err := resourceClaimCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up resource claim controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
