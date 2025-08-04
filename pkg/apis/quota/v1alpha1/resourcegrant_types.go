@@ -21,7 +21,7 @@ type Allowance struct {
 	// Fully qualified name of the resource type being granted
 	//
 	// +kubebuilder:validation:Required
-	ResourceTypeName string `json:"resourceTypeName"`
+	ResourceType string `json:"resourceType"`
 	// List of buckets this allowance contains
 	//
 	// +kubebuilder:validation:Required
@@ -31,15 +31,16 @@ type Allowance struct {
 
 // ResourceGrantSpec defines the desired state of ResourceGrant.
 type ResourceGrantSpec struct {
-	// Reference to the owning resource of the grant
+	// Reference to the owner resource specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	OwnerRef OwnerRef `json:"ownerRef"`
-	// // Flag to determine if this a default grant or one created in the Staff
-	// // Portal
-	// //
-	// // +kubebuilder:validation:Required
-	// DefaultGrant bool `json:"defaultGrant"`
+	OwnerInstanceRef OwnerInstanceRef `json:"ownerInstanceRef"`
+	// Flag to determine if this a default grant or one created in the Staff
+	// Portal. Defaults to false.
+	//
+	// +kubebuilder:default=false
+	// +kubebuilder:validation:Optional
+	IsDefault bool `json:"isDefault,omitempty"`
 	// List of allowances this grant contains
 	//
 	// +kubebuilder:validation:Required

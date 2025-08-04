@@ -4,29 +4,30 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ContributingGrantRef references a ResourceGrant that contributes allowances to this bucket
-type ContributingGrantRef struct {
-	// Name of the ResourceGrant
+// ContributingClaimRef references a granted ResourceClaim that contributes to
+// the allocated amount in the bucket's status.
+type ContributingClaimRef struct {
+	// Name of the ResourceClaim
 	//
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
-	// The generation of the ResourceGrant when this bucket last processed it
+	// The generation of the ResourceClaim when this bucket last processed it
 	//
-	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Required
 	LastObservedGeneration int64 `json:"lastObservedGeneration"`
 }
 
 // AllowanceBucketSpec defines the desired state of AllowanceBucket.
 type AllowanceBucketSpec struct {
-	// Reference to the EffectiveResourceGrant that owns this bucket
+	// Reference to the owner resource specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	OwnerRef OwnerRef `json:"ownerRef"`
+	OwnerInstanceRef OwnerInstanceRef `json:"ownerInstanceRef"`
 	// The resource type this bucket tracks quota usage for
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern=`^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$`
-	ResourceTypeName string `json:"resourceTypeName"`
+	ResourceType string `json:"resourceType"`
 	// Dimensions for this bucket as key-value pairs
 	//
 	// +kubebuilder:validation:Optional
@@ -46,18 +47,19 @@ type AllowanceBucketStatus struct {
 	Allocated int64 `json:"allocated"`
 	// A list of all the claims that have been allocated quota from this bucket.
 	//
-	// +kubebuilder:validation:Optional
-	Allocations []Allocation `json:"allocations,omitempty"`
+	// +kubebuilder:validation:Required
+	ContributingClaimRefs []ContributingClaimRef `json:"contributingClaimRefs"`
 }
 
 // AllowanceBucket is the Schema for the allowancebuckets API.
-// Provides the single source of truth for usage accounting for specific resource and dimension combinations.
+// Provides the single source of truth for usage accounting of specific resource
+// and dimension combinations.
 //
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +k8s:openapi-gen=true
-// +kubebuilder:printcolumn:name="Resource Type",type=string,JSONPath=`.spec.resourceTypeName`
+// +kubebuilder:printcolumn:name="Resource Type",type=string,JSONPath=`.spec.resourceType`
 // +kubebuilder:printcolumn:name="Allocated",type=integer,JSONPath=`.status.allocated`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type AllowanceBucket struct {
