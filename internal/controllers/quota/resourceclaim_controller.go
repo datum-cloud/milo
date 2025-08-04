@@ -10,6 +10,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -17,26 +18,26 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
-// ResourceClaimReconciler reconciles a ResourceClaim object and is
+// ResourceClaimController reconciles a ResourceClaim object and is
 // responsible for evaluating resource claims against available quota.
-type ResourceClaimReconciler struct {
+type ResourceClaimController struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceclaims/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=allowancebuckets,verbs=get;list;watch
 //
 // Reconciles a ResourceClaim object by evaluating the requests against the available quota.
-func (r *ResourceClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
+func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
 	logger := log.FromContext(ctx)
 
 	// Fetch the ResourceClaim
 	var claim quotav1alpha1.ResourceClaim
-	if err := r.Get(ctx, req.NamespacedName, &claim); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &claim); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("ResourceClaim not found")
 			return ctrl.Result{}, nil
@@ -85,7 +86,7 @@ func (r *ResourceClaimReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// Log the start of the evaluation for the current request
 		logger.Info("evaluating resource request",
 			"requestIndex", i,
-			"resourceTypeName", request.ResourceTypeName,
+			"resourceType", request.ResourceType,
 			"amount", request.Amount,
 			"dimensions", request.Dimensions)
 
@@ -161,13 +162,13 @@ func (r *ResourceClaimReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // by reading AllowanceBuckets for usage and active ResourceGrants for limits.
 // It returns a boolean indicating if the request was granted, a message describing the result,
 // and an error if the evaluation fails.
-func (r *ResourceClaimReconciler) evaluateResourceRequest(ctx context.Context, claim *quotav1alpha1.ResourceClaim, request quotav1alpha1.ResourceRequest) (bool, string, error) {
+func (r *ResourceClaimController) evaluateResourceRequest(ctx context.Context, claim *quotav1alpha1.ResourceClaim, request quotav1alpha1.ResourceRequest) (bool, string, error) {
 	// Get a logger for this context.
 	logger := log.FromContext(ctx)
 
 	// Determine current usage from the specific AllowanceBucket that matches
 	// the resource claim request
-	bucketName := r.generateAllowanceBucketName(claim.Namespace, request.ResourceTypeName, request.Dimensions)
+	bucketName := r.generateAllowanceBucketName(claim.Namespace, request.ResourceType, request.Dimensions)
 	var bucket quotav1alpha1.AllowanceBucket
 	currentUsage := int64(0)
 
@@ -199,7 +200,7 @@ func (r *ResourceClaimReconciler) evaluateResourceRequest(ctx context.Context, c
 
 		// Check each allowance in the grant
 		for _, allowance := range grant.Spec.Allowances {
-			if allowance.ResourceTypeName != request.ResourceTypeName {
+			if allowance.ResourceType != request.ResourceType {
 				continue
 			}
 
@@ -215,7 +216,7 @@ func (r *ResourceClaimReconciler) evaluateResourceRequest(ctx context.Context, c
 
 	// Evaluate quota
 	logger.Info("quota evaluation",
-		"resourceTypeName", request.ResourceTypeName,
+		"resourceType", request.ResourceType,
 		"requestAmount", request.Amount,
 		"currentUsage", currentUsage,
 		"totalEffectiveLimit", totalEffectiveLimit,
@@ -224,10 +225,10 @@ func (r *ResourceClaimReconciler) evaluateResourceRequest(ctx context.Context, c
 	if currentUsage+request.Amount <= totalEffectiveLimit {
 		// Claim can be granted due to quota availability
 		message := fmt.Sprintf("Granted %d units of %s (current usage: %d, applicable limit: %d, available: %d)",
-			request.Amount, request.ResourceTypeName, currentUsage, totalEffectiveLimit, totalEffectiveLimit-currentUsage)
+			request.Amount, request.ResourceType, currentUsage, totalEffectiveLimit, totalEffectiveLimit-currentUsage)
 
 		logger.Info("resource claim request granted",
-			"resourceTypeName", request.ResourceTypeName,
+			"resourceType", request.ResourceType,
 			"requestAmount", request.Amount,
 			"currentUsage", currentUsage,
 			"totalEffectiveLimit", totalEffectiveLimit)
@@ -237,10 +238,10 @@ func (r *ResourceClaimReconciler) evaluateResourceRequest(ctx context.Context, c
 		// Request exceeds available quota
 		available := totalEffectiveLimit - currentUsage
 		message := fmt.Sprintf("Denied %d units of %s - would exceed quota (current usage: %d, applicable limit: %d, available: %d)",
-			request.Amount, request.ResourceTypeName, currentUsage, totalEffectiveLimit, available)
+			request.Amount, request.ResourceType, currentUsage, totalEffectiveLimit, available)
 
 		logger.Info("resource claim request denied",
-			"resourceTypeName", request.ResourceTypeName,
+			"resourceType", request.ResourceType,
 			"requestAmount", request.Amount,
 			"currentUsage", currentUsage,
 			"totalEffectiveLimit", totalEffectiveLimit)
@@ -250,7 +251,7 @@ func (r *ResourceClaimReconciler) evaluateResourceRequest(ctx context.Context, c
 }
 
 // isResourceGrantActive checks if a ResourceGrant has an Active condition with status True
-func (r *ResourceClaimReconciler) isResourceGrantActive(grant *quotav1alpha1.ResourceGrant) bool {
+func (r *ResourceClaimController) isResourceGrantActive(grant *quotav1alpha1.ResourceGrant) bool {
 	for _, condition := range grant.Status.Conditions {
 		if condition.Type == quotav1alpha1.ResourceGrantActive && condition.Status == metav1.ConditionTrue {
 			return true
@@ -261,7 +262,7 @@ func (r *ResourceClaimReconciler) isResourceGrantActive(grant *quotav1alpha1.Res
 
 // Checks if a dimension selector matches the given dimensions.
 // Empty selector matches all dimensions
-func (r *ResourceClaimReconciler) dimensionSelectorMatches(selector metav1.LabelSelector, dimensions map[string]string) bool {
+func (r *ResourceClaimController) dimensionSelectorMatches(selector metav1.LabelSelector, dimensions map[string]string) bool {
 	// Empty selector matches everything
 	if len(selector.MatchLabels) == 0 && len(selector.MatchExpressions) == 0 {
 		return true
@@ -279,11 +280,11 @@ func (r *ResourceClaimReconciler) dimensionSelectorMatches(selector metav1.Label
 
 // Creates a deterministic name for AllowanceBucket using hash,
 // which should match the logic in EffectiveResourceGrant controller.
-func (r *ResourceClaimReconciler) generateAllowanceBucketName(namespace, resourceTypeName string, dimensions map[string]string) string {
+func (r *ResourceClaimController) generateAllowanceBucketName(namespace, resourceType string, dimensions map[string]string) string {
 	dimensionsBytes, _ := json.Marshal(dimensions)
 
-	// Create hash of namespace + resourceTypeName + dimensions
-	input := fmt.Sprintf("%s%s%s", namespace, resourceTypeName, string(dimensionsBytes))
+	// Create hash of namespace + resourceType + dimensions
+	input := fmt.Sprintf("%s%s%s", namespace, resourceType, string(dimensionsBytes))
 	hash := sha256.Sum256([]byte(input))
 
 	// Return first part of hex hash for readability
@@ -292,19 +293,19 @@ func (r *ResourceClaimReconciler) generateAllowanceBucketName(namespace, resourc
 
 // validateResourceRegistrations validates that all resource types in the claim
 // have corresponding registrations.
-func (r *ResourceClaimReconciler) validateResourceRegistrationsForClaim(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
+func (r *ResourceClaimController) validateResourceRegistrationsForClaim(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
 	// Collect all unique resource type names from requests to be passed into
 	// the ValidateResourceRegistrations function.
-	var resourceTypeNames []string
+	var resourceTypes []string
 	for _, request := range claim.Spec.Requests {
-		resourceTypeNames = append(resourceTypeNames, request.ResourceTypeName)
+		resourceTypes = append(resourceTypes, request.ResourceType)
 	}
 
-	return ValidateResourceRegistrations(ctx, r.Client, resourceTypeNames)
+	return ValidateResourceRegistrations(ctx, r.Client, resourceTypes)
 }
 
 // Create and register controller with controller manager
-func (r *ResourceClaimReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ResourceClaimController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		// Specify that this controller watches the ResourceClaim resource type as its primary resource.
 		For(&quotav1alpha1.ResourceClaim{}).
