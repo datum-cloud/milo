@@ -1,7 +1,7 @@
 apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceGrant
 metadata:
-  name: datum-max-projects-default-grant
+  name: datum-max-projects-memberships-grant
   # Organization namespace
   namespace: organization-datum
 spec:
@@ -18,5 +18,10 @@ spec:
     # Default number of projects allowed in this organization
     - resourceType: "resourcemanager.miloapis.com/Project"
       buckets:
-        - amount: 5
+        - amount: 3
+          dimensionSelector: {}
+    # Default number of OrganizationMemberships allowed in this organization
+    - resourceType: "resourcemanager.miloapis.com/OrganizationMembership"
+      buckets:
+        - amount: 20
           dimensionSelector: {}

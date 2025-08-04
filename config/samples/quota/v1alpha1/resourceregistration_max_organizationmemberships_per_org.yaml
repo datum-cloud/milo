@@ -1,7 +1,7 @@
 apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceRegistration
 metadata:
-  name: organization-project-registration
+  name: organization-organization-membership-registration
 spec:
   ownerTypeRef:
     apiGroup: resourcemanager.miloapis.com
@@ -9,13 +9,13 @@ spec:
   # Entity type for countable resources like projects
   type: "Entity"
   # Fully qualified name of the resource type being registered
-  resourceType: "resourcemanager.miloapis.com/Project"
+  resourceType: "resourcemanager.miloapis.com/OrganizationMembership"
   # Description of the quota limit for the resource type
-  description: "Maximum number of projects that can be created within an organization."
-  # The singular form of the base unit of measurement for the resource
-  baseUnit: "Project"
-  # The pluralized form of the unit of measurement UI will display to users
-  displayUnit: "Projects"
+  description: "Maximum number of OrganizationMembership resources that can be created within an Organization."
+  # The base unit of measurement for the resource
+  baseUnit: "OrganizationMembership"
+  # The pluralized unit of measurement UI will display to users
+  displayUnit: "Organization Memberships"
   # Defines how to convert between the base unit and the display unit
   # Formula: baseValue / unitConversionFactor = displayValue
   unitConversionFactor: 1
