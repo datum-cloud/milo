@@ -26,5 +26,4 @@ metadata:
 spec:
   userRef:
     name: "john-doe"
-  timezone: "America/New_York"
   theme: "dark" 
