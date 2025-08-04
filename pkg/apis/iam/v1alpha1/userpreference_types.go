@@ -9,7 +9,6 @@ import (
 // UserPreference is the Schema for the userpreferences API
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="User",type="string",JSONPath=".spec.userRef.name"
-// +kubebuilder:printcolumn:name="Timezone",type="string",JSONPath=".spec.timezone"
 // +kubebuilder:printcolumn:name="Theme",type="string",JSONPath=".spec.theme"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
@@ -27,12 +26,6 @@ type UserPreferenceSpec struct {
 	// Reference to the user these preferences belong to.
 	// +kubebuilder:validation:Required
 	UserRef UserReference `json:"userRef"`
-
-	// The user's timezone preference (e.g., "America/New_York", "Europe/London").
-	// This is only used for timestamp presentation in UIs and does not affect server-side processing.
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=America/New_York
-	Timezone string `json:"timezone,omitempty"`
 
 	// The user's theme preference.
 	// +kubebuilder:validation:Enum=light;dark;system

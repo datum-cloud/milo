@@ -5,5 +5,4 @@ metadata:
 spec:
   userRef:
     name: user-sample
-  timezone: "America/New_York"
   theme: "dark" 
