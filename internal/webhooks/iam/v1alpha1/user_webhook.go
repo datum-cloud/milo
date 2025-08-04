@@ -64,6 +64,11 @@ func (v *UserValidator) ValidateCreate(ctx context.Context, obj runtime.Object) 
 		return nil, fmt.Errorf("failed to create user preference: %w", err)
 	}
 
+	if err := v.createUserPreferencePolicyBinding(ctx, user); err != nil {
+		userlog.Error(err, "Failed to create user preference policy binding")
+		return nil, fmt.Errorf("failed to create user preference policy binding: %w", err)
+	}
+
 	return nil, nil
 }
 
@@ -135,6 +140,45 @@ func (v *UserValidator) createUserPreference(ctx context.Context, user *iamv1alp
 
 	if err := v.client.Create(ctx, userPreference); err != nil {
 		return fmt.Errorf("failed to create user preference resource: %w", err)
+	}
+
+	return nil
+}
+
+// createUserPreferencePolicyBinding creates a PolicyBinding for the user's UserPreference
+func (v *UserValidator) createUserPreferencePolicyBinding(ctx context.Context, user *iamv1alpha1.User) error {
+	userlog.Info("Attempting to create PolicyBinding for user preference", "user", user.Name)
+
+	// Build the PolicyBinding
+	policyBinding := &iamv1alpha1.PolicyBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("userpreference-self-manage-%s", user.Name),
+			Namespace: v.systemNamespace,
+		},
+		Spec: iamv1alpha1.PolicyBindingSpec{
+			RoleRef: iamv1alpha1.RoleReference{
+				Name:      "iam-user-preferences-manager",
+				Namespace: v.systemNamespace,
+			},
+			Subjects: []iamv1alpha1.Subject{
+				{
+					Kind: "User",
+					Name: user.Name,
+					UID:  string(user.GetUID()),
+				},
+			},
+			ResourceSelector: iamv1alpha1.ResourceSelector{
+				ResourceRef: &iamv1alpha1.ResourceReference{
+					APIGroup: iamv1alpha1.SchemeGroupVersion.Group,
+					Kind:     "UserPreference",
+					Name:     fmt.Sprintf("userpreference-%s", user.Name),
+				},
+			},
+		},
+	}
+
+	if err := v.client.Create(ctx, policyBinding); err != nil {
+		return fmt.Errorf("failed to create user preference policy binding resource: %w", err)
 	}
 
 	return nil
