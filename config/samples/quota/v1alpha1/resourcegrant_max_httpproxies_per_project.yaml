@@ -1,22 +1,20 @@
 apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceGrant
 metadata:
-  name: datum-max-projects-default-grant
-  # Organization namespace
-  namespace: organization-datum
+  name: datum-max-httpproxies-default-grant
+  namespace: datum-cloud
 spec:
   # Reference to the owner resource specific object instance.
   ownerInstanceRef:
-    kind: Organization
-    # Organization name
-    name: datum
+    kind: Project
+    name: datum-cloud
   # Flag to determine if this a default grant or one created in the Staff Portal.
   # Defaults to false.
   isDefault: true
   # List of allowances this grant contains
   allowances:
     # Default number of projects allowed in this organization
-    - resourceType: "resourcemanager.miloapis.com/Project"
+    - resourceType: "networking.miloapis.com/HTTPProxy"
       buckets:
         - amount: 5
           dimensionSelector: {}

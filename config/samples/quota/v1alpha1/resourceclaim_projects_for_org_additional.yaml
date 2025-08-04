@@ -1,7 +1,7 @@
 apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceClaim
 metadata:
-  name: datum-project-count-claim
+  name: datum-additional-projects-claim
   # Organization namespace
   namespace: organization-datum
 spec:
@@ -12,5 +12,5 @@ spec:
   requests:
     # Project entity count (must reference an active ResourceRegistration)
     - resourceType: "resourcemanager.miloapis.com/Project"
-      amount: 1
+      amount: 2
       dimensions: {}
