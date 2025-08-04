@@ -29,6 +29,7 @@ type UserPreferenceSpec struct {
 	UserRef UserReference `json:"userRef"`
 
 	// The user's timezone preference (e.g., "America/New_York", "Europe/London").
+	// This is only used for timestamp presentation in UIs and does not affect server-side processing.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=America/New_York
 	Timezone string `json:"timezone,omitempty"`
