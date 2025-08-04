@@ -9,3 +9,4 @@ resources:
   - userinvitation.yaml
   - protectedresource.yaml
   - policybinding.yaml
+  - userpreference.yaml

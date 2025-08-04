@@ -1,0 +1,19 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: userpreference-self-manage-binding
+  namespace: milo-system
+spec:
+  roleRef:
+    name: iam-user-preferences-manager
+    namespace: milo-system
+  subjects:
+    # This will be dynamically populated based on the userRef in the UserPreference resource
+    - kind: User
+      name: "${userRef.name}"  # This is a placeholder - the actual binding would be created per user
+  resourceSelector:
+    resourceRef:
+      apiGroup: "iam.miloapis.com"
+      kind: UserPreference
+      # The name would be dynamically set to match the user's preference resource
+      name: "userpreference-${userRef.name}" 
