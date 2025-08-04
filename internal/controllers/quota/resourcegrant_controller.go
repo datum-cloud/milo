@@ -9,6 +9,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -16,7 +17,7 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
-type ResourceGrantReconciler struct {
+type ResourceGrantController struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
@@ -24,13 +25,13 @@ type ResourceGrantReconciler struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
-
-func (r *ResourceGrantReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ResourceGrantController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	logger.Info("reconciling ResourceGrant!!!", "request", req, "NAME", req.Name, "NAMESPACE", req.Namespace, "NAMESPACEDNAME", req.NamespacedName)
 
 	// Fetch the ResourceGrant instance
 	var grant quotav1alpha1.ResourceGrant
-	if err := r.Get(ctx, req.NamespacedName, &grant); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &grant); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("ResourceGrant not found")
 			return ctrl.Result{}, nil
@@ -54,7 +55,7 @@ func (r *ResourceGrantReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 // updateResourceGrantStatus updates the status of the ResourceGrant
-func (r *ResourceGrantReconciler) updateResourceGrantStatus(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
+func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
 	logger := log.FromContext(ctx)
 
 	// Create a deep copy of the original status to compare against later
@@ -109,19 +110,19 @@ func (r *ResourceGrantReconciler) updateResourceGrantStatus(ctx context.Context,
 
 // validateResourceRegistrations validates that all resource types in the grant
 // have corresponding registrations.
-func (r *ResourceGrantReconciler) validateResourceRegistrationsForGrant(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
+func (r *ResourceGrantController) validateResourceRegistrationsForGrant(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
 	// Collect all unique resource type names from allowances to be passed into
 	// the ValidateResourceRegistrations function.
-	var resourceTypeNames []string
+	var resourceTypes []string
 	for _, allowance := range grant.Spec.Allowances {
-		resourceTypeNames = append(resourceTypeNames, allowance.ResourceTypeName)
+		resourceTypes = append(resourceTypes, allowance.ResourceType)
 	}
 
-	return ValidateResourceRegistrations(ctx, r.Client, resourceTypeNames)
+	return ValidateResourceRegistrations(ctx, r.Client, resourceTypes)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ResourceGrantReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ResourceGrantController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&quotav1alpha1.ResourceGrant{}).
 		Named("resource-grant").

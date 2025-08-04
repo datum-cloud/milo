@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -21,8 +23,8 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
-// EffectiveResourceGrantReconciler reconciles a EffectiveResourceGrant object
-type EffectiveResourceGrantReconciler struct {
+// EffectiveResourceGrantController reconciles a EffectiveResourceGrant object
+type EffectiveResourceGrantController struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
@@ -32,17 +34,17 @@ type EffectiveResourceGrantReconciler struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceclaims,verbs=get;list;watch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=allowancebuckets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=allowancebuckets/status,verbs=get;update;patch
 
 // Reconcile manages the lifecycle of EffectiveResourceGrant objects.
-func (r *EffectiveResourceGrantReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *EffectiveResourceGrantController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// Get the object that triggered this reconciliation
 	var effectiveGrant quotav1alpha1.EffectiveResourceGrant
 	if err := r.Get(ctx, req.NamespacedName, &effectiveGrant); err != nil {
 		if errors.IsNotFound(err) {
-			// EffectiveResourceGrant doesn't exist - check if we should create it
-			// This can happen when a ResourceGrant references a new resource type
+			// EffectiveResourceGrant doesn't exist - check if it should be created
 			return r.createEffectiveResourceGrants(ctx, req.NamespacedName)
 		}
 		logger.Error(err, "Failed to get EffectiveResourceGrant")
@@ -77,36 +79,50 @@ func (r *EffectiveResourceGrantReconciler) Reconcile(ctx context.Context, req ct
 		readyCondition.Message = fmt.Sprintf("Failed to create AllowanceBuckets: %v", err)
 		apimeta.SetStatusCondition(&effectiveGrant.Status.Conditions, *readyCondition)
 
-		if err := r.Status().Update(ctx, &effectiveGrant); err != nil {
-			logger.Error(err, "Failed to update EffectiveResourceGrant status after bucket creation failure")
+		if updateErr := r.Status().Update(ctx, &effectiveGrant); updateErr != nil {
+			if !errors.IsConflict(updateErr) {
+				logger.Error(updateErr, "Failed to update EffectiveResourceGrant status after bucket creation failure")
+			}
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to create AllowanceBuckets: %w", err)
 	}
 
-	// Aggregate total limit from all active ResourceGrants in the same namespace with matching resourceTypeName
-	totalLimit, err := r.aggregateTotalLimit(ctx, effectiveGrant.Namespace, effectiveGrant.Spec.ResourceTypeName)
+	// Aggregate total limit from all active ResourceGrants in the same namespace with matching resourceType and ownerInstanceRef
+	totalLimit, contributingGrantRefs, err := r.aggregateTotalLimit(ctx, effectiveGrant.Namespace, effectiveGrant.Spec.ResourceType, effectiveGrant.Spec.OwnerInstanceRef)
 	if err != nil {
 		readyCondition.Status = metav1.ConditionFalse
 		readyCondition.Reason = quotav1alpha1.EffectiveResourceGrantAggregationFailedReason
 		readyCondition.Message = fmt.Sprintf("Failed to aggregate total limit: %v", err)
 		apimeta.SetStatusCondition(&effectiveGrant.Status.Conditions, *readyCondition)
 
-		if err := r.Status().Update(ctx, &effectiveGrant); err != nil {
-			logger.Error(err, "Failed to update EffectiveResourceGrant status after aggregation failure")
+		if updateErr := r.Status().Update(ctx, &effectiveGrant); updateErr != nil {
+			if !errors.IsConflict(updateErr) {
+				logger.Error(updateErr, "Failed to update EffectiveResourceGrant status after aggregation failure")
+			}
 		}
+
+		// If a race condition is detected, requeue with a short delay to avoid
+		// excessive retries.
+		if strings.Contains(err.Error(), "no contributing ResourceGrants found") {
+			logger.Info("Requeuing due to timing issue with ResourceGrant activation", "retryAfter", "5s")
+			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+		}
+
 		return ctrl.Result{}, fmt.Errorf("failed to aggregate total limit: %w", err)
 	}
 
-	// Calculate total allocated from all owned AllowanceBuckets
-	totalAllocated, bucketRefs, err := r.calculateTotalAllocated(ctx, &effectiveGrant)
+	// Calculate total allocated from all granted ResourceClaims
+	totalAllocated, contributingClaimRefs, err := r.calculateTotalAllocated(ctx, &effectiveGrant)
 	if err != nil {
 		readyCondition.Status = metav1.ConditionFalse
 		readyCondition.Reason = quotav1alpha1.EffectiveResourceGrantAggregationFailedReason
 		readyCondition.Message = fmt.Sprintf("Failed to calculate total allocated: %v", err)
 		apimeta.SetStatusCondition(&effectiveGrant.Status.Conditions, *readyCondition)
 
-		if err := r.Status().Update(ctx, &effectiveGrant); err != nil {
-			logger.Error(err, "Failed to update EffectiveResourceGrant status after calculation failure")
+		if updateErr := r.Status().Update(ctx, &effectiveGrant); updateErr != nil {
+			if !errors.IsConflict(updateErr) {
+				logger.Error(updateErr, "Failed to update EffectiveResourceGrant status after calculation failure")
+			}
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to calculate total allocated: %w", err)
 	}
@@ -115,33 +131,42 @@ func (r *EffectiveResourceGrantReconciler) Reconcile(ctx context.Context, req ct
 	effectiveGrant.Status.TotalLimit = totalLimit
 	effectiveGrant.Status.TotalAllocated = totalAllocated
 	effectiveGrant.Status.Available = totalLimit - totalAllocated
-	effectiveGrant.Status.AllowanceBucketRefs = bucketRefs
+	effectiveGrant.Status.ContributingGrantRefs = contributingGrantRefs
+	effectiveGrant.Status.ContributingClaimRefs = contributingClaimRefs
 
 	// Set ready condition to true
 	readyCondition.Status = metav1.ConditionTrue
 	readyCondition.Reason = quotav1alpha1.EffectiveResourceGrantAggregationCompleteReason
-	readyCondition.Message = "Aggregation completed successfully"
+	readyCondition.Message = "EffectiveResourceGrant aggregation completed successfully"
 
 	apimeta.SetStatusCondition(&effectiveGrant.Status.Conditions, *readyCondition)
 
 	// Only update the status if something has actually changed
 	if !equality.Semantic.DeepEqual(originalStatus, &effectiveGrant.Status) {
 		if err := r.Status().Update(ctx, &effectiveGrant); err != nil {
+			if errors.IsConflict(err) {
+				// Conflict errors are expected when multiple reconciliation loops run simultaneously
+				// This is not a fatal error - just requeue to retry with the latest version
+				logger.Info("Conflict updating EffectiveResourceGrant status, will retry", "error", err)
+				return ctrl.Result{Requeue: true}, nil
+			}
 			logger.Error(err, "Failed to update EffectiveResourceGrant status")
 			return ctrl.Result{}, err
 		}
 		logger.Info("Successfully updated EffectiveResourceGrant",
 			"totalLimit", totalLimit,
 			"totalAllocated", totalAllocated,
-			"available", totalLimit-totalAllocated)
+			"available", totalLimit-totalAllocated,
+			"contributingGrants", len(contributingGrantRefs),
+			"contributingClaims", len(contributingClaimRefs))
 	}
 
 	return ctrl.Result{}, nil
 }
 
 // Handles the case where an EffectiveResourceGrant doesn't exist but should be
-// created based on existing ResourceGrants
-func (r *EffectiveResourceGrantReconciler) createEffectiveResourceGrants(ctx context.Context, namespacedName types.NamespacedName) (ctrl.Result, error) {
+// created based on the ResourceGrant that triggered this reconciliation.
+func (r *EffectiveResourceGrantController) createEffectiveResourceGrants(ctx context.Context, namespacedName types.NamespacedName) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// Extract resource type name from the EffectiveResourceGrant name
@@ -154,7 +179,7 @@ func (r *EffectiveResourceGrantReconciler) createEffectiveResourceGrants(ctx con
 	// Check if any ResourceGrant would create this EffectiveResourceGrant
 	for _, grant := range grants.Items {
 		for _, allowance := range grant.Spec.Allowances {
-			expectedName := r.generateEffectiveResourceGrantName(grant.Namespace, allowance.ResourceTypeName)
+			expectedName := r.generateEffectiveResourceGrantName(grant.Namespace, allowance.ResourceType, grant.Spec.OwnerInstanceRef)
 			if expectedName == namespacedName.Name {
 				// Found a matching ResourceGrant - create the EffectiveResourceGrant
 				effectiveGrant := quotav1alpha1.EffectiveResourceGrant{
@@ -163,7 +188,19 @@ func (r *EffectiveResourceGrantReconciler) createEffectiveResourceGrants(ctx con
 						Namespace: namespacedName.Namespace,
 					},
 					Spec: quotav1alpha1.EffectiveResourceGrantSpec{
-						ResourceTypeName: allowance.ResourceTypeName,
+						ResourceType: allowance.ResourceType,
+						OwnerInstanceRef: quotav1alpha1.OwnerInstanceRef{
+							Kind: grant.Spec.OwnerInstanceRef.Kind,
+							Name: grant.Spec.OwnerInstanceRef.Name,
+						},
+					},
+					Status: quotav1alpha1.EffectiveResourceGrantStatus{
+						TotalLimit:            0,
+						TotalAllocated:        0,
+						Available:             0,
+						ContributingGrantRefs: make([]quotav1alpha1.ContributingResourceRef, 0),
+						ContributingClaimRefs: make([]quotav1alpha1.ContributingResourceRef, 0),
+						Conditions:            make([]metav1.Condition, 0),
 					},
 				}
 
@@ -182,9 +219,8 @@ func (r *EffectiveResourceGrantReconciler) createEffectiveResourceGrants(ctx con
 	return ctrl.Result{}, nil
 }
 
-// ensureRequiredAllowanceBuckets ensures that all necessary AllowanceBuckets exist
-// for granted ResourceClaims affecting this EffectiveResourceGrant
-func (r *EffectiveResourceGrantReconciler) createAllowanceBucketsForGrantedClaims(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant) error {
+// createAllowanceBucketsForGrantedClaims creates AllowanceBuckets for all granted ResourceClaims.
+func (r *EffectiveResourceGrantController) createAllowanceBucketsForGrantedClaims(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant) error {
 	// Ensure buckets for ResourceClaims
 	var claims quotav1alpha1.ResourceClaimList
 	if err := r.List(ctx, &claims, client.InNamespace(effectiveGrant.Namespace)); err != nil {
@@ -198,12 +234,12 @@ func (r *EffectiveResourceGrantReconciler) createAllowanceBucketsForGrantedClaim
 		}
 
 		for _, request := range claim.Spec.Requests {
-			if request.ResourceTypeName == effectiveGrant.Spec.ResourceTypeName {
-				if err := r.createAllowanceBucket(ctx, effectiveGrant, request.ResourceTypeName, request.Dimensions); err != nil {
+			if request.ResourceType == effectiveGrant.Spec.ResourceType {
+				if err := r.createAllowanceBucket(ctx, effectiveGrant, request.ResourceType, request.Dimensions); err != nil {
 					return err
 				}
 				// Recalculate bucket allocation for this request
-				if err := r.recalculateBucketAllocation(ctx, effectiveGrant, request.ResourceTypeName, request.Dimensions); err != nil {
+				if err := r.recalculateBucketAllocation(ctx, effectiveGrant, request.ResourceType, request.Dimensions); err != nil {
 					return err
 				}
 			}
@@ -213,62 +249,131 @@ func (r *EffectiveResourceGrantReconciler) createAllowanceBucketsForGrantedClaim
 	return nil
 }
 
-// aggregateTotalLimit sums allowances from all active ResourceGrants with matching namespace and resourceTypeName
-func (r *EffectiveResourceGrantReconciler) aggregateTotalLimit(ctx context.Context, namespace, resourceTypeName string) (int64, error) {
+// aggregateTotalLimit sums allowances from all active ResourceGrants with matching namespace, resourceType, and ownerInstanceRef
+func (r *EffectiveResourceGrantController) aggregateTotalLimit(ctx context.Context, namespace, resourceType string, ownerInstanceRef quotav1alpha1.OwnerInstanceRef) (int64, []quotav1alpha1.ContributingResourceRef, error) {
+	logger := log.FromContext(ctx)
+
 	var grants quotav1alpha1.ResourceGrantList
 	if err := r.List(ctx, &grants, client.InNamespace(namespace)); err != nil {
-		return 0, fmt.Errorf("failed to list ResourceGrants: %w", err)
+		return 0, []quotav1alpha1.ContributingResourceRef{}, fmt.Errorf("failed to list ResourceGrants: %w", err)
 	}
 
+	logger.Info("Aggregating total limit",
+		"namespace", namespace,
+		"resourceType", resourceType,
+		"ownerInstanceRef", ownerInstanceRef,
+		"totalResourceGrants", len(grants.Items))
+
 	var totalLimit int64
+	contributingGrantRefs := make([]quotav1alpha1.ContributingResourceRef, 0)
+
 	for _, grant := range grants.Items {
+		logger.Info("Checking ResourceGrant",
+			"grantName", grant.Name,
+			"grantOwnerRef", grant.Spec.OwnerInstanceRef,
+			"isActive", r.isResourceGrantActive(&grant),
+			"conditions", grant.Status.Conditions)
+
 		// Check if grant is active
 		if !r.isResourceGrantActive(&grant) {
+			logger.Info("Skipping inactive ResourceGrant", "grantName", grant.Name)
 			continue
 		}
 
-		// Sum allowances for matching resource types
+		// Only consider grants with matching OwnerInstanceRef
+		if grant.Spec.OwnerInstanceRef.Kind != ownerInstanceRef.Kind ||
+			grant.Spec.OwnerInstanceRef.Name != ownerInstanceRef.Name {
+			logger.Info("Skipping ResourceGrant with non-matching owner",
+				"grantName", grant.Name,
+				"grantOwner", grant.Spec.OwnerInstanceRef,
+				"expectedOwner", ownerInstanceRef)
+			continue
+		}
+
+		// Check if this grant has allowances for the matching resource type
+		var hasMatchingResourceType bool
 		for _, allowance := range grant.Spec.Allowances {
-			if allowance.ResourceTypeName == resourceTypeName {
+			if allowance.ResourceType == resourceType {
+				hasMatchingResourceType = true
 				for _, bucket := range allowance.Buckets {
 					totalLimit += bucket.Amount
 				}
 			}
 		}
+
+		// If this grant contributed to the total limit, add it to contributing refs
+		if hasMatchingResourceType {
+			logger.Info("Found contributing ResourceGrant",
+				"grantName", grant.Name,
+				"generation", grant.Generation)
+			contributingGrantRefs = append(contributingGrantRefs, quotav1alpha1.ContributingResourceRef{
+				Name:               grant.Name,
+				ObservedGeneration: grant.Generation,
+			})
+		} else {
+			logger.Info("ResourceGrant has no matching resource type",
+				"grantName", grant.Name,
+				"expectedResourceType", resourceType)
+		}
 	}
 
-	return totalLimit, nil
+	logger.Info("Aggregation complete",
+		"totalLimit", totalLimit,
+		"contributingGrants", len(contributingGrantRefs))
+
+	// Since EffectiveResourceGrants are created when ResourceGrants are activated,
+	// we should always find at least one contributing ResourceGrant
+	if len(contributingGrantRefs) == 0 {
+		logger.Info("No contributing ResourceGrants found - this indicates a timing issue where the ResourceGrant hasn't been marked as active yet")
+		return 0, contributingGrantRefs, fmt.Errorf("no contributing ResourceGrants found - ResourceGrant may not be active yet")
+	}
+
+	return totalLimit, contributingGrantRefs, nil
 }
 
-// calculateTotalAllocated sums allocated amounts from all AllowanceBuckets owned by this EffectiveResourceGrant
-func (r *EffectiveResourceGrantReconciler) calculateTotalAllocated(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant) (int64, []quotav1alpha1.AllowanceBucketRef, error) {
-	var buckets quotav1alpha1.AllowanceBucketList
-	if err := r.List(ctx, &buckets, client.InNamespace(effectiveGrant.Namespace)); err != nil {
-		return 0, nil, fmt.Errorf("failed to list AllowanceBuckets: %w", err)
+// calculateTotalAllocated sums allocated amounts from all granted ResourceClaims for this resource type and owner instance
+func (r *EffectiveResourceGrantController) calculateTotalAllocated(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant) (int64, []quotav1alpha1.ContributingResourceRef, error) {
+	var claims quotav1alpha1.ResourceClaimList
+	if err := r.List(ctx, &claims, client.InNamespace(effectiveGrant.Namespace)); err != nil {
+		return 0, []quotav1alpha1.ContributingResourceRef{}, fmt.Errorf("failed to list ResourceClaims: %w", err)
 	}
 
 	var totalAllocated int64
-	var bucketRefs []quotav1alpha1.AllowanceBucketRef
+	contributingClaimRefs := make([]quotav1alpha1.ContributingResourceRef, 0)
 
-	for _, bucket := range buckets.Items {
-		// Only count buckets for this resource type that are owned by this EffectiveResourceGrant
-		if bucket.Spec.ResourceTypeName == effectiveGrant.Spec.ResourceTypeName &&
-			bucket.Spec.OwnerRef.Name == effectiveGrant.Name {
-			totalAllocated += bucket.Status.Allocated
-			bucketRefs = append(bucketRefs, quotav1alpha1.AllowanceBucketRef{
-				Name:               bucket.Name,
-				ObservedGeneration: bucket.Status.ObservedGeneration,
-				Allocated:          bucket.Status.Allocated,
+	for _, claim := range claims.Items {
+		// Only consider granted claims
+		if !r.isResourceClaimGranted(&claim) {
+			continue
+		}
+
+		// Check if this claim has any requests for the matching resource type
+		var hasMatchingRequest bool
+		var claimTotal int64
+
+		for _, request := range claim.Spec.Requests {
+			if request.ResourceType == effectiveGrant.Spec.ResourceType {
+				hasMatchingRequest = true
+				claimTotal += request.Amount
+			}
+		}
+
+		// If this claim contributed to the total allocated, add it to contributing refs
+		if hasMatchingRequest {
+			totalAllocated += claimTotal
+			contributingClaimRefs = append(contributingClaimRefs, quotav1alpha1.ContributingResourceRef{
+				Name:               claim.Name,
+				ObservedGeneration: claim.Generation,
 			})
 		}
 	}
 
-	return totalAllocated, bucketRefs, nil
+	return totalAllocated, contributingClaimRefs, nil
 }
 
 // isResourceGrantActive checks if a ResourceGrant has an Active condition with
 // a status of True
-func (r *EffectiveResourceGrantReconciler) isResourceGrantActive(grant *quotav1alpha1.ResourceGrant) bool {
+func (r *EffectiveResourceGrantController) isResourceGrantActive(grant *quotav1alpha1.ResourceGrant) bool {
 	for _, condition := range grant.Status.Conditions {
 		if condition.Type == quotav1alpha1.ResourceGrantActive && condition.Status == metav1.ConditionTrue {
 			return true
@@ -278,7 +383,7 @@ func (r *EffectiveResourceGrantReconciler) isResourceGrantActive(grant *quotav1a
 }
 
 // Determines if a ResourceClaim has been granted
-func (r *EffectiveResourceGrantReconciler) isResourceClaimGranted(claim *quotav1alpha1.ResourceClaim) bool {
+func (r *EffectiveResourceGrantController) isResourceClaimGranted(claim *quotav1alpha1.ResourceClaim) bool {
 	for _, condition := range claim.Status.Conditions {
 		if condition.Type == quotav1alpha1.ResourceClaimGranted && condition.Status == metav1.ConditionTrue {
 			return true
@@ -287,11 +392,12 @@ func (r *EffectiveResourceGrantReconciler) isResourceClaimGranted(claim *quotav1
 	return false
 }
 
-// Creates an AllowanceBucket if it doesn't exist
-func (r *EffectiveResourceGrantReconciler) createAllowanceBucket(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant, resourceTypeName string, dimensions map[string]string) error {
+// Creates an AllowanceBucket when a new ResourceClaim is granted.
+func (r *EffectiveResourceGrantController) createAllowanceBucket(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant, resourceType string, dimensions map[string]string) error {
 	log := log.FromContext(ctx)
 
-	bucketName := r.generateAllowanceBucketName(effectiveGrant.Namespace, resourceTypeName, dimensions)
+	log.Info("Running createAllowanceBucket", "effectiveGrant", effectiveGrant, "resourceType", resourceType, "dimensions", dimensions)
+	bucketName := r.generateAllowanceBucketName(effectiveGrant.Namespace, resourceType, dimensions)
 
 	var bucket quotav1alpha1.AllowanceBucket
 	err := r.Get(ctx, types.NamespacedName{
@@ -300,6 +406,8 @@ func (r *EffectiveResourceGrantReconciler) createAllowanceBucket(ctx context.Con
 	}, &bucket)
 
 	if errors.IsNotFound(err) {
+		log.Info("Creating new AllowanceBucket", "effectiveGrant", effectiveGrant, "resourceType", resourceType, "dimensions", dimensions)
+
 		// Create new AllowanceBucket
 		bucket = quotav1alpha1.AllowanceBucket{
 			ObjectMeta: metav1.ObjectMeta{
@@ -307,16 +415,16 @@ func (r *EffectiveResourceGrantReconciler) createAllowanceBucket(ctx context.Con
 				Namespace: effectiveGrant.Namespace,
 			},
 			Spec: quotav1alpha1.AllowanceBucketSpec{
-				OwnerRef: quotav1alpha1.OwnerRef{
-					APIGroup: "quota.miloapis.com",
-					Kind:     "EffectiveResourceGrant",
-					Name:     effectiveGrant.Name,
+				OwnerInstanceRef: quotav1alpha1.OwnerInstanceRef{
+					Kind: effectiveGrant.Kind,
+					Name: effectiveGrant.Name,
 				},
-				ResourceTypeName: resourceTypeName,
-				Dimensions:       dimensions,
+				ResourceType: resourceType,
+				Dimensions:   dimensions,
 			},
 			Status: quotav1alpha1.AllowanceBucketStatus{
-				Allocated: 0,
+				Allocated:             0,
+				ContributingClaimRefs: make([]quotav1alpha1.ContributingClaimRef, 0),
 			},
 		}
 
@@ -333,9 +441,9 @@ func (r *EffectiveResourceGrantReconciler) createAllowanceBucket(ctx context.Con
 }
 
 // Recalculates the entire allocation for a bucket by scanning all claims.
-func (r *EffectiveResourceGrantReconciler) recalculateBucketAllocation(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant, resourceTypeName string, dimensions map[string]string) error {
+func (r *EffectiveResourceGrantController) recalculateBucketAllocation(ctx context.Context, effectiveGrant *quotav1alpha1.EffectiveResourceGrant, resourceType string, dimensions map[string]string) error {
 	log := log.FromContext(ctx)
-	bucketName := r.generateAllowanceBucketName(effectiveGrant.Namespace, resourceTypeName, dimensions)
+	bucketName := r.generateAllowanceBucketName(effectiveGrant.Namespace, resourceType, dimensions)
 
 	var bucket quotav1alpha1.AllowanceBucket
 	if err := r.Get(ctx, types.NamespacedName{Name: bucketName, Namespace: effectiveGrant.Namespace}, &bucket); err != nil {
@@ -347,13 +455,22 @@ func (r *EffectiveResourceGrantReconciler) recalculateBucketAllocation(ctx conte
 	}
 
 	originalAllocated := bucket.Status.Allocated
+	originalContributingRefs := bucket.Status.ContributingClaimRefs
 
 	// Recalculate allocation from scratch
 	var newAllocated int64
+	newContributingRefs := make([]quotav1alpha1.ContributingClaimRef, 0)
+
 	var allClaims quotav1alpha1.ResourceClaimList
 	if err := r.List(ctx, &allClaims, client.InNamespace(effectiveGrant.Namespace)); err != nil {
 		return fmt.Errorf("failed to list ResourceClaims for bucket recalculation: %w", err)
 	}
+
+	log.Info("Recalculating bucket allocation",
+		"bucketName", bucketName,
+		"resourceType", resourceType,
+		"dimensions", dimensions,
+		"totalClaims", len(allClaims.Items))
 
 	for _, claim := range allClaims.Items {
 		// Only consider granted claims
@@ -361,28 +478,64 @@ func (r *EffectiveResourceGrantReconciler) recalculateBucketAllocation(ctx conte
 			continue
 		}
 
+		// Check if this claim has any requests that match this bucket
+		var claimContributesToBucket bool
+
 		// Find requests in the claim that match this bucket
 		for _, request := range claim.Spec.Requests {
-			if request.ResourceTypeName == resourceTypeName &&
+			if request.ResourceType == resourceType &&
 				r.dimensionsMatch(request.Dimensions, dimensions) {
 				newAllocated += request.Amount
+				claimContributesToBucket = true
 			}
+		}
+
+		// If this claim contributed to the bucket, add it to the contributing refs
+		if claimContributesToBucket {
+			log.V(1).Info("Found contributing ResourceClaim for bucket",
+				"bucketName", bucketName,
+				"claimName", claim.Name,
+				"generation", claim.Generation)
+			newContributingRefs = append(newContributingRefs, quotav1alpha1.ContributingClaimRef{
+				Name:                   claim.Name,
+				LastObservedGeneration: claim.Generation,
+			})
 		}
 	}
 
-	if newAllocated != originalAllocated {
+	log.Info("Bucket recalculation complete",
+		"bucketName", bucketName,
+		"newAllocated", newAllocated,
+		"contributingClaims", len(newContributingRefs))
+
+	// Check if anything changed (allocation amount or contributing claims)
+	contributingRefsChanged := !r.contributingClaimRefsEqual(originalContributingRefs, newContributingRefs)
+
+	if newAllocated != originalAllocated || contributingRefsChanged {
 		bucket.Status.Allocated = newAllocated
+		bucket.Status.ContributingClaimRefs = newContributingRefs
 		bucket.Status.ObservedGeneration = bucket.Generation
+
 		if err := r.Status().Update(ctx, &bucket); err != nil {
-			return fmt.Errorf("failed to update AllowanceBucket status for %s: %w", bucketName, err)
+			if errors.IsConflict(err) {
+				// Conflict is not fatal for bucket updates - another reconciliation will handle it
+				log.Info("Conflict updating AllowanceBucket status, skipping", "bucket", bucketName, "error", err)
+			} else {
+				return fmt.Errorf("failed to update AllowanceBucket status for %s: %w", bucketName, err)
+			}
 		}
+
+		log.Info("Updated AllowanceBucket status",
+			"bucketName", bucketName,
+			"allocated", newAllocated,
+			"contributingClaims", len(newContributingRefs))
 	}
 
 	return nil
 }
 
 // dimensionsMatch compares two dimension maps for equality.
-func (r *EffectiveResourceGrantReconciler) dimensionsMatch(d1, d2 map[string]string) bool {
+func (r *EffectiveResourceGrantController) dimensionsMatch(d1, d2 map[string]string) bool {
 	if len(d1) != len(d2) {
 		return false
 	}
@@ -394,23 +547,49 @@ func (r *EffectiveResourceGrantReconciler) dimensionsMatch(d1, d2 map[string]str
 	return true
 }
 
+// contributingClaimRefsEqual compares two slices of ContributingClaimRef for equality.
+func (r *EffectiveResourceGrantController) contributingClaimRefsEqual(refs1, refs2 []quotav1alpha1.ContributingClaimRef) bool {
+	if len(refs1) != len(refs2) {
+		return false
+	}
+
+	// Create maps for O(n) comparison instead of O(n²)
+	map1 := make(map[string]int64)
+	map2 := make(map[string]int64)
+
+	for _, ref := range refs1 {
+		map1[ref.Name] = ref.LastObservedGeneration
+	}
+
+	for _, ref := range refs2 {
+		map2[ref.Name] = ref.LastObservedGeneration
+	}
+
+	// Compare the maps
+	for name, gen1 := range map1 {
+		if gen2, exists := map2[name]; !exists || gen1 != gen2 {
+			return false
+		}
+	}
+
+	return true
+}
+
 // generateEffectiveResourceGrantName creates a deterministic name for EffectiveResourceGrant
-func (r *EffectiveResourceGrantReconciler) generateEffectiveResourceGrantName(namespace, resourceTypeName string) string {
-	// Create a hash of the resourceTypeName to ensure valid k8s names
-	// e.g., "resourcemanager.miloapis.com/Project" -> hash
-	input := fmt.Sprintf("%s%s", namespace, resourceTypeName)
+func (r *EffectiveResourceGrantController) generateEffectiveResourceGrantName(namespace, resourceType string, ownerRef quotav1alpha1.OwnerInstanceRef) string {
+	input := fmt.Sprintf("%s%s%s%s", namespace, resourceType, ownerRef.Kind, ownerRef.Name)
 	hash := sha256.Sum256([]byte(input))
 	// Use first 8 chars of hash + suffix for readability and uniqueness
 	return fmt.Sprintf("erg-%x", hash)[:12]
 }
 
 // generateAllowanceBucketName creates a deterministic name for AllowanceBucket using hash
-func (r *EffectiveResourceGrantReconciler) generateAllowanceBucketName(namespace, resourceTypeName string, dimensions map[string]string) string {
+func (r *EffectiveResourceGrantController) generateAllowanceBucketName(namespace, resourceType string, dimensions map[string]string) string {
 	// Serialize dimensions for consistent hashing
 	dimensionsJson, _ := json.Marshal(dimensions)
 
-	// Create hash of namespace + resourceTypeName + dimensions
-	input := fmt.Sprintf("%s%s%s", namespace, resourceTypeName, string(dimensionsJson))
+	// Create hash of namespace + resourceType + dimensions
+	input := fmt.Sprintf("%s%s%s", namespace, resourceType, string(dimensionsJson))
 	hash := sha256.Sum256([]byte(input))
 
 	// Return first 12 characters of hex hash for readability
@@ -419,7 +598,7 @@ func (r *EffectiveResourceGrantReconciler) generateAllowanceBucketName(namespace
 
 // SetupWithManager sets up the controller with the Manager.
 // Watches both ResourceGrant and ResourceClaim objects.
-func (r *EffectiveResourceGrantReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *EffectiveResourceGrantController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&quotav1alpha1.EffectiveResourceGrant{}).
 		Watches(
@@ -430,7 +609,7 @@ func (r *EffectiveResourceGrantReconciler) SetupWithManager(mgr ctrl.Manager) er
 
 				// Find all EffectiveResourceGrants affected by this ResourceGrant
 				for _, allowance := range grant.Spec.Allowances {
-					effectiveGrantName := r.generateEffectiveResourceGrantName(grant.Namespace, allowance.ResourceTypeName)
+					effectiveGrantName := r.generateEffectiveResourceGrantName(grant.Namespace, allowance.ResourceType, grant.Spec.OwnerInstanceRef)
 					requests = append(requests, reconcile.Request{
 						NamespacedName: types.NamespacedName{
 							Name:      effectiveGrantName,
@@ -449,14 +628,33 @@ func (r *EffectiveResourceGrantReconciler) SetupWithManager(mgr ctrl.Manager) er
 				var requests []reconcile.Request
 
 				// Find all EffectiveResourceGrants affected by this ResourceClaim
+				var grants quotav1alpha1.ResourceGrantList
+				if err := r.List(ctx, &grants, client.InNamespace(claim.Namespace)); err != nil {
+					return requests
+				}
+
+				// Create a map to deduplicate requests
+				requestMap := make(map[string]bool)
+
 				for _, request := range claim.Spec.Requests {
-					effectiveGrantName := r.generateEffectiveResourceGrantName(claim.Namespace, request.ResourceTypeName)
-					requests = append(requests, reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      effectiveGrantName,
-							Namespace: claim.Namespace,
-						},
-					})
+					// Find all ResourceGrants that provide quota for this resourceType
+					for _, grant := range grants.Items {
+						for _, allowance := range grant.Spec.Allowances {
+							if allowance.ResourceType == request.ResourceType {
+								effectiveGrantName := r.generateEffectiveResourceGrantName(claim.Namespace, request.ResourceType, grant.Spec.OwnerInstanceRef)
+								requestKey := fmt.Sprintf("%s/%s", claim.Namespace, effectiveGrantName)
+								if !requestMap[requestKey] {
+									requestMap[requestKey] = true
+									requests = append(requests, reconcile.Request{
+										NamespacedName: types.NamespacedName{
+											Name:      effectiveGrantName,
+											Namespace: claim.Namespace,
+										},
+									})
+								}
+							}
+						}
+					}
 				}
 
 				return requests
@@ -466,13 +664,13 @@ func (r *EffectiveResourceGrantReconciler) SetupWithManager(mgr ctrl.Manager) er
 			&quotav1alpha1.AllowanceBucket{},
 			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 				bucket := obj.(*quotav1alpha1.AllowanceBucket)
-				if bucket.Spec.OwnerRef.Name == "" {
+				if bucket.Spec.OwnerInstanceRef.Name == "" {
 					return nil
 				}
 				// When a bucket's allocation changes, trigger a reconcile for the owning EffectiveResourceGrant
 				return []reconcile.Request{
 					{NamespacedName: types.NamespacedName{
-						Name:      bucket.Spec.OwnerRef.Name,
+						Name:      bucket.Spec.OwnerInstanceRef.Name,
 						Namespace: bucket.Namespace,
 					}},
 				}

@@ -16,17 +16,17 @@ import (
 // have corresponding active ResourceRegistrations in the cluster. This is
 // reused between the ResourceClaim, ResourceGrant, and DefaultResourceGrant
 // controllers.
-func ValidateResourceRegistrations(ctx context.Context, c client.Client, resourceTypeNames []string) error {
+func ValidateResourceRegistrations(ctx context.Context, c client.Client, resourceTypes []string) error {
 	logger := log.FromContext(ctx)
 
-	if len(resourceTypeNames) == 0 {
+	if len(resourceTypes) == 0 {
 		return nil
 	}
 
 	// Create a set of unique resource type names
 	resourceTypeSet := make(map[string]bool)
-	for _, resourceTypeName := range resourceTypeNames {
-		resourceTypeSet[resourceTypeName] = true
+	for _, resourceType := range resourceTypes {
+		resourceTypeSet[resourceType] = true
 	}
 
 	// List all ResourceRegistrations in the cluster (non-namespaced)
@@ -35,18 +35,18 @@ func ValidateResourceRegistrations(ctx context.Context, c client.Client, resourc
 		return fmt.Errorf("failed to list ResourceRegistrations: %w", err)
 	}
 
-	// Create a map of resourceTypeName to registration
+	// Create a map of resourceType to registration
 	registrationMap := make(map[string]*quotav1alpha1.ResourceRegistration)
 	for i := range registrationList.Items {
 		registration := &registrationList.Items[i]
-		registrationMap[registration.Spec.ResourceTypeName] = registration
+		registrationMap[registration.Spec.ResourceType] = registration
 	}
 
 	// Check each resource type for a corresponding registration
-	for resourceTypeName := range resourceTypeSet {
-		registration, found := registrationMap[resourceTypeName]
+	for resourceType := range resourceTypeSet {
+		registration, found := registrationMap[resourceType]
 		if !found {
-			return fmt.Errorf("ResourceRegistration not found for resource type %q", resourceTypeName)
+			return fmt.Errorf("ResourceRegistration not found for resource type %q", resourceType)
 		}
 
 		// Ensure the registration is active
@@ -57,7 +57,7 @@ func ValidateResourceRegistrations(ctx context.Context, c client.Client, resourc
 
 		logger.Info("Validated ResourceRegistration",
 			"registrationName", registration.Name,
-			"resourceTypeName", resourceTypeName)
+			"resourceType", resourceType)
 	}
 
 	return nil
