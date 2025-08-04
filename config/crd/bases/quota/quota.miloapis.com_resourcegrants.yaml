@@ -44,13 +44,7 @@ spec:
             description: ResourceGrantSpec defines the desired state of ResourceGrant.
             properties:
               allowances:
-                description: |-
-                  // Flag to determine if this a default grant or one created in the Staff
-                  // Portal
-                  //
-                  // +kubebuilder:validation:Required
-                  DefaultGrant bool `json:"defaultGrant"`
-                  List of allowances this grant contains
+                description: List of allowances this grant contains
                 items:
                   description: Allowance defines a single resource allowance within
                     a grant
@@ -116,37 +110,44 @@ spec:
                         type: object
                       minItems: 1
                       type: array
-                    resourceTypeName:
+                    resourceType:
                       description: Fully qualified name of the resource type being
                         granted
                       type: string
                   required:
                   - buckets
-                  - resourceTypeName
+                  - resourceType
                   type: object
                 minItems: 1
                 type: array
-              ownerRef:
-                description: Reference to the owning resource of the grant
+              isDefault:
+                default: false
+                description: |-
+                  Flag to determine if this a default grant or one created in the Staff
+                  Portal. Defaults to false.
+                type: boolean
+              ownerInstanceRef:
+                description: Reference to the owner resource specific object instance.
                 properties:
-                  apiGroup:
-                    description: API group of the resource
-                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                    type: string
                   kind:
                     description: Resource type
-                    pattern: ^[A-Z][a-zA-Z]*$
                     type: string
                   name:
-                    description: Name of the owning resource if there is one
+                    description: Name of the owning resource object instance.
                     type: string
+                  observedGeneration:
+                    description: |-
+                      ObservedGeneration is the generation of the owning resource object instance
+                      that was used to populate this OwnerInstanceRef.
+                    format: int64
+                    type: integer
                 required:
-                - apiGroup
                 - kind
+                - name
                 type: object
             required:
             - allowances
-            - ownerRef
+            - ownerInstanceRef
             type: object
           status:
             description: ResourceGrantStatus defines the observed state of ResourceGrant.

@@ -43,23 +43,24 @@ spec:
           spec:
             description: ResourceClaimSpec defines the desired state of ResourceClaim.
             properties:
-              ownerRef:
-                description: Reference to the resource that owns the claim request.
+              ownerInstanceRef:
+                description: Reference to the owner resource specific object instance.
                 properties:
-                  apiGroup:
-                    description: API group of the resource
-                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                    type: string
                   kind:
                     description: Resource type
-                    pattern: ^[A-Z][a-zA-Z]*$
                     type: string
                   name:
-                    description: Name of the owning resource if there is one
+                    description: Name of the owning resource object instance.
                     type: string
+                  observedGeneration:
+                    description: |-
+                      ObservedGeneration is the generation of the owning resource object instance
+                      that was used to populate this OwnerInstanceRef.
+                    format: int64
+                    type: integer
                 required:
-                - apiGroup
                 - kind
+                - name
                 type: object
               requests:
                 description: List of resource requests defined by this claim
@@ -78,18 +79,18 @@ spec:
                       description: Dimensions for this resource request as key-value
                         pairs
                       type: object
-                    resourceTypeName:
+                    resourceType:
                       description: Fully qualified name of the resource type being
                         claimed
                       type: string
                   required:
                   - amount
-                  - resourceTypeName
+                  - resourceType
                   type: object
                 minItems: 1
                 type: array
             required:
-            - ownerRef
+            - ownerInstanceRef
             - requests
             type: object
           status:

@@ -15,7 +15,7 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.resourceTypeName
+    - jsonPath: .spec.resourceType
       name: Resource Type
       type: string
     - jsonPath: .status.allocated
@@ -29,7 +29,8 @@ spec:
       openAPIV3Schema:
         description: |-
           AllowanceBucket is the Schema for the allowancebuckets API.
-          Provides the single source of truth for usage accounting for specific resource and dimension combinations.
+          Provides the single source of truth for usage accounting of specific resource
+          and dimension combinations.
         properties:
           apiVersion:
             description: |-
@@ -56,32 +57,32 @@ spec:
                   type: string
                 description: Dimensions for this bucket as key-value pairs
                 type: object
-              ownerRef:
-                description: Reference to the EffectiveResourceGrant that owns this
-                  bucket
+              ownerInstanceRef:
+                description: Reference to the owner resource specific object instance.
                 properties:
-                  apiGroup:
-                    description: API group of the resource
-                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                    type: string
                   kind:
                     description: Resource type
-                    pattern: ^[A-Z][a-zA-Z]*$
                     type: string
                   name:
-                    description: Name of the owning resource if there is one
+                    description: Name of the owning resource object instance.
                     type: string
+                  observedGeneration:
+                    description: |-
+                      ObservedGeneration is the generation of the owning resource object instance
+                      that was used to populate this OwnerInstanceRef.
+                    format: int64
+                    type: integer
                 required:
-                - apiGroup
                 - kind
+                - name
                 type: object
-              resourceTypeName:
+              resourceType:
                 description: The resource type this bucket tracks quota usage for
                 pattern: ^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$
                 type: string
             required:
-            - ownerRef
-            - resourceTypeName
+            - ownerInstanceRef
+            - resourceType
             type: object
           status:
             description: AllowanceBucketStatus defines the observed state of AllowanceBucket.
@@ -91,42 +92,25 @@ spec:
                 format: int64
                 minimum: 0
                 type: integer
-              allocations:
+              contributingClaimRefs:
                 description: A list of all the claims that have been allocated quota
                   from this bucket.
                 items:
-                  description: Allocation represents a single allocation of quota
-                    from a bucket to a claim.
+                  description: |-
+                    ContributingClaimRef references a granted ResourceClaim that contributes to
+                    the allocated amount in the bucket's status.
                   properties:
-                    amount:
-                      description: |-
-                        The amount of quota allocated.
-                        /
+                    lastObservedGeneration:
+                      description: The generation of the ResourceClaim when this bucket
+                        last processed it
                       format: int64
-                      minimum: 0
                       type: integer
-                    claimRef:
-                      description: Reference to the granted ResourceClaim that this
-                        allocation is for.
-                      properties:
-                        apiGroup:
-                          description: API group of the resource
-                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                          type: string
-                        kind:
-                          description: Resource type
-                          pattern: ^[A-Z][a-zA-Z]*$
-                          type: string
-                        name:
-                          description: Name of the owning resource if there is one
-                          type: string
-                      required:
-                      - apiGroup
-                      - kind
-                      type: object
+                    name:
+                      description: Name of the ResourceClaim
+                      type: string
                   required:
-                  - amount
-                  - claimRef
+                  - lastObservedGeneration
+                  - name
                   type: object
                 type: array
               observedGeneration:
@@ -135,6 +119,7 @@ spec:
                 type: integer
             required:
             - allocated
+            - contributingClaimRefs
             type: object
         required:
         - spec
