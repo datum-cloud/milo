@@ -2,10 +2,10 @@ package v1alpha1
 
 // Allocation represents a single allocation of quota from a bucket to a claim.
 type Allocation struct {
-	// Reference to the granted ResourceClaim that this allocation is for.
+	// Reference to the claim's specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	ClaimRef OwnerRef `json:"claimRef"`
+	ClaimRef OwnerInstanceRef `json:"claimRef"`
 	// The amount of quota allocated.
 	///
 	// +kubebuilder:validation:Required

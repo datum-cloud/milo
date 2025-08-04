@@ -6,34 +6,16 @@ import (
 
 // EffectiveResourceGrantSpec defines the desired state of EffectiveResourceGrant.
 type EffectiveResourceGrantSpec struct {
-	// Reference to the resource that owns the effective grant.
+	// Reference to the owner resource specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	OwnerRef OwnerRef `json:"ownerRef"`
+	OwnerInstanceRef OwnerInstanceRef `json:"ownerInstanceRef"`
 
 	// The resource type this effective grant aggregates quota information for
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern=`^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$`
-	ResourceTypeName string `json:"resourceTypeName"`
-}
-
-// AllowanceBucketRef references an AllowanceBucket and its observed state
-type AllowanceBucketRef struct {
-	// Name of the AllowanceBucket
-	//
-	// +kubebuilder:validation:Required
-	Name string `json:"name"`
-	// The generation of the AllowanceBucket when this reference was last
-	// observed
-	//
-	// +kubebuilder:validation:Optional
-	ObservedGeneration int64 `json:"observedGeneration"`
-	// Amount allocated in this bucket
-	//
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Required
-	Allocated int64 `json:"allocated"`
+	ResourceType string `json:"resourceType"`
 }
 
 // EffectiveResourceGrantStatus defines the observed state of EffectiveResourceGrant.
@@ -47,7 +29,7 @@ type EffectiveResourceGrantStatus struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Required
 	TotalLimit int64 `json:"totalLimit"`
-	// Total allocated usage across all AllowanceBucket resources for this resource type
+	// Total allocated usage across all granted ResourceClaims for this resource type
 	//
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Required
@@ -58,10 +40,17 @@ type EffectiveResourceGrantStatus struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Required
 	Available int64 `json:"available"`
-	// References to AllowanceBuckets used to calculate totalAllocated
+	// References to the granted ResourceClaims that have contributed to the
+	// totalAllocated field
 	//
-	// +kubebuilder:validation:Optional
-	AllowanceBucketRefs []AllowanceBucketRef `json:"allowanceBucketRefs,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Default={}
+	ContributingClaimRefs []ContributingResourceRef `json:"contributingClaimRefs"`
+	// A list of all the grants that have contributed to the totalLimit field
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Default={}
+	ContributingGrantRefs []ContributingResourceRef `json:"contributingGrantRefs"`
 	// Known condition types: "Ready"
 	//
 	// +kubebuilder:validation:XValidation:rule="self.all(c, c.type == 'Ready' ? c.reason in ['AggregationComplete', 'AggregationFailed', 'AggregationPending'] : true)",message="Ready condition reason must be valid"
@@ -91,7 +80,7 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +k8s:openapi-gen=true
-// +kubebuilder:printcolumn:name="Resource Type",type=string,JSONPath=`.spec.resourceTypeName`
+// +kubebuilder:printcolumn:name="Resource Type",type=string,JSONPath=`.spec.resourceType`
 // +kubebuilder:printcolumn:name="Total Limit",type=integer,JSONPath=`.status.totalLimit`
 // +kubebuilder:printcolumn:name="Allocated",type=integer,JSONPath=`.status.totalAllocated`
 // +kubebuilder:printcolumn:name="Available",type=integer,JSONPath=`.status.available`

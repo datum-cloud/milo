@@ -4,22 +4,33 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type ObjectRef struct {
+// OwnerTypeRef defines the resource type that owns the registration,
+// and the grants and claims that will be created for it.
+type OwnerTypeRef struct {
+	// API group of the resource type that owns the registration
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	APIGroup string `json:"apiGroup"`
-	Kind     string `json:"kind"`
+
+	// Resource type that owns the registration.
+	//
+	// +kubebuilder:validation:Required
+	Kind string `json:"kind"`
 }
 
 // ResourceRegistrationSpec defines the desired state of ResourceRegistration.
 type ResourceRegistrationSpec struct {
-	// Reference to the resource type that will create grant and claim objects
+	// Reference to the owning resource type that will create grant and claim objects
 	// for this registration.
 	// For example, if creating a registration that defines the max number of
-	// "Project"s, the object ref will reference the "Organization" resource
-	// type as projects are created within an organization.
+	// Projects per Organization, the OwnerTypeRef would be the Organization resource type.
+	// No Name field is included as ResourceRegistrations are cluster-scoped and
+	// not owned by any specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	ObjectRef ObjectRef `json:"objectRef"`
-	// Type of resource being registered (Entity, Allocation).
+	OwnerTypeRef OwnerTypeRef `json:"ownerTypeRef"`
+	// Type is the type of registration (Entity, Allocation).
 	//
 	// +kubebuilder:validation:Enum=Entity;Allocation
 	// +kubebuilder:validation:Required
@@ -29,7 +40,7 @@ type ResourceRegistrationSpec struct {
 	// Format: apiGroup/ResourceType or apiGroup/resourceType/subResource
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern=`^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$`
-	ResourceTypeName string `json:"resourceTypeName"`
+	ResourceType string `json:"resourceType"`
 	// Human-readable description of the registration
 	//
 	// +kubebuilder:validation:Optional +kubebuilder:validation:MaxLength=500
@@ -55,7 +66,7 @@ type ResourceRegistrationSpec struct {
 	UnitConversionFactor int64 `json:"unitConversionFactor"`
 	// List of dimension names that can be used in ResourceGrant selectors for
 	// this resource type. Each dimension should be a fully qualified name
-	// matching the pattern: apiGroup/resourceTypeName
+	// matching the pattern: apiGroup/resourceType
 	//
 	// +kubebuilder:validation:Optional
 	Dimensions []string `json:"dimensions,omitempty"`

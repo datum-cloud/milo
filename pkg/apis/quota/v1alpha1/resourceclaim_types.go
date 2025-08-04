@@ -9,7 +9,7 @@ type ResourceRequest struct {
 	// Fully qualified name of the resource type being claimed
 	//
 	// +kubebuilder:validation:Required
-	ResourceTypeName string `json:"resourceTypeName"`
+	ResourceType string `json:"resourceType"`
 	// Amount of the resource being claimed
 	//
 	// +kubebuilder:validation:Minimum=0
@@ -23,10 +23,10 @@ type ResourceRequest struct {
 
 // ResourceClaimSpec defines the desired state of ResourceClaim.
 type ResourceClaimSpec struct {
-	// Reference to the resource that owns the claim request.
+	// Reference to the owner resource specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	OwnerRef OwnerRef `json:"ownerRef"`
+	OwnerInstanceRef OwnerInstanceRef `json:"ownerInstanceRef"`
 	// List of resource requests defined by this claim
 	//
 	// +kubebuilder:validation:Required
@@ -70,6 +70,7 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Granted",type="string",JSONPath=".status.conditions[?(@.type=='Granted')].status"
+// +kubebuilder:printcolumn:name="Allocated",type="string",JSONPath=".status.allocated"
 // +k8s:openapi-gen=true
 type ResourceClaim struct {
 	metav1.TypeMeta   `json:",inline"`
