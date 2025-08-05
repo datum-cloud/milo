@@ -10,3 +10,4 @@ resources:
   - protectedresource.yaml
   - policybinding.yaml
   - userpreference.yaml
+  - userdeactivation.yaml
