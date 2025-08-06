@@ -6,3 +6,5 @@ certs/
 # Generated kubeconfig for local development
 .kube/
 dev/.kind-etcd-certs
+.tool-versions
+

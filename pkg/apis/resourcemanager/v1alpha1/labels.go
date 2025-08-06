@@ -5,5 +5,6 @@ const (
 
 	OrganizationNameLabel = LabelNamespace + "/organization-name"
 	ProjectNameLabel      = LabelNamespace + "/project-name"
+	ProjectUIDLabel       = LabelNamespace + "/project-uid"
 	OwnerNameLabel        = LabelNamespace + "/owner-name"
 )

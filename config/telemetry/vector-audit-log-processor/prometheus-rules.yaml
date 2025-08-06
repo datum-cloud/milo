@@ -1,0 +1,67 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vector-audit-log-processor
+spec:
+  groups:
+    - name: vector-audit-log-processor
+      rules:
+        - alert: VectorComponentErrors
+          expr: |
+            rate(vector_component_errors_total{job="vector-audit-log-processor"}[5m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Vector component {{ $labels.component_name }} is experiencing errors"
+            description: "The Vector component {{ $labels.component_name }} of type {{ $labels.component_type }} is logging errors. This may indicate a misconfiguration or a problem with the component itself."
+
+        - alert: VectorComponentEventsDiscarded
+          expr: |
+            rate(vector_component_discarded_events_total{job="vector-audit-log-processor", intentional="false"}[5m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Vector component {{ $labels.component_name }} is discarding events"
+            description: "The Vector component {{ $labels.component_name }} of type {{ $labels.component_type }} is unintentionally discarding events. This could be due to schema violations or other processing errors."
+
+        - alert: VectorBufferEventsDiscarded
+          expr: |
+            rate(vector_buffer_discarded_events_total{job="vector-audit-log-processor"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Vector buffer for component {{ $labels.component_name }} is discarding events"
+            description: "The buffer for Vector component {{ $labels.component_name }} of type {{ $labels.component_type }} is full and discarding events. This indicates backpressure in the pipeline and may lead to data loss."
+
+        - alert: VectorRemapTransformError
+          expr: |
+            rate(vector_component_errors_total{job="vector-audit-log-processor", component_name="project_audit_log_transformer"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Vector remap transform 'project_audit_log_transformer' is failing"
+            description: "The remap transform 'project_audit_log_transformer' is encountering errors and dropping events. This is likely due to an issue with the VRL script."
+
+        - alert: VectorHttpServerError
+          expr: |
+            sum(rate(vector_http_server_handler_duration_seconds_count{job="vector-audit-log-processor", component_name="project_audit_log_webhook", status!~"2.."}[5m])) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Vector HTTP server for 'project_audit_log_webhook' is returning errors"
+            description: "The HTTP server source 'project_audit_log_webhook' is receiving requests that result in non-2xx status codes. This could indicate a problem with the clients sending data to this webhook."
+
+        - alert: VectorNoEventsProcessed
+          expr: |
+            rate(vector_component_sent_events_total{job="vector-audit-log-processor", component_name="project_audit_log_transformer"}[15m]) == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Vector is not processing any audit logs"
+            description: "The Vector pipeline for audit logs has not processed any events in the last 15 minutes. This might indicate an issue with the data source or the Vector agent itself."

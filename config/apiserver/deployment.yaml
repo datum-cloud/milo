@@ -26,7 +26,7 @@ spec:
         args:
           - apiserver
           - --authorization-mode=$(AUTHORIZATION_MODE)
-          - --authentication-config=$(AUTHENTICATION_CONFIG)
+          - --authentication-token-webhook-config-file=$(AUTHENTICATION_WEBHOOK_CONFIG_FILE)
           - --authentication-token-webhook-version=$(AUTHENTICATION_TOKEN_WEBHOOK_VERSION)
           - --authorization-webhook-config-file=$(AUTHORIZATION_WEBHOOK_CONFIG_FILE)
           - --authorization-webhook-version=$(AUTHORIZATION_WEBHOOK_VERSION)
@@ -49,7 +49,7 @@ spec:
             value: "4"
           - name: AUTHORIZATION_MODE
             value: "RBAC,Webhook"
-          - name: AUTHENTICATION_CONFIG
+          - name: AUTHENTICATION_WEBHOOK_CONFIG_FILE
             value: "/etc/kubernetes/config/authentication-config.yaml"
           - name: AUTHENTICATION_TOKEN_WEBHOOK_VERSION
             value: "v1"

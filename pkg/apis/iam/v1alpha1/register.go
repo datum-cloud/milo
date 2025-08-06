@@ -37,6 +37,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&MachineAccountList{},
 		&MachineAccountKey{},
 		&MachineAccountKeyList{},
+		&UserPreference{},
+		&UserPreferenceList{},
 		&UserDeactivation{},
 		&UserDeactivationList{},
 	)
