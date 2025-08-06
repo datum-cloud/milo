@@ -3,8 +3,8 @@
 # Milo
 
 Milo is a "business operating system" for product-led, B2B companies. Think of
-it like a control plane for modern service providers, built on top of a
-comprehensive system of record that ties together key parts of your business.
+it like a control plane for modern service providers, built on top of a unified
+system of record that ties together key parts of your business.
 
 ## Why We're Building Milo
 
@@ -30,9 +30,9 @@ our own kick-butt back office, we should make it available to others. Et voila!
 ## What We Prefer Not to Build
 
 Projects with such a wide surface area can engender a "build everything"
-mindset. While our vision calls for a pretty comprehensive approach, there are a
-number of capabilities that are either commoditized or serviced by existing
-scaled vendors. Here are some examples:
+mindset. While our vision calls for a pretty broad approach, there are a number
+of capabilities that are either commoditized or serviced by existing scaled
+vendors. Here are some examples:
 
 - Email sending can be provided by Twilio, Resend, etc.
 - Authentication can be provided by Zitadel, Clerk, Auth0, Descope, etc.
@@ -72,3 +72,21 @@ some areas we're planning to work on:
 - Purchase Orders: An API to support end user procurement tracking
 - Billing: A centralized hub for account statements, two sided ledger, & invoice
   status
+
+## Getting Started
+
+**New to Milo?** Start with our [Getting Started Guide](docs/getting-started/)
+to understand what Milo is, who it's for, and how it works.
+
+**Ready to build?** Check out our [API documentation](docs/reference/api/) and
+[integration guides](docs/developer-guides/integrations/) to extend Milo for
+your specific business needs.
+
+**Questions?** [Join us on Slack](https://slack.datum.net) to connect with the
+community.
+
+## Contributing
+
+Interested in contributing to Milo? We welcome contributions from the community.
+Check out our [documentation](docs/) to get started and reach out on Slack to
+connect with other contributors.

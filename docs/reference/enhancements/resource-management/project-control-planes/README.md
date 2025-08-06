@@ -1,7 +1,5 @@
 # Project Controller
 
-## Overview
-
 The Project Controller is a custom Kubernetes controller responsible for
 managing the lifecycle of `Project` resources and their corresponding
 `ProjectControlPlane` resources across multiple Kubernetes clusters. This
