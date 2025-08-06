@@ -224,6 +224,10 @@ tasks:
           echo "Port 9443 in use – killing existing process..."
           kill -9 $(lsof -i tcp:9443 -t)
         fi
+        if lsof -i tcp:9443 -t >/dev/null 2>&1; then
+          echo "Port 9443 in use – killing existing process..."
+          kill -9 $(lsof -i tcp:9443 -t)
+        fi
 
         # Verify connectivity to Milo API server
         echo "Verifying connectivity to Milo API server..."
