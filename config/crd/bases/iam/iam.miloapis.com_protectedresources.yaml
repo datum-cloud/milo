@@ -27,7 +27,54 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ProtectedResource is the Schema for the protectedresources API
+        description: "ProtectedResource registers a resource type with the Milo IAM
+          system, making it available\nfor access control through roles and policy
+          bindings. This is a cluster-scoped resource\nthat defines which resource
+          types can be protected by the IAM system and what permissions\nare available
+          for those resources.\n\nProtectedResources serve as the registry that makes
+          the IAM system aware of different\nresource types that exist in the platform.
+          By registering a resource type, system\nadministrators define the complete
+          set of permissions that can be granted on instances\nof that resource type,
+          enabling fine-grained access control.\n\nKey characteristics:\n- Cluster-scoped:
+          ProtectedResources exist globally across the control plane\n- Administrator-managed:
+          Typically created by system administrators, not end users\n- Permission
+          registry: Defines all possible permissions for a resource type\n- Hierarchy
+          support: Can specify parent resources to enable permission inheritance\n-
+          Service integration: Links resources to their owning services for organization\n\nPermission
+          inheritance through parent resources:\nWhen parent resources are specified,
+          permissions can be granted at higher levels\nin the resource hierarchy and
+          automatically apply to child resources. For example,\ngranting permissions
+          on an Organization can automatically apply to all Projects\nwithin that
+          organization.\n\nCommon usage patterns:\n- New service integration: Register
+          resource types when adding new services to Milo\n- Permission modeling:
+          Define the complete permission set for each resource type\n- Hierarchy establishment:
+          Set up parent-child relationships between resource types\n- Access control
+          preparation: Make resources available for PolicyBinding targeting\n\nBest
+          practices:\n- Use consistent permission naming across similar resource types\n-
+          Define comprehensive permission sets that cover all necessary operations\n-
+          Establish clear parent-child relationships for logical permission inheritance\n-
+          Link resources to appropriate services for proper organization\n- Document
+          permission semantics for developers and administrators\n\nExample - Register
+          a Workload resource type:\n\n\tapiVersion: iam.miloapis.com/v1alpha1\n\tkind:
+          ProtectedResource\n\tmetadata:\n\t  name: workloads\n\tspec:\n\t  serviceRef:\n\t
+          \   name: compute.datumapis.com\n\t  kind: Workload\n\t  singular: workload\n\t
+          \ plural: workloads\n\t  permissions:\n\t  - \"compute.datumapis.com/workloads.create\"\n\t
+          \ - \"compute.datumapis.com/workloads.get\"\n\t  - \"compute.datumapis.com/workloads.update\"\n\t
+          \ - \"compute.datumapis.com/workloads.delete\"\n\t  - \"compute.datumapis.com/workloads.list\"\n\t
+          \ - \"compute.datumapis.com/workloads.scale\"\n\t  parentResources:\n\t
+          \ - apiGroup: resourcemanager.miloapis.com\n\t    kind: Project\n\nExample
+          - Register a Database resource with organization-level inheritance:\n\n\tapiVersion:
+          iam.miloapis.com/v1alpha1\n\tkind: ProtectedResource\n\tmetadata:\n\t  name:
+          databases\n\tspec:\n\t  serviceRef:\n\t    name: sql.datumapis.com\n\t  kind:
+          Database\n\t  singular: database\n\t  plural: databases\n\t  permissions:\n\t
+          \ - \"sql.datumapis.com/databases.create\"\n\t  - \"sql.datumapis.com/databases.read\"\n\t
+          \ - \"sql.datumapis.com/databases.update\"\n\t  - \"sql.datumapis.com/databases.delete\"\n\t
+          \ - \"sql.datumapis.com/databases.backup\"\n\t  - \"sql.datumapis.com/databases.restore\"\n\t
+          \ parentResources:\n\t  - apiGroup: resourcemanager.miloapis.com\n\t    kind:
+          Project\n\nRelated resources:\n- Role: Can include permissions defined in
+          ProtectedResource\n- PolicyBinding: Can target resource types registered
+          as ProtectedResource\n\nProtectedResource is the Schema for the protectedresources
+          API"
         properties:
           apiVersion:
             description: |-
@@ -47,18 +94,37 @@ spec:
           metadata:
             type: object
           spec:
-            description: ProtectedResourceSpec defines the desired state of ProtectedResource
+            description: |-
+              ProtectedResourceSpec defines the desired state of ProtectedResource, specifying
+              how a resource type should be registered with the IAM system and what permissions
+              are available for instances of that resource type.
             properties:
               kind:
                 description: |-
-                  The kind of the resource.
-                  This will be in the format `Workload`.
+                  Kind specifies the Kubernetes-style kind name for this resource type.
+                  This should match the kind field used in the actual resource definitions
+                  and follow PascalCase naming conventions.
+
+                  Examples: "Workload", "Database", "StorageBucket"
                 type: string
               parentResources:
                 description: |-
-                  A list of resources that are registered with the platform that may be a
-                  parent to the resource. Permissions may be bound to a parent resource so
-                  they can be inherited down the resource hierarchy.
+                  ParentResources defines the resource types that can serve as parents to
+                  this resource type in the permission hierarchy. When permissions are
+                  granted on a parent resource, they can be inherited by child resources.
+
+                  This enables powerful permission models where, for example, granting
+                  permissions on an Organization automatically applies to all Projects
+                  within that organization, and all resources within those projects.
+
+                  Each parent resource reference must specify the apiGroup and kind of
+                  the parent resource type. The parent resource types must also be
+                  registered as ProtectedResources for the inheritance to work properly.
+
+                  Example hierarchy: Project -> Workload
+                    parentResources:
+                    - apiGroup: resourcemanager.miloapis.com
+                      kind: Project
                 items:
                   description: ParentResourceRef defines the reference to a parent
                     resource
@@ -77,18 +143,51 @@ spec:
                   type: object
                 type: array
               permissions:
-                description: A list of permissions that are associated with the resource.
+                description: |-
+                  Permissions defines the complete set of permissions that can be granted
+                  on instances of this resource type. Each permission should follow the
+                  standard format: {service}/{resource}.{action}
+
+                  These permissions become available for use in Role definitions and
+                  determine what actions users can perform on resources of this type
+                  when granted appropriate roles through PolicyBindings.
+
+                  Common permission patterns:
+                  - CRUD operations: create, read, update, delete
+                  - Listing operations: list
+                  - Administrative operations: admin, manage
+                  - Resource-specific operations: scale, backup, restore, etc.
+
+                  Examples:
+                    permissions:
+                    - "compute.datumapis.com/workloads.create"
+                    - "compute.datumapis.com/workloads.get"
+                    - "compute.datumapis.com/workloads.update"
+                    - "compute.datumapis.com/workloads.delete"
+                    - "compute.datumapis.com/workloads.list"
+                    - "compute.datumapis.com/workloads.scale"
+                    - "compute.datumapis.com/workloads.logs"
                 items:
                   type: string
                 type: array
               plural:
                 description: |-
-                  The plural form for the resource type, e.g. 'workloads'. Must follow
-                  camelCase format.
+                  Plural specifies the plural form of the resource name, used in API paths
+                  and resource listings. This should follow camelCase naming conventions
+                  and be the lowercase, plural version of the Kind.
+
+                  Examples: "workloads", "databases", "storageBuckets"
                 type: string
               serviceRef:
-                description: ServiceRef references the service definition this protected
-                  resource belongs to.
+                description: |-
+                  ServiceRef identifies the service that owns this protected resource type.
+                  This creates a logical grouping of related resource types under their
+                  owning service, helping with organization and management. The service name
+                  should be the API group of the service.
+
+                  Example:
+                    serviceRef:
+                      name: compute.datumapis.com
                 properties:
                   name:
                     description: Name is the resource name of the service definition.
@@ -98,8 +197,11 @@ spec:
                 type: object
               singular:
                 description: |-
-                  The singular form for the resource type, e.g. 'workload'. Must follow
-                  camelCase format.
+                  Singular specifies the singular form of the resource name, used in API
+                  paths and CLI commands. This should follow camelCase naming conventions
+                  and be the lowercase, singular version of the Kind.
+
+                  Examples: "workload", "database", "storageBucket"
                 type: string
             required:
             - kind
@@ -109,7 +211,9 @@ spec:
             - singular
             type: object
           status:
-            description: ProtectedResourceStatus defines the observed state of ProtectedResource
+            description: |-
+              ProtectedResourceStatus defines the observed state of ProtectedResource, indicating
+              whether the resource type has been successfully registered with the IAM system.
             properties:
               conditions:
                 default:
@@ -118,8 +222,22 @@ spec:
                   reason: Unknown
                   status: Unknown
                   type: Ready
-                description: Conditions provide conditions that represent the current
-                  status of the ProtectedResource.
+                description: |-
+                  Conditions provide detailed status information about the ProtectedResource registration.
+                  The primary condition type is "Ready" which indicates whether the resource type
+                  has been successfully registered and is available for use in the IAM system.
+
+                  Common condition types:
+                  - Ready: Indicates the resource type is registered and available for protection
+                  - ServiceValid: Indicates the referenced service exists
+                  - PermissionsValid: Indicates all specified permissions follow the correct format
+                  - ParentResourcesValid: Indicates all parent resource references are valid
+
+                  Example condition:
+                    - type: Ready
+                      status: "True"
+                      reason: ResourceRegistered
+                      message: Resource type successfully registered with IAM system
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -177,8 +295,10 @@ spec:
                 type: array
               observedGeneration:
                 description: |-
-                  ObservedGeneration is the most recent generation observed for this ProtectedResource. It corresponds to the
-                  ProtectedResource's generation, which is updated on mutation by the API Server.
+                  ObservedGeneration represents the most recent generation that has been
+                  observed and processed by the ProtectedResource controller. This corresponds
+                  to the resource's metadata.generation and is used to track whether the
+                  controller has processed the latest changes to the spec.
                 format: int64
                 type: integer
             type: object

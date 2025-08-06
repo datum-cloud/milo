@@ -48,8 +48,37 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OrganizationMembership is the Schema for the organizationmemberships
-          API
+        description: "OrganizationMembership links a user to an organization, establishing
+          the\nfoundation for role-based access control within organizations. Note
+          that\nmembership alone does not grant access - a PolicyBinding must also
+          be\ncreated to assign roles and permissions to the user.\n\nOrganizationMemberships
+          are namespaced resources that create relationships\nbetween cluster-scoped
+          users and organizations. They are a prerequisite\nfor access control but
+          do not grant permissions by themselves.\n\nKey characteristics:\n- Namespaced:
+          Created within the organization's namespace\n- User-organization linkage:
+          Connects users to organizations\n- Access prerequisite: Required before
+          PolicyBindings can grant organization permissions\n- Status information:
+          Provides cached details about both user and organization\n\nCommon workflows:\n1.
+          Ensure both the user and organization exist and are ready\n2. Create the
+          membership in the organization's namespace\n3. Wait for the Ready condition
+          to become True\n4. Create PolicyBinding resources to grant specific roles
+          and permissions\n5. User can now access organization resources based on
+          assigned policies\n\nPrerequisites:\n- User: The referenced user must exist
+          and be ready\n- Organization: The referenced organization must exist and
+          be ready\n- Namespace: Must be created in the organization's associated
+          namespace\n\nExample - Adding a user to an organization:\n\n\tapiVersion:
+          resourcemanager.miloapis.com/v1alpha1\n\tkind: OrganizationMembership\n\tmetadata:\n\t
+          \ name: jane-doe-acme-membership\n\t  namespace: organization-acme-corp\n\tspec:\n\t
+          \ organizationRef:\n\t    name: acme-corp\n\t  userRef:\n\t    name: jane-doe\n\nRelated
+          resources:\n- User: Must exist before creating membership\n- Organization:
+          Must exist before creating membership\n- PolicyBinding: Required to grant
+          actual permissions after membership is established\n\nTroubleshooting:\n-
+          Check the Ready condition in status to verify successful membership\n- Ensure
+          both user and organization resources exist and are ready\n- Verify the membership
+          is created in the correct organization namespace\n- Remember that PolicyBinding
+          resources are still needed to grant actual permissions\n- List memberships
+          within the organization namespace to verify creation\n\nOrganizationMembership
+          is the Schema for the organizationmemberships API"
         properties:
           apiVersion:
             description: |-
@@ -69,24 +98,44 @@ spec:
           metadata:
             type: object
           spec:
-            description: OrganizationMembershipSpec defines the desired state of OrganizationMembership
+            description: |-
+              OrganizationMembershipSpec defines the desired membership relationship
+              between a user and an organization.
             properties:
               organizationRef:
-                description: OrganizationRef is a reference to the Organization that
-                  the user is a member of.
+                description: |-
+                  OrganizationRef identifies the organization to grant membership in.
+                  The organization must exist before creating the membership.
+
+                  Example:
+                    organizationRef:
+                      name: acme-corp
                 properties:
                   name:
-                    description: Name is the name of resource being referenced
+                    description: |-
+                      Name is the name of the organization to reference.
+                      Must match an existing organization resource.
+
+                      Example: "acme-corp"
                     type: string
                 required:
                 - name
                 type: object
               userRef:
-                description: UserRef is a reference to the User that is a member of
-                  the Organization.
+                description: |-
+                  UserRef identifies the user to grant organization membership.
+                  The user must exist before creating the membership.
+
+                  Example:
+                    userRef:
+                      name: jane-doe
                 properties:
                   name:
-                    description: Name is the name of resource being referenced
+                    description: |-
+                      Name is the name of the user to reference.
+                      Must match an existing user resource.
+
+                      Example: "jane-doe"
                     type: string
                 required:
                 - name
@@ -96,8 +145,9 @@ spec:
             - userRef
             type: object
           status:
-            description: OrganizationMembershipStatus defines the observed state of
-              OrganizationMembership
+            description: |-
+              OrganizationMembershipStatus defines the observed state of OrganizationMembership,
+              indicating whether the membership has been successfully established.
             properties:
               conditions:
                 default:
@@ -106,8 +156,19 @@ spec:
                   reason: Unknown
                   status: Unknown
                   type: Ready
-                description: Conditions provide conditions that represent the current
-                  status of the OrganizationMembership.
+                description: |-
+                  Conditions describe the current state of membership establishment.
+                  Check the "Ready" condition to determine if the membership is
+                  active and the user has access to organization resources.
+
+                  Common condition types:
+                  - Ready: Membership is established and user has organization access
+
+                  Example ready condition:
+                    - type: Ready
+                      status: "True"
+                      reason: MembershipReady
+                      message: User successfully added to organization
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -164,34 +225,47 @@ spec:
                   type: object
                 type: array
               observedGeneration:
-                description: ObservedGeneration is the most recent generation observed
-                  for this OrganizationMembership by the controller.
+                description: |-
+                  ObservedGeneration tracks the most recent membership spec that the
+                  controller has processed. Use this to determine if status reflects
+                  the latest changes.
                 format: int64
                 type: integer
               organization:
-                description: Organization contains information about the organization
-                  in the membership.
+                description: |-
+                  Organization contains cached information about the organization in this membership.
+                  This information is populated by the controller from the referenced organization.
                 properties:
                   displayName:
-                    description: DisplayName is the display name of the organization
-                      in the membership.
+                    description: |-
+                      DisplayName is the human-readable name of the organization.
+                      Populated from the kubernetes.io/display-name annotation of the organization.
                     type: string
                   type:
-                    description: Type is the type of the organization in the membership.
+                    description: |-
+                      Type is the business model of the organization (Personal or Standard).
+                      Populated from the referenced organization resource.
                     type: string
                 type: object
               user:
-                description: User contains information about the user in the membership.
+                description: |-
+                  User contains cached information about the user in this membership.
+                  This information is populated by the controller from the referenced user.
                 properties:
                   email:
-                    description: Email is the email of the user in the membership.
+                    description: |-
+                      Email is the email address of the user.
+                      Populated from the referenced user resource.
                     type: string
                   familyName:
-                    description: FamilyName is the family name of the user in the
-                      membership.
+                    description: |-
+                      FamilyName is the last name of the user.
+                      Populated from the referenced user resource.
                     type: string
                   givenName:
-                    description: GivenName is the given name of the user in the membership.
+                    description: |-
+                      GivenName is the first name of the user.
+                      Populated from the referenced user resource.
                     type: string
                 type: object
             type: object
