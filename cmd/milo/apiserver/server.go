@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"go.miloapis.com/milo/pkg/workspaces"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -15,8 +16,10 @@ import (
 	_ "k8s.io/apiserver/pkg/admission"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	recommended "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/apiserver/pkg/util/notfoundhandler"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
@@ -30,6 +33,7 @@ import (
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/klog/v2"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
 	"k8s.io/kubernetes/pkg/controlplane/apiserver/options"
 )
@@ -48,6 +52,8 @@ var (
 func NewCommand() *cobra.Command {
 	s := NewOptions()
 	var namedFlagSets cliflag.NamedFlagSets
+
+	var enableVirtual bool
 
 	cmd := &cobra.Command{
 		Use:   "apiserver",
@@ -89,7 +95,7 @@ func NewCommand() *cobra.Command {
 			utilfeature.DefaultMutableFeatureGate.AddMetrics()
 
 			ctx := genericapiserver.SetupSignalContext()
-			return Run(ctx, completedOptions)
+			return Run(ctx, completedOptions, enableVirtual)
 		},
 		Args: func(cmd *cobra.Command, args []string) error {
 			for _, arg := range args {
@@ -100,6 +106,9 @@ func NewCommand() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&enableVirtual, "virtual-clusters", false,
+		"Serve each Project through an in-process workspace API server.")
 
 	// Override the ComponentGlobalsRegistry to avoid k8s feature flags from being added.
 	// Add our own feature gates or expose native k8s ones if necessary
@@ -154,7 +163,7 @@ func NewOptions() *options.Options {
 }
 
 // Run runs the specified APIServer. This should never exit.
-func Run(ctx context.Context, opts options.CompletedOptions) error {
+func Run(ctx context.Context, opts options.CompletedOptions, enableVirtual bool) error {
 	// To help debugging, immediately log version
 	klog.Infof("Version: %+v", version.Get())
 
@@ -173,6 +182,37 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 	server, err := CreateServerChain(completed)
 	if err != nil {
 		return err
+	}
+
+	// ─── virtual-clusters (in-process workspaces) ────────────────────────────
+	if enableVirtual {
+		// 1. Build a factory that can stamp out per-project servers.
+		baseRec := &recommended.RecommendedOptions{
+			Etcd:          opts.Etcd,
+			SecureServing: opts.SecureServing,
+			Audit:         opts.Audit,
+			Features:      opts.Features,
+			Traces:        opts.Traces,
+			Admission:     opts.Admission.GenericAdmission,
+		}
+
+		wsFactory := workspaces.NewFactory(baseRec,
+			legacyscheme.Codecs,
+			completed.ControlPlane.Generic.LoopbackClientConfig,
+			completed.ControlPlane.Generic.OpenAPIConfig, // ✅ v2 config
+			completed.ControlPlane.Generic.OpenAPIV3Config,
+			func(dc discovery.DiscoveryInterface) (
+				[]controlplaneapiserver.RESTStorageProvider, error) { // ← correct sig
+				return completed.GenericStorageProviders(dc) // reuse your method
+			})
+
+		// 3. Inject router into the root control-plane handler chain.
+		attachRouterToServer(ctx, server.GenericAPIServer, wsFactory)
+
+		// attachRouterToConfig(ctx, server.GenericAPIServer, wsFactory)
+		// attachRouterToRecommended(ctx, config.Aggregator.GenericConfig, wsFactory)
+
+		klog.Info("virtual-clusters ENABLED (per-project workspaces)")
 	}
 
 	prepared, err := server.PrepareRun()

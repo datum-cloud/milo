@@ -6,3 +6,4 @@ certs/
 # Generated kubeconfig for local development
 .kube/
 .tool-versions
+/vendor
