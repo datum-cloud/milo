@@ -80,6 +80,7 @@ import (
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
+	quotav1alpha1webhook "go.miloapis.com/milo/internal/webhooks/quota/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
@@ -409,6 +410,12 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := iamv1alpha1webhook.SetupUserWebhooksWithManager(ctrl, SystemNamespace, "iam-user-self-manage"); err != nil {
 				logger.Error(err, "Error setting up user webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Set up quota webhooks for automatic ResourceClaim creation
+			if err := quotav1alpha1webhook.SetupQuotaWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up quota webhooks")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
