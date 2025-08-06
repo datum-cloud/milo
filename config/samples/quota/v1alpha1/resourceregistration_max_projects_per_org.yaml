@@ -1,7 +1,7 @@
 apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceRegistration
 metadata:
-  name: organization-project-registration
+  name: registration-abc123
 spec:
   ownerTypeRef:
     apiGroup: resourcemanager.miloapis.com

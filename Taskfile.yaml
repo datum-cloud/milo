@@ -45,7 +45,7 @@ tasks:
       - test -f "{{.CERTS_DIR}}/tls.crt"
     silent: true
 
-  kind-create-and-serve:
+  kind-setup-and-run:
     desc: >-
       Create a local kind cluster named “milo-local”, apply CRDs,
       generate dev certificates, build the controller binary,
@@ -55,7 +55,7 @@ tasks:
       - kind delete cluster --name milo-local
       - kind create cluster --name milo-local
 
-      # 2. (Optional) Verify your kube-context is now kind-milo-local
+      # 2. (Optional) Verify the kube-context is now `kind-milo-local`
       - kubectl config current-context
 
       # 3. Generate base CRDs (deepcopy, client, CRD YAMLs, etc.)
@@ -71,14 +71,22 @@ tasks:
       # 6. Build the controller binary
       - go build -o bin/milo ./cmd/milo
 
-      # 7. Free up port 43271 if already in use
+      # 7. Free up ports 43271 and 96443 if already in use from the process not
+      #    being shutdown properly.
       - |
         if lsof -i tcp:43271 -t >/dev/null 2>&1; then
           echo "Port 43271 in use – killing existing process..."
           kill -9 $(lsof -i tcp:43271 -t)
         fi
+        if lsof -i tcp:9443 -t >/dev/null 2>&1; then
+          echo "Port 9443 in use – killing existing process..."
+          kill -9 $(lsof -i tcp:9443 -t)
+        fi
 
-      # 8. Run the controller manager locally
+      # 8. Apply the development webhook manifests - necessary??
+      # - kubectl apply -k config/dev/
+
+      # 9. Run the controller manager locally
       - |
         ./bin/milo controller-manager \
           --leader-elect=false \
@@ -91,6 +99,98 @@ tasks:
           --kubeconfig=$HOME/.kube/config \
           --infra-cluster-kubeconfig=$HOME/.kube/config \
           --v=4
+
+  kind-create-organization-namespace:
+    desc: |- 
+      Create a single organization namespace in the kind cluster as a
+      workaround until the webhooks are properly configured to run locally.
+      No project namespaces are created, as the `milo-system` namespace is
+      created by default during startup and used for project-scoped resources.
+    cmds:
+      # Create the organization namespace
+      - kubectl create namespace organization-datum
+
+  kind-create-registrations:
+    desc: Create resource registrations in the kind cluster
+    cmds:
+      # Create the resource registrations
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_projects_per_org.yaml
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_organizationmemberships_per_org.yaml
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
+
+  kind-create-organization:
+    desc: Create organizations in the kind cluster
+    cmds:
+      # Create the organization which also creates the default resource grant of
+      # 5 projects for it.
+      - kubectl create -f config/samples/resourcemanager/v1alpha1/organization.yaml
+
+  kind-create-project:
+    desc: Create projects in the kind cluster
+    cmds:
+      # Create the project which also creates the default resource grant of
+      # 5 HTTPProxy instances per project
+      - kubectl create -f config/samples/resourcemanager/v1alpha1/project.yaml
+
+  kind-create-grants:
+    desc: Create resource grants in the kind cluster
+    cmds:
+      # Create the resource grant that allows an additional 3 projects per
+      # organization and 20 organization memberships per organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_organization.yaml
+      # Create the resource grant that allows an additional 5 HTTPProxy instances per project
+      - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
+
+  kind-create-claims:
+    desc: Create resource claims in the kind cluster
+    cmds:
+      # Create the resource claim for 1 project for the organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
+      # Create the resource claim for 2 additional projects for the organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional.yaml
+      # Create the resource claim for 1 additional project for the organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional_2.yaml
+      # Create the resource claim for 2 additional HTTPProxy instances for the project
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_httpproxies_per_project.yaml
+
+  kind-create-all-quota-resources:
+    desc: |-
+      Setup resources in the kind cluster for quota system testing. This is
+      an alternative to running the previous `kind-*` tasks individually.
+    cmds:
+      # Create a single organization namespace in the kind cluster as a
+      # workaround until the webhooks are properly configured to run locally.
+      # No project namespaces are created, as the `milo-system` namespace is
+      # created by default during startup and used for project-scoped resources.
+      # - kubectl create namespace organization-datum
+
+      # Create the resource registrations
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_projects_per_org.yaml
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_organizationmemberships_per_org.yaml
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
+
+      # Create the organization which also creates the default resource grant of
+      # 5 projects for it.
+      - kubectl create -f config/samples/resourcemanager/v1alpha1/organization.yaml
+      
+      # Create the project which also creates the default resource grant of
+      # 5 HTTPProxy instances for it.
+      # - kubectl create -f config/samples/resourcemanager/v1alpha1/project.yaml
+
+      # # Create the resource grant that allows an additional 3 projects per
+      # # organization and 20 organization memberships per organization
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_organization.yaml
+      # # Create the resource grant that allows an additional 2 HTTPProxy instances per project
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
+
+      # # Create the resource claim for 1 project for the organization
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
+      # # Create the resource claim for 2 additional projects for the organization
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional.yaml
+      # # Create the resource claim for 1 additional project for the organization
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional_2.yaml
+      # # Create the resource claim for 1 additional HTTPProxy instance for the project
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_httpproxies_per_project.yaml
 
   generate:
     desc: Generate code including deepcopy, objects, CRDs, and potentially protobuf marshallers

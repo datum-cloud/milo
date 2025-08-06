@@ -2,8 +2,7 @@ apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceClaim
 metadata:
   name: datum-additional-projects-claim
-  # Organization namespace
-  namespace: organization-datum
+  namespace: milo-system
 spec:
   # Reference to the owner resource specific object instance.
   ownerInstanceRef:

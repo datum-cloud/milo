@@ -18,6 +18,9 @@ spec:
     - jsonPath: .status.conditions[?(@.type=='Granted')].status
       name: Granted
       type: string
+    - jsonPath: .status.allocated
+      name: Allocated
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:

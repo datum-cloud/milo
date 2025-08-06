@@ -27,11 +27,10 @@ type ResourceGrantController struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
 func (r *ResourceGrantController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("reconciling ResourceGrant!!!", "request", req, "NAME", req.Name, "NAMESPACE", req.Namespace, "NAMESPACEDNAME", req.NamespacedName)
 
 	// Fetch the ResourceGrant instance
 	var grant quotav1alpha1.ResourceGrant
-	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &grant); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: quotav1alpha1.MiloSystemNamespace}, &grant); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("ResourceGrant not found")
 			return ctrl.Result{}, nil
@@ -122,6 +121,7 @@ func (r *ResourceGrantController) validateResourceRegistrationsForGrant(ctx cont
 }
 
 // SetupWithManager sets up the controller with the Manager.
+// Uses GenerationChangedPredicate to avoid reconciling on status-only updates.
 func (r *ResourceGrantController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&quotav1alpha1.ResourceGrant{}).

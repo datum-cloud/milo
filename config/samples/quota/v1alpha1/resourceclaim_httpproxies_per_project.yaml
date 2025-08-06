@@ -1,15 +1,15 @@
 apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceClaim
 metadata:
-  name: datum-project-claim-001
+  name: datum-cloud-max-httpproxies-claim
   namespace: milo-system
 spec:
   # Reference to the owner resource specific object instance.
   ownerInstanceRef:
-    kind: Organization
-    name: datum
+    kind: Project
+    name: datum-cloud
   requests:
-    # Project entity count (must reference an active ResourceRegistration)
-    - resourceType: "resourcemanager.miloapis.com/Project"
+    # HTTPProxy entity count (must reference an active ResourceRegistration)
+    - resourceType: "networking.datumapis.com/HTTPProxy"
       amount: 1
       dimensions: {}

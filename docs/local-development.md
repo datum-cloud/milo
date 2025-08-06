@@ -34,12 +34,12 @@ task --list-all
 ## Local Kind Cluster
 
 Run the following task to run to create a local kind cluster
-and run the controller manager in the project control plane. This is an
+and run the controller manager in the core control plane. This is an
 alternative approach to local development than using
 [devcontainer](https://containers.dev).
 
 ```shell
-task kind-create-and-serve
+task kind-setup-and-run
 ```
 
 ## Starting the API Server
