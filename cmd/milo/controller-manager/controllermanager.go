@@ -84,6 +84,7 @@ import (
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
+	quotav1alpha1webhook "go.miloapis.com/milo/internal/webhooks/quota/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
@@ -429,6 +430,12 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := notificationv1alpha1webhook.SetupEmailWebhooksWithManager(ctrl); err != nil {
 				logger.Error(err, "unable to setup email webhook", "error", err)
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Set up quota webhooks for automatic ResourceClaim creation
+			if err := quotav1alpha1webhook.SetupQuotaWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up quota webhooks")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
