@@ -31,3 +31,9 @@ type ContributingResourceRef struct {
 	// +kubebuilder:validation:Required
 	ObservedGeneration int64 `json:"observedGeneration"`
 }
+
+const (
+	// MiloSystemNamespace is the namespace where the Milo system components are
+	// deployed in the project control-plane.
+	MiloSystemNamespace = "milo-system"
+)

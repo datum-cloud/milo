@@ -25,7 +25,7 @@ type ResourceRegistrationController struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations/status,verbs=get;update;patch
 //
-// Reconciles a ResourceRegistration object by validating it and updating the
+// Reconcile reconciles a ResourceRegistration object by validating it and updating the
 // status to reflect whether the registration is active and the resource type
 // can be managed by the quota system.
 //
@@ -36,8 +36,8 @@ type ResourceRegistrationController struct {
 func (r *ResourceRegistrationController) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
 	logger := log.FromContext(ctx)
 	var registration quotav1alpha1.ResourceRegistration
-	// Fetch the cluster-scoped ResourceRegistration by name and check for
-	// errors
+	// Fetch the cluster-scoped ResourceRegistration by name from the core control plane.
+	logger.Info("Fetching ResourceRegistration", "name", req.Name)
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name}, &registration); err != nil {
 		// Stop reconciliation if the object isn't found
 		if apierrors.IsNotFound(err) {
@@ -62,7 +62,7 @@ func (r *ResourceRegistrationController) Reconcile(ctx context.Context, req ctrl
 
 	// Log that reconciliation is proceeding and the details of the registration
 	// for debugging purposes.
-	logger.Info("Reconciling ResourceRegistration",
+	logger.Info("ResourceRegistration found - reconciling",
 		"name", registration.Name,
 		"resourceType", registration.Spec.ResourceType,
 		"type", registration.Spec.Type,
@@ -95,15 +95,13 @@ func (r *ResourceRegistrationController) Reconcile(ctx context.Context, req ctrl
 		activeCondition.ObservedGeneration = registration.Generation
 	}
 
-	// If the registration is already active, skip the rest of the
-	// reconciliation.
-	if activeCondition.Status == metav1.ConditionTrue {
-		return ctrl.Result{}, nil
-	}
+	// // If the registration is already active, skip the rest of the
+	// // reconciliation.
+	// if activeCondition.Status == metav1.ConditionTrue {
+	// 	return ctrl.Result{}, nil
+	// }
 
-	// In phase 1, this is a placeholder that always passes. Phase 2 will add
-	// cross-system validation to ensure that the resource type is valid and
-	// that the owner ref is valid.
+	// Validate the registration.
 	if err := r.validateRegistration(ctx, &registration); err != nil {
 		// Update condition to reflect the failure
 		logger.Info("resource registration validation failed", "error", err)
@@ -112,7 +110,7 @@ func (r *ResourceRegistrationController) Reconcile(ctx context.Context, req ctrl
 		activeCondition.Message = fmt.Sprintf("Validation failed: %v. Please check the resourceType, ownerRef, and dimensions fields to ensure they are valid.", err)
 	} else {
 		// Set the condition to true to reflect that validation passed and the
-		// registration is now active..
+		// registration is now active.
 		activeCondition.Status = metav1.ConditionTrue
 		activeCondition.Reason = quotav1alpha1.ResourceRegistrationActiveReason
 		activeCondition.Message = "The registration is active and resource grants and claims can now be created for this resource type."

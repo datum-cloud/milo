@@ -1,7 +1,7 @@
 apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceRegistration
 metadata:
-  name: project-httpproxy-registration
+  name: registration-ghi789
 spec:
   ownerTypeRef:
     apiGroup: resourcemanager.miloapis.com
@@ -9,7 +9,7 @@ spec:
   # Entity type for countable resources like projects
   type: "Entity"
   # Fully qualified name of the resource type being registered
-  resourceType: "networking.miloapis.com/HTTPProxy"
+  resourceType: "networking.datumapis.com/HTTPProxy"
   # Description of the quota limit for the resource type
   description: "Maximum number of HTTPProxy resources that can be created within a Project."
   # The base unit of measurement for the resource
