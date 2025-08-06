@@ -117,8 +117,6 @@ rules:
   resources:
   - allowancebuckets
   - effectiveresourcegrants
-  - resourcegrants
-  - resourceclaims
   verbs:
   - create
   - delete
@@ -130,8 +128,8 @@ rules:
 - apiGroups:
   - quota.miloapis.com
   resources:
+  - allowancebuckets/status
   - effectiveresourcegrants/status
-  - resourcegrants/status
   verbs:
   - get
   - patch
@@ -139,13 +137,11 @@ rules:
 - apiGroups:
   - quota.miloapis.com
   resources:
-  - resourceregistrations
+  - resourceclaims
+  - resourcegrants
   verbs:
-  - create
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - resourcemanager.miloapis.com
