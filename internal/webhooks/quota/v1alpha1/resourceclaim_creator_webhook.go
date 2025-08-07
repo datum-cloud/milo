@@ -81,9 +81,8 @@ func SetupQuotaWebhooksWithManager(mgr ctrl.Manager) error {
 	return nil
 }
 
-// +kubebuilder:webhook:path=/mutate-quota-resource-claim-creation-miloapis-com-v1alpha1,mutating=true,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=resourcemanager.miloapis.com,resources=projects,verbs=create,versions=v1alpha1,name=mresourceclaimcreation.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
-
-// +kubebuilder:webhook:path=/mutate-quota-resource-claim-creation-miloapis-com-v1alpha1,mutating=true,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=networking.datumapis.com,resources=httpproxies,verbs=create,versions=v1alpha,name=mresourceclaimcreation.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/mutate-create-resourceclaim-miloapis-com-v1alpha1,mutating=true,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=networking.datumapis.com,resources=httpproxies,verbs=create,versions=v1alpha1,name=mresourceclaimcreation.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/mutate-create-resourceclaim-miloapis-com-v1alpha1,mutating=true,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=resourcemanager.miloapis.com,resources=projects,verbs=create,versions=v1alpha1,name=mresourceclaimcreation.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // ResourceClaimCreator handles automatic creation of ResourceClaims for any
 // configured resource type defined in getSupportedResourceTypes().
