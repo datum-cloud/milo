@@ -24,7 +24,7 @@ type ResourceRegistrationController struct {
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations/status,verbs=get;update;patch
-//
+
 // Reconcile reconciles a ResourceRegistration object by validating it and updating the
 // status to reflect whether the registration is active and the resource type
 // can be managed by the quota system.
@@ -50,7 +50,7 @@ func (r *ResourceRegistrationController) Reconcile(ctx context.Context, req ctrl
 	}
 
 	// If the resource is being deleted, stop reconciliation. TODO: add
-	// finalizer to delete grants, claims, effective grants, allowance buckets
+	// finalizer to delete grants, claims, resource quota summaries, allowance buckets
 	// that are tied to this registration so they aren't orphaned. It is
 	// unlikely registrations will be deleted, so this can be deferred to a
 	// follow up PR. For now, configured RBAC for the controller does not allow

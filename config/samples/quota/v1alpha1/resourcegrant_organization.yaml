@@ -20,8 +20,3 @@ spec:
       buckets:
         - amount: 3
           dimensionSelector: {}
-    # Default number of OrganizationMemberships allowed in this organization
-    - resourceType: "resourcemanager.miloapis.com/OrganizationMembership"
-      buckets:
-        - amount: 20
-          dimensionSelector: {}

@@ -4,14 +4,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: effectiveresourcegrants.quota.miloapis.com
+  name: resourcequotasummaries.quota.miloapis.com
 spec:
   group: quota.miloapis.com
   names:
-    kind: EffectiveResourceGrant
-    listKind: EffectiveResourceGrantList
-    plural: effectiveresourcegrants
-    singular: effectiveresourcegrant
+    kind: ResourceQuotaSummary
+    listKind: ResourceQuotaSummaryList
+    plural: resourcequotasummaries
+    singular: resourcequotasummary
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -36,7 +36,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: EffectiveResourceGrant is the Schema for the effectiveresourcegrants
+        description: ResourceQuotaSummary is the Schema for the resourcequotasummaries
           API.
         properties:
           apiVersion:
@@ -57,7 +57,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: EffectiveResourceGrantSpec defines the desired state of EffectiveResourceGrant.
+            description: ResourceQuotaSummarySpec defines the desired state of ResourceQuotaSummary.
             properties:
               ownerInstanceRef:
                 description: Reference to the owner resource specific object instance.
@@ -79,8 +79,8 @@ spec:
                 - name
                 type: object
               resourceType:
-                description: The resource type this effective grant aggregates quota
-                  information for
+                description: The resource type this summary aggregates quota information
+                  for
                 pattern: ^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$
                 type: string
             required:
@@ -88,8 +88,8 @@ spec:
             - resourceType
             type: object
           status:
-            description: EffectiveResourceGrantStatus defines the observed state of
-              EffectiveResourceGrant.
+            description: ResourceQuotaSummaryStatus defines the observed state of
+              ResourceQuotaSummary.
             properties:
               available:
                 description: |-
@@ -157,8 +157,8 @@ spec:
                 type: array
                 x-kubernetes-validations:
                 - message: Ready condition reason must be valid
-                  rule: 'self.all(c, c.type == ''Ready'' ? c.reason in [''AggregationComplete'',
-                    ''AggregationFailed'', ''AggregationPending''] : true)'
+                  rule: 'self.all(c, c.type == ''Ready'' ? c.reason in [''CalculationComplete'',
+                    ''CalculationFailed'', ''CalculationPending''] : true)'
               contributingClaimRefs:
                 description: |-
                   References to the granted ResourceClaims that have contributed to the
@@ -199,7 +199,7 @@ spec:
                   type: object
                 type: array
               observedGeneration:
-                description: The specific revision of the EffectiveResourceGrant
+                description: The specific revision of the ResourceQuotaSummary
                 format: int64
                 type: integer
               totalAllocated:

@@ -17,5 +17,5 @@ spec:
     # Default number of projects allowed in this organization
     - resourceType: "resourcemanager.miloapis.com/Project"
       buckets:
-        - amount: 5
+        - amount: 3
           dimensionSelector: {}

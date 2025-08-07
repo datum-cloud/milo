@@ -25,12 +25,12 @@ type ResourceClaimController struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceclaims/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=allowancebuckets,verbs=get;list;watch
-//
+
 // Reconciles a ResourceClaim object by evaluating the requests against the available quota.
 func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
 	logger := log.FromContext(ctx)
@@ -279,7 +279,7 @@ func (r *ResourceClaimController) dimensionSelectorMatches(selector metav1.Label
 }
 
 // Creates a deterministic name for AllowanceBucket using hash,
-// which should match the logic in EffectiveResourceGrant controller.
+// which should match the logic in ResourceQuotaSummary controller.
 func (r *ResourceClaimController) generateAllowanceBucketName(namespace, resourceType string, dimensions map[string]string) string {
 	dimensionsBytes, _ := json.Marshal(dimensions)
 
