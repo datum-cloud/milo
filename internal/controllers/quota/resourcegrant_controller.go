@@ -2,6 +2,7 @@ package quota
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -25,6 +26,8 @@ type ResourceGrantController struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcequotasummaries,verbs=get;create;update;patch
+
 func (r *ResourceGrantController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -104,7 +107,61 @@ func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context,
 			"active", activeCondition.Status)
 	}
 
+	// If the grant is active, ensure the ResourceQuotaSummary exists.
+	// This is done after the status update to ensure the grant's active status
+	// is persisted first.
+	// The ResourceQuotaSummary status.totalLimit is updated by the
+	// ResourceQuotaSummary controller when the ResourceGrant becomes active.
+	if activeCondition.Status == metav1.ConditionTrue {
+		if err := r.validateOrCreateResourceQuotaSummary(ctx, grant); err != nil {
+			logger.Error(err, "Failed to validate or create ResourceQuotaSummary")
+			// trigger requeue
+			return err
+		}
+	}
+
 	return nil
+}
+
+// validateOrCreateResourceQuotaSummary creates or updates ResourceQuotaSummaries based on the allowances in a ResourceGrant.
+func (r *ResourceGrantController) validateOrCreateResourceQuotaSummary(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
+	logger := log.FromContext(ctx)
+
+	for _, allowance := range grant.Spec.Allowances {
+		resourceQuotaSummaryName := r.generateResourceQuotaSummaryName(grant.Namespace, allowance.ResourceType, grant.Spec.OwnerInstanceRef)
+		var resourceQuotaSummary quotav1alpha1.ResourceQuotaSummary
+
+		err := r.Get(ctx, types.NamespacedName{Name: resourceQuotaSummaryName, Namespace: grant.Namespace}, &resourceQuotaSummary)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// ResourceQuotaSummary does not exist, so it needs to be created.
+				logger.Info("Creating ResourceQuotaSummary", "name", resourceQuotaSummaryName)
+				newResourceQuotaSummary := &quotav1alpha1.ResourceQuotaSummary{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      resourceQuotaSummaryName,
+						Namespace: grant.Namespace,
+					},
+					Spec: quotav1alpha1.ResourceQuotaSummarySpec{
+						ResourceType:     allowance.ResourceType,
+						OwnerInstanceRef: grant.Spec.OwnerInstanceRef,
+					},
+				}
+				if createErr := r.Create(ctx, newResourceQuotaSummary); createErr != nil {
+					return fmt.Errorf("failed to create ResourceQuotaSummary %s: %w", resourceQuotaSummaryName, createErr)
+				}
+			} else {
+				return fmt.Errorf("failed to get ResourceQuotaSummary %s: %w", resourceQuotaSummaryName, err)
+			}
+		}
+	}
+	return nil
+}
+
+// generateResourceQuotaSummaryName creates a deterministic name for a ResourceQuotaSummary.
+func (r *ResourceGrantController) generateResourceQuotaSummaryName(namespace, resourceType string, ownerRef quotav1alpha1.OwnerInstanceRef) string {
+	input := fmt.Sprintf("%s%s%s%s", namespace, resourceType, ownerRef.Kind, ownerRef.Name)
+	hash := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("rqs-%x", hash)[:12]
 }
 
 // validateResourceRegistrations validates that all resource types in the grant

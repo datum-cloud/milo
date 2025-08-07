@@ -84,7 +84,7 @@ tasks:
         fi
 
       # 8. Apply the development webhook manifests
-      # Note: uncomment to run the webhook locally
+      # Note: uncomment to run the webhook locally outside of the kind cluster
       # - kubectl apply -k config/dev/
 
       # 9. Run the controller manager locally
@@ -185,7 +185,7 @@ tasks:
       # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
 
       # # Create the resource claim for 1 project for the organization
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
       # # Create the resource claim for 2 additional projects for the organization
       # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional.yaml
       # # Create the resource claim for 1 additional project for the organization

@@ -476,11 +476,11 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			effectiveResourceGrantCtrl := quotacontroller.EffectiveResourceGrantController{
+			resourceQuotaSummaryCtrl := quotacontroller.ResourceQuotaSummaryController{
 				Client: ctrl.GetClient(),
 			}
-			if err := effectiveResourceGrantCtrl.SetupWithManager(ctrl); err != nil {
-				logger.Error(err, "Error setting up effective resource grant controller")
+			if err := resourceQuotaSummaryCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up resource quota summary controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

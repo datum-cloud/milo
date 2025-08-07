@@ -4,23 +4,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EffectiveResourceGrantSpec defines the desired state of EffectiveResourceGrant.
-type EffectiveResourceGrantSpec struct {
+// ResourceQuotaSummarySpec defines the desired state of ResourceQuotaSummary.
+type ResourceQuotaSummarySpec struct {
 	// Reference to the owner resource specific object instance.
 	//
 	// +kubebuilder:validation:Required
 	OwnerInstanceRef OwnerInstanceRef `json:"ownerInstanceRef"`
 
-	// The resource type this effective grant aggregates quota information for
+	// The resource type this summary aggregates quota information for
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern=`^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$`
 	ResourceType string `json:"resourceType"`
 }
 
-// EffectiveResourceGrantStatus defines the observed state of EffectiveResourceGrant.
-type EffectiveResourceGrantStatus struct {
-	// The specific revision of the EffectiveResourceGrant
+// ResourceQuotaSummaryStatus defines the observed state of ResourceQuotaSummary.
+type ResourceQuotaSummaryStatus struct {
+	// The specific revision of the ResourceQuotaSummary
 	//
 	// +kubebuilder:validation:Optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
@@ -53,28 +53,29 @@ type EffectiveResourceGrantStatus struct {
 	ContributingGrantRefs []ContributingResourceRef `json:"contributingGrantRefs"`
 	// Known condition types: "Ready"
 	//
-	// +kubebuilder:validation:XValidation:rule="self.all(c, c.type == 'Ready' ? c.reason in ['AggregationComplete', 'AggregationFailed', 'AggregationPending'] : true)",message="Ready condition reason must be valid"
+	// +kubebuilder:validation:XValidation:rule="self.all(c, c.type == 'Ready' ? c.reason in ['CalculationComplete', 'CalculationFailed', 'CalculationPending'] : true)",message="Ready condition reason must be valid"
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// Condition type constants for EffectiveResourceGrant
+// Condition type constants for ResourceQuotaSummary
 const (
-	// Indicates that the EffectiveResourceGrant has completed aggregation and is ready
-	EffectiveResourceGrantReady = "Ready"
+	// Indicates that the ResourceQuotaSummary has completed calculation of
+	// status valuesand is ready
+	ResourceQuotaSummaryReady = "Ready"
 )
 
-// Condition reason constants for EffectiveResourceGrant
+// Condition reason constants for ResourceQuotaSummary
 const (
-	// Indicates that aggregation has completed successfully
-	EffectiveResourceGrantAggregationCompleteReason = "AggregationComplete"
-	// Indicates that aggregation failed
-	EffectiveResourceGrantAggregationFailedReason = "AggregationFailed"
-	// Indicates that aggregation is pending
-	EffectiveResourceGrantAggregationPendingReason = "AggregationPending"
+	// Indicates that calculation has completed successfully
+	ResourceQuotaSummaryCalculationCompleteReason = "CalculationComplete"
+	// Indicates that calculation failed
+	ResourceQuotaSummaryCalculationFailedReason = "CalculationFailed"
+	// Indicates that calculation is pending
+	ResourceQuotaSummaryCalculationPendingReason = "CalculationPending"
 )
 
-// EffectiveResourceGrant is the Schema for the effectiveresourcegrants API.
+// ResourceQuotaSummary is the Schema for the resourcequotasummaries API.
 //
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
@@ -86,21 +87,21 @@ const (
 // +kubebuilder:printcolumn:name="Available",type=integer,JSONPath=`.status.available`
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
-type EffectiveResourceGrant struct {
+type ResourceQuotaSummary struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// +kubebuilder:validation:Required
-	Spec   EffectiveResourceGrantSpec   `json:"spec"`
-	Status EffectiveResourceGrantStatus `json:"status,omitempty"`
+	Spec   ResourceQuotaSummarySpec   `json:"spec"`
+	Status ResourceQuotaSummaryStatus `json:"status,omitempty"`
 }
 
-// EffectiveResourceGrantList contains a list of EffectiveResourceGrant.
+// ResourceQuotaSummaryList contains a list of ResourceQuotaSummary.
 //
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
-type EffectiveResourceGrantList struct {
+type ResourceQuotaSummaryList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []EffectiveResourceGrant `json:"items"`
+	Items           []ResourceQuotaSummary `json:"items"`
 }

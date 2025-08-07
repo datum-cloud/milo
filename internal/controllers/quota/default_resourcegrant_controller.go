@@ -53,6 +53,12 @@ type DefaultResourceGrantController struct {
 	Scheme *runtime.Scheme
 }
 
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=projects,verbs=get;list;watch
+
 // The Reconcile function reconciles Project and Organization resources when
 // they are created or changed in the APIServer and is responsible for creating
 // default ResourceGrants for both resources on creation.
@@ -60,12 +66,6 @@ type DefaultResourceGrantController struct {
 // Responsibilites:
 // 1. Determines whether a Project or Organization triggered the reconciliation.
 // 2. Delegates default ResourceGrant creation to the appropriate function.
-//
-// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
-// +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizations,verbs=get;list;watch
-// +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=projects,verbs=get;list;watch
 func (r *DefaultResourceGrantController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling Organization or Project for default ResourceGrant creation", "NAMESPACED_NAME", req.NamespacedName, "NAME", req.Name)
