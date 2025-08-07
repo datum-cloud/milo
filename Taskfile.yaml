@@ -179,13 +179,13 @@ tasks:
 
       # Create the resource grant that allows an additional 3 projects per
       # organization
-      - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_projects_per_org.yaml
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_projects_per_org.yaml
 
       # # Create the resource grant that allows an additional 2 HTTPProxy instances per project
       # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
 
       # # Create the resource claim for 1 project for the organization
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
       # # Create the resource claim for 2 additional projects for the organization
       # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional.yaml
       # # Create the resource claim for 1 additional project for the organization
