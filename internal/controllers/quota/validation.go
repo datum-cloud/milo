@@ -29,7 +29,7 @@ func ValidateResourceRegistrations(ctx context.Context, c client.Client, resourc
 		resourceTypeSet[resourceType] = true
 	}
 
-	// List all ResourceRegistrations in the cluster (non-namespaced)
+	// List all ResourceRegistrations in the cluster
 	var registrationList quotav1alpha1.ResourceRegistrationList
 	if err := c.List(ctx, &registrationList); err != nil {
 		return fmt.Errorf("failed to list ResourceRegistrations: %w", err)

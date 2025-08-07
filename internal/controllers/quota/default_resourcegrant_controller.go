@@ -9,9 +9,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
@@ -66,9 +68,7 @@ type DefaultResourceGrantController struct {
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=projects,verbs=get;list;watch
 func (r *DefaultResourceGrantController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-
-	logger.Info("\n\n\nRequest:", req, "\n\n\n")
-
+	logger.Info("Reconciling Organization or Project for default ResourceGrant creation", "NAMESPACED_NAME", req.NamespacedName, "NAME", req.Name)
 	// Attempts to fetch an Organization by its name, as it is a cluster-scoped resource.
 	org := &resourcemanagerv1alpha1.Organization{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name}, org); err == nil {
@@ -79,7 +79,7 @@ func (r *DefaultResourceGrantController) Reconcile(ctx context.Context, req ctrl
 	}
 
 	// If the Organization is not found in the above logic, attempts to fetch a
-	// Project by its name, as it is also a cluster-scoped resource.
+	// Project by its name.
 	project := &resourcemanagerv1alpha1.Project{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name}, project); err == nil {
 		// If the Project was found, proceed to create default grant(s) for it
@@ -155,7 +155,7 @@ func (r *DefaultResourceGrantController) createDefaultGrantsForOrganization(ctx 
 	grant := &quotav1alpha1.ResourceGrant{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      maxProjectGrantName,
-			Namespace: "organization-" + org.Name,
+			Namespace: quotav1alpha1.MiloSystemNamespace,
 		},
 		Spec: quotav1alpha1.ResourceGrantSpec{
 			OwnerInstanceRef: quotav1alpha1.OwnerInstanceRef{
@@ -224,7 +224,7 @@ func (r *DefaultResourceGrantController) createDefaultGrantsForProject(ctx conte
 	// List existing ResourceGrants for this Project to determine if a
 	// default grant for the specific resource type has already been created
 	existingGrants := &quotav1alpha1.ResourceGrantList{}
-	err := r.Client.List(ctx, existingGrants, client.InNamespace(project.Name))
+	err := r.Client.List(ctx, existingGrants, client.InNamespace("project-"+project.Name))
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to list existing ResourceGrants: %w", err)
 	}
@@ -248,7 +248,7 @@ func (r *DefaultResourceGrantController) createDefaultGrantsForProject(ctx conte
 	defaultGrant := &quotav1alpha1.ResourceGrant{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      maxHTTPProxyGrantName,
-			Namespace: "project-" + project.Name,
+			Namespace: quotav1alpha1.MiloSystemNamespace,
 		},
 		Spec: quotav1alpha1.ResourceGrantSpec{
 			OwnerInstanceRef: quotav1alpha1.OwnerInstanceRef{
@@ -284,7 +284,12 @@ func (r *DefaultResourceGrantController) createDefaultGrantsForProject(ctx conte
 
 // SetupWithManager configures the DefaultResourceGrantController with the
 // controller-runtime Manager to watch both Project and Organization resources.
+// Uses GenerationChangedPredicate to only trigger on spec changes, avoiding reconciliations
+// for metadata-only updates  or status changes.
 func (r *DefaultResourceGrantController) SetupWithManager(mgr ctrl.Manager) error {
+	// Only reconcile when generation changes (spec updates), not metadata/status updates
+	specChangePredicate := predicate.GenerationChangedPredicate{}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		Watches(
 			&resourcemanagerv1alpha1.Organization{},
@@ -295,6 +300,7 @@ func (r *DefaultResourceGrantController) SetupWithManager(mgr ctrl.Manager) erro
 					}},
 				}
 			}),
+			builder.WithPredicates(specChangePredicate),
 		).
 		Watches(
 			&resourcemanagerv1alpha1.Project{},
@@ -305,6 +311,7 @@ func (r *DefaultResourceGrantController) SetupWithManager(mgr ctrl.Manager) erro
 					}},
 				}
 			}),
+			builder.WithPredicates(specChangePredicate),
 		).
 		Named("default-resourcegrant").
 		Complete(r)
