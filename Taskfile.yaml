@@ -83,7 +83,8 @@ tasks:
           kill -9 $(lsof -i tcp:9443 -t)
         fi
 
-      # 8. Apply the development webhook manifests - necessary??
+      # 8. Apply the development webhook manifests
+      # Note: uncomment to run the webhook locally
       # - kubectl apply -k config/dev/
 
       # 9. Run the controller manager locally
@@ -100,7 +101,7 @@ tasks:
           --infra-cluster-kubeconfig=$HOME/.kube/config \
           --v=4
 
-  kind-create-organization-namespace:
+  kind-create-namespaces:
     desc: |- 
       Create a single organization namespace in the kind cluster as a
       workaround until the webhooks are properly configured to run locally.
@@ -109,23 +110,24 @@ tasks:
     cmds:
       # Create the organization namespace
       - kubectl create namespace organization-datum
+      - kubectl create namespace milo-system
 
   kind-create-registrations:
     desc: Create resource registrations in the kind cluster
     cmds:
       # Create the resource registrations
       - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_projects_per_org.yaml
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_organizationmemberships_per_org.yaml
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_organizationmemberships_per_org.yaml
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
 
-  kind-create-organization:
+  kind-create-s:
     desc: Create organizations in the kind cluster
     cmds:
       # Create the organization which also creates the default resource grant of
       # 5 projects for it.
       - kubectl create -f config/samples/resourcemanager/v1alpha1/organization.yaml
 
-  kind-create-project:
+  kind-create-projects:
     desc: Create projects in the kind cluster
     cmds:
       # Create the project which also creates the default resource grant of
@@ -135,11 +137,13 @@ tasks:
   kind-create-grants:
     desc: Create resource grants in the kind cluster
     cmds:
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_organization.yaml
       # Create the resource grant that allows an additional 3 projects per
-      # organization and 20 organization memberships per organization
-      - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_organization.yaml
-      # Create the resource grant that allows an additional 5 HTTPProxy instances per project
-      - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
+      # organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_projects_per_org.yaml
+      # Create the resource grant that allows an additional 5 HTTPProxy instances
+      # per project
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
 
   kind-create-claims:
     desc: Create resource claims in the kind cluster
@@ -151,23 +155,19 @@ tasks:
       # Create the resource claim for 1 additional project for the organization
       - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional_2.yaml
       # Create the resource claim for 2 additional HTTPProxy instances for the project
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_httpproxies_per_project.yaml
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_httpproxies_per_project.yaml
 
   kind-create-all-quota-resources:
     desc: |-
       Setup resources in the kind cluster for quota system testing. This is
       an alternative to running the previous `kind-*` tasks individually.
     cmds:
-      # Create a single organization namespace in the kind cluster as a
-      # workaround until the webhooks are properly configured to run locally.
-      # No project namespaces are created, as the `milo-system` namespace is
-      # created by default during startup and used for project-scoped resources.
-      # - kubectl create namespace organization-datum
+      - kubectl create namespace organization-datum
+      - kubectl create namespace milo-system
 
       # Create the resource registrations
       - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_projects_per_org.yaml
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_organizationmemberships_per_org.yaml
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
 
       # Create the organization which also creates the default resource grant of
       # 5 projects for it.
@@ -177,9 +177,10 @@ tasks:
       # 5 HTTPProxy instances for it.
       # - kubectl create -f config/samples/resourcemanager/v1alpha1/project.yaml
 
-      # # Create the resource grant that allows an additional 3 projects per
-      # # organization and 20 organization memberships per organization
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_organization.yaml
+      # Create the resource grant that allows an additional 3 projects per
+      # organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_projects_per_org.yaml
+
       # # Create the resource grant that allows an additional 2 HTTPProxy instances per project
       # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
 
