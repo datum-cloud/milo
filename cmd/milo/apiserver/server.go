@@ -8,8 +8,9 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"go.miloapis.com/milo/pkg/tenantwrap"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // ← add / keep this
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	_ "k8s.io/apiserver/pkg/admission"
@@ -207,7 +208,12 @@ func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregat
 		return nil, fmt.Errorf("failed to create storage providers: %w", err)
 	}
 
-	if err := nativeAPIs.InstallAPIs(storageProviders...); err != nil {
+	wrapped := make([]controlplaneapiserver.RESTStorageProvider, 0, len(storageProviders))
+	for _, p := range storageProviders {
+		wrapped = append(wrapped, tenantwrap.WrapProvider(p))
+	}
+
+	if err := nativeAPIs.InstallAPIs(wrapped...); err != nil {
 		return nil, fmt.Errorf("failed to install APIs: %w", err)
 	}
 

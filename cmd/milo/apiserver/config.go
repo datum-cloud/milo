@@ -10,6 +10,7 @@ import (
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericfeatures "k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/server"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/routine"
 	flowcontrolrequest "k8s.io/apiserver/pkg/util/flowcontrol/request"
@@ -34,6 +35,7 @@ import (
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	svmrest "k8s.io/kubernetes/pkg/registry/storagemigration/rest"
 
+	"go.miloapis.com/milo/pkg/server/filters"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
 )
 
@@ -111,8 +113,10 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 
-	genericConfig.BuildHandlerChainFunc = DefaultBuildHandlerChain
-
+	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
+		inner := filters.ProjectRouter(h)                          // router = INNER
+		return genericapiserver.DefaultBuildHandlerChain(inner, c) // default filters = OUTER
+	}
 	serviceResolver := webhook.NewDefaultServiceResolver()
 	kubeAPIs, pluginInitializer, err := controlplaneapiserver.CreateConfig(opts, genericConfig, versionedInformers, storageFactory, serviceResolver, nil)
 	if err != nil {
