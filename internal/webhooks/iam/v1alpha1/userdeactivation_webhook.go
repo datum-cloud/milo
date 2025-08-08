@@ -62,7 +62,7 @@ func (m *UserDeactivationMutator) Default(ctx context.Context, obj runtime.Objec
 	user := &iamv1alpha1.User{}
 	if err := m.client.Get(ctx, client.ObjectKey{Name: ud.Spec.UserRef.Name}, user); err != nil {
 		userdeactivationlog.Error(err, "failed to fetch referenced User while setting owner reference", "userName", ud.Spec.UserRef.Name)
-		return fmt.Errorf("failed to get referenced User '%s': %w", ud.Spec.UserRef.Name, err)
+		return errors.NewInternalError(fmt.Errorf("failed to fetch referenced User while setting owner reference, %w", err))
 	}
 
 	ud.OwnerReferences = []metav1.OwnerReference{
