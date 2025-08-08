@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: iam.miloapis.com-userdeactivation
+spec:
+  serviceRef:
+    name: "iam.miloapis.com"
+  kind: UserDeactivation
+  plural: userdeactivations
+  singular: userdeactivation
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
