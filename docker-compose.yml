@@ -9,6 +9,22 @@ services:
     ports:
       - "2379:2379"
 
+  milo-controller:
+    image: milo-apiserver:dev
+    command: >
+      controller-manager
+        --kubeconfig=/etc/milo/root-kubeconfig.yaml
+        --system-namespace=milo-system
+        --leader-elect-resource-namespace=milo-system
+        --v=4
+    environment:
+      - TZ=UTC
+    volumes:
+      - ./certs:/certs:ro 
+      - ./root-kubeconfig.yaml:/etc/milo/root-kubeconfig.yaml:ro
+    depends_on:
+      - milo
+
   milo:
     image: milo-apiserver:dev
     environment:
@@ -29,7 +45,10 @@ services:
       - "8443:8443"
     volumes:
       - ./certs:/certs:ro 
-      - ./root-kubeconfig.yaml:/etc/milo/root-kubeconfig.yaml:ro
+      - etcd-data:/etcd-data
 
     depends_on:
       - etcd
+
+volumes:
+  etcd-data:

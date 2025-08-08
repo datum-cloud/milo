@@ -2,7 +2,6 @@ package app
 
 import (
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
 	validatingadmissionpolicy "k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	mutatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/mutating"
 	validatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/validating"
@@ -12,7 +11,7 @@ import (
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.
 func DefaultOffAdmissionPlugins() sets.Set[string] {
 	defaultOnPlugins := sets.New[string](
-		lifecycle.PluginName, // NamespaceLifecycle
+		// lifecycle.PluginName, // NamespaceLifecycle
 		// defaulttolerationseconds.PluginName, // DefaultTolerationSeconds
 		mutatingwebhook.PluginName,   // MutatingAdmissionWebhook
 		validatingwebhook.PluginName, // ValidatingAdmissionWebhook

@@ -114,8 +114,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		inner := filters.ProjectRouter(h)                          // router = INNER
-		return genericapiserver.DefaultBuildHandlerChain(inner, c) // default filters = OUTER
+		return filters.ProjectRouter(genericapiserver.DefaultBuildHandlerChain(h, c))
 	}
 	serviceResolver := webhook.NewDefaultServiceResolver()
 	kubeAPIs, pluginInitializer, err := controlplaneapiserver.CreateConfig(opts, genericConfig, versionedInformers, storageFactory, serviceResolver, nil)

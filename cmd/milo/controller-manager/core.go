@@ -15,9 +15,12 @@ import (
 	"k8s.io/kubernetes/cmd/kube-controller-manager/names"
 	pkgcontroller "k8s.io/kubernetes/pkg/controller"
 	garbagecollector "k8s.io/kubernetes/pkg/controller/garbagecollector"
-	namespacecontroller "k8s.io/kubernetes/pkg/controller/namespace"
 	resourcequotacontroller "k8s.io/kubernetes/pkg/controller/resourcequota"
 	quotainstall "k8s.io/kubernetes/pkg/quota/v1/install"
+
+	"go.miloapis.com/milo/pkg/controller/namespace"
+	namespacecontroller "go.miloapis.com/milo/pkg/controller/namespace"
+	"go.miloapis.com/milo/pkg/provider/project"
 )
 
 func newNamespaceControllerDescriptor() *ControllerDescriptor {
@@ -40,7 +43,6 @@ func startNamespaceController(ctx context.Context, controllerContext ControllerC
 }
 
 func startModifiedNamespaceController(ctx context.Context, controllerContext ControllerContext, namespaceKubeClient clientset.Interface, nsKubeconfig *restclient.Config) (controller.Interface, bool, error) {
-
 	metadataClient, err := metadata.NewForConfig(nsKubeconfig)
 	if err != nil {
 		return nil, true, err
@@ -48,6 +50,7 @@ func startModifiedNamespaceController(ctx context.Context, controllerContext Con
 
 	discoverResourcesFn := namespaceKubeClient.Discovery().ServerPreferredNamespacedResources
 
+	// ROOT: same as before (this registers the "root" cluster in your forked controller)
 	namespaceController := namespacecontroller.NewNamespaceController(
 		ctx,
 		namespaceKubeClient,
@@ -59,6 +62,19 @@ func startModifiedNamespaceController(ctx context.Context, controllerContext Con
 	)
 	go namespaceController.Run(ctx, int(controllerContext.ComponentConfig.NamespaceController.ConcurrentNamespaceSyncs))
 
+	sink := &namespace.NMSink{
+		NM:        namespaceController,
+		Resync:    controllerContext.ComponentConfig.NamespaceController.NamespaceSyncPeriod.Duration,
+		Finalizer: v1.FinalizerKubernetes,
+	}
+
+	prov, err := project.New(nsKubeconfig, sink)
+	if err != nil {
+		return nil, true, err
+	}
+	go prov.Run(ctx)
+
+	// nothing to return to kube-controller-manager; controller runs in goroutines
 	return nil, true, nil
 }
 

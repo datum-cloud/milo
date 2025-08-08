@@ -3,14 +3,12 @@ package tenantwrap
 
 import (
 	"reflect"
-	"strings"
 	"unsafe"
 
 	generic "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	apiserver "k8s.io/apiserver/pkg/server"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
-	"k8s.io/klog/v2"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
 )
 
@@ -26,27 +24,26 @@ func (b baseDecorator) NewRESTStorage(
 	getter generic.RESTOptionsGetter,
 ) (apiserver.APIGroupInfo, error) {
 
+	getter = WithProjectAwareDecorator(getter)
+
 	agi, err := b.inner.NewRESTStorage(cfg, getter)
 	if err != nil {
 		return agi, err
 	}
 
 	// pkg/tenantwrap/provider.go  – inside baseDecorator.NewRESTStorage
-	for _, resMap := range agi.VersionedResourcesStorageMap {
-		// look for the three namespace entries
-		for resName, obj := range resMap {
-			if !strings.HasPrefix(resName, "namespaces") {
-				continue
-			}
+	// for _, resMap := range agi.VersionedResourcesStorageMap {
+	// 	// look for the three namespace entries
+	// 	for resName, obj := range resMap {
 
-			if s := findStore(obj); s != nil {
-				klog.Infof("[tenant] wrapping %q store (%T)", resName, s)
-				Wrap(s) // prepend /projects/<id>/registry/…
-			} else {
-				klog.Warningf("[tenant] %q: Store not found (type %T)", resName, obj)
-			}
-		}
-	}
+	// 		if s := findStore(obj); s != nil {
+	// 			klog.Infof("[tenant] wrapping %q store (%T)", resName, s)
+	// 			Wrap(s) // prepend /projects/<id>/registry/…
+	// 		} else {
+	// 			klog.Warningf("[tenant] %q: Store not found (type %T)", resName, obj)
+	// 		}
+	// 	}
+	// }
 
 	return agi, nil
 }
