@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -22,7 +23,7 @@ func SetupUserDeactivationWebhooksWithManager(mgr ctrl.Manager, systemNamespace 
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.UserDeactivation{}).
-		WithDefaulter(&UserDeactivationMutator{}).
+		WithDefaulter(&UserDeactivationMutator{client: mgr.GetClient(), scheme: mgr.GetScheme()}).
 		WithValidator(&UserDeactivationValidator{
 			client:          mgr.GetClient(),
 			systemNamespace: systemNamespace,
@@ -33,7 +34,10 @@ func SetupUserDeactivationWebhooksWithManager(mgr ctrl.Manager, systemNamespace 
 // +kubebuilder:webhook:path=/mutate-iam-miloapis-com-v1alpha1-userdeactivation,mutating=true,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=userdeactivations,verbs=create,versions=v1alpha1,name=muserdeactivation.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // UserDeactivationMutator sets default values on UserDeactivation resources.
-type UserDeactivationMutator struct{}
+type UserDeactivationMutator struct {
+	client client.Client
+	scheme *runtime.Scheme
+}
 
 // Default sets the deactivatedBy field to the username of the requesting user if it is not already set.
 func (m *UserDeactivationMutator) Default(ctx context.Context, obj runtime.Object) error {
@@ -53,6 +57,17 @@ func (m *UserDeactivationMutator) Default(ctx context.Context, obj runtime.Objec
 	ud.Spec.DeactivatedBy = req.UserInfo.Username
 
 	userdeactivationlog.Info("Defaulting deactivatedBy complete", "name", ud.GetName(), "deactivatedBy", ud.Spec.DeactivatedBy)
+
+	// Set the owner reference so the UserDeactivation is garbage collected when the User is deleted.
+	// The user is guaranteed to exist, as ValidateCreate validates that the user exists
+	user := &iamv1alpha1.User{}
+	if err := m.client.Get(ctx, client.ObjectKey{Name: ud.Spec.UserRef.Name}, user); err != nil {
+		userdeactivationlog.Error(err, "failed to fetch referenced User while setting owner reference", "userName", ud.Spec.UserRef.Name)
+		return errors.NewInternalError(fmt.Errorf("failed to fetch referenced User while setting owner reference, %w", err))
+	}
+	if err := controllerutil.SetOwnerReference(user, ud, m.scheme); err != nil {
+		return errors.NewInternalError(fmt.Errorf("failed to set owner reference for user deactivation: %w", err))
+	}
 
 	return nil
 }

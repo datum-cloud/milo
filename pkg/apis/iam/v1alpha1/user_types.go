@@ -4,6 +4,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type UserState string
+
+const (
+	UserStateActive   UserState = "Active"
+	UserStateInactive UserState = "Inactive"
+)
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // User is the Schema for the users API
@@ -53,7 +60,7 @@ type UserStatus struct {
 	//   - Inactive: The user is prohibited to be used to authenticate, and revokes all existing sessions.
 	// +kubebuilder:default=Active
 	// +kubebuilder:validation:Enum=Active;Inactive
-	State string `json:"state,omitempty"`
+	State UserState `json:"state,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
