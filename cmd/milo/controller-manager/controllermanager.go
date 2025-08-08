@@ -432,6 +432,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			userCtrl := iamcontroller.UserController{
+				Client: ctrl.GetClient(),
+			}
+			if err := userCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
 			go func() {
 				if err := infraCluster.Start(ctx); err != nil {
 					panic(err)
