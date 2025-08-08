@@ -87,6 +87,9 @@ tasks:
       # Note: uncomment to run the webhook locally outside of the kind cluster
       # - kubectl apply -k config/dev/
 
+      # 8. Apply the webhook manifest to the cluster
+      - kubectl apply -f config/webhook/manifests.yaml
+
       # 9. Run the controller manager locally
       - |
         ./bin/milo controller-manager \
@@ -118,7 +121,7 @@ tasks:
       # Create the resource registrations
       - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_projects_per_org.yaml
       # - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_organizationmemberships_per_org.yaml
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
 
   kind-create-s:
     desc: Create organizations in the kind cluster
