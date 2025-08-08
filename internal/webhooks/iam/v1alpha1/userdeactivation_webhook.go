@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,7 +23,7 @@ func SetupUserDeactivationWebhooksWithManager(mgr ctrl.Manager, systemNamespace 
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.UserDeactivation{}).
-		WithDefaulter(&UserDeactivationMutator{}).
+		WithDefaulter(&UserDeactivationMutator{client: mgr.GetClient()}).
 		WithValidator(&UserDeactivationValidator{
 			client:          mgr.GetClient(),
 			systemNamespace: systemNamespace,
@@ -33,7 +34,9 @@ func SetupUserDeactivationWebhooksWithManager(mgr ctrl.Manager, systemNamespace 
 // +kubebuilder:webhook:path=/mutate-iam-miloapis-com-v1alpha1-userdeactivation,mutating=true,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=userdeactivations,verbs=create,versions=v1alpha1,name=muserdeactivation.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // UserDeactivationMutator sets default values on UserDeactivation resources.
-type UserDeactivationMutator struct{}
+type UserDeactivationMutator struct {
+	client client.Client
+}
 
 // Default sets the deactivatedBy field to the username of the requesting user if it is not already set.
 func (m *UserDeactivationMutator) Default(ctx context.Context, obj runtime.Object) error {
@@ -53,6 +56,23 @@ func (m *UserDeactivationMutator) Default(ctx context.Context, obj runtime.Objec
 	ud.Spec.DeactivatedBy = req.UserInfo.Username
 
 	userdeactivationlog.Info("Defaulting deactivatedBy complete", "name", ud.GetName(), "deactivatedBy", ud.Spec.DeactivatedBy)
+
+	// Set the owner reference so the UserDeactivation is garbage collected when the User is deleted.
+	// The user is guaranteed to exist, as ValidateCreate validates that the user exists
+	user := &iamv1alpha1.User{}
+	if err := m.client.Get(ctx, client.ObjectKey{Name: ud.Spec.UserRef.Name}, user); err != nil {
+		userdeactivationlog.Error(err, "failed to fetch referenced User while setting owner reference", "userName", ud.Spec.UserRef.Name)
+		return fmt.Errorf("failed to get referenced User '%s': %w", ud.Spec.UserRef.Name, err)
+	}
+
+	ud.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: iamv1alpha1.SchemeGroupVersion.String(),
+			Kind:       "User",
+			Name:       user.Name,
+			UID:        user.GetUID(),
+		},
+	}
 
 	return nil
 }

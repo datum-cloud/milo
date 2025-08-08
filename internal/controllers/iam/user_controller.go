@@ -36,39 +36,14 @@ type userFinalizer struct {
 }
 
 // Finalize implements the finalizer.Finalizer interface.
+// TODO: Implement this
 func (f *userFinalizer) Finalize(ctx context.Context, obj client.Object) (finalizer.Result, error) {
-	log := log.FromContext(ctx).WithName("user-finalizer")
-
-	user, ok := obj.(*iamv1alpha1.User)
-	if !ok {
-		log.Error(fmt.Errorf("unexpected object type %T, expected *iamv1alpha1.User", obj), "unexpected object type")
-		return finalizer.Result{}, fmt.Errorf("unexpected object type %T, expected *iamv1alpha1.User", obj)
-	}
-	log.Info("finalizing User", "user", user.Name)
-
-	// Best-effort delete of the associated UserDeactivation, if present.
-	var udList iamv1alpha1.UserDeactivationList
-	if err := f.Client.List(ctx, &udList, client.MatchingFields{"spec.userRef.name": user.Name}); err != nil {
-		log.Error(err, "failed to list UserDeactivations in finalizer")
-		return finalizer.Result{}, fmt.Errorf("failed to list UserDeactivations in finalizer: %w", err)
-	}
-
-	for i := range udList.Items {
-		ud := &udList.Items[i]
-		if err := f.Client.Delete(ctx, ud); err != nil && !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to delete UserDeactivation during finalization", "userDeactivation", ud.Name)
-			return finalizer.Result{}, err
-		}
-		log.Info("deleted UserDeactivation during finalization", "userDeactivation", ud.Name, "user", user.Name)
-	}
-
-	log.Info("finalized User", "user", user.Name)
 	return finalizer.Result{}, nil
 }
 
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch;update
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users/status,verbs=update
-// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userdeactivations,verbs=get;list;watch;delete
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userdeactivations,verbs=get;list;watch
 
 // Reconcile is the main reconciliation loop for the UserController.
 func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
