@@ -61,7 +61,6 @@ rules:
   resources:
   - userdeactivations
   verbs:
-  - delete
   - get
   - list
   - watch
