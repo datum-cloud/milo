@@ -7,6 +7,10 @@ vars:
   CONTROLLER_TOOLS_VERSION: v0.18.0
   # renovate: datasource=go depName=fybrik.io/crdoc
   CRDOC_VERSION: v0.6.4
+  # Container image configuration
+  MILO_IMAGE_NAME: "ghcr.io/datum-cloud/milo"
+  MILO_IMAGE_TAG: "dev"
+  TEST_INFRA_CLUSTER_NAME: "test-infra"
 
 tasks:
   default:
@@ -44,6 +48,282 @@ tasks:
       - test -f "{{.CERTS_DIR}}/tls.key"
       - test -f "{{.CERTS_DIR}}/tls.crt"
     silent: true
+
+  kind-setup-and-run:
+    desc: >-
+      Create a local kind cluster named “milo-local”, apply CRDs,
+      generate dev certificates, build the controller binary,
+      and run the controller manager against the cluster.
+    cmds:
+      # 1. Delete and re-create the kind cluster
+      - kind delete cluster --name milo-local
+      - kind create cluster --name milo-local
+
+      # 2. (Optional) Verify the kube-context is now `kind-milo-local`
+      - kubectl config current-context
+
+      # 3. Generate base CRDs (deepcopy, client, CRD YAMLs, etc.)
+      - task: generate
+
+      # 4. Apply overlay CRDs for core and infra control-planes
+      - kubectl apply -k config/crd/overlays/core-control-plane/
+      - kubectl apply -k config/crd/overlays/infra-control-plane/
+
+      # 5. Generate the development TLS certificates
+      - task: generate-dev-certs
+
+      # 6. Build the controller binary
+      - go build -o bin/milo ./cmd/milo
+
+      # 7. Free up ports 43271 and 96443 if already in use from the process not
+      #    being shutdown properly.
+      - |
+        if lsof -i tcp:43271 -t >/dev/null 2>&1; then
+          echo "Port 43271 in use – killing existing process..."
+          kill -9 $(lsof -i tcp:43271 -t)
+        fi
+        if lsof -i tcp:9443 -t >/dev/null 2>&1; then
+          echo "Port 9443 in use – killing existing process..."
+          kill -9 $(lsof -i tcp:9443 -t)
+        fi
+
+      # 8. Apply the development webhook manifests
+      # Note: uncomment to run the webhook locally outside of the kind cluster
+      # - kubectl apply -k config/dev/
+
+      # 8. Apply the webhook manifest to the cluster
+      - kubectl apply -f config/webhook/manifests.yaml
+
+      # 9. Run the controller manager locally
+      - |
+        ./bin/milo controller-manager \
+          --leader-elect=false \
+          --authentication-skip-lookup \
+          --secure-port=43271 \
+          --cert-dir=./certs \
+          --tls-cert-file=./certs/tls.crt \
+          --tls-private-key-file=./certs/tls.key \
+          --control-plane-scope=core \
+          --kubeconfig=$HOME/.kube/config \
+          --infra-cluster-kubeconfig=$HOME/.kube/config \
+          --v=4
+
+  kind-create-namespaces:
+    desc: |-
+      Create a single organization namespace in the kind cluster as a
+      workaround until the webhooks are properly configured to run locally.
+      No project namespaces are created, as the `milo-system` namespace is
+      created by default during startup and used for project-scoped resources.
+    cmds:
+      # Create the organization namespace
+      - kubectl create namespace organization-datum
+      - kubectl create namespace milo-system
+
+  kind-create-registrations:
+    desc: Create resource registrations in the kind cluster
+    cmds:
+      # Create the resource registrations
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_projects_per_org.yaml
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_organizationmemberships_per_org.yaml
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
+
+  kind-create-s:
+    desc: Create organizations in the kind cluster
+    cmds:
+      # Create the organization which also creates the default resource grant of
+      # 5 projects for it.
+      - kubectl create -f config/samples/resourcemanager/v1alpha1/organization.yaml
+
+  kind-create-projects:
+    desc: Create projects in the kind cluster
+    cmds:
+      # Create the project which also creates the default resource grant of
+      # 5 HTTPProxy instances per project
+      - kubectl create -f config/samples/resourcemanager/v1alpha1/project.yaml
+
+  kind-create-grants:
+    desc: Create resource grants in the kind cluster
+    cmds:
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_organization.yaml
+      # Create the resource grant that allows an additional 3 projects per
+      # organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_projects_per_org.yaml
+      # Create the resource grant that allows an additional 5 HTTPProxy instances
+      # per project
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
+
+  kind-create-claims:
+    desc: Create resource claims in the kind cluster
+    cmds:
+      # Create the resource claim for 1 project for the organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
+      # Create the resource claim for 2 additional projects for the organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional.yaml
+      # Create the resource claim for 1 additional project for the organization
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional_2.yaml
+      # Create the resource claim for 2 additional HTTPProxy instances for the project
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_httpproxies_per_project.yaml
+
+  kind-create-all-quota-resources:
+    desc: |-
+      Setup resources in the kind cluster for quota system testing. This is
+      an alternative to running the previous `kind-*` tasks individually.
+    cmds:
+      - kubectl create namespace organization-datum
+      - kubectl create namespace milo-system
+
+      # Create the resource registrations
+      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_projects_per_org.yaml
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
+
+      # Create the organization which also creates the default resource grant of
+      # 5 projects for it.
+      - kubectl create -f config/samples/resourcemanager/v1alpha1/organization.yaml
+
+      # Create the project which also creates the default resource grant of
+      # 5 HTTPProxy instances for it.
+      # - kubectl create -f config/samples/resourcemanager/v1alpha1/project.yaml
+
+      # Create the resource grant that allows an additional 3 projects per
+      # organization
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_projects_per_org.yaml
+
+      # # Create the resource grant that allows an additional 2 HTTPProxy instances per project
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
+
+      # # Create the resource claim for 1 project for the organization
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
+      # # Create the resource claim for 2 additional projects for the organization
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional.yaml
+      # # Create the resource claim for 1 additional project for the organization
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional_2.yaml
+      # # Create the resource claim for 1 additional HTTPProxy instance for the project
+      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_httpproxies_per_project.yaml
+
+  test-infra-cluster:
+    desc: |-
+      Start a new kind cluster using the datum-cloud/test-infra repository.
+      This creates a cluster with flux, cert-manager, and other components pre-installed.
+    cmds:
+      - |
+        set -e
+        TEMP_DIR=$(mktemp -d)
+        echo "Cloning test-infra repository to temporary directory: $TEMP_DIR"
+
+        git clone https://github.com/datum-cloud/test-infra.git "$TEMP_DIR/test-infra"
+        cd "$TEMP_DIR/test-infra"
+
+        echo "Starting kind cluster with test infrastructure..."
+        make cluster-up
+
+        echo "Cleaning up temporary directory..."
+        cd - > /dev/null
+        rm -rf "$TEMP_DIR"
+
+        echo "Test infrastructure cluster is ready!"
+        echo "Use 'kubectl config current-context' to verify your context."
+
+  build-milo-image:
+    desc: Build the Milo container image for development
+    cmds:
+      - |
+        set -e
+        echo "Building Milo container image: {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}"
+        docker build -t "{{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}" .
+        echo "Successfully built {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}"
+    sources:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "Dockerfile"
+    generates:
+      - ".task-build-timestamp"
+    method: timestamp
+
+  load-image-to-kind:
+    desc: Load the Milo container image into the kind cluster
+    deps:
+      - build-milo-image
+    cmds:
+      - |
+        set -e
+        echo "Loading image {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}} into kind cluster '{{.TEST_INFRA_CLUSTER_NAME}}'..."
+        kind load docker-image "{{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}" --name "{{.TEST_INFRA_CLUSTER_NAME}}"
+        echo "Successfully loaded image into kind cluster"
+
+  deploy-to-test-infra:
+    desc: Deploy Milo controller manager to the test-infra cluster
+    deps:
+      - generate
+      - load-image-to-kind
+    cmds:
+      - |
+        set -e
+        echo "Deploying Milo controller manager to test-infra cluster..."
+
+        # Apply CRDs first
+        echo "Applying CRDs..."
+        kubectl apply -k config/crd/overlays/core-control-plane/
+        kubectl apply -k config/crd/overlays/infra-control-plane/
+
+        # Deploy controller manager with dev overlay
+        echo "Deploying controller manager and webhooks..."
+        kubectl apply -k config/dev/
+
+        # Wait for deployment to be ready
+        echo "Waiting for controller manager to be ready..."
+        kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s
+
+        echo "✅ Milo controller manager deployed successfully!"
+        echo "Check status with: kubectl get pods -n milo-system"
+
+  test-infra-setup-complete:
+    desc: Complete setup of test-infra cluster with Milo deployment
+    deps:
+      - test-infra-cluster
+      - deploy-to-test-infra
+    cmds:
+      - |
+        echo "🎉 Test infrastructure setup complete!"
+        echo ""
+        echo "Cluster: {{.TEST_INFRA_CLUSTER_NAME}}"
+        echo "Context: $(kubectl config current-context)"
+        echo ""
+        echo "Available components:"
+        echo "  ✅ Flux (GitOps)"
+        echo "  ✅ cert-manager (TLS certificates)"
+        echo "  ✅ Kyverno (Policy management)"
+        echo "  ✅ Milo controller manager"
+        echo ""
+        echo "Test with: kubectl apply -f config/samples/resourcemanager/v1alpha1/organization.yaml"
+
+  test-infra-redeploy:
+    desc: Quick rebuild and redeploy for development iterations
+    deps:
+      - load-image-to-kind
+    cmds:
+      - |
+        set -e
+        echo "Redeploying Milo controller manager..."
+
+        # Restart the deployment to pick up new image
+        kubectl rollout restart deployment/milo-controller-manager -n milo-system
+
+        # Wait for rollout to complete
+        echo "Waiting for rollout to complete..."
+        kubectl rollout status deployment/milo-controller-manager -n milo-system --timeout=120s
+
+        echo "✅ Redeployment complete!"
+        echo "Check logs with: task test-infra-logs"
+
+  test-infra-logs:
+    desc: Show controller manager logs from test-infra deployment
+    cmds:
+      - |
+        echo "Showing Milo controller manager logs..."
+        echo "Press Ctrl+C to stop following logs"
+        echo ""
+        kubectl logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager --follow --tail=50
 
   generate:
     desc: Generate code including deepcopy, objects, CRDs, and potentially protobuf marshallers
