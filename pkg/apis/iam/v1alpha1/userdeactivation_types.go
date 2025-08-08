@@ -4,6 +4,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Condition and reason constants for UserDeactivation
+const (
+	// UserDeactivationReadyCondition is set to True when the deactivation has been processed.
+	UserDeactivationReadyCondition = "Ready"
+	// UserDeactivationReadyReason is the typical reason used when reconciliation succeeds.
+	UserDeactivationReadyReason = "Reconciled"
+)
+
 // UserDeactivationSpec defines the desired state of UserDeactivation
 type UserDeactivationSpec struct {
 	// UserRef is a reference to the User being deactivated.

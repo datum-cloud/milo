@@ -63,8 +63,16 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	// Defining the desired user state
 	var desiredState iamv1alpha1.UserState
-	// If there are any UserDeactivations for this user, the user is inactive
-	if len(udList.Items) > 0 {
+	// Only mark the user Inactive if there is at least one processed (Ready=True) UserDeactivation
+	hasProcessedDeactivation := false
+	for i := range udList.Items {
+		ud := udList.Items[i]
+		if meta.IsStatusConditionTrue(ud.Status.Conditions, iamv1alpha1.UserDeactivationReadyCondition) {
+			hasProcessedDeactivation = true
+			break
+		}
+	}
+	if hasProcessedDeactivation {
 		desiredState = iamv1alpha1.UserStateInactive
 	} else {
 		desiredState = iamv1alpha1.UserStateActive
@@ -76,7 +84,7 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		Type:               userReadyConditionType,
 		Status:             metav1.ConditionTrue,
 		Reason:             "Reconciled",
-		Message:            fmt.Sprintf("User state set to %s based on UserDeactivation presence", desiredState),
+		Message:            fmt.Sprintf("User state set to %s based on processed UserDeactivation presence", desiredState),
 		LastTransitionTime: metav1.Now(),
 	}
 	meta.SetStatusCondition(&user.Status.Conditions, userCondition)
