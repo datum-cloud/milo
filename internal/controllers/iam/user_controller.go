@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/finalizer"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -25,20 +24,7 @@ const (
 
 // UserController reconciles a User object
 type UserController struct {
-	Client     client.Client
-	Finalizers finalizer.Finalizers
-}
-
-// userFinalizer implements the finalizer.Finalizer interface for User cleanup.
-// This is used to clean up associated UserDeactivations when a User is deleted.
-type userFinalizer struct {
 	Client client.Client
-}
-
-// Finalize implements the finalizer.Finalizer interface.
-// TODO: Implement this
-func (f *userFinalizer) Finalize(ctx context.Context, obj client.Object) (finalizer.Result, error) {
-	return finalizer.Result{}, nil
 }
 
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch;update
@@ -58,20 +44,6 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, fmt.Errorf("failed to get User: %w", err)
 	}
 	log.Info("reconciling User", "user", user.Name)
-
-	// Handle finalizer lifecycle and ensure it is set.
-	finalizeResult, err := r.Finalizers.Finalize(ctx, user)
-	if err != nil {
-		log.Error(err, "failed to run finalizers for User")
-		return ctrl.Result{}, fmt.Errorf("failed to run finalizers for User: %w", err)
-	}
-	if finalizeResult.Updated {
-		if err := r.Client.Update(ctx, user); err != nil {
-			log.Error(err, "failed to update User after finalizer update")
-			return ctrl.Result{}, fmt.Errorf("failed to update User after finalizer update: %w", err)
-		}
-		return ctrl.Result{}, nil
-	}
 
 	// Stop reconciling if deletion in progress.
 	if !user.DeletionTimestamp.IsZero() {
@@ -125,12 +97,6 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *UserController) SetupWithManager(mgr ctrl.Manager) error {
-	r.Finalizers = finalizer.NewFinalizers()
-	// Register finalizer implementation
-	if err := r.Finalizers.Register(userFinalizerKey, &userFinalizer{Client: mgr.GetClient()}); err != nil {
-		return fmt.Errorf("failed to register user finalizer: %w", err)
-	}
-
 	// Index UserDeactivation by spec.userRef.name for efficient lookups
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.UserDeactivation{}, "spec.userRef.name", func(obj client.Object) []string {
 		ud, ok := obj.(*iamv1alpha1.UserDeactivation)
