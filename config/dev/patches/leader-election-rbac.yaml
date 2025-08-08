@@ -1,0 +1,31 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: milo-controller-manager
+rules:
+# Add leader election permissions
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+# Add event permissions for leader election
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+# Add namespace creation permissions for webhooks
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - create

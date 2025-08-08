@@ -1,0 +1,23 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: milo-controller-manager-tls
+  namespace: milo-system
+spec:
+  secretName: milo-controller-manager-tls
+  issuerRef:
+    name: milo-controller-manager-selfsigned-issuer
+    kind: Issuer
+  dnsNames:
+  - milo-controller-manager
+  - milo-controller-manager.milo-system
+  - milo-controller-manager.milo-system.svc
+  - milo-controller-manager.milo-system.svc.cluster.local
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: milo-controller-manager-selfsigned-issuer
+  namespace: milo-system
+spec:
+  selfSigned: {}

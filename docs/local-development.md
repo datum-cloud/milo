@@ -31,7 +31,132 @@ Run the following command to see all available tasks.
 task --list-all
 ```
 
-## Local Kind Cluster
+## Test Infrastructure Cluster
+
+The recommended approach for local development is using the test infrastructure cluster that includes production-like components (Flux, cert-manager, Kyverno) along with the Milo controller manager.
+
+### Quick Start
+
+For first-time setup, use the complete setup command:
+
+```shell
+task test-infra-setup-complete
+```
+
+This single command will:
+1. Create a kind cluster with test infrastructure (Flux, cert-manager, Kyverno)
+2. Generate all CRDs and manifests
+3. Build the Milo container image
+4. Load the image into the kind cluster
+5. Deploy the controller manager and webhooks
+6. Verify the deployment is healthy
+
+### Development Workflow
+
+After the initial setup, use these commands for daily development:
+
+#### Code Changes
+When you make changes to Go code:
+
+```shell
+task test-infra-redeploy
+```
+
+This will:
+- Rebuild the container image with your latest changes
+- Load the updated image into the kind cluster
+- Restart the controller manager deployment
+- Wait for the deployment to be ready
+
+#### Configuration Changes
+When you modify Kubernetes manifests or Kustomize overlays:
+
+```shell
+kubectl apply -k config/dev/
+```
+
+#### View Logs
+To see controller manager logs in real-time:
+
+```shell
+task test-infra-logs
+```
+
+Press `Ctrl+C` to stop following the logs.
+
+#### Check Status
+Verify the deployment status:
+
+```shell
+kubectl get pods -n milo-system
+kubectl get nodes
+kubectl config current-context  # Should show: kind-test-infra
+```
+
+### Manual Step-by-Step Setup
+
+For learning or debugging purposes, you can run the setup steps individually:
+
+```shell
+# 1. Create test infrastructure cluster
+task test-infra-cluster
+
+# 2. Deploy Milo components
+task deploy-to-test-infra
+```
+
+### Individual Commands
+
+The following commands are available for specific tasks:
+
+| Command | Purpose |
+|---------|---------|
+| `task build-milo-image` | Build the Milo container image |
+| `task load-image-to-kind` | Load image into kind cluster |
+| `task deploy-to-test-infra` | Deploy controller with CRDs and webhooks |
+| `task test-infra-redeploy` | Quick rebuild and redeploy |
+| `task test-infra-logs` | Follow controller manager logs |
+| `task test-infra-setup-complete` | Full environment setup |
+
+### Testing Your Changes
+
+After deployment, test that everything works:
+
+1. **Check cluster health:**
+   ```shell
+   kubectl get pods -A
+   ```
+
+2. **Verify webhooks are working:**
+   ```shell
+   # This should work without errors
+   kubectl apply -f config/samples/resourcemanager/v1alpha1/organization.yaml
+   ```
+
+3. **Check controller logs:**
+   ```shell
+   task test-infra-logs
+   ```
+
+### Configuration
+
+The test infrastructure uses these configurable variables (in `Taskfile.yaml`):
+
+- `MILO_IMAGE_NAME`: Container image name (default: `ghcr.io/datum-cloud/milo`)
+- `MILO_IMAGE_TAG`: Container image tag (default: `dev`)
+- `TEST_INFRA_CLUSTER_NAME`: Kind cluster name (default: `test-infra`)
+
+### Cleanup
+
+When you're done developing, clean up the test cluster:
+
+```shell
+kind delete cluster --name test-infra
+```
+
+## Legacy Local Kind Cluster
+
+> **NOTE:** The following approach is legacy. Use the test infrastructure cluster above instead.
 
 Run the following task to run to create a local kind cluster
 and run the controller manager in the core control plane. This is an
@@ -104,7 +229,7 @@ Mailhog is a lightweight test SMTP server designed for local development. It cap
 ### API Access
 
 - **Inbox Data**: `http://localhost:8025/api/v2/messages`
-- 
+-
   Retrieve all email data programmatically via the Mailhog API.
 
 - **API Documentation**: [Mailhog API v2 Documentation](https://github.com/mailhog/MailHog/tree/master/docs/APIv2)
@@ -120,4 +245,3 @@ The Zitadel service is preconfigured to route all outgoing emails, such as:
 All emails, regardless of the recipient address, are captured and available for testing within Mailhog.
 
 This setup ensures a seamless and secure way to test email functionality during local development.
-

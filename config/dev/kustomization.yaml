@@ -1,5 +1,57 @@
-resources:
-- ../webhook
+namespace: milo-system
 
-transformers:
-  - webhook_patch.yaml
+resources:
+- namespace.yaml
+- certificate.yaml
+- cluster-admin-rbac.yaml
+- ../webhook
+- ../controller-manager/overlays/core-control-plane
+
+# transformers:
+#   - webhook_patch.yaml
+
+patches:
+  - path: patches/controller-manager-deployment.yaml
+  - path: patches/leader-election-rbac.yaml
+  - patch: |
+      # Remove the organization validation webhook since it'll automatically
+      # create a policy binding for the authenticated user and there won't be an
+      # authenticated user in this environment.
+      - op: remove
+        path: /webhooks/1
+      # Remove the project validation webhook since it'll automatically create a
+      # policy binding for the authenticated user and there won't be an
+      # authenticated user in this environment.
+      - op: remove
+        # The index changes from 2 -> 1 since another webhook was removed above.
+        path: /webhooks/1
+    target:
+      kind: ValidatingWebhookConfiguration
+      name: resourcemanager.miloapis.com
+  - patch: |
+      # Remove the project mutating webhook since it'll automatically associate
+      # a project with an organization but the organization context isn't passed
+      # through without it being run in Milo's APIserver.
+      - op: remove
+        # Now it's the only webhook, so remove index 0
+        path: /webhooks/0
+    target:
+      kind: MutatingWebhookConfiguration
+      name: resourcemanager.miloapis.com
+
+  - path: patches/webhook-ca-injection.yaml
+    target:
+      kind: ValidatingWebhookConfiguration
+      name: resourcemanager.miloapis.com
+  - path: patches/webhook-ca-injection.yaml
+    target:
+      kind: MutatingWebhookConfiguration
+      name: resourcemanager.miloapis.com
+  - path: patches/webhook-ca-injection.yaml
+    target:
+      kind: MutatingWebhookConfiguration
+      name: quota.miloapis.com
+
+images:
+  - name: ghcr.io/datum-cloud/milo
+    newTag: dev

@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milo-controller-manager
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: true
+      containers:
+      - name: milo-controller-manager
+        # Use in-cluster config for development
+        env:
+          - name: KUBECONFIG
+            value: ""
+          - name: INFRA_CLUSTER_KUBECONFIG
+            value: ""
+        # Mount cert-manager generated certificates
+        volumeMounts:
+        - name: webhook-certs
+          mountPath: /etc/kubernetes/pki/webhook
+          readOnly: true
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: milo-controller-manager-tls
