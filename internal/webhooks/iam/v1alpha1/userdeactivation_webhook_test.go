@@ -10,6 +10,7 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -185,7 +186,7 @@ func TestUserDeactivationMutator_DefaultsAndValidator(t *testing.T) {
 
 	// Build fake client including referenced user
 	testUser := &iamv1alpha1.User{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-user"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-user", UID: types.UID("test-uid")},
 		Spec:       iamv1alpha1.UserSpec{Email: "test@example.com"},
 	}
 
@@ -200,11 +201,20 @@ func TestUserDeactivationMutator_DefaultsAndValidator(t *testing.T) {
 	ctx := admission.NewContextWithRequest(context.Background(), req)
 
 	// Run mutator default
-	mutator := &UserDeactivationMutator{}
+	mutator := &UserDeactivationMutator{client: fakeClient}
 	assert.NoError(t, mutator.Default(ctx, ud))
 
 	// Ensure DeactivatedBy was defaulted to requester username
 	assert.Equal(t, "tester", ud.Spec.DeactivatedBy, "deactivatedBy should be defaulted to requester username")
+
+	// Ensure OwnerReferences were set to the referenced User
+	if assert.Len(t, ud.OwnerReferences, 1, "expected a single owner reference to be set") {
+		ref := ud.OwnerReferences[0]
+		assert.Equal(t, iamv1alpha1.SchemeGroupVersion.String(), ref.APIVersion)
+		assert.Equal(t, "User", ref.Kind)
+		assert.Equal(t, "test-user", ref.Name)
+		assert.Equal(t, types.UID("test-uid"), ref.UID)
+	}
 
 	// Validate create should now pass
 	validator := &UserDeactivationValidator{client: fakeClient, systemNamespace: systemNamespace}
