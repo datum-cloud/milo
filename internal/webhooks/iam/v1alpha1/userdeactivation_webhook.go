@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -23,7 +23,7 @@ func SetupUserDeactivationWebhooksWithManager(mgr ctrl.Manager, systemNamespace 
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.UserDeactivation{}).
-		WithDefaulter(&UserDeactivationMutator{client: mgr.GetClient()}).
+		WithDefaulter(&UserDeactivationMutator{client: mgr.GetClient(), scheme: mgr.GetScheme()}).
 		WithValidator(&UserDeactivationValidator{
 			client:          mgr.GetClient(),
 			systemNamespace: systemNamespace,
@@ -36,6 +36,7 @@ func SetupUserDeactivationWebhooksWithManager(mgr ctrl.Manager, systemNamespace 
 // UserDeactivationMutator sets default values on UserDeactivation resources.
 type UserDeactivationMutator struct {
 	client client.Client
+	scheme *runtime.Scheme
 }
 
 // Default sets the deactivatedBy field to the username of the requesting user if it is not already set.
@@ -64,14 +65,8 @@ func (m *UserDeactivationMutator) Default(ctx context.Context, obj runtime.Objec
 		userdeactivationlog.Error(err, "failed to fetch referenced User while setting owner reference", "userName", ud.Spec.UserRef.Name)
 		return errors.NewInternalError(fmt.Errorf("failed to fetch referenced User while setting owner reference, %w", err))
 	}
-
-	ud.OwnerReferences = []metav1.OwnerReference{
-		{
-			APIVersion: iamv1alpha1.SchemeGroupVersion.String(),
-			Kind:       "User",
-			Name:       user.Name,
-			UID:        user.GetUID(),
-		},
+	if err := controllerutil.SetOwnerReference(user, ud, m.scheme); err != nil {
+		return errors.NewInternalError(fmt.Errorf("failed to set owner reference for user deactivation: %w", err))
 	}
 
 	return nil
