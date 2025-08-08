@@ -201,7 +201,7 @@ func TestUserDeactivationMutator_DefaultsAndValidator(t *testing.T) {
 	ctx := admission.NewContextWithRequest(context.Background(), req)
 
 	// Run mutator default
-	mutator := &UserDeactivationMutator{client: fakeClient}
+	mutator := &UserDeactivationMutator{client: fakeClient, scheme: runtimeScheme}
 	assert.NoError(t, mutator.Default(ctx, ud))
 
 	// Ensure DeactivatedBy was defaulted to requester username
