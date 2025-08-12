@@ -4,25 +4,22 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: users.iam.miloapis.com
+  name: userpreferences.iam.miloapis.com
 spec:
   group: iam.miloapis.com
   names:
-    kind: User
-    listKind: UserList
-    plural: users
-    singular: user
+    kind: UserPreference
+    listKind: UserPreferenceList
+    plural: userpreferences
+    singular: userpreference
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.email
-      name: Email
+    - jsonPath: .spec.userRef.name
+      name: User
       type: string
-    - jsonPath: .spec.givenName
-      name: Given Name
-      type: string
-    - jsonPath: .spec.familyName
-      name: Family Name
+    - jsonPath: .spec.theme
+      name: Theme
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -30,13 +27,10 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .status.state
-      name: State
-      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: User is the Schema for the users API
+        description: UserPreference is the Schema for the userpreferences API
         properties:
           apiVersion:
             description: |-
@@ -56,22 +50,30 @@ spec:
           metadata:
             type: object
           spec:
-            description: UserSpec defines the desired state of User
+            description: UserPreferenceSpec defines the desired state of UserPreference
             properties:
-              email:
-                description: The email of the user.
+              theme:
+                default: system
+                description: The user's theme preference.
+                enum:
+                - light
+                - dark
+                - system
                 type: string
-              familyName:
-                description: The last name of the user.
-                type: string
-              givenName:
-                description: The first name of the user.
-                type: string
+              userRef:
+                description: Reference to the user these preferences belong to.
+                properties:
+                  name:
+                    description: Name is the name of the User being referenced.
+                    type: string
+                required:
+                - name
+                type: object
             required:
-            - email
+            - userRef
             type: object
           status:
-            description: UserStatus defines the observed state of User
+            description: UserPreferenceStatus defines the observed state of UserPreference
             properties:
               conditions:
                 default:
@@ -81,7 +83,7 @@ spec:
                   status: Unknown
                   type: Ready
                 description: Conditions provide conditions that represent the current
-                  status of the User.
+                  status of the UserPreference.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -137,21 +139,6 @@ spec:
                   - type
                   type: object
                 type: array
-              state:
-                default: Active
-                description: |-
-                  State represents the current activation state of the user account from the
-                  auth provider. This field is managed exclusively by the UserDeactivation CRD
-                  and cannot be changed directly by the user. When a UserDeactivation resource
-                  is created for the user, the user is deactivated in the auth provider; when
-                  the UserDeactivation is deleted, the user is reactivated.
-                  States:
-                    - Active: The user can be used to authenticate.
-                    - Inactive: The user is prohibited to be used to authenticate, and revokes all existing sessions.
-                enum:
-                - Active
-                - Inactive
-                type: string
             type: object
         type: object
     served: true

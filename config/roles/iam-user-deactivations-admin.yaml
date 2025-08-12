@@ -1,8 +1,8 @@
 apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
-  name: resourcemanager-admin
+  name: iam-user-deactivations-admin
 spec:
   launchStage: Beta
   inheritedRoles:
-    - name: resourcemanager-editor
+    - name: iam-user-deactivations-editor

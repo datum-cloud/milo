@@ -59,6 +59,17 @@ func (v *UserValidator) ValidateCreate(ctx context.Context, obj runtime.Object) 
 		return nil, fmt.Errorf("failed to create owner policy binding: %w", err)
 	}
 
+	userPreferences, err := v.createUserPreference(ctx, user)
+	if err != nil {
+		userlog.Error(err, "Failed to create user preference")
+		return nil, fmt.Errorf("failed to create user preference: %w", err)
+	}
+
+	if err := v.createUserPreferencePolicyBinding(ctx, user, userPreferences); err != nil {
+		userlog.Error(err, "Failed to create user preference policy binding")
+		return nil, fmt.Errorf("failed to create user preference policy binding: %w", err)
+	}
+
 	return nil, nil
 }
 
@@ -105,6 +116,70 @@ func (v *UserValidator) createSelfManagePolicyBinding(ctx context.Context, user 
 
 	if err := v.client.Create(ctx, policyBinding); err != nil {
 		return fmt.Errorf("failed to create policy binding resource: %w", err)
+	}
+
+	return nil
+}
+
+// createUserPreference creates a UserPreference for the new user
+func (v *UserValidator) createUserPreference(ctx context.Context, user *iamv1alpha1.User) (*iamv1alpha1.UserPreference, error) {
+	userlog.Info("Attempting to create UserPreference for new user", "user", user.Name)
+
+	// Build the UserPreference
+	userPreference := &iamv1alpha1.UserPreference{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("userpreference-%s", user.Name),
+		},
+		Spec: iamv1alpha1.UserPreferenceSpec{
+			UserRef: iamv1alpha1.UserReference{
+				Name: user.Name,
+			},
+			Theme: "system", // Default theme
+		},
+	}
+
+	if err := v.client.Create(ctx, userPreference); err != nil {
+		return nil, fmt.Errorf("failed to create user preference resource: %w", err)
+	}
+
+	return userPreference, nil
+}
+
+// createUserPreferencePolicyBinding creates a PolicyBinding for the user's UserPreference
+func (v *UserValidator) createUserPreferencePolicyBinding(ctx context.Context, user *iamv1alpha1.User, userPreference *iamv1alpha1.UserPreference) error {
+	userlog.Info("Attempting to create PolicyBinding for user preference", "user", user.Name)
+
+	// Build the PolicyBinding
+	policyBinding := &iamv1alpha1.PolicyBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("userpreference-self-manage-%s", user.Name),
+			Namespace: v.systemNamespace,
+		},
+		Spec: iamv1alpha1.PolicyBindingSpec{
+			RoleRef: iamv1alpha1.RoleReference{
+				Name:      "iam-user-preferences-manager",
+				Namespace: v.systemNamespace,
+			},
+			Subjects: []iamv1alpha1.Subject{
+				{
+					Kind: "User",
+					Name: user.Name,
+					UID:  string(user.GetUID()),
+				},
+			},
+			ResourceSelector: iamv1alpha1.ResourceSelector{
+				ResourceRef: &iamv1alpha1.ResourceReference{
+					APIGroup: iamv1alpha1.SchemeGroupVersion.Group,
+					Kind:     "UserPreference",
+					Name:     userPreference.Name,
+					UID:      string(userPreference.UID),
+				},
+			},
+		},
+	}
+
+	if err := v.client.Create(ctx, policyBinding); err != nil {
+		return fmt.Errorf("failed to create user preference policy binding resource: %w", err)
 	}
 
 	return nil

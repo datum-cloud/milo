@@ -3,7 +3,6 @@ kind: Component
 
 resources:
   - owner.yaml
-  - organization-manager.yaml
   - project-manager.yaml
   - iam-reader.yaml
   - iam-editor.yaml
@@ -16,5 +15,9 @@ resources:
   - core-admin.yaml
   - apiextensions-reader.yaml
   - iam-user-self-manage.yaml
+  - iam-user-preferences-manager.yaml
+  - iam-user-deactivations-reader.yaml
+  - iam-user-deactivations-editor.yaml
+  - iam-user-deactivations-admin.yaml
 
 namespace: milo-system

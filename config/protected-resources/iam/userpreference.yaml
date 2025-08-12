@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: iam.miloapis.com-userpreference
+spec:
+  serviceRef:
+    name: "iam.miloapis.com"
+  kind: UserPreference
+  plural: userpreferences
+  singular: userpreference
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch 

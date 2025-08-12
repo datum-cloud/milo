@@ -98,6 +98,7 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 				Name:      project.Name,
 				Labels: map[string]string{
 					resourcemanagerv1alpha.ProjectNameLabel: project.Name,
+					resourcemanagerv1alpha.ProjectUIDLabel:  string(project.UID),
 				},
 				Annotations: map[string]string{
 					resourcemanagerv1alpha.OwnerNameLabel: project.Spec.OwnerRef.Name,
@@ -109,6 +110,10 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 		if err := r.InfraClient.Create(ctx, &projectControlPlane); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to create project control plane: %w", err)
 		}
+
+		// The project control plane will be reconciled once the status has been
+		// updated.
+		return ctrl.Result{}, nil
 	}
 
 	projectControlPlaneReadyCondition := apimeta.FindStatusCondition(projectControlPlane.Status.Conditions, infrastructurev1alpha1.ProjectControlPlaneReady)

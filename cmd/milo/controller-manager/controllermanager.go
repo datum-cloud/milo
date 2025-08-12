@@ -394,6 +394,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up user webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupUserDeactivationWebhooksWithManager(ctrl, SystemNamespace); err != nil {
+				logger.Error(err, "Error setting up userdeactivation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
@@ -401,6 +405,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := projectCtrl.SetupWithManager(ctrl, infraCluster); err != nil {
 				logger.Error(err, "Error setting up project controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			organizationCtrl := resourcemanagercontroller.OrganizationController{
+				Client: ctrl.GetClient(),
+			}
+			if err := organizationCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up organization controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
@@ -417,6 +429,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := groupCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up group controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			userCtrl := iamcontroller.UserController{
+				Client: ctrl.GetClient(),
+			}
+			if err := userCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
