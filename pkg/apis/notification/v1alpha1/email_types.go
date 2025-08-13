@@ -6,10 +6,14 @@ import (
 
 // Condition and reason constants for Email
 const (
-	// EmailReadyCondition is set to True when the email has been processed by the control plane.
-	EmailReadyCondition = "Ready"
-	// EmailReadyReason is the typical reason used when reconciliation succeeds.
-	EmailReadyReason = "Reconciled"
+	// EmailDeliveredCondition is the condition Type that tracks email delivery status.
+	EmailDeliveredCondition = "Delivered"
+	// EmailDeliveredReason is used when email delivery succeeds.
+	EmailDeliveredReason = "DeliverySuccessful"
+	// EmailDeliveryFailedReason is used when email delivery fails.
+	EmailDeliveryFailedReason = "DeliveryFailed"
+	// EmailDeliveryPendingReason is used when email delivery is in progress.
+	EmailDeliveryPendingReason = "DeliveryPending"
 )
 
 // EmailPriority defines the priority for sending an Email.
@@ -84,11 +88,12 @@ type EmailSpec struct {
 }
 
 // EmailStatus captures the observed state of an Email.
-// Right now we only expose standard Kubernetes conditions so callers can track delivery state.
+// Uses standard Kubernetes conditions to track both processing and delivery state.
 // +kubebuilder:validation:Type=object
 type EmailStatus struct {
 	// Conditions represent the latest available observations of an object's current state.
-	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
+	// Standard condition is "Delivered" which tracks email delivery status.
+	// +kubebuilder:default={{type: "Delivered", status: "Unknown", reason: "DeliveryPending", message: "Waiting for email delivery", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +kubebuilder:validation:Optional
 	// +patchMergeKey=type
 	// +patchStrategy=merge
@@ -106,7 +111,7 @@ type EmailStatus struct {
 // It represents a concrete e-mail that should be sent to the referenced users.
 // +kubebuilder:printcolumn:name="Template",type="string",JSONPath=".spec.templateRef.name"
 // +kubebuilder:printcolumn:name="Priority",type="string",JSONPath=".spec.priority"
-// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Delivered",type="string",JSONPath=".status.conditions[?(@.type=='Delivered')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Namespaced
 type Email struct {
