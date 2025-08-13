@@ -1,0 +1,30 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: basic-httpproxy-policy
+  labels:
+    quota.miloapis.com/category: "networking"
+    quota.miloapis.com/tier: "basic"
+spec:
+  enabled: true
+  targetResource:
+    apiVersion: "networking.miloapis.com/v1alpha1"
+    kind: "HTTPProxy"
+  resourceClaimTemplate:
+    requests:
+    - resourceType: "networking.miloapis.com/HTTPProxy"
+      amount: 1
+      dimensions:
+        service-tier: "basic"
+        protocol: "http"
+        region: "us-west-1"
+      dimensionExpressions:
+        hostname: "object.spec.virtualhost.fqdn || 'unknown'"
+        path-count: "string(size(object.spec.routes || []))"
+    nameTemplate: "basic-{{.ResourceName}}-claim"
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/service-tier: "basic"
+    annotations:
+      quota.miloapis.com/description: "Basic HTTPProxy quota claim"
+      quota.miloapis.com/billing-category: "networking-basic"

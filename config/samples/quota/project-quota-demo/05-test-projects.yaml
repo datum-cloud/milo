@@ -1,0 +1,105 @@
+# Test Projects - These demonstrate quota enforcement
+# Apply these one by one to see quota limits in action
+
+---
+# Project 1: Development tier, us-east-1 (should succeed - within quota)
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: acme-dev-api
+  labels:
+    quota.miloapis.com/tier: "development"
+    quota.miloapis.com/region: "us-east-1"
+    quota.miloapis.com/demo: "project-quota"
+spec:
+  ownerRef:
+    kind: Organization
+    name: "datum"
+
+---
+# Project 2: Development tier, us-east-1 (should succeed - still within quota)
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: acme-dev-web
+  labels:
+    quota.miloapis.com/tier: "development"
+    quota.miloapis.com/region: "us-east-1"
+    quota.miloapis.com/demo: "project-quota"
+spec:
+  ownerRef:
+    kind: Organization
+    name: "datum"
+
+---
+# Project 3: Development tier, us-east-1 (should FAIL - exceeds quota of 2)
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: acme-dev-mobile
+  labels:
+    quota.miloapis.com/tier: "development"
+    quota.miloapis.com/region: "us-east-1"
+    quota.miloapis.com/demo: "project-quota"
+spec:
+  ownerRef:
+    kind: Organization
+    name: "datum"
+
+---
+# Project 4: Standard tier, us-east-1 (should succeed - different quota bucket)
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: acme-standard-api
+  labels:
+    quota.miloapis.com/tier: "standard"
+    quota.miloapis.com/region: "us-east-1"
+    quota.miloapis.com/demo: "project-quota"
+spec:
+  ownerRef:
+    kind: Organization
+    name: "datum"
+
+---
+# Project 5: Standard tier, us-west-2 (should succeed)
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: acme-standard-web
+  labels:
+    quota.miloapis.com/tier: "standard"
+    quota.miloapis.com/region: "us-west-2"
+    quota.miloapis.com/demo: "project-quota"
+spec:
+  ownerRef:
+    kind: Organization
+    name: "datum"
+
+---
+# Project 6: Production tier, us-east-1 (should succeed - high quota)
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: acme-prod-api
+  labels:
+    quota.miloapis.com/tier: "production"
+    quota.miloapis.com/region: "us-east-1"
+    quota.miloapis.com/demo: "project-quota"
+spec:
+  ownerRef:
+    kind: Organization
+    name: "datum"
+
+---
+# Project 7: No quota labels (should FAIL - condition expression rejects it)
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: acme-unlabeled-project
+  labels:
+    quota.miloapis.com/demo: "project-quota"
+spec:
+  ownerRef:
+    kind: Organization
+    name: "datum"

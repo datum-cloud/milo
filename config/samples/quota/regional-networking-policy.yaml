@@ -1,0 +1,51 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: regional-networking-policy
+  labels:
+    quota.miloapis.com/category: "networking"
+    quota.miloapis.com/scope: "multi-regional"
+spec:
+  enabled: true
+  targetResource:
+    apiVersion: "networking.miloapis.com/v1alpha"
+    kind: "HTTPProxy"
+  resourceClaimTemplate:
+    requests:
+    # Basic networking quota
+    - resourceType: "networking.miloapis.com/HTTPProxy"
+      amount: 1
+      dimensions:
+        service-category: "networking"
+        availability-zone: "multi-az"
+      dimensionExpressions:
+        deployment-region: "object.metadata.annotations['topology.kubernetes.io/region'] || 'us-west-2'"
+        data-residency: "object.metadata.labels['compliance.miloapis.com/data-residency'] || 'compliant'"
+    
+    # Premium features quota (conditional on user tier)
+    - resourceType: "networking.miloapis.com/PremiumFeatures"
+      amount: 5
+      dimensions:
+        feature-set: "premium"
+        support-level: "priority"
+      dimensionExpressions:
+        user-tier: "user.groups.contains('premium-users') ? 'premium' : 'standard'"
+      conditionExpression: "user.groups.contains('premium-users') || user.groups.contains('enterprise-users')"
+    
+    # Enterprise-only advanced networking (conditional)
+    - resourceType: "networking.miloapis.com/EnterpriseNetworking"
+      amountExpression: "object.spec.replicas || 1"
+      dimensions:
+        enterprise-tier: "advanced"
+      dimensionExpressions:
+        dedicated-resources: "object.metadata.labels['networking.miloapis.com/dedicated'] == 'true' ? 'dedicated' : 'shared'"
+      conditionExpression: "user.groups.contains('enterprise-users')"
+    
+    nameTemplate: "{{.Namespace}}-{{.Kind | lower}}-{{.ResourceName}}-claim"
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/service-category: "networking"
+      quota.miloapis.com/regional: "true"
+    annotations:
+      quota.miloapis.com/description: "Multi-regional networking service quota"
+      quota.miloapis.com/billing-category: "networking-regional"

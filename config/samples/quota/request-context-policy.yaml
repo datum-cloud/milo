@@ -1,0 +1,63 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: deployment-request-context-policy
+  labels:
+    example: request-context
+spec:
+  enabled: true
+  targetResource:
+    apiVersion: "apps/v1"
+    kind: "Deployment"
+  resourceClaimTemplate:
+    requests:
+    # Basic deployment request
+    - resourceType: "apps/Deployment"
+      amountExpression: "object.spec.replicas || 1"
+      dimensionExpressions:
+        # Use object labels for tier information
+        tier: "object.metadata.labels['tier'] || 'standard'"
+        # Use user groups to determine service level
+        service-level: "'premium' in user.groups ? 'premium' : 'standard'"
+        # Include operation context (verb)
+        operation-type: "requestInfo.verb"
+        # Add subresource if present
+        subresource: "requestInfo.subresource != '' ? requestInfo.subresource : 'none'"
+        # Include resource type
+        resource-type: "requestInfo.resource"
+      
+    # Conditional CPU request based on resource requests and user groups
+    - resourceType: "compute/CPU"
+      amountExpression: |
+        has(object.spec.template.spec.containers[0].resources.requests.cpu) ? 
+        int(object.spec.template.spec.containers[0].resources.requests.cpu[:-1]) : 0
+      dimensionExpressions:
+        cpu-tier: |
+          'high-cpu' in user.groups ? 'dedicated' : 
+          object.metadata.labels['cpu-class'] || 'shared'
+        user-tier: "'premium' in user.groups ? 'premium' : 'standard'"
+      conditionExpression: |
+        has(object.spec.template.spec.containers[0].resources.requests.cpu) && 
+        requestInfo.verb == 'create'
+      
+    # Memory request for premium users only
+    - resourceType: "compute/Memory"
+      amountExpression: |
+        has(object.spec.template.spec.containers[0].resources.requests.memory) ? 
+        int(object.spec.template.spec.containers[0].resources.requests.memory[:-2]) : 0
+      dimensionExpressions:
+        memory-type: "object.metadata.labels['memory-type'] || 'standard'"
+        allocation: "'dedicated-memory' in user.groups ? 'dedicated' : 'shared'"
+      conditionExpression: |
+        'premium' in user.groups && 
+        has(object.spec.template.spec.containers[0].resources.requests.memory) &&
+        !request.dryRun
+        
+    nameTemplate: "deploy-{{.Kind | lower}}-{{.ResourceName}}-{{.Operation}}"
+    namespace: "milo-system"
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/context-aware: "true"
+    annotations:
+      quota.miloapis.com/description: "Request context aware resource claim"
+      quota.miloapis.com/features: "user-groups,object-labels,request-context"

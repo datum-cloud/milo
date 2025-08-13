@@ -137,7 +137,7 @@ func (r *ResourceClaimCreator) Default(ctx context.Context, obj runtime.Object) 
 }
 
 // createResourceClaim creates a ResourceClaim for the given resource
-func (r *ResourceClaimCreator) createResourceClaim(ctx context.Context, resourceName, namespace, kind, resourceType string) error {
+func (r *ResourceClaimCreator) createResourceClaim(ctx context.Context, resourceName, kind, resourceType, apiGroup string) error {
 	// Generate a unique name for the ResourceClaim
 	claimName := r.generateResourceClaimName(resourceName)
 
@@ -163,8 +163,10 @@ func (r *ResourceClaimCreator) createResourceClaim(ctx context.Context, resource
 		},
 		Spec: quotav1alpha1.ResourceClaimSpec{
 			OwnerInstanceRef: quotav1alpha1.OwnerInstanceRef{
-				Kind: kind,
-				Name: resourceName,
+				APIGroup: apiGroup,
+				Kind:     kind,
+				Name:     resourceName,
+				// UID will be populated later
 			},
 			Requests: []quotav1alpha1.ResourceRequest{
 				{

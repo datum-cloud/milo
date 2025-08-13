@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
 	// Datum webhook and API type imports
@@ -32,6 +31,7 @@ import (
 	"k8s.io/apiserver/pkg/server/mux"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/metadata"
@@ -79,6 +79,7 @@ import (
 
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
+	quotacontroller "go.miloapis.com/milo/internal/controllers/quota"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
@@ -225,6 +226,9 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&ProjectOwnerRoleName, "project-owner-role-name", "resourcemanager.miloapis.com-projectowner", "The name of the role that will be used to grant project owner permissions.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
+	fs.StringVar(&s.WebhookCertDir, "webhook-cert-dir", "./certs", "Directory containing webhook server certificates.")
+	fs.StringVar(&s.WebhookCertName, "webhook-cert-name", "tls.crt", "Name of webhook server certificate file.")
+	fs.StringVar(&s.WebhookKeyName, "webhook-key-name", "tls.key", "Name of webhook server private key file.")
 
 	s.InfraCluster.AddFlags(namedFlagSets.FlagSet("Infrastructure Cluster"))
 	s.ControlPlane.AddFlags(namedFlagSets.FlagSet("Control Plane"))
@@ -261,6 +265,11 @@ type Options struct {
 
 	// The port to use for the controller-runtime webhook server.
 	ControllerRuntimeWebhookPort int
+
+	// Webhook server certificate configuration
+	WebhookCertDir  string
+	WebhookCertName string
+	WebhookKeyName  string
 }
 
 // NewOptions creates a new Options object with default values.
@@ -388,16 +397,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 						BindAddress: "0",
 					},
 					WebhookServer: webhook.NewServer(webhook.Options{
-						Port:    opts.ControllerRuntimeWebhookPort,
-						CertDir: opts.SecureServing.ServerCert.CertDirectory,
-						// The webhook server expects the key and cert files to
-						// be in the cert directory. This is different from how
-						// the webhook server built into the k8s controller
-						// manager component expects them to be configured so we
-						// need to trim the cert directory from the key and cert
-						// file names.
-						KeyName:  strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.KeyFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
-						CertName: strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.CertFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
+						Port:     opts.ControllerRuntimeWebhookPort,
+						CertDir:  opts.WebhookCertDir,
+						CertName: opts.WebhookCertName,
+						KeyName:  opts.WebhookKeyName,
 					}),
 				},
 			)
@@ -469,6 +472,20 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Create dynamic client for quota controllers that need it
+			dynamicClient, err := dynamic.NewForConfig(ctrlConfig)
+			if err != nil {
+				logger.Error(err, "Error creating dynamic client for quota controllers")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Setup all quota controllers using the registry
+			quotaRegistry := quotacontroller.NewQuotaControllerRegistry(logger.WithName("quota-registry"))
+			if err := quotaRegistry.SetupAllControllers(ctrl, dynamicClient); err != nil {
+				logger.Error(err, "Error setting up quota controllers")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

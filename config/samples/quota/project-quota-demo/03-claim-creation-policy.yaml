@@ -1,0 +1,41 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: project-quota-enforcement-policy
+  labels:
+    quota.miloapis.com/resource-category: "core"
+    quota.miloapis.com/demo: "project-quota"
+spec:
+  # Enable this policy to enforce project quota
+  enabled: true
+
+  # Target Project resources for quota enforcement
+  targetResource:
+    apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+    kind: "Project"
+
+  # Template for creating ResourceClaims when Projects are created
+  resourceClaimTemplate:
+    # Create claims in the milo-system namespace
+    namespace: "milo-system"
+
+    # Template for generating ResourceClaim names
+    nameTemplate: "project-{{.ResourceName}}-{{.Namespace}}-quota-claim"
+
+    # Labels for the ResourceClaim
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/resource-type: "project"
+      quota.miloapis.com/policy: "project-quota-enforcement-policy"
+
+    # Annotations for the ResourceClaim
+    annotations:
+      quota.miloapis.com/description: "Automatic quota claim for project creation"
+      quota.miloapis.com/created-by: "project-quota-enforcement-policy"
+      quota.miloapis.com/billing-category: "projects"
+
+    # Resource requests - what quota to claim
+    requests:
+      # Claim 1 project quota with dimensions based on project spec
+      - resourceType: "resourcemanager.miloapis.com/Project"
+        amount: 1
