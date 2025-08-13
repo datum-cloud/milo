@@ -88,18 +88,15 @@ spec:
                 - name
                 type: object
               userRef:
-                description: UserRef references the User resources that will receive
+                description: UserRef references the User resource that will receive
                   the message.
                 properties:
-                  names:
-                    description: Names contains the names of the User resources that
-                      will receive the email.
-                    items:
-                      type: string
-                    minItems: 1
-                    type: array
+                  name:
+                    description: Name contain the name of the User resource that will
+                      receive the email.
+                    type: string
                 required:
-                - names
+                - name
                 type: object
               variables:
                 description: Variables supplies the values that will be substituted

@@ -32,14 +32,13 @@ type TemplateReference struct {
 	Name string `json:"name"`
 }
 
-// EmailUserReference contains information about the recipient User resources.
+// EmailUserReference contains information about the recipient User resource.
 // Users are cluster-scoped resources, hence Namespace is not included.
 // +kubebuilder:validation:Type=object
 type EmailUserReference struct {
-	// Names contains the names of the User resources that will receive the email.
+	// Name contain the name of the User resource that will receive the email.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinItems=1
-	Names []string `json:"names"`
+	Name string `json:"name"`
 }
 
 // EmailVariable represents a name/value pair that will be injected into the template.
@@ -62,7 +61,7 @@ type EmailSpec struct {
 	// +kubebuilder:validation:Required
 	TemplateRef TemplateReference `json:"templateRef"`
 
-	// UserRef references the User resources that will receive the message.
+	// UserRef references the User resource that will receive the message.
 	// +kubebuilder:validation:Required
 	UserRef EmailUserReference `json:"userRef"`
 
