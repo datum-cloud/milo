@@ -6,8 +6,10 @@ metadata:
 spec:
   # Reference to the owner resource specific object instance.
   ownerInstanceRef:
+    apiGroup: resourcemanager.miloapis.com
     kind: Project
     name: datum-cloud
+    uid: "123e4567-e89b-12d3-a456-426614174000"
   # Flag to determine if this a default grant or one created in the Staff Portal.
   # Defaults to false.
   isDefault: false

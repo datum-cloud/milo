@@ -159,8 +159,10 @@ func (r *DefaultResourceGrantController) createDefaultGrantsForOrganization(ctx 
 		},
 		Spec: quotav1alpha1.ResourceGrantSpec{
 			OwnerInstanceRef: quotav1alpha1.OwnerInstanceRef{
-				Kind: "Organization",
-				Name: org.Name,
+				APIGroup: "resourcemanager.miloapis.com",
+				Kind:     "Organization",
+				Name:     org.Name,
+				UID:      string(org.UID),
 			},
 			IsDefault: true,
 			Allowances: []quotav1alpha1.Allowance{
@@ -252,8 +254,10 @@ func (r *DefaultResourceGrantController) createDefaultGrantsForProject(ctx conte
 		},
 		Spec: quotav1alpha1.ResourceGrantSpec{
 			OwnerInstanceRef: quotav1alpha1.OwnerInstanceRef{
-				Kind: "Project",
-				Name: project.Name,
+				APIGroup: "resourcemanager.miloapis.com",
+				Kind:     "Project",
+				Name:     project.Name,
+				UID:      string(project.UID),
 			},
 			IsDefault: true,
 			Allowances: []quotav1alpha1.Allowance{

@@ -1,0 +1,34 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: high-consumption-workload-policy
+  labels:
+    quota.miloapis.com/category: "compute-intensive"
+    quota.miloapis.com/tier: "high-consumption"
+spec:
+  enabled: true
+  targetResource:
+    apiVersion: "apps/v1"
+    kind: "Deployment"
+  resourceClaimTemplate:
+    requests:
+    - resourceType: "compute.miloapis.com/HighConsumptionWorkload"
+      # Dynamic quota based on resource requirements
+      amountExpression: "int(object.spec.template.spec.containers[0].resources.requests.cpu[:-1]) * int(object.spec.template.spec.containers[0].resources.requests.memory[:-2]) / 1024"
+      dimensions:
+        consumption-tier: "high"
+        cost-category: "compute-intensive"
+        resource-approval: "required"
+      dimensionExpressions:
+        billing-multiplier: "int(object.spec.template.spec.containers[0].resources.requests.cpu[:-1]) > 16 ? '10.0' : '5.0'"
+        instance-class: "int(object.spec.template.spec.containers[0].resources.requests.memory[:-2]) > 32768 ? 'high-memory' : 'compute-optimized'"
+        priority-class: "object.spec.template.spec.priorityClassName || 'standard'"
+    nameTemplate: "high-consumption-{{.ResourceName}}-claim"
+    labels:
+      quota.miloapis.com/consumption-tier: "high"
+      quota.miloapis.com/requires-approval: "true"
+      quota.miloapis.com/cost-impact: "high"
+    annotations:
+      quota.miloapis.com/description: "High consumption workload quota claim"
+      quota.miloapis.com/billing-category: "compute-intensive"
+      quota.miloapis.com/cost-warning: "This workload may incur significant costs"

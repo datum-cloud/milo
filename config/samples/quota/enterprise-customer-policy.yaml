@@ -1,0 +1,49 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: acme-corp-enterprise-policy
+  labels:
+    quota.miloapis.com/category: "enterprise"
+    quota.miloapis.com/customer: "acme-corp"
+spec:
+  enabled: true
+  targetResource:
+    apiVersion: "apps/v1"
+    kind: "Deployment"
+  resourceClaimTemplate:
+    requests:
+    # Base workload quota claim
+    - resourceType: "apps/Deployment"
+      amount: 1
+      dimensions:
+        customer-id: "acme-corp"
+        contract-tier: "enterprise"
+      dimensionExpressions:
+        billing-model: "object.metadata.labels['billing-model'] || 'consumption'"
+        account-manager: "object.metadata.annotations['account-manager'] || 'enterprise-team'"
+    
+    # CPU quota claim (conditional)
+    - resourceType: "compute/CPU"
+      amountExpression: "has(object.spec.template.spec.containers[0].resources.requests.cpu) ? int(object.spec.template.spec.containers[0].resources.requests.cpu[:-1]) : 0"
+      dimensions:
+        resource-type: "cpu"
+      dimensionExpressions:
+        instance-type: "object.spec.template.spec.containers[0].resources.requests.cpu.endsWith('m') ? 'shared' : 'dedicated'"
+      conditionExpression: "has(object.spec.template.spec.containers[0].resources.requests.cpu)"
+    
+    # Memory quota claim (conditional)
+    - resourceType: "compute/Memory"
+      amountExpression: "has(object.spec.template.spec.containers[0].resources.requests.memory) ? int(object.spec.template.spec.containers[0].resources.requests.memory[:-2]) : 0"
+      dimensions:
+        resource-type: "memory"
+      conditionExpression: "has(object.spec.template.spec.containers[0].resources.requests.memory)"
+    
+    nameTemplate: "acme-{{.Kind | lower}}-{{.ResourceName}}-claim"
+    namespace: "organization-acme-corp"
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/customer: "acme-corp"
+      quota.miloapis.com/contract-tier: "enterprise"
+    annotations:
+      quota.miloapis.com/description: "Enterprise customer multi-resource quota claim"
+      quota.miloapis.com/billing-category: "enterprise-compute"
