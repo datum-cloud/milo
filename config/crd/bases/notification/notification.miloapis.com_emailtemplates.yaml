@@ -94,6 +94,7 @@ spec:
                   - required
                   - type
                   type: object
+                maxItems: 100
                 type: array
             required:
             - htmlBody
