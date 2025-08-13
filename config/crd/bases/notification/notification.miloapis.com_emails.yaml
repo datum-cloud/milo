@@ -21,8 +21,8 @@ spec:
     - jsonPath: .spec.priority
       name: Priority
       type: string
-    - jsonPath: .status.conditions[?(@.type=='Ready')].status
-      name: Ready
+    - jsonPath: .status.conditions[?(@.type=='Delivered')].status
+      name: Delivered
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -124,17 +124,18 @@ spec:
           status:
             description: |-
               EmailStatus captures the observed state of an Email.
-              Right now we only expose standard Kubernetes conditions so callers can track delivery state.
+              Uses standard Kubernetes conditions to track both processing and delivery state.
             properties:
               conditions:
                 default:
                 - lastTransitionTime: "1970-01-01T00:00:00Z"
-                  message: Waiting for control plane to reconcile
-                  reason: Unknown
+                  message: Waiting for email delivery
+                  reason: DeliveryPending
                   status: Unknown
-                  type: Ready
-                description: Conditions represent the latest available observations
-                  of an object's current state.
+                  type: Delivered
+                description: |-
+                  Conditions represent the latest available observations of an object's current state.
+                  Standard condition is "Delivered" which tracks email delivery status.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
