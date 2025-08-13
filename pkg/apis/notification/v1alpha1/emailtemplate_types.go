@@ -57,6 +57,7 @@ type EmailTemplateSpec struct {
 
 	// Variables enumerates all variables that can be referenced inside the template expressions.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxItems=100
 	Variables []TemplateVariable `json:"variables,omitempty"`
 }
 
