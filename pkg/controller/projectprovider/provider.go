@@ -1,5 +1,4 @@
-// pkg/provider/project/provider.go
-package project
+package projectprovider
 
 import (
 	"context"
@@ -37,7 +36,7 @@ func New(root *rest.Config, sink Sink) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	gvr, err := resolveProjectGVR(context.TODO(), root, "resourcemanager.miloapis.com", "v1alpha1")
+	gvr, err := resolveProjectGVR(root, "resourcemanager.miloapis.com", "v1alpha1")
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +80,7 @@ func (p *Provider) Run(ctx context.Context) error {
 	return nil
 }
 
-func resolveProjectGVR(ctx context.Context, cfg *rest.Config, group, preferredVersion string) (schema.GroupVersionResource, error) {
+func resolveProjectGVR(cfg *rest.Config, group, preferredVersion string) (schema.GroupVersionResource, error) {
 	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
 		return schema.GroupVersionResource{}, err

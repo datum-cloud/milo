@@ -14,13 +14,14 @@ import (
 	"k8s.io/controller-manager/controller"
 	"k8s.io/kubernetes/cmd/kube-controller-manager/names"
 	pkgcontroller "k8s.io/kubernetes/pkg/controller"
-	garbagecollector "k8s.io/kubernetes/pkg/controller/garbagecollector"
 	resourcequotacontroller "k8s.io/kubernetes/pkg/controller/resourcequota"
 	quotainstall "k8s.io/kubernetes/pkg/quota/v1/install"
 
+	gccontroller "go.miloapis.com/milo/pkg/controller/garbagecollector"
 	"go.miloapis.com/milo/pkg/controller/namespace"
 	namespacecontroller "go.miloapis.com/milo/pkg/controller/namespace"
-	"go.miloapis.com/milo/pkg/provider/project"
+
+	"go.miloapis.com/milo/pkg/controller/projectprovider"
 )
 
 func newNamespaceControllerDescriptor() *ControllerDescriptor {
@@ -68,7 +69,7 @@ func startModifiedNamespaceController(ctx context.Context, controllerContext Con
 		Finalizer: v1.FinalizerKubernetes,
 	}
 
-	prov, err := project.New(nsKubeconfig, sink)
+	prov, err := projectprovider.New(nsKubeconfig, sink)
 	if err != nil {
 		return nil, true, err
 	}
@@ -94,41 +95,57 @@ func startGarbageCollectorController(ctx context.Context, controllerContext Cont
 	gcClientset := controllerContext.ClientBuilder.ClientOrDie("generic-garbage-collector")
 	discoveryClient := controllerContext.ClientBuilder.DiscoveryClientOrDie("generic-garbage-collector")
 
-	config := controllerContext.ClientBuilder.ConfigOrDie("generic-garbage-collector")
-	// Increase garbage collector controller's throughput: each object deletion takes two API calls,
-	// so to get |config.QPS| deletion rate we need to allow 2x more requests for this controller.
-	config.QPS *= 2
-	metadataClient, err := metadata.NewForConfig(config)
+	cfg := controllerContext.ClientBuilder.ConfigOrDie("generic-garbage-collector")
+	// each deletion ~ two API calls
+	cfg.QPS *= 2
+
+	metadataClient, err := metadata.NewForConfig(cfg)
 	if err != nil {
 		return nil, true, err
 	}
 
-	ignoredResources := make(map[schema.GroupResource]struct{})
+	ignored := make(map[schema.GroupResource]struct{})
 	for _, r := range controllerContext.ComponentConfig.GarbageCollectorController.GCIgnoredResources {
-		ignoredResources[schema.GroupResource{Group: r.Group, Resource: r.Resource}] = struct{}{}
+		ignored[schema.GroupResource{Group: r.Group, Resource: r.Resource}] = struct{}{}
 	}
 
-	garbageCollector, err := garbagecollector.NewComposedGarbageCollector(
+	// Build GC with a root graph builder (constructed inside), using the composite informer factory and informersStarted.
+	gc, err := gccontroller.NewGarbageCollector(
 		ctx,
 		gcClientset,
 		metadataClient,
-		controllerContext.RESTMapper,
-		controllerContext.GraphBuilder,
+		controllerContext.RESTMapper, // reuse the same mapper across partitions
+		ignored,
+		controllerContext.ObjectOrMetadataInformerFactory, // composite (core + metadata) factory
+		controllerContext.InformersStarted,
 	)
 	if err != nil {
 		return nil, true, fmt.Errorf("failed to start the generic garbage collector: %w", err)
 	}
 
-	// Start the garbage collector.
+	// Start GC workers
 	workers := int(controllerContext.ComponentConfig.GarbageCollectorController.ConcurrentGCSyncs)
 	const syncPeriod = 30 * time.Second
-	go garbageCollector.Run(ctx, workers, syncPeriod)
+	go gc.Run(ctx, workers, syncPeriod)
 
-	// Periodically refresh the RESTMapper with new discovery information and sync
-	// the garbage collector.
-	go garbageCollector.Sync(ctx, discoveryClient, 30*time.Second)
+	// Periodic discovery sync for the root partition
+	go gc.Sync(ctx, discoveryClient, 30*time.Second)
 
-	return garbageCollector, true, nil
+	// Hook dynamic projects into GC via a sink
+	gcSink := &gccontroller.GCSink{
+		GC:                gc,
+		RootRESTMapper:    controllerContext.RESTMapper, // same API surface across projects
+		Ignored:           ignored,
+		InformersStarted:  controllerContext.InformersStarted,
+		InitialSyncPeriod: 30 * time.Second,
+	}
+	gcProv, err := projectprovider.New(cfg, gcSink)
+	if err != nil {
+		return nil, true, fmt.Errorf("failed to start project provider for GC: %w", err)
+	}
+	go gcProv.Run(ctx)
+
+	return gc, true, nil
 }
 
 func newResourceQuotaControllerDescriptor() *ControllerDescriptor {

@@ -1,4 +1,4 @@
-package tenantwrap
+package projectstorage
 
 import (
 	"context"
@@ -9,73 +9,15 @@ import (
 	"go.miloapis.com/milo/pkg/request"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 
 	generic "k8s.io/apiserver/pkg/registry/generic"
-	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"
 	storagebackend "k8s.io/apiserver/pkg/storage/storagebackend"
 	factory "k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
 	"k8s.io/client-go/tools/cache"
 )
-
-// Wrap the upstream RESTOptionsGetter to install a per-project decorator.
-func WithProjectAwareDecorator(inner generic.RESTOptionsGetter) generic.RESTOptionsGetter {
-	return roGetter{inner: inner}
-}
-
-type roGetter struct {
-	inner generic.RESTOptionsGetter
-}
-
-// NOTE: matches your two-arg signature (GroupResource, runtime.Object).
-func (g roGetter) GetRESTOptions(gr schema.GroupResource, example runtime.Object) (generic.RESTOptions, error) {
-	opts, err := g.inner.GetRESTOptions(gr, example)
-	if err != nil {
-		return opts, err
-	}
-	// Ensure we always wrap with our project-aware decorator.
-	if opts.Decorator == nil {
-		opts.Decorator = ProjectAwareDecorator(genericregistry.StorageWithCacher())
-	} else {
-		opts.Decorator = ProjectAwareDecorator(opts.Decorator)
-	}
-	return opts, nil
-}
-
-// ProjectAwareDecorator builds (and reuses) a child cacher per project prefix.
-func ProjectAwareDecorator(inner generic.StorageDecorator) generic.StorageDecorator {
-	return func(
-		cfg *storagebackend.ConfigForResource,
-		resourcePrefix string,
-		keyFunc func(obj runtime.Object) (string, error),
-		newFunc func() runtime.Object,
-		newListFunc func() runtime.Object,
-		getAttrs storage.AttrFunc,
-		triggerFn storage.IndexerFuncs, // <— changed type
-		indexers *cache.Indexers, // <— from client-go/tools/cache
-	) (storage.Interface, factory.DestroyFunc, error) {
-
-		// Build default child (no project in ctx).
-		defS, defDestroy, err := inner(cfg, resourcePrefix, keyFunc, newFunc, newListFunc, getAttrs, triggerFn, indexers)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		mux := &projectMux{
-			inner: inner,
-			cfg:   *cfg, // copy
-			args:  decoratorArgs{resourcePrefix, keyFunc, newFunc, newListFunc, getAttrs, triggerFn, indexers},
-			children: map[string]*child{
-				"": {s: defS, destroy: defDestroy},
-			},
-			versioner: defS.Versioner(),
-		}
-		return mux, mux.destroyAll, nil
-	}
-}
 
 type child struct {
 	s       storage.Interface

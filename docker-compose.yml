@@ -16,7 +16,9 @@ services:
         --kubeconfig=/etc/milo/root-kubeconfig.yaml
         --system-namespace=milo-system
         --leader-elect-resource-namespace=milo-system
-        --v=4
+        --authorization-always-allow-paths=/debug/controllers/garbage-collector-controller/graph,/debug/controllers/garbage-collector-controller/graph/
+        --authentication-skip-lookup
+        --v=6
     environment:
       - TZ=UTC
     volumes:
@@ -24,6 +26,9 @@ services:
       - ./root-kubeconfig.yaml:/etc/milo/root-kubeconfig.yaml:ro
     depends_on:
       - milo
+    ports:
+      - "10252:10252"
+      - "10257:10257"
 
   milo:
     image: milo-apiserver:dev

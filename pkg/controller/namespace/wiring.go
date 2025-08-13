@@ -25,6 +25,7 @@ func (s *NMSink) AddProject(ctx context.Context, id string, cfg *rest.Config) er
 	klog.Infof("[namespace] Adding project %q with config: %v", id, cfg)
 	return s.NM.AddCluster(ctx, id, cs, md, cs.Discovery().ServerPreferredNamespacedResources, s.Resync, s.Finalizer)
 }
+
 func (s *NMSink) RemoveProject(id string) {
 	klog.Infof("[namespace] Removing project %q", id)
 	s.NM.RemoveCluster(id)

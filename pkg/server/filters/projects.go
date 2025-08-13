@@ -5,16 +5,13 @@ import (
 	"net/http"
 	"strings"
 
-	"go.miloapis.com/milo/pkg/request"
+	reqinfo "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/klog/v2"
+
+	"go.miloapis.com/milo/pkg/request"
 )
 
-// ProjectRouter rewrites
-//   /projects/<id>/control-plane/<k8s-path>
-// to
-//   /<k8s-path>
-// and stashes <id> in the context.
-func ProjectRouter(next http.Handler) http.Handler {
+func ProjectRouterWithRequestInfo(next http.Handler, rir reqinfo.RequestInfoResolver) http.Handler {
 	const (
 		projectsSeg     = "/projects/"
 		controlPlaneSeg = "/control-plane"
@@ -23,7 +20,6 @@ func ProjectRouter(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idx := strings.Index(r.URL.Path, projectsSeg)
 		if idx < 0 {
-			// not project-scoped
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -31,7 +27,6 @@ func ProjectRouter(next http.Handler) http.Handler {
 		tail := r.URL.Path[idx+len(projectsSeg):] // "<id>/control-plane/..."
 		slash := strings.IndexByte(tail, '/')
 		if slash < 0 || !strings.HasPrefix(tail[slash:], controlPlaneSeg+"/") {
-			// e.g. CRD paths that just contain ".../projects/..." in the middle
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -42,18 +37,35 @@ func ProjectRouter(next http.Handler) http.Handler {
 		newPath := "/" + strings.TrimPrefix(
 			r.URL.Path[idx+len(projectsSeg)+slash+len(controlPlaneSeg):], "/")
 
-		// Clone request with project in context and fully-rewritten URL bits
+		// Clone request, stash project, and rewrite URL bits
 		r2 := r.Clone(request.WithProject(r.Context(), projID))
 		r2.URL.Path = newPath
-		r2.URL.RawPath = newPath // important for request-info & long-running detection
-
+		r2.URL.RawPath = newPath
 		if r.URL.RawQuery != "" {
 			r2.RequestURI = newPath + "?" + r.URL.RawQuery
 		} else {
 			r2.RequestURI = newPath
 		}
 
-		klog.InfoS("ProjectRouter", "project", projID, "newPath", newPath, "rawQuery", r.URL.RawQuery)
+		// 🔁 Recompute RequestInfo on the rewritten request
+		ri, err := rir.NewRequestInfo(r2)
+		if err != nil {
+			klog.ErrorS(err, "Failed to create RequestInfo for project router")
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		r2 = r2.WithContext(reqinfo.WithRequestInfo(r2.Context(), ri))
+
+		klog.InfoS("ProjectRouter",
+			"project", projID,
+			"newPath", newPath,
+			"ns", ri.Namespace,
+			"resource", ri.Resource,
+			"subresource", ri.Subresource,
+			"verb", ri.Verb,
+			"isResourceRequest", ri.IsResourceRequest,
+		)
+
 		next.ServeHTTP(w, r2)
 	})
 }

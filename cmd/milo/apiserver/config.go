@@ -6,6 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/endpoints/filterlatency"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericfeatures "k8s.io/apiserver/pkg/features"
@@ -16,6 +17,7 @@ import (
 	flowcontrolrequest "k8s.io/apiserver/pkg/util/flowcontrol/request"
 	"k8s.io/apiserver/pkg/util/webhook"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/rest"
 	utilversion "k8s.io/component-base/version"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
 	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
@@ -34,6 +36,8 @@ import (
 	flowcontrolrest "k8s.io/kubernetes/pkg/registry/flowcontrol/rest"
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	svmrest "k8s.io/kubernetes/pkg/registry/storagemigration/rest"
+
+	myinit "go.miloapis.com/milo/pkg/apiserver/admission/initializer"
 
 	"go.miloapis.com/milo/pkg/server/filters"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
@@ -114,20 +118,33 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		return filters.ProjectRouter(genericapiserver.DefaultBuildHandlerChain(h, c))
+		h = filters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
+		return genericapiserver.DefaultBuildHandlerChain(h, c)
 	}
 	serviceResolver := webhook.NewDefaultServiceResolver()
-	kubeAPIs, pluginInitializer, err := controlplaneapiserver.CreateConfig(opts, genericConfig, versionedInformers, storageFactory, serviceResolver, nil)
+
+	// 🔧 Build loopback-only initializer using the generic loopback
+	loopbackInit := myinit.LoopbackInitializer{
+		Loopback: rest.CopyConfig(genericConfig.LoopbackClientConfig),
+	}
+
+	kubeAPIs, upstreamInits, err := controlplaneapiserver.CreateConfig(opts, genericConfig, versionedInformers, storageFactory, serviceResolver, []admission.PluginInitializer{loopbackInit})
 	if err != nil {
 		return nil, err
 	}
 	c.ControlPlane = kubeAPIs
 	c.ControlPlane.Generic.EffectiveVersion = utilversion.DefaultKubeEffectiveVersion()
 
+	combinedInits := append(upstreamInits, loopbackInit)
+
 	authInfoResolver := webhook.NewDefaultAuthenticationInfoResolverWrapper(kubeAPIs.ProxyTransport, kubeAPIs.Generic.EgressSelector, kubeAPIs.Generic.LoopbackClientConfig, kubeAPIs.Generic.TracerProvider)
-	apiExtensions, err := controlplaneapiserver.CreateAPIExtensionsConfig(*kubeAPIs.Generic, kubeAPIs.VersionedInformers, pluginInitializer, opts, 3, serviceResolver, authInfoResolver)
+	apiExtensions, err := controlplaneapiserver.CreateAPIExtensionsConfig(*kubeAPIs.Generic, kubeAPIs.VersionedInformers, combinedInits, opts, 3, serviceResolver, authInfoResolver)
 	if err != nil {
 		return nil, err
+	}
+	apiExtensions.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
+		h = filters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
+		return genericapiserver.DefaultBuildHandlerChain(h, c)
 	}
 	c.APIExtensions = apiExtensions
 
@@ -135,9 +152,13 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	// a Secret with a type of `kubernetes.io/service-account-token`
 	c.APIExtensions.GenericConfig.DisabledPostStartHooks.Insert("start-legacy-token-tracking-controller")
 
-	aggregator, err := controlplaneapiserver.CreateAggregatorConfig(*kubeAPIs.Generic, opts, kubeAPIs.VersionedInformers, serviceResolver, kubeAPIs.ProxyTransport, kubeAPIs.Extra.PeerProxy, pluginInitializer)
+	aggregator, err := controlplaneapiserver.CreateAggregatorConfig(*kubeAPIs.Generic, opts, kubeAPIs.VersionedInformers, serviceResolver, kubeAPIs.ProxyTransport, kubeAPIs.Extra.PeerProxy, combinedInits)
 	if err != nil {
 		return nil, err
+	}
+	aggregator.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
+		h = filters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
+		return genericapiserver.DefaultBuildHandlerChain(h, c)
 	}
 	c.Aggregator = aggregator
 	c.Aggregator.ExtraConfig.DisableRemoteAvailableConditionController = true

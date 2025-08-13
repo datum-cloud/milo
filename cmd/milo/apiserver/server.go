@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"go.miloapis.com/milo/pkg/tenantwrap"
+	"go.miloapis.com/milo/pkg/apiserver/admission/plugin/namespace/lifecycle"
+	"go.miloapis.com/milo/pkg/apiserver/storage/project"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // ← add / keep this
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apiserver/pkg/admission"
 	_ "k8s.io/apiserver/pkg/admission"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -144,6 +146,15 @@ func NewOptions() *options.Options {
 	s := options.NewOptions()
 	s.Admission.GenericAdmission.DefaultOffPlugins = DefaultOffAdmissionPlugins()
 
+	if s.Admission.GenericAdmission.Plugins == nil {
+		s.Admission.GenericAdmission.Plugins = admission.NewPlugins()
+	}
+	lifecycle.Register(s.Admission.GenericAdmission.Plugins)
+
+	s.Admission.GenericAdmission.RecommendedPluginOrder =
+		append(s.Admission.GenericAdmission.RecommendedPluginOrder, lifecycle.PluginName)
+	s.Admission.GenericAdmission.EnablePlugins = append(s.Admission.GenericAdmission.EnablePlugins, lifecycle.PluginName)
+
 	wd, _ := os.Getwd()
 	s.SecureServing.ServerCert.CertDirectory = filepath.Join(wd, ".sample-minimal-controlplane")
 
@@ -210,7 +221,7 @@ func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregat
 
 	wrapped := make([]controlplaneapiserver.RESTStorageProvider, 0, len(storageProviders))
 	for _, p := range storageProviders {
-		wrapped = append(wrapped, tenantwrap.WrapProvider(p))
+		wrapped = append(wrapped, projectstorage.WrapProvider(p))
 	}
 
 	if err := nativeAPIs.InstallAPIs(wrapped...); err != nil {

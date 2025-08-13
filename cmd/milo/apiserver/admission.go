@@ -1,6 +1,7 @@
 package app
 
 import (
+	"go.miloapis.com/milo/pkg/apiserver/admission/plugin/namespace/lifecycle"
 	"k8s.io/apimachinery/pkg/util/sets"
 	validatingadmissionpolicy "k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	mutatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/mutating"
@@ -11,7 +12,7 @@ import (
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.
 func DefaultOffAdmissionPlugins() sets.Set[string] {
 	defaultOnPlugins := sets.New[string](
-		// lifecycle.PluginName, // NamespaceLifecycle
+		lifecycle.PluginName, // NamespaceLifecycle
 		// defaulttolerationseconds.PluginName, // DefaultTolerationSeconds
 		mutatingwebhook.PluginName,   // MutatingAdmissionWebhook
 		validatingwebhook.PluginName, // ValidatingAdmissionWebhook
@@ -23,5 +24,8 @@ func DefaultOffAdmissionPlugins() sets.Set[string] {
 		validatingadmissionpolicy.PluginName, // ValidatingAdmissionPolicy, only active when feature gate ValidatingAdmissionPolicy is enabled
 	)
 
-	return sets.New(options.AllOrderedPlugins...).Difference(defaultOnPlugins)
+	universe := sets.New(options.AllOrderedPlugins...)
+	universe.Insert(lifecycle.PluginName)
+
+	return universe.Difference(defaultOnPlugins)
 }
