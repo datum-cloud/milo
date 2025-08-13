@@ -100,10 +100,10 @@ func (v *UserDeactivationValidator) ValidateCreate(ctx context.Context, obj runt
 	if errors.IsNotFound(err) {
 		userdeactivationlog.Error(err, "referenced user does not exist", "userName", userName)
 		errs = append(errs, field.NotFound(field.NewPath("spec").Child("userRef").Child("name"), userName))
-		return nil, errors.NewNotFound(iamv1alpha1.SchemeGroupVersion.WithResource("users").GroupResource(), userName)
+		return nil, errors.NewInvalid(iamv1alpha1.SchemeGroupVersion.WithKind("UserDeactivation").GroupKind(), userDeactivation.Name, errs)
 	} else if err != nil {
 		userdeactivationlog.Error(err, "failed to validate user reference", "userName", userName)
-		return nil, errors.NewInvalid(iamv1alpha1.SchemeGroupVersion.WithKind("UserDeactivation").GroupKind(), userDeactivation.Name, errs)
+		return nil, errors.NewInternalError(fmt.Errorf("failed to validate user reference"))
 	}
 
 	// Ensure there is no existing UserDeactivation for the same user
