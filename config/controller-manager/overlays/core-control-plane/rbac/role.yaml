@@ -29,6 +29,12 @@ rules:
   - update
   - watch
 - apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - get
+- apiGroups:
   - iam.miloapis.com
   resources:
   - groupmemberships
@@ -116,6 +122,7 @@ rules:
   - quota.miloapis.com
   resources:
   - allowancebuckets/status
+  - claimcreationpolicies/status
   - resourceclaims/status
   - resourcegrants/status
   - resourcequotasummaries/status
@@ -127,6 +134,7 @@ rules:
 - apiGroups:
   - quota.miloapis.com
   resources:
+  - claimcreationpolicies
   - resourceclaims
   - resourcegrants
   verbs:

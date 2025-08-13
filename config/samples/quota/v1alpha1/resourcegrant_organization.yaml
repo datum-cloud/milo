@@ -7,9 +7,11 @@ metadata:
 spec:
   # Reference to the owner resource specific object instance.
   ownerInstanceRef:
+    apiGroup: resourcemanager.miloapis.com
     kind: Organization
     # Organization name
     name: datum
+    uid: "569b6bd5-0965-4d2b-be0e-8157f8cd71ff"
   # Flag to determine if this a default grant or one created in the Staff Portal.
   # Defaults to false.
   isDefault: false

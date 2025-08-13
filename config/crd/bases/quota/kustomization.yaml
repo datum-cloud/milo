@@ -4,3 +4,4 @@ resources:
 - quota.miloapis.com_resourceclaims.yaml
 - quota.miloapis.com_allowancebuckets.yaml
 - quota.miloapis.com_resourcequotasummaries.yaml
+- quota.miloapis.com_claimcreationpolicies.yaml

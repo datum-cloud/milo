@@ -1,0 +1,31 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: premium-service-tier-policy
+  labels:
+    quota.miloapis.com/category: "project-management"
+    quota.miloapis.com/tier: "premium"
+spec:
+  enabled: true
+  targetResource:
+    apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+    kind: "Project"
+  resourceClaimTemplate:
+    requests:
+    - resourceType: "resourcemanager.miloapis.com/Project"
+      amountExpression: "user.groups.contains('enterprise-users') ? 20 : 10"
+      dimensions:
+        service-tier: "premium"
+        billing-tier: "premium"
+        support-level: "priority"
+      dimensionExpressions:
+        cost-center: "object.metadata.labels['cost-center'] || 'premium-services'"
+        region: "object.metadata.annotations['topology.kubernetes.io/region'] || 'us-west-1'"
+    nameTemplate: "premium-svc-{{.ResourceName}}-claim"
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/service-tier: "premium"
+      quota.miloapis.com/managed-by: "platform-admin"
+    annotations:
+      quota.miloapis.com/description: "Premium service tier project quota"
+      quota.miloapis.com/billing-category: "project-premium"

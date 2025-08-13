@@ -1,0 +1,10 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: acme-corp
+  labels:
+    quota.miloapis.com/demo: "project-quota"
+    quota.miloapis.com/tier: "enterprise"
+spec:
+  # Organization type determines default quotas and features
+  type: Standard
