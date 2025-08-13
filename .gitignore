@@ -5,4 +5,6 @@ bin/
 certs/
 # Generated kubeconfig for local development
 .kube/
+# Development environment temp files
+dev-temp/
 .tool-versions

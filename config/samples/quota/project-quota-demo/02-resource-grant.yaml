@@ -1,0 +1,22 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: acme-corp-project-quota-grant
+  namespace: milo-system
+  labels:
+    quota.miloapis.com/organization: "acme-corp"
+    quota.miloapis.com/demo: "project-quota"
+spec:
+  # Reference to the organization that receives this quota grant
+  ownerInstanceRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: "datum"
+    uid: e6e5fc2a-bc74-45f3-8f10-cf611eaa45ac
+
+  # Quota allowances for different project tiers and regions
+  allowances:
+    # Development tier projects - limited quota for testing
+    - resourceType: "resourcemanager.miloapis.com/Project"
+      buckets:
+        - amount: 2

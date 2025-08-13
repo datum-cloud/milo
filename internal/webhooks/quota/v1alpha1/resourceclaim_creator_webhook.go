@@ -157,7 +157,7 @@ func (r *DynamicResourceClaimCreator) Default(ctx context.Context, obj runtime.O
 		"resourceType", resourceType, "name", req.Name)
 
 	// Create the ResourceClaim
-	if err := r.createResourceClaim(ctx, req.Name, req.Kind.Kind, resourceType); err != nil {
+	if err := r.createResourceClaim(ctx, req.Name, req.Kind.Kind, resourceType, req.Kind.Group); err != nil {
 		// Log the error but don't fail the original resource creation
 		resourceclaimlog.Error(err, "Failed to create ResourceClaim",
 			"resourceName", req.Name, "resourceType", resourceType, "gvk", requestGVK)
@@ -182,7 +182,7 @@ func (r *DynamicResourceClaimCreator) isSupportedGVK(gvk schema.GroupVersionKind
 }
 
 // createResourceClaim creates a ResourceClaim for the given resource
-func (r *DynamicResourceClaimCreator) createResourceClaim(ctx context.Context, resourceName, kind, resourceType string) error {
+func (r *DynamicResourceClaimCreator) createResourceClaim(ctx context.Context, resourceName, kind, resourceType, apiGroup string) error {
 	// Generate a unique name for the ResourceClaim
 	claimName := r.generateResourceClaimName(resourceName)
 
@@ -208,8 +208,10 @@ func (r *DynamicResourceClaimCreator) createResourceClaim(ctx context.Context, r
 		},
 		Spec: quotav1alpha1.ResourceClaimSpec{
 			OwnerInstanceRef: quotav1alpha1.OwnerInstanceRef{
-				Kind: kind,
-				Name: resourceName,
+				APIGroup: apiGroup,
+				Kind:     kind,
+				Name:     resourceName,
+				// UID will be populated later
 			},
 			Requests: []quotav1alpha1.ResourceRequest{
 				{

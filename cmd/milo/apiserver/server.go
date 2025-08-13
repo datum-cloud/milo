@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apiserver/pkg/admission"
 	_ "k8s.io/apiserver/pkg/admission"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -32,6 +34,10 @@ import (
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
 	"k8s.io/kubernetes/pkg/controlplane/apiserver/options"
+
+	// Import quota admission plugin to register it
+	_ "go.miloapis.com/milo/internal/admission/quota"
+	admissionquota "go.miloapis.com/milo/internal/admission/quota"
 )
 
 func init() {
@@ -141,6 +147,18 @@ func NewCommand() *cobra.Command {
 
 func NewOptions() *options.Options {
 	s := options.NewOptions()
+
+	// Register custom admission plugins BEFORE determining which plugins to disable
+	// This ensures our plugins are known when DefaultOffAdmissionPlugins() is called
+	s.Admission.GenericAdmission.Plugins.Register(admissionquota.PluginName, func(config io.Reader) (admission.Interface, error) {
+		return admissionquota.NewClaimCreationPlugin()
+	})
+
+	// Set custom plugin order that includes our ClaimCreationQuota plugin
+	// This dynamically extends Kubernetes' plugin order with our custom plugins
+	s.Admission.GenericAdmission.RecommendedPluginOrder = GetMiloOrderedPlugins()
+
+	// Configure which plugins should be disabled
 	s.Admission.GenericAdmission.DefaultOffPlugins = DefaultOffAdmissionPlugins()
 
 	wd, _ := os.Getwd()

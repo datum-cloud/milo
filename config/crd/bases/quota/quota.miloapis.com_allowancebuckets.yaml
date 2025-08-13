@@ -60,21 +60,24 @@ spec:
               ownerInstanceRef:
                 description: Reference to the owner resource specific object instance.
                 properties:
+                  apiGroup:
+                    description: |-
+                      APIGroup of the target resource (e.g., "resourcemanager.miloapis.com").
+                      Empty string for core API group.
+                    type: string
                   kind:
                     description: Resource type
                     type: string
                   name:
                     description: Name of the owning resource object instance.
                     type: string
-                  observedGeneration:
-                    description: |-
-                      ObservedGeneration is the generation of the owning resource object instance
-                      that was used to populate this OwnerInstanceRef.
-                    format: int64
-                    type: integer
+                  uid:
+                    description: UID of the owning resource object instance.
+                    type: string
                 required:
                 - kind
                 - name
+                - uid
                 type: object
               resourceType:
                 description: The resource type this bucket tracks quota usage for

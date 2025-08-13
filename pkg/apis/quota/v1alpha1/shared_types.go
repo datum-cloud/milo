@@ -3,6 +3,12 @@ package v1alpha1
 // OwnerInstanceRef is a reference to the specific owning resource object
 // instance.
 type OwnerInstanceRef struct {
+	// APIGroup of the target resource (e.g., "resourcemanager.miloapis.com").
+	// Empty string for core API group.
+	//
+	// +kubebuilder:validation:Optional
+	APIGroup string `json:"apiGroup,omitempty"`
+
 	// Resource type
 	//
 	// +kubebuilder:validation:Required
@@ -13,11 +19,10 @@ type OwnerInstanceRef struct {
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
-	// ObservedGeneration is the generation of the owning resource object instance
-	// that was used to populate this OwnerInstanceRef.
+	// UID of the owning resource object instance.
 	//
-	// +kubebuilder:validation:Optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// +kubebuilder:validation:Required
+	UID string `json:"uid"`
 }
 
 type ContributingResourceRef struct {
