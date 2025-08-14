@@ -11,7 +11,6 @@ import (
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericfeatures "k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/server"
-	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/routine"
 	flowcontrolrequest "k8s.io/apiserver/pkg/util/flowcontrol/request"
@@ -119,7 +118,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
 		h = filters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
-		return genericapiserver.DefaultBuildHandlerChain(h, c)
+		return DefaultBuildHandlerChain(h, c)
 	}
 	serviceResolver := webhook.NewDefaultServiceResolver()
 
@@ -144,7 +143,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 	apiExtensions.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
 		h = filters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
-		return genericapiserver.DefaultBuildHandlerChain(h, c)
+		return DefaultBuildHandlerChain(h, c)
 	}
 	c.APIExtensions = apiExtensions
 
@@ -158,7 +157,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 	aggregator.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
 		h = filters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
-		return genericapiserver.DefaultBuildHandlerChain(h, c)
+		return DefaultBuildHandlerChain(h, c)
 	}
 	c.Aggregator = aggregator
 	c.Aggregator.ExtraConfig.DisableRemoteAvailableConditionController = true
