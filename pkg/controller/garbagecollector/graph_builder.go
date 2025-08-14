@@ -81,7 +81,7 @@ type event struct {
 type GraphBuilder struct {
 	restMapper meta.RESTMapper
 
-	clusterID string
+	project string
 
 	// each monitor list/watches a resource, the results are funneled to the
 	// dependencyGraphBuilder
@@ -216,7 +216,7 @@ func NewDependencyGraphBuilder(
 	)
 }
 
-func (gb *GraphBuilder) SetClusterID(id string) { gb.clusterID = id }
+func (gb *GraphBuilder) SetProject(id string) { gb.project = id }
 
 func (gb *GraphBuilder) controllerFor(logger klog.Logger, resource schema.GroupVersionResource, kind schema.GroupVersionKind) (cache.Controller, cache.Store, error) {
 	handlers := cache.ResourceEventHandlerFuncs{
@@ -457,7 +457,7 @@ func (gb *GraphBuilder) addDependentToOwners(logger klog.Logger, n *node, owners
 			// exist in the graph yet.
 			ownerNode = &node{
 				identity: objectReference{
-					Cluster:        n.identity.Cluster,
+					Project:        n.identity.Project,
 					OwnerReference: ownerReferenceCoordinates(owner),
 					Namespace:      n.identity.Namespace,
 				},
@@ -700,7 +700,7 @@ func (gb *GraphBuilder) runProcessGraphChanges(logger klog.Logger) {
 
 func (gb *GraphBuilder) identityFromEvent(event *event, accessor metav1.Object) objectReference {
 	return objectReference{
-		Cluster: gb.clusterID,
+		Project: gb.project,
 		OwnerReference: metav1.OwnerReference{
 			APIVersion: event.gvk.GroupVersion().String(),
 			Kind:       event.gvk.Kind,
@@ -733,7 +733,7 @@ func (gb *GraphBuilder) processGraphChanges(logger klog.Logger) bool {
 		"uid", string(accessor.GetUID()),
 		"eventType", event.eventType,
 		"virtual", event.virtual,
-		"cluster", gb.clusterID,
+		"project", gb.project,
 	)
 
 	// Check if the node already exists

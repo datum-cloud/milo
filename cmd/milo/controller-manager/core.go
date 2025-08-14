@@ -139,11 +139,11 @@ func startGarbageCollectorController(ctx context.Context, controllerContext Cont
 		InformersStarted:  controllerContext.InformersStarted,
 		InitialSyncPeriod: 30 * time.Second,
 	}
-	gcProv, err := projectprovider.New(cfg, gcSink)
+	prov, err := projectprovider.New(cfg, gcSink)
 	if err != nil {
 		return nil, true, fmt.Errorf("failed to start project provider for GC: %w", err)
 	}
-	go gcProv.Run(ctx)
+	go prov.Run(ctx)
 
 	return gc, true, nil
 }

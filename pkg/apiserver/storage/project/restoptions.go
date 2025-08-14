@@ -23,6 +23,11 @@ func (g roGetter) GetRESTOptions(gr schema.GroupResource, example runtime.Object
 	if err != nil {
 		return opts, err
 	}
+	// 🔒 Leave CRD *definitions* global so discovery is shared cluster-wide
+	if gr.Group == "apiextensions.k8s.io" && gr.Resource == "customresourcedefinitions" {
+		return opts, nil
+	}
+
 	// Ensure we always wrap with our project-aware decorator.
 	if opts.Decorator == nil {
 		opts.Decorator = ProjectAwareDecorator(genericregistry.StorageWithCacher())

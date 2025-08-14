@@ -33,7 +33,7 @@ import (
 type dotVertex struct {
 	uid                types.UID
 	gvk                schema.GroupVersionKind
-	cluster            string
+	project            string
 	namespace          string
 	name               string
 	missingFromGraph   bool
@@ -44,7 +44,7 @@ type dotVertex struct {
 
 func (v *dotVertex) dotID() string {
 	// globally unique across partitions
-	return v.cluster + "|" + string(v.uid)
+	return v.project + "|" + string(v.uid)
 }
 
 func (v *dotVertex) MarshalDOT(w io.Writer) error {
@@ -83,7 +83,7 @@ func (v *dotVertex) String() string {
 		virtual = "(virtual)"
 	}
 	return fmt.Sprintf(`%s/%s[%s]@%s-%s%s%s%s%s`,
-		kind, v.name, v.namespace, v.cluster, v.uid,
+		kind, v.name, v.namespace, v.project, v.uid,
 		missing, deleting, deletingDependents, virtual)
 }
 
@@ -99,12 +99,12 @@ func (v *dotVertex) Attributes() []attribute {
 	}
 	kubectlString += "/" + v.name
 
-	label := fmt.Sprintf(`cluster=%v
+	label := fmt.Sprintf(`project=%v
 uid=%v
 namespace=%v
 %v
 `,
-		v.cluster,
+		v.project,
 		v.uid,
 		v.namespace,
 		kubectlString,
@@ -132,7 +132,7 @@ namespace=%v
 		{Key: "group", Value: v.gvk.Group},
 		{Key: "version", Value: v.gvk.Version},
 		{Key: "kind", Value: v.gvk.Kind},
-		{Key: "cluster", Value: v.cluster},
+		{Key: "project", Value: v.project},
 		{Key: "namespace", Value: v.namespace},
 		{Key: "name", Value: v.name},
 		{Key: "uid", Value: string(v.uid)},
@@ -152,7 +152,7 @@ func NewDOTVertex(node *node) *dotVertex {
 	return &dotVertex{
 		uid:                node.identity.UID,
 		gvk:                gv.WithKind(node.identity.Kind),
-		cluster:            node.identity.Cluster,
+		project:            node.identity.Project,
 		namespace:          node.identity.Namespace,
 		name:               node.identity.Name,
 		beingDeleted:       node.beingDeleted,
@@ -162,7 +162,7 @@ func NewDOTVertex(node *node) *dotVertex {
 }
 
 // NewMissingdotVertex creates a new dotVertex.
-func NewMissingdotVertex(cluster string, ownerRef metav1.OwnerReference) *dotVertex {
+func NewMissingdotVertex(project string, ownerRef metav1.OwnerReference) *dotVertex {
 	gv, err := schema.ParseGroupVersion(ownerRef.APIVersion)
 	if err != nil {
 		utilruntime.HandleError(err)
@@ -170,7 +170,7 @@ func NewMissingdotVertex(cluster string, ownerRef metav1.OwnerReference) *dotVer
 	return &dotVertex{
 		uid:              ownerRef.UID,
 		gvk:              gv.WithKind(ownerRef.Kind),
-		cluster:          cluster,
+		project:          project,
 		name:             ownerRef.Name,
 		missingFromGraph: true,
 	}
@@ -205,12 +205,12 @@ func toDOTNodesAndEdges(uidToNode map[types.UID]*node) ([]*dotVertex, []dotEdge)
 		if len(n.dependents) == 0 && len(n.owners) == 0 {
 			continue
 		}
-		v := NewDOTVertex(n) // carries n.identity.Cluster
+		v := NewDOTVertex(n) // carries n.identity.Project
 		uidToVertex[n.identity.UID] = v
 		nodes = append(nodes, v)
 	}
 
-	// 2) Add edges; create “missing owner” vertices as needed (in same cluster as child).
+	// 2) Add edges; create “missing owner” vertices as needed (in same project as child).
 	for _, n := range uidToNode {
 		currVertex := uidToVertex[n.identity.UID]
 		if currVertex == nil {
@@ -219,7 +219,7 @@ func toDOTNodesAndEdges(uidToNode map[types.UID]*node) ([]*dotVertex, []dotEdge)
 		for _, ownerRef := range n.owners {
 			ownerVertex, ok := uidToVertex[ownerRef.UID]
 			if !ok {
-				ownerVertex = NewMissingdotVertex(n.identity.Cluster, ownerRef)
+				ownerVertex = NewMissingdotVertex(n.identity.Project, ownerRef)
 				uidToVertex[ownerRef.UID] = ownerVertex
 				nodes = append(nodes, ownerVertex)
 			}
@@ -314,17 +314,17 @@ func marshalDOT(w io.Writer, nodes []*dotVertex, edges []dotEdge) error {
 	return nil
 }
 
-func (h *debugHTTPHandler) pickBuilders(cluster string) []*GraphBuilder {
+func (h *debugHTTPHandler) pickBuilders(project string) []*GraphBuilder {
 	if len(h.controller.dependencyGraphBuilders) == 0 {
 		return nil
 	}
-	if cluster == "" {
+	if project == "" {
 		// all partitions
 		return h.controller.dependencyGraphBuilders
 	}
 	// specific partition id
 	for _, gb := range h.controller.dependencyGraphBuilders {
-		if gb.clusterID == cluster {
+		if gb.project == project {
 			return []*GraphBuilder{gb}
 		}
 	}
@@ -338,10 +338,10 @@ func (h *debugHTTPHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	q := req.URL.Query()
-	clusterFilter := q.Get("cluster")
-	builders := h.pickBuilders(clusterFilter)
+	projectFilter := q.Get("project")
+	builders := h.pickBuilders(projectFilter)
 	if len(builders) == 0 {
-		http.Error(w, "no graph builders available for requested cluster", http.StatusNotFound)
+		http.Error(w, "no graph builders available for requested project", http.StatusNotFound)
 		return
 	}
 
@@ -353,7 +353,7 @@ func (h *debugHTTPHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if len(uidStrings) > 0 {
 		// Allow:
 		//   uid=<uid>              (searched across selected builders)
-		//   uid=<cluster>:<uid>    (direct to one builder)
+		//   uid=<project>:<uid>    (direct to one builder)
 		type target struct {
 			gb  *GraphBuilder
 			uid types.UID
@@ -362,7 +362,7 @@ func (h *debugHTTPHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		for _, us := range uidStrings {
 			if parts := strings.SplitN(us, ":", 2); len(parts) == 2 {
-				// explicit cluster:uid
+				// explicit project:uid
 				cid, uidStr := parts[0], parts[1]
 				gbs := h.pickBuilders(cid)
 				if len(gbs) == 1 {

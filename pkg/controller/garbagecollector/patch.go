@@ -26,16 +26,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/metadata"
 	"k8s.io/kubernetes/pkg/controller/garbagecollector/metaonly"
 )
-
-func (gc *GarbageCollector) metadataForCluster(cluster string) metadata.Interface {
-	if gb := gc.builderForCluster(cluster); gb != nil && gb.metadataClient != nil {
-		return gb.metadataClient
-	}
-	return gc.metadataClient
-}
 
 // getMetadata tries getting object metadata from local cache, and sends GET request to apiserver when
 // local cache is not available or not latest.
@@ -44,7 +36,7 @@ func (gc *GarbageCollector) getMetadataForIdentity(id objectReference) (metav1.O
 	var mapper meta.RESTMapper = meta.RESTMapper(gc.restMapper) // cast from Resettable to RESTMapper
 	md := gc.metadataClient
 
-	if gb := gc.builderForCluster(id.Cluster); gb != nil {
+	if gb := gc.builderForProject(id.Project); gb != nil {
 		mapper = gb.restMapper // OK: RESTMapper -> RESTMapper
 		md = gb.metadataClient
 	}
@@ -55,7 +47,7 @@ func (gc *GarbageCollector) getMetadataForIdentity(id objectReference) (metav1.O
 	}
 
 	// rest unchanged...
-	gb := gc.builderForCluster(id.Cluster)
+	gb := gc.builderForProject(id.Project)
 	if gb == nil {
 		return md.Resource(apiResource).Namespace(id.Namespace).Get(context.TODO(), id.Name, metav1.GetOptions{})
 	}

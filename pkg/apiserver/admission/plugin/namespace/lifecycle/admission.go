@@ -1,4 +1,4 @@
-// pkg/admission/plugin/namespace/lifecycle/admission.go
+// pkg/apiserver/admission/plugin/namespace/lifecycle/admission.go
 package lifecycle
 
 import (

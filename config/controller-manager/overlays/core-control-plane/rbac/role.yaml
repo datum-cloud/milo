@@ -64,18 +64,6 @@ rules:
   - list
   - watch
 - apiGroups:
-  - infrastructure.miloapis.com
-  resources:
-  - projectcontrolplanes
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - resourcemanager.miloapis.com
   resources:
   - organizationmemberships
@@ -88,7 +76,6 @@ rules:
   - resourcemanager.miloapis.com
   resources:
   - organizationmemberships/status
-  - projects/status
   verbs:
   - get
   - patch
@@ -97,14 +84,7 @@ rules:
   - resourcemanager.miloapis.com
   resources:
   - organizations
-  - projects
   verbs:
   - get
   - list
   - watch
-- apiGroups:
-  - resourcemanager.miloapis.com
-  resources:
-  - projects/finalizers
-  verbs:
-  - update

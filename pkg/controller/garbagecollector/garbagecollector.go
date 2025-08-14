@@ -82,9 +82,9 @@ type GarbageCollector struct {
 var _ controller.Interface = (*GarbageCollector)(nil)
 var _ controller.Debuggable = (*GarbageCollector)(nil)
 
-func (gc *GarbageCollector) AddPartition(
+func (gc *GarbageCollector) AddProject(
 	parent context.Context,
-	clusterID string,
+	project string,
 	md metadata.Interface,
 	mapper meta.ResettableRESTMapper,
 	ignored map[schema.GroupResource]struct{},
@@ -116,13 +116,13 @@ func (gc *GarbageCollector) AddPartition(
 		absent,
 		gc.eventBroadcaster, // share events across partitions
 	)
-	gb.SetClusterID(clusterID)
+	gb.SetProject(project)
 
 	// Track and start
 	ctx, cancel := context.WithCancel(parent)
 	gc.mu.Lock()
 	gc.dependencyGraphBuilders = append(gc.dependencyGraphBuilders, gb)
-	gc.cancels[clusterID] = cancel
+	gc.cancels[project] = cancel
 	gc.mu.Unlock()
 
 	go gb.Run(ctx)
@@ -132,33 +132,33 @@ func (gc *GarbageCollector) AddPartition(
 	newResources, _ := GetDeletableResources(logger, discover)
 	if err := gb.syncMonitors(logger, newResources); err != nil {
 		cancel()
-		return fmt.Errorf("gc(%s): syncMonitors: %w", clusterID, err)
+		return fmt.Errorf("gc(%s): syncMonitors: %w", project, err)
 	}
 	gb.startMonitors(logger)
 
 	// Optional: wait briefly for first sync to reduce initial GC latency
 	ok := cache.WaitForNamedCacheSync(
-		"gc-"+clusterID,
+		"gc-"+project,
 		waitForStopOrTimeout(ctx.Done(), initialSyncTimeout),
 		func() bool { return gb.IsSynced(logger) },
 	)
 	if !ok {
-		logger.Info("GC: partition monitors not fully synced; continuing", "cluster", clusterID)
+		logger.Info("GC: partition monitors not fully synced; continuing", "project", project)
 	}
 
 	return nil
 }
 
-func (gc *GarbageCollector) RemovePartition(clusterID string) {
+func (gc *GarbageCollector) RemoveProject(project string) {
 	gc.mu.Lock()
-	if cancel, ok := gc.cancels[clusterID]; ok {
+	if cancel, ok := gc.cancels[project]; ok {
 		cancel()
-		delete(gc.cancels, clusterID)
+		delete(gc.cancels, project)
 	}
 	// drop from slice
 	dst := gc.dependencyGraphBuilders[:0]
 	for _, gb := range gc.dependencyGraphBuilders {
-		if gb.clusterID != clusterID {
+		if gb.project != project {
 			dst = append(dst, gb)
 		}
 	}
@@ -205,7 +205,7 @@ func NewComposedGarbageCollectorMulti(
 	delQ, orphanQ, absent := graphBuilders[0].GetGraphResources()
 
 	gc := &GarbageCollector{
-		metadataClient:          metadataClient, // kept for legacy paths; live calls should route by node.identity.Cluster
+		metadataClient:          metadataClient, // kept for legacy paths; live calls should route by node.identity.Project
 		restMapper:              mapper,
 		attemptToDelete:         delQ,
 		attemptToOrphan:         orphanQ,
@@ -430,9 +430,9 @@ func (gc *GarbageCollector) runAttemptToDeleteWorker(ctx context.Context) {
 	}
 }
 
-var enqueuedVirtualDeleteEventErr = goerrors.New("enqueued virtual delete event")
+var errEnqueuedVirtualDeleteEvent = goerrors.New("enqueued virtual delete event")
 
-var namespacedOwnerOfClusterScopedObjectErr = goerrors.New("cluster-scoped objects cannot refer to namespaced owners")
+var errNamespacedOwnerOfClusterScopedObject = goerrors.New("cluster-scoped objects cannot refer to namespaced owners")
 
 func (gc *GarbageCollector) processAttemptToDeleteWorker(ctx context.Context) bool {
 	item, quit := gc.attemptToDelete.Get()
@@ -459,17 +459,17 @@ const (
 	forgetItem
 )
 
-// helper: find builder by cluster id
-func (gc *GarbageCollector) builderForCluster(cluster string) *GraphBuilder {
+// helper: find builder by project id
+func (gc *GarbageCollector) builderForProject(project string) *GraphBuilder {
 	for _, gb := range gc.dependencyGraphBuilders {
-		if gb.clusterID == cluster {
+		if gb.project == project {
 			return gb
 		}
 	}
 	return nil
 }
 
-// helper: fallback — search any builder by UID (only used if cluster is empty)
+// helper: fallback — search any builder by UID (only used if project is empty)
 func (gc *GarbageCollector) findNodeInAnyBuilder(uid types.UID) (*node, bool) {
 	for _, gb := range gc.dependencyGraphBuilders {
 		if n, ok := gb.uidToNode.Read(uid); ok {
@@ -489,20 +489,20 @@ func (gc *GarbageCollector) attemptToDeleteWorker(ctx context.Context, item inte
 
 	// choose the right graph for this node’s partition
 	var gb *GraphBuilder
-	if n.identity.Cluster != "" {
-		gb = gc.builderForCluster(n.identity.Cluster)
+	if n.identity.Project != "" {
+		gb = gc.builderForProject(n.identity.Project)
 	} else {
 		// legacy/defensive: try to find by UID in any builder
 		if nf, found := gc.findNodeInAnyBuilder(n.identity.UID); found {
-			// trust that node’s cluster for future lookups
-			gb = gc.builderForCluster(nf.identity.Cluster)
+			// trust that node’s project for future lookups
+			gb = gc.builderForProject(nf.identity.Project)
 		}
 	}
 	if gb == nil {
-		// No graph for that cluster (partition removed or not registered yet).
+		// No graph for that project (partition removed or not registered yet).
 		// Requeue to give registration a chance to happen.
-		logger.V(2).Info("no graphbuilder for node's cluster; requeuing",
-			"cluster", n.identity.Cluster, "item", n.identity)
+		logger.V(2).Info("no graphbuilder for node's project; requeuing",
+			"project", n.identity.Project, "item", n.identity)
 		return requeueItem
 	}
 
@@ -530,11 +530,11 @@ func (gc *GarbageCollector) attemptToDeleteWorker(ctx context.Context, item inte
 		}
 		return forgetItem
 
-	case err == enqueuedVirtualDeleteEventErr:
+	case err == errEnqueuedVirtualDeleteEvent:
 		// virtual delete event will be handled by the per-partition graph builder; no need to requeue
 		return forgetItem
 
-	case err == namespacedOwnerOfClusterScopedObjectErr:
+	case err == errNamespacedOwnerOfClusterScopedObject:
 		// unrecoverable for this item; don't requeue
 		return forgetItem
 
@@ -568,7 +568,7 @@ func (gc *GarbageCollector) isDangling(ctx context.Context, reference metav1.Own
 	// >>> change: use RESTMapper (narrow) here
 	var mapper meta.RESTMapper = meta.RESTMapper(gc.restMapper) // cast
 	md := gc.metadataClient
-	if gb := gc.builderForCluster(item.identity.Cluster); gb != nil {
+	if gb := gc.builderForProject(item.identity.Project); gb != nil {
 		mapper = gb.restMapper
 		md = gb.metadataClient
 	}
@@ -583,7 +583,7 @@ func (gc *GarbageCollector) isDangling(ctx context.Context, reference metav1.Own
 
 	if len(item.identity.Namespace) == 0 && namespaced {
 		logger.V(2).Info("item is cluster-scoped, but refers to a namespaced owner", "item", item.identity, "owner", reference)
-		return false, nil, namespacedOwnerOfClusterScopedObjectErr
+		return false, nil, errNamespacedOwnerOfClusterScopedObject
 	}
 
 	ns := resourceDefaultNamespace(namespaced, item.identity.Namespace)
@@ -654,10 +654,10 @@ func (gc *GarbageCollector) attemptToDeleteItem(ctx context.Context, item *node)
 	logger := klog.FromContext(ctx)
 
 	// pick the correct graph (partition) for this node
-	gb := gc.builderForCluster(item.identity.Cluster)
+	gb := gc.builderForProject(item.identity.Project)
 	if gb == nil {
-		// no graph registered for this cluster yet — cause a retry
-		return fmt.Errorf("no graph builder for cluster %q", item.identity.Cluster)
+		// no graph registered for this project yet — cause a retry
+		return fmt.Errorf("no graph builder for project %q", item.identity.Project)
 	}
 
 	logger.V(2).Info("Processing item",
@@ -680,7 +680,7 @@ func (gc *GarbageCollector) attemptToDeleteItem(ctx context.Context, item *node)
 		// object doesn't exist; enqueue a virtual delete event on the correct graph
 		logger.V(5).Info("item not found, generating a virtual delete event", "item", item.identity)
 		gb.enqueueVirtualDeleteEvent(item.identity)
-		return enqueuedVirtualDeleteEventErr
+		return errEnqueuedVirtualDeleteEvent
 	case err != nil:
 		return err
 	}
@@ -688,7 +688,7 @@ func (gc *GarbageCollector) attemptToDeleteItem(ctx context.Context, item *node)
 	if latest.GetUID() != item.identity.UID {
 		logger.V(5).Info("UID doesn't match, item not found, generating a virtual delete event", "item", item.identity)
 		gb.enqueueVirtualDeleteEvent(item.identity)
-		return enqueuedVirtualDeleteEventErr
+		return errEnqueuedVirtualDeleteEvent
 	}
 
 	// If the item itself is deleting dependents, continue that flow.

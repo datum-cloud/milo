@@ -13,16 +13,20 @@ services:
     image: milo-apiserver:dev
     command: >
       controller-manager
+        --control-plane-scope=core
         --kubeconfig=/etc/milo/root-kubeconfig.yaml
         --system-namespace=milo-system
         --leader-elect-resource-namespace=milo-system
         --authorization-always-allow-paths=/debug/controllers/garbage-collector-controller/graph,/debug/controllers/garbage-collector-controller/graph/
         --authentication-skip-lookup
+        --cert-dir=/certs
+        --tls-cert-file=/certs/tls.crt
+        --tls-private-key-file=/certs/tls.key
         --v=6
     environment:
       - TZ=UTC
     volumes:
-      - ./certs:/certs:ro 
+      - ./webhook-certs:/certs:ro
       - ./root-kubeconfig.yaml:/etc/milo/root-kubeconfig.yaml:ro
     depends_on:
       - milo

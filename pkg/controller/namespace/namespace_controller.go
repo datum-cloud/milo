@@ -74,9 +74,9 @@ type NamespaceController struct {
 	cancels map[string]context.CancelFunc
 }
 
-func (nm *NamespaceController) AddCluster(
+func (nm *NamespaceController) AddProject(
 	parent context.Context,
-	cluster string,
+	project string,
 	kube clientset.Interface,
 	md metadata.Interface,
 	discover func() ([]*metav1.APIResourceList, error),
@@ -85,31 +85,25 @@ func (nm *NamespaceController) AddCluster(
 ) error {
 	// klog
 
-	klog.FromContext(parent).Info("Adding cluster", "cluster", cluster,)
-	// Build cluster-scoped deleter
+	klog.FromContext(parent).Info("Adding project", "project", project)
+	// Build project-scoped deleter
 	del := deletion.NewNamespacedResourcesDeleter(
 		parent, kube.CoreV1().Namespaces(), md, kube.CoreV1(), discover, finalizer)
 
-	// Build cluster-scoped informer
+	// Build project-scoped informer
 	factory := informers.NewSharedInformerFactory(kube, resync)
 	nsInf := factory.Core().V1().Namespaces()
 
-	// Enqueue terminating namespaces for this cluster
+	// Enqueue terminating namespaces for this project
 	nsInf.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(o interface{}) {
-				n := o.(*v1.Namespace)
-				klog.InfoS("ns tap add", "cluster", cluster, "ns", n.Name, "dt", n.DeletionTimestamp)
-
-				nm.enqueueNamespace(cluster, o)
+				nm.enqueueNamespace(project, o)
 			},
 			UpdateFunc: func(_, newObj interface{}) {
-				n := newObj.(*v1.Namespace)
-				klog.InfoS("ns tap update", "cluster", cluster, "ns", n.Name, "dt", n.DeletionTimestamp)
-
-				nm.enqueueNamespace(cluster, newObj)
+				nm.enqueueNamespace(project, newObj)
 			},
-			DeleteFunc: func(o interface{}) { nm.enqueueNamespace(cluster, o) },
+			DeleteFunc: func(o interface{}) { nm.enqueueNamespace(project, o) },
 		},
 		resync,
 	)
@@ -119,40 +113,39 @@ func (nm *NamespaceController) AddCluster(
 	if nm.cancels == nil {
 		nm.cancels = make(map[string]context.CancelFunc)
 	}
-	nm.listers[cluster] = nsInf.Lister()
-	nm.listersSynced[cluster] = nsInf.Informer().HasSynced
-	nm.deleters[cluster] = del
+	nm.listers[project] = nsInf.Lister()
+	nm.listersSynced[project] = nsInf.Informer().HasSynced
+	nm.deleters[project] = del
 	nm.mu.Unlock()
 
-	// Start and block until this cluster’s cache is ready
+	// Start and block until this project's cache is ready
 	ctx, cancel := context.WithCancel(parent)
 	nm.mu.Lock()
-	nm.cancels[cluster] = cancel
+	nm.cancels[project] = cancel
 	nm.mu.Unlock()
 
 	go factory.Start(ctx.Done())
-	if !cache.WaitForNamedCacheSync("namespace-"+cluster, ctx.Done(), nsInf.Informer().HasSynced) {
+	if !cache.WaitForNamedCacheSync("namespace-"+project, ctx.Done(), nsInf.Informer().HasSynced) {
 		// failed to sync; clean up the partial registration
-		nm.RemoveCluster(cluster)
+		nm.RemoveProject(project)
 		return context.Canceled
 	}
 	return nil
 }
 
-func (nm *NamespaceController) RemoveCluster(cluster string) {
+func (nm *NamespaceController) RemoveProject(project string) {
 	nm.mu.Lock()
-	if cancel, ok := nm.cancels[cluster]; ok {
+	if cancel, ok := nm.cancels[project]; ok {
 		cancel()
-		delete(nm.cancels, cluster)
+		delete(nm.cancels, project)
 	}
-	delete(nm.listers, cluster)
-	delete(nm.listersSynced, cluster)
-	delete(nm.deleters, cluster)
+	delete(nm.listers, project)
+	delete(nm.listersSynced, project)
+	delete(nm.deleters, project)
 	nm.mu.Unlock()
-	// We don’t try to purge queued items; workers will skip keys whose cluster is gone.
+	// We don’t try to purge queued items; workers will skip keys whose project is gone.
 }
 
-// NewNamespaceController creates a new NamespaceController
 // NewNamespaceController creates a multi-cluster-aware controller and
 // wires the passed informer/client as the initial "root" cluster.
 // If you want a different name, replace "root" with your desired ID.
@@ -303,7 +296,9 @@ func (nm *NamespaceController) syncNamespaceFromKey(ctx context.Context, key nsK
 	lister := nm.listers[key.Cluster]
 	deleter := nm.deleters[key.Cluster]
 	if lister == nil || deleter == nil {
-		return fmt.Errorf("cluster %q not registered", key.Cluster)
+		// The project was unregistered (e.g., after purge). Nothing left to do.
+		logger.V(3).Info("Dropping key for unregistered cluster", "cluster", key.Cluster, "namespace", key.Name)
+		return nil // <- important: no error => worker will Forget() and not requeue
 	}
 
 	namespace, err := lister.Get(key.Name)

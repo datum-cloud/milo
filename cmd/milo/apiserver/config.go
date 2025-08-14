@@ -36,9 +36,7 @@ import (
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	svmrest "k8s.io/kubernetes/pkg/registry/storagemigration/rest"
 
-	myinit "go.miloapis.com/milo/pkg/apiserver/admission/initializer"
-
-	"go.miloapis.com/milo/pkg/server/filters"
+	"go.miloapis.com/milo/pkg/apiserver/admission/initializer"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
 )
 
@@ -117,13 +115,13 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		h = filters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
+		h = datumfilters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
 		return DefaultBuildHandlerChain(h, c)
 	}
 	serviceResolver := webhook.NewDefaultServiceResolver()
 
 	// 🔧 Build loopback-only initializer using the generic loopback
-	loopbackInit := myinit.LoopbackInitializer{
+	loopbackInit := initializer.LoopbackInitializer{
 		Loopback: rest.CopyConfig(genericConfig.LoopbackClientConfig),
 	}
 
@@ -142,7 +140,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	apiExtensions.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		h = filters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
+		h = datumfilters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
 		return DefaultBuildHandlerChain(h, c)
 	}
 	c.APIExtensions = apiExtensions
@@ -156,7 +154,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	aggregator.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		h = filters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
+		h = datumfilters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
 		return DefaultBuildHandlerChain(h, c)
 	}
 	c.Aggregator = aggregator

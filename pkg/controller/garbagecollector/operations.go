@@ -124,7 +124,7 @@ func (gc *GarbageCollector) getObject(item objectReference) (*metav1.PartialObje
 	ns := resourceDefaultNamespace(namespaced, item.Namespace)
 	if namespaced && len(ns) == 0 {
 		// cluster-scoped child referencing a namespaced owner, invalid
-		return nil, namespacedOwnerOfClusterScopedObjectErr
+		return nil, errNamespacedOwnerOfClusterScopedObject
 	}
 
 	return gb.metadataClient.Resource(resource).Namespace(ns).

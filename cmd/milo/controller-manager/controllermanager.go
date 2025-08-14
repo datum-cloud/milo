@@ -78,7 +78,6 @@ import (
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -322,22 +321,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 		// TODO: Refactor how we handle controller registration so we can easily
 		//       scope controllers to a specific control plane.
 		if opts.ControlPlane.Scope == controlplane.ScopeCore {
-			// Get a client for the infrastructure cluster and start the cluster's cache informers.
-			// This allows controllers to manage resources and watch for changes in the infrastructure
-			// cluster.
-			infraClient, err := opts.InfraCluster.GetClient()
-			if err != nil {
-				logger.Error(err, "Error building infrastructure cluster client")
-				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-			}
-			infraCluster, err := cluster.New(infraClient, func(o *cluster.Options) {
-				o.Scheme = Scheme
-			})
-			if err != nil {
-				logger.Error(err, "Error building infrastructure cluster")
-				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-			}
-
 			// We intentionally use a new configuration here because the one built into
 			// the legacy controller manager component leverages protobuf encoding. The
 			// controller runtime uses JSON encoding when managing CRDs.
@@ -397,9 +380,8 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
-				InfraClient:        infraCluster.GetClient(),
 			}
-			if err := projectCtrl.SetupWithManager(ctrl, infraCluster); err != nil {
+			if err := projectCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up project controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
@@ -427,12 +409,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up group controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-
-			go func() {
-				if err := infraCluster.Start(ctx); err != nil {
-					panic(err)
-				}
-			}()
 
 			go func() {
 				if err := ctrl.Start(ctx); err != nil {

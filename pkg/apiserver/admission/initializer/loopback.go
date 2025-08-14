@@ -1,4 +1,4 @@
-// milo/pkg/apiserver/admission/initializer/loopback_only.go
+// milo/pkg/apiserver/admission/initializer/loopback.go
 package initializer
 
 import (

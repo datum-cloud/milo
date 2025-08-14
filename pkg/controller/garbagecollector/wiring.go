@@ -36,7 +36,7 @@ func (s *GCSink) AddProject(ctx context.Context, id string, cfg *rest.Config) er
 	metaFact := metadatainformer.NewSharedInformerFactory(mdProj, ResourceResyncTime)
 	composite := informerfactory.NewInformerFactory(coreFact, metaFact)
 
-	return s.GC.AddPartition(
+	return s.GC.AddProject(
 		ctx,
 		id,
 		mdProj,
@@ -50,5 +50,5 @@ func (s *GCSink) AddProject(ctx context.Context, id string, cfg *rest.Config) er
 }
 
 func (s *GCSink) RemoveProject(id string) {
-	s.GC.RemovePartition(id)
+	s.GC.RemoveProject(id)
 }

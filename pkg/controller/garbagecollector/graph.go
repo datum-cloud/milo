@@ -27,7 +27,7 @@ import (
 )
 
 type objectReference struct {
-	Cluster string
+	Project string
 
 	metav1.OwnerReference
 	// This is needed by the dynamic client
