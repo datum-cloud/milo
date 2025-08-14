@@ -82,7 +82,9 @@ func (v *dotVertex) String() string {
 	if v.virtual {
 		virtual = "(virtual)"
 	}
-	return fmt.Sprintf(`%s/%s[%s]%s-%s%s%s%s`, kind, v.name, v.namespace, "@"+v.cluster, v.uid, missing, deleting, deletingDependents, virtual)
+	return fmt.Sprintf(`%s/%s[%s]@%s-%s%s%s%s%s`,
+		kind, v.name, v.namespace, v.cluster, v.uid,
+		missing, deleting, deletingDependents, virtual)
 }
 
 type attribute struct {
