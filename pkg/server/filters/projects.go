@@ -9,7 +9,6 @@ import (
 
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
-	"k8s.io/apiserver/pkg/endpoints/request"
 	reqinfo "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/klog/v2"
 
@@ -91,7 +90,7 @@ func ProjectContextAuthorizationDecorator(next http.Handler) http.Handler {
 			return
 		}
 
-		reqUser, ok := request.UserFrom(ctx)
+		reqUser, ok := reqinfo.UserFrom(ctx)
 		if !ok {
 			responsewriters.InternalError(w, req, fmt.Errorf("failed to extract user info from context"))
 			return
@@ -109,7 +108,7 @@ func ProjectContextAuthorizationDecorator(next http.Handler) http.Handler {
 			iamv1alpha1.ParentNameExtraKey:     {projID},
 		}
 
-		req = req.WithContext(request.WithUser(ctx, userWithExtra(u, extra)))
+		req = req.WithContext(reqinfo.WithUser(ctx, userWithExtra(u, extra)))
 		next.ServeHTTP(w, req)
 	})
 }
