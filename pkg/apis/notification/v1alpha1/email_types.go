@@ -102,6 +102,12 @@ type EmailStatus struct {
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ProviderID is the identifier returned by the underlying email provider
+	// (e.g. Resend) when the e-mail is accepted for delivery. It is usually
+	// used to track the email delivery status (e.g. provider webhooks).
+	// +optional
+	ProviderID string `json:"providerID,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
