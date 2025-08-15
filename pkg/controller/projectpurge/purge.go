@@ -42,6 +42,14 @@ func ignorable(err error) bool {
 		meta.IsNoMatchError(err)
 }
 
+var protected = map[string]struct{}{
+	"default":         {},
+	"kube-system":     {},
+	"kube-public":     {},
+	"kube-node-lease": {},
+	// add "milo-system" if you make it per-project and protect it
+}
+
 func (p *Purger) Purge(ctx context.Context, cfg *rest.Config, project string, o Options) error {
 	if o.Timeout == 0 {
 		o.Timeout = 5 * time.Minute
@@ -142,20 +150,24 @@ func (p *Purger) Purge(ctx context.Context, cfg *rest.Config, project string, o 
 	}
 
 	// Phase B: cluster-scoped kinds
-	if err := runParallel(deadline, o.Parallel, cluster, func(ctx context.Context, r res) error {
-		if err := dyn.Resource(r.gvr).DeleteCollection(ctx, delOpts, listOpts); !ignorable(err) {
-			if apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) {
-				return fmt.Errorf("rbac forbids DeleteCollection for %s: %w", r.gvr, err)
-			}
-			return fmt.Errorf("DeleteCollection %s: %w", r.gvr, err)
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
+	// if err := runParallel(deadline, o.Parallel, cluster, func(ctx context.Context, r res) error {
+	// 	if err := dyn.Resource(r.gvr).DeleteCollection(ctx, delOpts, listOpts); !ignorable(err) {
+	// 		if apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) {
+	// 			return fmt.Errorf("rbac forbids DeleteCollection for %s: %w", r.gvr, err)
+	// 		}
+	// 		return fmt.Errorf("DeleteCollection %s: %w", r.gvr, err)
+	// 	}
+	// 	return nil
+	// }); err != nil {
+	// 	return err
+	// }
 
 	// Phase C: delete namespaces themselves (sets DeletionTimestamp)
 	if err := runParallel(deadline, o.Parallel, namespaces, func(ctx context.Context, ns string) error {
+		if _, ok := protected[ns]; ok {
+			// Keep the namespace object; we've already deleted its contents in Phase A.
+			return nil
+		}
 		if err := core.CoreV1().Namespaces().Delete(ctx, ns, delOpts); !ignorable(err) {
 			if apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) {
 				return fmt.Errorf("rbac forbids deleting namespace %q: %w", ns, err)
@@ -196,12 +208,17 @@ func (p *Purger) Purge(ctx context.Context, cfg *rest.Config, project string, o 
 	}
 
 	// Phase E: verify all namespaces are gone (so tearing down per-project controllers is safe)
-	if err := wait.PollImmediateUntilWithContext(deadline, 500*time.Millisecond, func(ctx context.Context) (bool, error) {
+	if err := wait.PollUntilContextCancel(deadline, 500*time.Millisecond, true, func(ctx context.Context) (bool, error) {
 		nsList, err := core.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("list namespaces: %w", err)
 		}
-		return len(nsList.Items) == 0, nil
+		if len(nsList.Items) == 1 && nsList.Items[0].Name == "default" {
+			return true, nil // all gone
+		}
+		// If we have namespaces left, we can’t proceed
+		return false, nil
+
 	}); err != nil {
 		return fmt.Errorf("timeout waiting for namespaces to disappear: %w", err)
 	}

@@ -115,9 +115,12 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		h = datumfilters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
-		return DefaultBuildHandlerChain(h, c)
+		return datumfilters.ProjectRouterWithRequestInfo(
+			DefaultBuildHandlerChain(h, c), // build stock chain first
+			c.RequestInfoResolver,          // then wrap with router
+		)
 	}
+
 	serviceResolver := webhook.NewDefaultServiceResolver()
 
 	// 🔧 Build loopback-only initializer using the generic loopback
@@ -140,8 +143,10 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	apiExtensions.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		h = datumfilters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
-		return DefaultBuildHandlerChain(h, c)
+		return datumfilters.ProjectRouterWithRequestInfo(
+			DefaultBuildHandlerChain(h, c),
+			c.RequestInfoResolver,
+		)
 	}
 	c.APIExtensions = apiExtensions
 
@@ -154,8 +159,10 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	aggregator.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		h = datumfilters.ProjectRouterWithRequestInfo(h, c.RequestInfoResolver)
-		return DefaultBuildHandlerChain(h, c)
+		return datumfilters.ProjectRouterWithRequestInfo(
+			DefaultBuildHandlerChain(h, c),
+			c.RequestInfoResolver,
+		)
 	}
 	c.Aggregator = aggregator
 	c.Aggregator.ExtraConfig.DisableRemoteAvailableConditionController = true
