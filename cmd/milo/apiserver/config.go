@@ -215,6 +215,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	// organization contexts.
 	handler = datumfilters.UserContextAuthorizationDecorator(handler)
 	handler = datumfilters.OrganizationContextAuthorizationDecorator(handler)
+	handler = datumfilters.ProjectContextAuthorizationDecorator(handler)
 
 	failedHandler := genericapifilters.Unauthorized(c.Serializer)
 	failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyRuleEvaluator)
