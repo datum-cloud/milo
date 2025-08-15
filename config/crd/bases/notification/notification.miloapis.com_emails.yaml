@@ -197,6 +197,12 @@ spec:
                   - type
                   type: object
                 type: array
+              providerID:
+                description: |-
+                  ProviderID is the identifier returned by the underlying email provider
+                  (e.g. Resend) when the e-mail is accepted for delivery. It is usually
+                  used to track the email delivery status (e.g. provider webhooks).
+                type: string
             type: object
         type: object
     served: true
