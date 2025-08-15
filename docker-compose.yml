@@ -26,7 +26,7 @@ services:
     environment:
       - TZ=UTC
     volumes:
-      - ./webhook-certs:/certs:ro
+      - ./certs:/certs:ro
       - ./root-kubeconfig.yaml:/etc/milo/root-kubeconfig.yaml:ro
     depends_on:
       - milo
