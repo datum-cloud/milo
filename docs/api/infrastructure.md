@@ -2,26 +2,26 @@
 
 Packages:
 
-- [resourcemanager.miloapis.com/v1alpha1](#resourcemanagerdatumapiscomv1alpha1)
+- [infrastructure.miloapis.com/v1alpha1](#infrastructuremiloapiscomv1alpha1)
 
-# resourcemanager.miloapis.com/v1alpha1
+# infrastructure.miloapis.com/v1alpha1
 
 Resource Types:
 
-- [Project](#project)
+- [ProjectControlPlane](#projectcontrolplane)
 
 
 
 
-## Project
-<sup><sup>[↩ Parent](#resourcemanagerdatumapiscomv1alpha1 )</sup></sup>
+## ProjectControlPlane
+<sup><sup>[↩ Parent](#infrastructuremiloapiscomv1alpha1 )</sup></sup>
 
 
 
 
 
 
-Project is the Schema for the projects API.
+ProjectControlPlane is the Schema for the projectcontrolplanes API.
 
 <table>
     <thead>
@@ -35,13 +35,13 @@ Project is the Schema for the projects API.
     <tbody><tr>
       <td><b>apiVersion</b></td>
       <td>string</td>
-      <td>resourcemanager.miloapis.com/v1alpha1</td>
+      <td>infrastructure.miloapis.com/v1alpha1</td>
       <td>true</td>
       </tr>
       <tr>
       <td><b>kind</b></td>
       <td>string</td>
-      <td>Project</td>
+      <td>ProjectControlPlane</td>
       <td>true</td>
       </tr>
       <tr>
@@ -50,136 +50,31 @@ Project is the Schema for the projects API.
       <td>Refer to the Kubernetes API documentation for the fields of the `metadata` field.</td>
       <td>true</td>
       </tr><tr>
-        <td><b><a href="#projectspec">spec</a></b></td>
+        <td><b>spec</b></td>
         <td>object</td>
         <td>
-          ProjectSpec defines the desired state of Project.<br/>
+          ProjectControlPlaneSpec defines the desired state of ProjectControlPlane.<br/>
         </td>
         <td>true</td>
       </tr><tr>
-        <td><b><a href="#projectstatus">status</a></b></td>
+        <td><b><a href="#projectcontrolplanestatus">status</a></b></td>
         <td>object</td>
         <td>
-          ProjectStatus defines the observed state of Project.<br/>
-        </td>
-        <td>false</td>
-      </tr></tbody>
-</table>
-
-
-### Project.spec
-<sup><sup>[↩ Parent](#project)</sup></sup>
-
-
-
-ProjectSpec defines the desired state of Project.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b><a href="#projectspecparent">parent</a></b></td>
-        <td>object</td>
-        <td>
-          A reference to the project's parent in the resource hierarchy.<br/>
-        </td>
-        <td>true</td>
-      </tr></tbody>
-</table>
-
-
-### Project.spec.parent
-<sup><sup>[↩ Parent](#projectspec)</sup></sup>
-
-
-
-A reference to the project's parent in the resource hierarchy.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b><a href="#projectspecparentresourceref">resourceRef</a></b></td>
-        <td>object</td>
-        <td>
-          Resource is a reference to the parent of the project. Must be a valid
-resource.<br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
-        <td><b>external</b></td>
-        <td>string</td>
-        <td>
-          External is a reference to the parent of the project. Must be a valid
-resource name.<br/>
-        </td>
-        <td>false</td>
-      </tr></tbody>
-</table>
-
-
-### Project.spec.parent.resourceRef
-<sup><sup>[↩ Parent](#projectspecparent)</sup></sup>
-
-
-
-Resource is a reference to the parent of the project. Must be a valid
-resource.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>apiGroup</b></td>
-        <td>string</td>
-        <td>
-          Group is the group of the resource.<br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
-        <td><b>kind</b></td>
-        <td>enum</td>
-        <td>
-          Kind is the kind of the resource.<br/>
+          ProjectControlPlaneStatus defines the observed state of ProjectControlPlane.<br/>
           <br/>
-            <i>Enum</i>: Organization<br/>
+            <i>Default</i>: map[conditions:[map[lastTransitionTime:1970-01-01T00:00:00Z message:Creating a new control plane for the project reason:Creating status:False type:ControlPlaneReady]]]<br/>
         </td>
-        <td>true</td>
-      </tr><tr>
-        <td><b>name</b></td>
-        <td>string</td>
-        <td>
-          Name is the name of the resource.<br/>
-        </td>
-        <td>true</td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
 
-### Project.status
-<sup><sup>[↩ Parent](#project)</sup></sup>
+### ProjectControlPlane.status
+<sup><sup>[↩ Parent](#projectcontrolplane)</sup></sup>
 
 
 
-ProjectStatus defines the observed state of Project.
+ProjectControlPlaneStatus defines the observed state of ProjectControlPlane.
 
 <table>
     <thead>
@@ -191,21 +86,19 @@ ProjectStatus defines the observed state of Project.
         </tr>
     </thead>
     <tbody><tr>
-        <td><b><a href="#projectstatusconditionsindex">conditions</a></b></td>
+        <td><b><a href="#projectcontrolplanestatusconditionsindex">conditions</a></b></td>
         <td>[]object</td>
         <td>
-          Represents the observations of a project's current state.
+          Represents the observations of a project control plane's current state.
 Known condition types are: "Ready"<br/>
-          <br/>
-            <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for control plane to reconcile reason:Unknown status:Unknown type:Ready]]<br/>
         </td>
         <td>false</td>
       </tr></tbody>
 </table>
 
 
-### Project.status.conditions[index]
-<sup><sup>[↩ Parent](#projectstatus)</sup></sup>
+### ProjectControlPlane.status.conditions[index]
+<sup><sup>[↩ Parent](#projectcontrolplanestatus)</sup></sup>
 
 
 

@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam-user-deactivations-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: iam-user-deactivations-reader
+  includedPermissions:
+    - iam.miloapis.com/userdeactivations.create
+    - iam.miloapis.com/userdeactivations.update
+    - iam.miloapis.com/userdeactivations.patch
+    - iam.miloapis.com/userdeactivations.delete

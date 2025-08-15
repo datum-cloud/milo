@@ -37,6 +37,7 @@ rules:
   - iam.miloapis.com
   resources:
   - groups/finalizers
+  - users/status
   verbs:
   - update
 - apiGroups:
@@ -58,10 +59,19 @@ rules:
 - apiGroups:
   - iam.miloapis.com
   resources:
+  - userdeactivations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
   - users
   verbs:
   - get
   - list
+  - update
   - watch
 - apiGroups:
   - resourcemanager.miloapis.com

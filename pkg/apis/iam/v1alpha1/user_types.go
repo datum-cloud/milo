@@ -4,6 +4,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type UserState string
+
+const (
+	UserStateActive   UserState = "Active"
+	UserStateInactive UserState = "Inactive"
+)
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // User is the Schema for the users API
@@ -13,6 +20,7 @@ import (
 // +kubebuilder:printcolumn:name="Family Name",type="string",JSONPath=".spec.familyName"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state"
 // +kubebuilder:resource:path=users,scope=Cluster
 type User struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -41,6 +49,18 @@ type UserStatus struct {
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// State represents the current activation state of the user account from the
+	// auth provider. This field is managed exclusively by the UserDeactivation CRD
+	// and cannot be changed directly by the user. When a UserDeactivation resource
+	// is created for the user, the user is deactivated in the auth provider; when
+	// the UserDeactivation is deleted, the user is reactivated.
+	// States:
+	//   - Active: The user can be used to authenticate.
+	//   - Inactive: The user is prohibited to be used to authenticate, and revokes all existing sessions.
+	// +kubebuilder:default=Active
+	// +kubebuilder:validation:Enum=Active;Inactive
+	State UserState `json:"state,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -47,6 +47,13 @@ func TestUserContextHandler(t *testing.T) {
 			expectedPath:   "/apis/iam.miloapis.com/v1alpha1/users/test-user",
 		},
 		{
+			name:           "valid user path status subresource",
+			requestPath:    "/apis/iam.miloapis.com/v1alpha1/users/test-user/status",
+			expectedUserID: "test-user",
+			expectRewrite:  false,
+			expectedPath:   "/apis/iam.miloapis.com/v1alpha1/users/test-user/status",
+		},
+		{
 			name:        "invalid user ID",
 			requestPath: "/apis/iam.miloapis.com/v1alpha1/users/invalid@user/control-plane/apis/resourcemanager.miloapis.com/organizationmemberships/v1alpha1",
 			expectError: true,
