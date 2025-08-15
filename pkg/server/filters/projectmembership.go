@@ -7,7 +7,7 @@ import (
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
-	projctx "go.miloapis.com/milo/pkg/request" // <-- your ProjectID(ctx)
+	projctx "go.miloapis.com/milo/pkg/request"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	"k8s.io/apiserver/pkg/endpoints/request"
