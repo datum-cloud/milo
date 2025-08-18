@@ -7,7 +7,7 @@ import (
 )
 
 // SchemeGroupVersion is group version used to register these objects.
-var SchemeGroupVersion = schema.GroupVersion{Group: "email.miloapis.com", Version: "v1alpha1"}
+var SchemeGroupVersion = schema.GroupVersion{Group: "notification.miloapis.com", Version: "v1alpha1"}
 
 var (
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
