@@ -21,6 +21,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&EmailTemplate{},
 		&EmailTemplateList{},
+		&Email{},
+		&EmailList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
