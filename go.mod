@@ -1,8 +1,6 @@
 module go.miloapis.com/milo
 
-go 1.24.0
-
-toolchain go1.24.6
+go 1.23.1
 
 require (
 	github.com/blang/semver/v4 v4.0.0
@@ -25,7 +23,6 @@ require (
 	k8s.io/kubernetes v1.32.0
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/controller-runtime v0.20.4
-	sigs.k8s.io/gateway-api v1.3.0
 	sigs.k8s.io/multicluster-runtime v0.20.4-alpha.6
 )
 

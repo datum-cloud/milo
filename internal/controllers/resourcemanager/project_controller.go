@@ -10,15 +10,15 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	resourcemanagerv1alpha "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	"go.miloapis.com/milo/pkg/controller/projectpurge"
@@ -48,6 +48,7 @@ type ProjectController struct {
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=projects/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gatewayclasses,verbs=get;list;watch;create;update;patch;delete
+
 func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -126,30 +127,35 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // TODO(zach): Remove this once project addons are fully migrated to the new API.
 // ensureGatewayClass ensures that a GatewayClass with the given name and controller exists.
 func ensureGatewayClass(ctx context.Context, cfg *rest.Config, name, controller string) error {
-	c, err := client.New(cfg, client.Options{Scheme: k8sscheme.Scheme})
+	dc, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("build project typed client: %w", err)
+		return fmt.Errorf("build dynamic client: %w", err)
 	}
 
-	var gc gatewayv1.GatewayClass
-	if err := c.Get(ctx, client.ObjectKey{Name: name}, &gc); err == nil {
-		desired := gatewayv1.GatewayController(controller)
-		if gc.Spec.ControllerName != desired {
-			return fmt.Errorf("gatewayclass %q already exists with different controllerName %q (wanted %q)",
-				name, gc.Spec.ControllerName, desired)
-		}
+	// Check if it already exists
+	_, err = dc.Resource(gvrGatewayClass).Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
 		return nil
-	} else if !apierrors.IsNotFound(err) {
+	}
+	if !apierrors.IsNotFound(err) {
 		return fmt.Errorf("get GatewayClass %q: %w", name, err)
 	}
 
-	gc = gatewayv1.GatewayClass{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: gatewayv1.GatewayClassSpec{
-			ControllerName: gatewayv1.GatewayController(controller),
+	// Doesn’t exist → create it
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "gateway.networking.k8s.io/v1",
+			"kind":       "GatewayClass",
+			"metadata": map[string]interface{}{
+				"name": name,
+			},
+			"spec": map[string]interface{}{
+				"controllerName": controller,
+			},
 		},
 	}
-	if err := c.Create(ctx, &gc); err != nil && !apierrors.IsAlreadyExists(err) {
+
+	if _, err := dc.Resource(gvrGatewayClass).Create(ctx, obj, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("create GatewayClass %q: %w", name, err)
 	}
 	return nil

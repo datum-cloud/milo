@@ -9,6 +9,20 @@ rules:
   resources:
   - namespaces
   verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses
+  verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -86,6 +100,7 @@ rules:
   - resourcemanager.miloapis.com
   resources:
   - organizationmemberships/status
+  - projects/status
   verbs:
   - get
   - patch
@@ -98,3 +113,19 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - resourcemanager.miloapis.com
+  resources:
+  - projects
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - resourcemanager.miloapis.com
+  resources:
+  - projects/finalizers
+  verbs:
+  - update
