@@ -7,7 +7,7 @@ spec:
     name: user-invitation
   # Reference one User custom resources that will receive the e-mail.
   userRef:
-    names: "87898762149765435787"
+    name: "87898762149765435787"
   # Optional: additional recipients.
   cc:
     - hr@example.com
