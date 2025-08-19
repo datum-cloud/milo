@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milo-apiserver
+spec:
+  template:
+    spec:
+      containers:
+      - name: milo-apiserver
+        # Override etcd connection and auth for test-infra cluster
+        env:
+          - name: ETCD_SERVERS
+            value: "http://etcd.milo-system.svc.cluster.local:2379"
+          - name: ETCD_CAFILE
+            value: ""
+          - name: ETCD_CERTFILE
+            value: ""
+          - name: ETCD_KEYFILE
+            value: ""
+          - name: ETCD_PREFIX
+            value: "/"
+          # Use RBAC authorization for test environment
+          - name: AUTHORIZATION_MODE
+            value: "RBAC"
+          - name: AUTHENTICATION_CONFIG
+            value: ""
+          - name: AUTHORIZATION_WEBHOOK_CONFIG_FILE
+            value: ""
+          - name: AUTHENTICATION_WEBHOOK_CONFIG_FILE
+            value: ""
+          # Use token auth for test environment
+          - name: TOKEN_AUTH_FILE
+            value: "/etc/kubernetes/auth/tokens.csv"
+          # Disable tracing for test environment
+          - name: TRACING_CONFIG_FILE
+            value: ""
+          # Disable client CA for test environment
+          - name: CLIENT_CA_FILE
+            value: ""
+          # Enable anonymous auth for test environment
+          - name: ANONYMOUS_AUTH
+            value: "true"
+        # Add volume mount for token auth
+        volumeMounts:
+          - name: auth-tokens
+            mountPath: /etc/kubernetes/auth
+            readOnly: true
+          - name: tls-certs
+            mountPath: /etc/kubernetes/pki/apiserver
+            readOnly: true
+      volumes:
+        - name: auth-tokens
+          secret:
+            secretName: milo-apiserver-auth-tokens
+        - name: tls-certs
+          secret:
+            secretName: milo-apiserver-tls
