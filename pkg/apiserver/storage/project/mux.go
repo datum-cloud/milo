@@ -3,7 +3,6 @@ package projectstorage
 import (
 	"context"
 	"path"
-	"strings"
 	"sync"
 
 	"go.miloapis.com/milo/pkg/request"
@@ -62,8 +61,7 @@ func (m *projectMux) childForProject(project string) (storage.Interface, error) 
 	}
 
 	cfg2 := m.cfg // copy
-	base := strings.TrimPrefix(cfg2.Config.Prefix, "/")
-	cfg2.Config.Prefix = "/" + path.Join("projects", project, base)
+	cfg2.Config.Prefix = "/" + path.Join("projects", project)
 
 	s, destroy, err := m.inner(
 		&cfg2,

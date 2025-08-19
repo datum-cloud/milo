@@ -12,14 +12,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	resourcemanagerv1alpha "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	"go.miloapis.com/milo/pkg/controller/projectpurge"
 )
@@ -35,6 +40,7 @@ var gvrGatewayClass = schema.GroupVersionResource{
 // ProjectController reconciles a Project object
 type ProjectController struct {
 	ControlPlaneClient client.Client
+	InfraClient        client.Client
 
 	// Base (root) API config used to derive per-project clients.
 	BaseConfig *rest.Config
@@ -47,6 +53,7 @@ type ProjectController struct {
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=projects/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=projects/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=infrastructure.miloapis.com,resources=projectcontrolplanes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gatewayclasses,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -61,6 +68,16 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Deletion path: run purge, then remove finalizer
 	if !project.DeletionTimestamp.IsZero() {
+		// Best-effort delete the ProjectControlPlane in infra
+		if r.InfraClient != nil {
+			var pcp infrastructurev1alpha1.ProjectControlPlane
+			if err := r.InfraClient.Get(ctx, types.NamespacedName{
+				Namespace: project.Namespace,
+				Name:      project.Name,
+			}, &pcp); err == nil && pcp.DeletionTimestamp.IsZero() {
+				_ = r.InfraClient.Delete(ctx, &pcp)
+			}
+		}
 		if controllerutil.ContainsFinalizer(&project, projectFinalizer) {
 			projCfg := r.forProject(r.BaseConfig, project.Name)
 			if err := r.Purger.Purge(ctx, projCfg, project.Name, projectpurge.Options{
@@ -88,6 +105,66 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		// trigger another reconcile after patch
 		return ctrl.Result{}, nil
+	}
+
+	// ---- Ensure ProjectControlPlane exists & is Ready ----
+	if r.InfraClient != nil {
+		var pcp infrastructurev1alpha1.ProjectControlPlane
+		if err := r.InfraClient.Get(ctx, types.NamespacedName{
+			Namespace: project.Namespace,
+			Name:      project.Name,
+		}, &pcp); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return ctrl.Result{}, fmt.Errorf("get projectcontrolplane: %w", err)
+			}
+			// create it
+			pcp = infrastructurev1alpha1.ProjectControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: project.Namespace,
+					Name:      project.Name,
+					Labels: map[string]string{
+						resourcemanagerv1alpha.ProjectNameLabel: project.Name,
+						resourcemanagerv1alpha.ProjectUIDLabel:  string(project.UID),
+					},
+					Annotations: map[string]string{
+						resourcemanagerv1alpha.OwnerNameLabel: project.Spec.OwnerRef.Name,
+					},
+				},
+				Spec: infrastructurev1alpha1.ProjectControlPlaneSpec{},
+			}
+			if err := r.InfraClient.Create(ctx, &pcp); err != nil && !apierrors.IsAlreadyExists(err) {
+				return ctrl.Result{}, fmt.Errorf("create projectcontrolplane: %w", err)
+			}
+			// Let the PCP reconcile/update status; requeue shortly
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+		}
+
+		// Check PCP readiness
+		if cond := apimeta.FindStatusCondition(pcp.Status.Conditions, infrastructurev1alpha1.ProjectControlPlaneReady); cond == nil || cond.Status != metav1.ConditionTrue {
+			// reflect PCP state onto Project status & pause further setup
+			reason := resourcemanagerv1alpha.ProjectProvisioningReason
+			msg := "Project is provisioning"
+			if cond != nil {
+				if cond.Reason != "" {
+					reason = cond.Reason
+				}
+				if cond.Message != "" {
+					msg = cond.Message
+				}
+			}
+			newCond := metav1.Condition{
+				Type:               resourcemanagerv1alpha.ProjectReady,
+				Status:             metav1.ConditionFalse,
+				Reason:             reason,
+				Message:            msg,
+				ObservedGeneration: project.Generation,
+			}
+			if apimeta.SetStatusCondition(&project.Status.Conditions, newCond) {
+				_ = r.ControlPlaneClient.Status().Update(ctx, &project)
+			}
+			// wait for PCP to become ready
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+		}
 	}
 
 	// Ensure per-project "default" Namespace exists
@@ -195,13 +272,31 @@ func (r *ProjectController) forProject(base *rest.Config, project string) *rest.
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ProjectController) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ProjectController) SetupWithManager(mgr ctrl.Manager, infraCluster cluster.Cluster) error {
+	r.InfraClient = infraCluster.GetClient()
 	r.ControlPlaneClient = mgr.GetClient()
 	r.BaseConfig = mgr.GetConfig()
 	r.Purger = projectpurge.New()
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&resourcemanagerv1alpha.Project{}).
+		WatchesRawSource(source.TypedKind(
+			infraCluster.GetCache(),
+			&infrastructurev1alpha1.ProjectControlPlane{},
+			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, projectControlPlane *infrastructurev1alpha1.ProjectControlPlane) []ctrl.Request {
+				projectName, ok := projectControlPlane.Labels[resourcemanagerv1alpha.ProjectNameLabel]
+				if !ok {
+					return nil
+				}
+				return []ctrl.Request{
+					{
+						NamespacedName: types.NamespacedName{
+							Name: projectName,
+						},
+					},
+				}
+			}),
+		)).
 		Named("project").
 		Complete(r)
 }

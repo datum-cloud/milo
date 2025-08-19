@@ -88,6 +88,18 @@ rules:
   - update
   - watch
 - apiGroups:
+  - infrastructure.miloapis.com
+  resources:
+  - projectcontrolplanes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - resourcemanager.miloapis.com
   resources:
   - organizationmemberships
