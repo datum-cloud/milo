@@ -1,7 +1,7 @@
 package app
 
 import (
-	"go.miloapis.com/milo/pkg/apiserver/admission/plugin/namespace/lifecycle"
+	"go.miloapis.com/milo/internal/apiserver/admission/plugin/namespace/lifecycle"
 	"k8s.io/apimachinery/pkg/util/sets"
 	validatingadmissionpolicy "k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	mutatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/mutating"

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"go.miloapis.com/milo/pkg/apiserver/admission/plugin/namespace/lifecycle"
-	projectstorage "go.miloapis.com/milo/pkg/apiserver/storage/project"
+	"go.miloapis.com/milo/internal/apiserver/admission/plugin/namespace/lifecycle"
+	projectstorage "go.miloapis.com/milo/internal/apiserver/storage/project"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // ← add / keep this
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"

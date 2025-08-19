@@ -26,7 +26,7 @@ import (
 
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	resourcemanagerv1alpha "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
-	"go.miloapis.com/milo/pkg/controller/projectpurge"
+	"go.miloapis.com/milo/internal/controllers/projectpurge"
 )
 
 const projectFinalizer = "resourcemanager.miloapis.com/project-controller"

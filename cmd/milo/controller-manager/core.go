@@ -17,11 +17,10 @@ import (
 	resourcequotacontroller "k8s.io/kubernetes/pkg/controller/resourcequota"
 	quotainstall "k8s.io/kubernetes/pkg/quota/v1/install"
 
-	gccontroller "go.miloapis.com/milo/pkg/controller/garbagecollector"
-	"go.miloapis.com/milo/pkg/controller/namespace"
-	namespacecontroller "go.miloapis.com/milo/pkg/controller/namespace"
+	gccontroller "go.miloapis.com/milo/internal/controllers/garbagecollector"
+	namespacecontroller "go.miloapis.com/milo/internal/controllers/namespace"
 
-	"go.miloapis.com/milo/pkg/controller/projectprovider"
+	"go.miloapis.com/milo/internal/controllers/projectprovider"
 )
 
 func newNamespaceControllerDescriptor() *ControllerDescriptor {
@@ -63,7 +62,7 @@ func startModifiedNamespaceController(ctx context.Context, controllerContext Con
 	)
 	go namespaceController.Run(ctx, int(controllerContext.ComponentConfig.NamespaceController.ConcurrentNamespaceSyncs))
 
-	sink := &namespace.NMSink{
+	sink := &namespacecontroller.NMSink{
 		NM:        namespaceController,
 		Resync:    controllerContext.ComponentConfig.NamespaceController.NamespaceSyncPeriod.Duration,
 		Finalizer: v1.FinalizerKubernetes,

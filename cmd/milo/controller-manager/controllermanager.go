@@ -440,6 +440,12 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 
 			go func() {
+				if err := infraCluster.Start(ctx); err != nil {
+					panic(err)
+				}
+			}()
+
+			go func() {
 				if err := ctrl.Start(ctx); err != nil {
 					panic(err)
 				}

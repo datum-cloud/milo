@@ -36,7 +36,7 @@ import (
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	svmrest "k8s.io/kubernetes/pkg/registry/storagemigration/rest"
 
-	"go.miloapis.com/milo/pkg/apiserver/admission/initializer"
+	"go.miloapis.com/milo/internal/apiserver/admission/initializer"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
 )
 
