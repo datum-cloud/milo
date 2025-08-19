@@ -32,6 +32,8 @@ The fastest way to get Milo running:
 git clone https://github.com/datum-cloud/milo.git
 cd milo
 
+# Enable remote task files to be used
+export TASK_X_REMOTE_TASKFILES=1
 # Deploy everything with a single command
 task dev:setup
 ```
