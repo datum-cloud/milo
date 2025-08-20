@@ -135,8 +135,8 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if err := r.InfraClient.Create(ctx, &pcp); err != nil && !apierrors.IsAlreadyExists(err) {
 				return ctrl.Result{}, fmt.Errorf("create projectcontrolplane: %w", err)
 			}
-			// Let the PCP reconcile/update status; requeue shortly
-			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+			// wait for PCP watch event to re-enqueue when status flips
+			return ctrl.Result{}, nil
 		}
 
 		// Check PCP readiness
