@@ -403,6 +403,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up emailtemplate webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := notificationv1alpha1webhook.SetupEmailWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "unable to setup email webhook", "error", err)
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
