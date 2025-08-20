@@ -135,7 +135,7 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if err := r.InfraClient.Create(ctx, &pcp); err != nil && !apierrors.IsAlreadyExists(err) {
 				return ctrl.Result{}, fmt.Errorf("create projectcontrolplane: %w", err)
 			}
-			// wait for PCP watch event to re-enqueue when status flips
+			// PCP add/update events will re-enqueue the Project via the watch
 			return ctrl.Result{}, nil
 		}
 
@@ -162,8 +162,8 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if apimeta.SetStatusCondition(&project.Status.Conditions, newCond) {
 				_ = r.ControlPlaneClient.Status().Update(ctx, &project)
 			}
-			// wait for PCP to become ready
-			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+			// wait for PCP watch event to re-enqueue when status flips
+			return ctrl.Result{}, nil
 		}
 	}
 
