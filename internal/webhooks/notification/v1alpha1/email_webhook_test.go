@@ -125,15 +125,6 @@ func TestEmailValidator_ValidateUpdateDelete(t *testing.T) {
 	if err.Error() != "update is not supported on resources of kind \"emails.notification.miloapis.com\"" {
 		t.Fatalf("expected error message 'updates to Email resources are not allowed', got %v", err)
 	}
-
-	// Delete should be rejected
-	_, err = validator.ValidateDelete(context.Background(), email)
-	if err == nil || !apierrors.IsMethodNotSupported(err) {
-		t.Fatalf("expected MethodNotSupported error on delete, got %v", err)
-	}
-	if err.Error() != "delete is not supported on resources of kind \"emails.notification.miloapis.com\"" {
-		t.Fatalf("expected error message 'updates to Email resources are not allowed', got %v", err)
-	}
 }
 
 // helper contains substring (avoid strings import collision)

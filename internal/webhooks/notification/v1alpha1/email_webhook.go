@@ -98,11 +98,6 @@ func (v *EmailValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-// We do not allow deletion of Email resources as we want to keep a record of all emails sent.
 func (v *EmailValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	_, ok := obj.(*notificationv1alpha1.Email)
-	if !ok {
-		return nil, fmt.Errorf("failed to cast object to Email")
-	}
-	return nil, errors.NewMethodNotSupported(notificationv1alpha1.SchemeGroupVersion.WithResource("emails").GroupResource(), "delete")
+	return nil, nil
 }
