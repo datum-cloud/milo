@@ -726,16 +726,6 @@ func (gb *GraphBuilder) processGraphChanges(logger klog.Logger) bool {
 		return true
 	}
 
-	logger.V(5).Info("GraphBuilder process object",
-		"apiVersion", event.gvk.GroupVersion().String(),
-		"kind", event.gvk.Kind,
-		"object", klog.KObj(accessor),
-		"uid", string(accessor.GetUID()),
-		"eventType", event.eventType,
-		"virtual", event.virtual,
-		"project", gb.project,
-	)
-
 	// Check if the node already exists
 	existingNode, found := gb.uidToNode.Read(accessor.GetUID())
 	if found && !event.virtual && !existingNode.isObserved() {
