@@ -24,9 +24,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"go.miloapis.com/milo/internal/controllers/projectpurge"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	resourcemanagerv1alpha "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
-	"go.miloapis.com/milo/internal/controllers/projectpurge"
 )
 
 const projectFinalizer = "resourcemanager.miloapis.com/project-controller"
@@ -135,35 +135,8 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if err := r.InfraClient.Create(ctx, &pcp); err != nil && !apierrors.IsAlreadyExists(err) {
 				return ctrl.Result{}, fmt.Errorf("create projectcontrolplane: %w", err)
 			}
-			// PCP add/update events will re-enqueue the Project via the watch
-			return ctrl.Result{}, nil
-		}
-
-		// Check PCP readiness
-		if cond := apimeta.FindStatusCondition(pcp.Status.Conditions, infrastructurev1alpha1.ProjectControlPlaneReady); cond == nil || cond.Status != metav1.ConditionTrue {
-			// reflect PCP state onto Project status & pause further setup
-			reason := resourcemanagerv1alpha.ProjectProvisioningReason
-			msg := "Project is provisioning"
-			if cond != nil {
-				if cond.Reason != "" {
-					reason = cond.Reason
-				}
-				if cond.Message != "" {
-					msg = cond.Message
-				}
-			}
-			newCond := metav1.Condition{
-				Type:               resourcemanagerv1alpha.ProjectReady,
-				Status:             metav1.ConditionFalse,
-				Reason:             reason,
-				Message:            msg,
-				ObservedGeneration: project.Generation,
-			}
-			if apimeta.SetStatusCondition(&project.Status.Conditions, newCond) {
-				_ = r.ControlPlaneClient.Status().Update(ctx, &project)
-			}
-			// wait for PCP watch event to re-enqueue when status flips
-			return ctrl.Result{}, nil
+			// Requeue to ensure we get the latest state
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 		}
 	}
 
