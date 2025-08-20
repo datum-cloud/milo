@@ -412,6 +412,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up user webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupUserDeactivationWebhooksWithManager(ctrl, SystemNamespace); err != nil {
+				logger.Error(err, "Error setting up userdeactivation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			// Set up quota webhooks for automatic ResourceClaim creation
 			if err := quotav1alpha1webhook.SetupQuotaWebhooksWithManager(ctrl); err != nil {
@@ -489,6 +493,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := resourceClaimCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up resource claim controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			userCtrl := iamcontroller.UserController{
+				Client: ctrl.GetClient(),
+			}
+			if err := userCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

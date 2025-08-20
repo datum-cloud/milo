@@ -7,10 +7,23 @@ vars:
   CONTROLLER_TOOLS_VERSION: v0.18.0
   # renovate: datasource=go depName=fybrik.io/crdoc
   CRDOC_VERSION: v0.6.4
+  # renovate: datasource=go depName=github.com/kyverno/chainsaw
+  CHAINSAW_VERSION: v0.2.12
   # Container image configuration
   MILO_IMAGE_NAME: "ghcr.io/datum-cloud/milo"
   MILO_IMAGE_TAG: "dev"
   TEST_INFRA_CLUSTER_NAME: "test-infra"
+  # Test infra repository configuration - can be overridden with environment variable
+  TEST_INFRA_REPO_REF: 'feature/additional-components'
+
+includes:
+  # Must set TASK_X_REMOTE_TASKFILES=1 to use this feature.
+  #
+  # See: https://taskfile.dev/experiments/remote-taskfiles
+  test-infra:
+    taskfile: https://raw.githubusercontent.com/datum-cloud/test-infra/{{.TEST_INFRA_REPO_REF}}/Taskfile.yml
+    vars:
+      REPO_REF: "{{.TEST_INFRA_REPO_REF}}"
 
 tasks:
   default:
@@ -19,212 +32,9 @@ tasks:
       - task --list
     silent: true
 
-  generate-dev-certs:
-    desc: Generate self-signed certificates for local webhook development
-    cmds:
-      - mkdir -p "{{.CERTS_DIR}}"
-      - |
-        set -e
-        echo "Generating self-signed certificates for local development..."
-
-        CERTS_DIR="{{.CERTS_DIR}}"
-
-        # Generate private key
-        openssl genrsa -out "$CERTS_DIR/tls.key" 2048
-
-        # Generate certificate signing request and self-signed certificate
-        # Using localhost and 127.0.0.1 for local development
-        openssl req -new -x509 -key "$CERTS_DIR/tls.key" -out "$CERTS_DIR/tls.crt" -days 365 \
-          -subj "/C=US/ST=Development/L=Local/O=Milo/OU=Development/CN=localhost" \
-          -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:::1"
-
-        echo "Certificates generated in $CERTS_DIR/"
-        echo "  - Private key: $CERTS_DIR/tls.key"
-        echo "  - Certificate: $CERTS_DIR/tls.crt"
-        echo ""
-        echo "To use these certificates, run the controller manager with:"
-        echo "  --tls-cert-file=$CERTS_DIR/tls.crt --tls-private-key-file=$CERTS_DIR/tls.key"
-    status:
-      - test -f "{{.CERTS_DIR}}/tls.key"
-      - test -f "{{.CERTS_DIR}}/tls.crt"
-    silent: true
-
-  kind-setup-and-run:
-    desc: >-
-      Create a local kind cluster named “milo-local”, apply CRDs,
-      generate dev certificates, build the controller binary,
-      and run the controller manager against the cluster.
-    cmds:
-      # 1. Delete and re-create the kind cluster
-      - kind delete cluster --name milo-local
-      - kind create cluster --name milo-local
-
-      # 2. (Optional) Verify the kube-context is now `kind-milo-local`
-      - kubectl config current-context
-
-      # 3. Generate base CRDs (deepcopy, client, CRD YAMLs, etc.)
-      - task: generate
-
-      # 4. Apply overlay CRDs for core and infra control-planes
-      - kubectl apply -k config/crd/overlays/core-control-plane/
-      - kubectl apply -k config/crd/overlays/infra-control-plane/
-
-      # 5. Generate the development TLS certificates
-      - task: generate-dev-certs
-
-      # 6. Build the controller binary
-      - go build -o bin/milo ./cmd/milo
-
-      # 7. Free up ports 43271 and 96443 if already in use from the process not
-      #    being shutdown properly.
-      - |
-        if lsof -i tcp:43271 -t >/dev/null 2>&1; then
-          echo "Port 43271 in use – killing existing process..."
-          kill -9 $(lsof -i tcp:43271 -t)
-        fi
-        if lsof -i tcp:9443 -t >/dev/null 2>&1; then
-          echo "Port 9443 in use – killing existing process..."
-          kill -9 $(lsof -i tcp:9443 -t)
-        fi
-
-      # 8. Apply the development webhook manifests
-      # Note: uncomment to run the webhook locally outside of the kind cluster
-      # - kubectl apply -k config/dev/
-
-      # 8. Apply the webhook manifest to the cluster
-      - kubectl apply -f config/webhook/manifests.yaml
-
-      # 9. Run the controller manager locally
-      - |
-        ./bin/milo controller-manager \
-          --leader-elect=false \
-          --authentication-skip-lookup \
-          --secure-port=43271 \
-          --cert-dir=./certs \
-          --tls-cert-file=./certs/tls.crt \
-          --tls-private-key-file=./certs/tls.key \
-          --control-plane-scope=core \
-          --kubeconfig=$HOME/.kube/config \
-          --infra-cluster-kubeconfig=$HOME/.kube/config \
-          --v=4
-
-  kind-create-namespaces:
-    desc: |-
-      Create a single organization namespace in the kind cluster as a
-      workaround until the webhooks are properly configured to run locally.
-      No project namespaces are created, as the `milo-system` namespace is
-      created by default during startup and used for project-scoped resources.
-    cmds:
-      # Create the organization namespace
-      - kubectl create namespace organization-datum
-      - kubectl create namespace milo-system
-
-  kind-create-registrations:
-    desc: Create resource registrations in the kind cluster
-    cmds:
-      # Create the resource registrations
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_projects_per_org.yaml
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_organizationmemberships_per_org.yaml
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
-
-  kind-create-s:
-    desc: Create organizations in the kind cluster
-    cmds:
-      # Create the organization which also creates the default resource grant of
-      # 5 projects for it.
-      - kubectl create -f config/samples/resourcemanager/v1alpha1/organization.yaml
-
-  kind-create-projects:
-    desc: Create projects in the kind cluster
-    cmds:
-      # Create the project which also creates the default resource grant of
-      # 5 HTTPProxy instances per project
-      - kubectl create -f config/samples/resourcemanager/v1alpha1/project.yaml
-
-  kind-create-grants:
-    desc: Create resource grants in the kind cluster
-    cmds:
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_organization.yaml
-      # Create the resource grant that allows an additional 3 projects per
-      # organization
-      - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_projects_per_org.yaml
-      # Create the resource grant that allows an additional 5 HTTPProxy instances
-      # per project
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
-
-  kind-create-claims:
-    desc: Create resource claims in the kind cluster
-    cmds:
-      # Create the resource claim for 1 project for the organization
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
-      # Create the resource claim for 2 additional projects for the organization
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional.yaml
-      # Create the resource claim for 1 additional project for the organization
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional_2.yaml
-      # Create the resource claim for 2 additional HTTPProxy instances for the project
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_httpproxies_per_project.yaml
-
-  kind-create-all-quota-resources:
-    desc: |-
-      Setup resources in the kind cluster for quota system testing. This is
-      an alternative to running the previous `kind-*` tasks individually.
-    cmds:
-      - kubectl create namespace organization-datum
-      - kubectl create namespace milo-system
-
-      # Create the resource registrations
-      - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_projects_per_org.yaml
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourceregistration_max_httpproxies_per_project.yaml
-
-      # Create the organization which also creates the default resource grant of
-      # 5 projects for it.
-      - kubectl create -f config/samples/resourcemanager/v1alpha1/organization.yaml
-
-      # Create the project which also creates the default resource grant of
-      # 5 HTTPProxy instances for it.
-      # - kubectl create -f config/samples/resourcemanager/v1alpha1/project.yaml
-
-      # Create the resource grant that allows an additional 3 projects per
-      # organization
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_projects_per_org.yaml
-
-      # # Create the resource grant that allows an additional 2 HTTPProxy instances per project
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourcegrant_max_httpproxies_per_project.yaml
-
-      # # Create the resource claim for 1 project for the organization
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_project_for_org.yaml
-      # # Create the resource claim for 2 additional projects for the organization
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional.yaml
-      # # Create the resource claim for 1 additional project for the organization
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_projects_for_org_additional_2.yaml
-      # # Create the resource claim for 1 additional HTTPProxy instance for the project
-      # - kubectl apply -f config/samples/quota/v1alpha1/resourceclaim_httpproxies_per_project.yaml
-
-  test-infra-cluster:
-    desc: |-
-      Start a new kind cluster using the datum-cloud/test-infra repository.
-      This creates a cluster with flux, cert-manager, and other components pre-installed.
-    cmds:
-      - |
-        set -e
-        TEMP_DIR=$(mktemp -d)
-        echo "Cloning test-infra repository to temporary directory: $TEMP_DIR"
-
-        git clone https://github.com/datum-cloud/test-infra.git "$TEMP_DIR/test-infra"
-        cd "$TEMP_DIR/test-infra"
-
-        echo "Starting kind cluster with test infrastructure..."
-        make cluster-up
-
-        echo "Cleaning up temporary directory..."
-        cd - > /dev/null
-        rm -rf "$TEMP_DIR"
-
-        echo "Test infrastructure cluster is ready!"
-        echo "Use 'kubectl config current-context' to verify your context."
-
-  build-milo-image:
+  dev:build:
     desc: Build the Milo container image for development
+    silent: true
     cmds:
       - |
         set -e
@@ -240,10 +50,11 @@ tasks:
       - ".task-build-timestamp"
     method: timestamp
 
-  load-image-to-kind:
+  dev:load:
     desc: Load the Milo container image into the kind cluster
+    silent: true
     deps:
-      - build-milo-image
+      - dev:build
     cmds:
       - |
         set -e
@@ -251,56 +62,107 @@ tasks:
         kind load docker-image "{{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}" --name "{{.TEST_INFRA_CLUSTER_NAME}}"
         echo "Successfully loaded image into kind cluster"
 
-  deploy-to-test-infra:
-    desc: Deploy Milo controller manager to the test-infra cluster
+  dev:deploy:
+    desc: Deploy complete Milo control plane (etcd + API server + controller manager) to test-infra cluster
+    silent: true
     deps:
-      - generate
-      - load-image-to-kind
+      - generate:code
+      - dev:load
     cmds:
       - |
         set -e
-        echo "Deploying Milo controller manager to test-infra cluster..."
+        echo "🚀 Deploying complete Milo control plane to test-infra cluster..."
 
-        # Apply CRDs first
-        echo "Applying CRDs..."
-        kubectl apply -k config/crd/overlays/core-control-plane/
+        # Deploy all components including etcd, API server, controller manager, webhooks, RBAC, and networking
+        # Everything is deployed in the milo-system namespace for simplified testing
+        echo "📋 Deploying Milo control plane with etcd storage backend..."
+        kubectl apply -k config/overlays/test-infra/
+
+        # Wait for etcd Helm release to be complete (ensures deployment is fully reconciled)
+        echo "⏳ Waiting for etcd Helm release to be ready..."
+        kubectl wait --for=condition=Ready helmrelease/etcd -n milo-system --timeout=300s
+
+        # Wait for etcd pod readiness (API server needs etcd to store data)
+        echo "⏳ Waiting for etcd pod to be ready..."
+        kubectl wait --for=condition=Ready pod -l app.kubernetes.io/component=etcd -n milo-system --timeout=180s
+
+        # Wait for API server to be ready (required for CRD installation)
+        # API server must be running before we can install custom resources
+        echo "⏳ Waiting for API server to be ready..."
+        kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-apiserver -n milo-system --timeout=180s
+
+        # Install CRDs into Milo API server (defines custom resource schemas)
+        # Controller manager needs these CRDs to watch and reconcile custom resources
+        echo "📋 Installing core control plane CRDs into Milo API server..."
+        KUBECONFIG=.milo/kubeconfig kubectl apply -k config/crd/overlays/core-control-plane/
+
+        # Step 6b: Install infrastructure control plane CRDs into Milo API server
+        # This includes ProjectControlPlanes needed by the controller manager
+        echo "📋 Installing infrastructure control plane CRDs into the infrastructure cluster..."
         kubectl apply -k config/crd/overlays/infra-control-plane/
 
-        # Deploy controller manager with dev overlay
-        echo "Deploying controller manager and webhooks..."
-        kubectl apply -k config/dev/
+        # Step 7: Verify CRDs are properly installed (sanity check)
+        echo "✅ Verifying CRDs are installed..."
+        CRD_COUNT=$(KUBECONFIG=.milo/kubeconfig kubectl get crd --no-headers | grep miloapis | wc -l || echo "0")
+        echo "Installed $CRD_COUNT Milo CRDs in API server"
 
-        # Wait for deployment to be ready
-        echo "Waiting for controller manager to be ready..."
-        kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s
+        # Step 7b: Create test users in Milo API server
+        echo "👤 Creating test users in Milo API server..."
+        KUBECONFIG=.milo/kubeconfig kubectl apply -f config/overlays/test-infra/resources/test-users.yaml
 
-        echo "✅ Milo controller manager deployed successfully!"
-        echo "Check status with: kubectl get pods -n milo-system"
+        # Step 8: Wait for controller manager (now that CRDs exist for it to reconcile)
+        # Controller manager can only start successfully after CRDs are available
+        echo "⏳ Waiting for controller manager to be ready..."
+        kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s || echo "⚠️  Controller manager not ready - continuing anyway (this is expected in test environment)"
 
-  test-infra-setup-complete:
-    desc: Complete setup of test-infra cluster with Milo deployment
-    deps:
-      - test-infra-cluster
-      - deploy-to-test-infra
+        # Update kubeconfig for easy developer access
+        echo "📝 Updating kubeconfig for developer access..."
+
+        # Step 9: Restart deployments to ensure they pick up the latest image
+        echo "🔄 Restarting deployments to pick up latest image..."
+        kubectl rollout restart deployment/milo-apiserver -n milo-system
+        kubectl rollout restart deployment/milo-controller-manager -n milo-system
+
+        # Wait for rollouts to complete
+        echo "⏳ Waiting for deployments to restart..."
+        kubectl rollout status deployment/milo-apiserver -n milo-system --timeout=120s
+        kubectl rollout status deployment/milo-controller-manager -n milo-system --timeout=120s
+
+        echo ""
+        echo "✅ Milo API server and storage deployed successfully!"
+        echo ""
+        echo "📊 Status:"
+        echo "  etcd: kubectl get pods -n milo-system -l app.kubernetes.io/component=etcd"
+        echo "  API server: kubectl get pods -n milo-system -l app.kubernetes.io/name=milo-apiserver"
+        echo "  Controller manager: kubectl get pods -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
+        echo ""
+        echo "🔗 Access:"
+        echo "  Gateway: https://localhost:30443 (via Envoy Gateway)"
+        echo ""
+        echo "🔐 Authentication:"
+        echo "  Kubeconfig: .milo/kubeconfig"
+        echo "  Usage: export KUBECONFIG=.milo/kubeconfig"
+        echo ""
+        echo "🎯 Test custom resources:"
+        echo "  kubectl get organizations"
+        echo "  kubectl get projects"
+        echo "  kubectl get users    # Should show 'admin' and 'test-user'"
+        echo ""
+        echo "📋 Available tokens:"
+        echo "  Admin: test-admin-token (system:masters)"
+        echo "  User: test-user-token (system:authenticated)"
+
+  dev:setup:
+    desc: Complete setup of test-infra cluster with full Milo control plane
+    silent: true
     cmds:
-      - |
-        echo "🎉 Test infrastructure setup complete!"
-        echo ""
-        echo "Cluster: {{.TEST_INFRA_CLUSTER_NAME}}"
-        echo "Context: $(kubectl config current-context)"
-        echo ""
-        echo "Available components:"
-        echo "  ✅ Flux (GitOps)"
-        echo "  ✅ cert-manager (TLS certificates)"
-        echo "  ✅ Kyverno (Policy management)"
-        echo "  ✅ Milo controller manager"
-        echo ""
-        echo "Test with: kubectl apply -f config/samples/resourcemanager/v1alpha1/organization.yaml"
+      - task: test-infra:cluster-up
+      - task: dev:deploy
 
-  test-infra-redeploy:
+  dev:redeploy:
     desc: Quick rebuild and redeploy for development iterations
     deps:
-      - load-image-to-kind
+      - dev:load
     cmds:
       - |
         set -e
@@ -314,18 +176,41 @@ tasks:
         kubectl rollout status deployment/milo-controller-manager -n milo-system --timeout=120s
 
         echo "✅ Redeployment complete!"
-        echo "Check logs with: task test-infra-logs"
+        echo "Check logs with: kubectl logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
 
-  test-infra-logs:
-    desc: Show controller manager logs from test-infra deployment
+  test:end-to-end:
+    desc: Run end to end tests using Chainsaw against Milo API server
+    deps:
+      - task: install-go-tool
+        vars:
+          NAME: chainsaw
+          PACKAGE: github.com/kyverno/chainsaw
+          VERSION: "{{.CHAINSAW_VERSION}}"
     cmds:
       - |
-        echo "Showing Milo controller manager logs..."
-        echo "Press Ctrl+C to stop following logs"
-        echo ""
-        kubectl logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager --follow --tail=50
+        set -e
+        echo "Running Chainsaw end to end tests against Milo API server..."
+        echo "Using Milo API server via .milo/kubeconfig"
+        KUBECONFIG=.milo/kubeconfig "{{.TOOL_DIR}}/chainsaw" test test/
+    silent: true
 
+  test:unit:
+    desc: Run unit tests
+    cmds:
+      - |
+        set -e
+        echo "Running unit tests..."
+        go test ./... -v
+    silent: true
+
+  # Code generation tasks
   generate:
+    desc: Generate code (alias for generate:code for backward compatibility)
+    cmds:
+      - task: generate:code
+      - task: generate:docs
+
+  generate:code:
     desc: Generate code including deepcopy, objects, CRDs, and potentially protobuf marshallers
     deps:
       - task: install-go-tool
@@ -352,7 +237,7 @@ tasks:
       - "\"{{.TOOL_DIR}}/controller-gen\" rbac:roleName=milo-controller-manager paths=\"./internal/controllers/...\" output:dir=\"./config/controller-manager/overlays/core-control-plane/rbac\""
     silent: true
 
-  api-docs:
+  generate:docs:
     desc: Generate API docs
     deps:
       - task: install-go-tool
@@ -373,6 +258,7 @@ tasks:
 
   install-go-tool:
     desc: Install a Go tool to {{.TOOL_DIR}}/{{.NAME}} (symlinked from {{.TOOL_DIR}}/{{.NAME}}-{{.VERSION}})
+    silent: true
     internal: true
     # vars: - Variables that need to be set when depending on this task
     #   NAME:
@@ -438,5 +324,3 @@ tasks:
           (cd "$_TOOL_DIR" && ln -sf "$_NAME-$_VERSION" "$_NAME")
           echo "Tool $_NAME is now available at $_SYMLINK_PATH (points to $_VERSIONED_TOOL_PATH)"
         fi
-
-    silent: true
