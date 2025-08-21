@@ -95,11 +95,13 @@ tasks:
         # Controller manager needs these CRDs to watch and reconcile custom resources
         echo "📋 Installing core control plane CRDs into Milo API server..."
         KUBECONFIG=.milo/kubeconfig kubectl apply -k config/crd/overlays/core-control-plane/
+        KUBECONFIG=.milo/kubeconfig kubectl wait --for=condition=Established customresourcedefinitions --all
 
         # Step 6b: Install infrastructure control plane CRDs into Milo API server
         # This includes ProjectControlPlanes needed by the controller manager
         echo "📋 Installing infrastructure control plane CRDs into the infrastructure cluster..."
         kubectl apply -k config/crd/overlays/infra-control-plane/
+        kubectl wait --for=condition=Established customresourcedefinitions projectcontrolplanes.infrastructure.miloapis.com
 
         # Step 7: Verify CRDs are properly installed (sanity check)
         echo "✅ Verifying CRDs are installed..."
