@@ -40,6 +40,10 @@ spec:
           # Enable anonymous auth for test environment
           - name: ANONYMOUS_AUTH
             value: "true"
+          - name: CLIENT_CA_FILE
+            value: /etc/kubernetes/pki/apiserver/ca.crt
+          - name: SERVICE_ACCOUNT_KEY_FILE
+            value: /etc/kubernetes/pki/apiserver/ca.crt
         # Add volume mount for token auth
         volumeMounts:
           - name: auth-tokens

@@ -35,10 +35,14 @@ Get Milo running locally in under 5 minutes:
 # Prerequisites: Docker, Kind, kubectl, and Task installed
 git clone https://github.com/datum-cloud/milo.git
 cd milo
+
+# Enable remote task files to be used
+export TASK_X_REMOTE_TASKFILES=1
 task dev:setup
 ```
 
-This deploys a complete Milo environment with API server, storage, and controllers. Access it with:
+This deploys a complete Milo environment with API server, storage, and
+controllers. Access it with:
 
 ```bash
 export KUBECONFIG=.milo/kubeconfig
