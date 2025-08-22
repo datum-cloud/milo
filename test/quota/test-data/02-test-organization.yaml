@@ -1,0 +1,9 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: test-quota-org
+  annotations:
+    kubernetes.io/display-name: "Test Quota Organization"
+    kubernetes.io/description: "Organization for testing quota system"
+spec:
+  type: Standard
