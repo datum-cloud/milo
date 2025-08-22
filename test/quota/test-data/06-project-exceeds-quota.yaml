@@ -1,0 +1,8 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: test-project-4
+  namespace: organization-test-quota-org
+spec:
+  displayName: "Test Project 4"
+  description: "Fourth test project should exceed quota limit"

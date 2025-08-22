@@ -1,0 +1,273 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: quota-system
+spec:
+  steps:
+  - name: setup-quota-resources
+    try:
+    - apply:
+        file: test-data/01-resource-registration.yaml
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceRegistration
+        name: test-projects-per-org
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+    - assert:
+        file: test-data/assert-resource-registration.yaml
+  
+  - name: create-organization
+    try:
+    - apply:
+        file: test-data/02-test-organization.yaml
+        outputs:
+          - name: testOrg
+            value: (@)
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Organization
+        name: test-quota-org
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+    - assert:
+        file: test-data/assert-organization.yaml
+    - wait:
+        apiVersion: v1
+        kind: Namespace
+        name: organization-test-quota-org
+        timeout: 30s
+        for:
+          condition:
+            name: Active
+            value: 'True'
+  
+  - name: setup-resource-grant
+    try:
+    - apply:
+        resource:
+          apiVersion: quota.miloapis.com/v1alpha1
+          kind: ResourceGrant
+          metadata:
+            name: test-quota-org-grant
+            namespace: milo-system
+            labels:
+              test.miloapis.com/quota: "true"
+          spec:
+            ownerInstanceRef:
+              apiGroup: resourcemanager.miloapis.com
+              kind: Organization
+              name: test-quota-org
+              uid: ($testOrg.metadata.uid)
+            allowances:
+              - resourceType: "resourcemanager.miloapis.com/Project"
+                buckets:
+                  - amount: 3
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceGrant
+        name: test-quota-org-grant
+        namespace: milo-system
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+  
+  - name: setup-claim-creation-policy
+    try:
+    - apply:
+        file: test-data/04-claim-creation-policy.yaml
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ClaimCreationPolicy
+        name: test-project-quota-policy
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+  
+  - name: create-projects-within-quota
+    try:
+    - apply:
+        file: test-data/05-test-projects.yaml
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Project
+        name: test-project-1
+        namespace: organization-test-quota-org
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.status.phase}'
+            value: Active
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Project
+        name: test-project-2
+        namespace: organization-test-quota-org
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.status.phase}'
+            value: Active
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Project
+        name: test-project-3
+        namespace: organization-test-quota-org
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.status.phase}'
+            value: Active
+    - assert:
+        file: test-data/assert-projects.yaml
+  
+  - name: verify-resource-claims-created
+    try:
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceClaim
+        name: test-project-test-project-1-quota-claim
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.status.state}'
+            value: Allocated
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceClaim
+        name: test-project-test-project-2-quota-claim
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.status.state}'
+            value: Allocated
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceClaim
+        name: test-project-test-project-3-quota-claim
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.status.state}'
+            value: Allocated
+    - assert:
+        file: test-data/assert-resource-claims.yaml
+  
+  - name: create-project-exceeding-quota
+    try:
+    - apply:
+        file: test-data/06-project-exceeds-quota.yaml
+        expect:
+          - check:
+              (error != null): true
+    - error:
+        file: test-data/06-project-exceeds-quota.yaml
+  
+  - name: cleanup-projects
+    try:
+    - delete:
+        file: test-data/05-test-projects.yaml
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Project
+        name: test-project-1
+        namespace: organization-test-quota-org
+        timeout: 30s
+        for:
+          deletion: {}
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Project
+        name: test-project-2
+        namespace: organization-test-quota-org
+        timeout: 30s
+        for:
+          deletion: {}
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Project
+        name: test-project-3
+        namespace: organization-test-quota-org
+        timeout: 30s
+        for:
+          deletion: {}
+  
+  - name: verify-resource-claims-deleted
+    try:
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceClaim
+        name: test-project-test-project-1-quota-claim
+        namespace: milo-system
+        timeout: 30s
+        for:
+          deletion: {}
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceClaim
+        name: test-project-test-project-2-quota-claim
+        namespace: milo-system
+        timeout: 30s
+        for:
+          deletion: {}
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceClaim
+        name: test-project-test-project-3-quota-claim
+        namespace: milo-system
+        timeout: 30s
+        for:
+          deletion: {}
+  
+  - name: cleanup-quota-resources
+    try:
+    - delete:
+        file: test-data/04-claim-creation-policy.yaml
+    - delete:
+        file: test-data/03-resource-grant.yaml
+    - delete:
+        file: test-data/02-test-organization.yaml
+    - delete:
+        file: test-data/01-resource-registration.yaml
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ClaimCreationPolicy
+        name: test-project-quota-policy
+        timeout: 30s
+        for:
+          deletion: {}
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceGrant
+        name: test-quota-org-grant
+        namespace: milo-system
+        timeout: 30s
+        for:
+          deletion: {}
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Organization
+        name: test-quota-org
+        timeout: 30s
+        for:
+          deletion: {}
+    - wait:
+        apiVersion: quota.miloapis.com/v1alpha1
+        kind: ResourceRegistration
+        name: test-projects-per-org
+        timeout: 30s
+        for:
+          deletion: {}
