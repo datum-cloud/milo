@@ -104,7 +104,7 @@ webhooks:
       path: /validate-notification-miloapis-com-v1alpha1-email
       port: 9443
   failurePolicy: Fail
-  name: vemails.notification.miloapis.com
+  name: vemail.notification.miloapis.com
   rules:
   - apiGroups:
     - notification.miloapis.com
@@ -127,7 +127,7 @@ webhooks:
       path: /validate-notification-miloapis-com-v1alpha1-emailtemplate
       port: 9443
   failurePolicy: Fail
-  name: vemailtemplates.notification.miloapis.com
+  name: vemailtemplate.notification.miloapis.com
   rules:
   - apiGroups:
     - notification.miloapis.com

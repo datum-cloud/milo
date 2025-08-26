@@ -25,7 +25,7 @@ func SetupEmailTemplateWebhooksWithManager(mgr ctrl.Manager, _ string) error {
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-notification-miloapis-com-v1alpha1-emailtemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=notification.miloapis.com,resources=emailtemplates,verbs=create;update,versions=v1alpha1,name=vemailtemplates.notification.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/validate-notification-miloapis-com-v1alpha1-emailtemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=notification.miloapis.com,resources=emailtemplates,verbs=create;update,versions=v1alpha1,name=vemailtemplate.notification.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 type EmailTemplateValidator struct{}
 

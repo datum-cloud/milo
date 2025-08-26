@@ -28,7 +28,7 @@ func SetupEmailWebhooksWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-notification-miloapis-com-v1alpha1-email,mutating=false,failurePolicy=fail,sideEffects=None,groups=notification.miloapis.com,resources=emails,verbs=create;update;delete,versions=v1alpha1,name=vemails.notification.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/validate-notification-miloapis-com-v1alpha1-email,mutating=false,failurePolicy=fail,sideEffects=None,groups=notification.miloapis.com,resources=emails,verbs=create;update;delete,versions=v1alpha1,name=vemail.notification.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // EmailValidator validates Email resources.
 type EmailValidator struct {
