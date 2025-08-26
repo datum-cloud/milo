@@ -77,6 +77,7 @@ import (
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
+	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -109,6 +110,7 @@ func init() {
 	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
 }
 
 const (
