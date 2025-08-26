@@ -114,7 +114,6 @@ webhooks:
     - CREATE
     - UPDATE
     - DELETE
-    - patch
     resources:
     - emails
   sideEffects: None
@@ -137,7 +136,6 @@ webhooks:
     operations:
     - CREATE
     - UPDATE
-    - patch
     resources:
     - emailtemplates
   sideEffects: None
