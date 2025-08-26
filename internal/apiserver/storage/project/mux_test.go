@@ -18,7 +18,7 @@ import (
 type recorder struct {
 	rootCreates, unionCreates       int
 	rootDestroyed, unionDestroyed   bool
-	calls                           []string // e.g. "root:Get alpha/pods/x"
+	calls                           []string // e.g. "root:Get alpha/secrets/x"
 }
 
 func (r *recorder) record(where, what, key string) {
@@ -88,13 +88,13 @@ func TestRootRoutesToRootChild(t *testing.T) {
 	rec := &recorder{}
 	m := newMuxForTest(rec)
 
-	if err := m.Get(context.Background(), "pods/x", storage.GetOptions{}, nil); err != nil {
+	if err := m.Get(context.Background(), "secrets/x", storage.GetOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if rec.rootCreates != 1 || rec.unionCreates != 0 {
 		t.Fatalf("expected root=1, union=0 creates; got %d, %d", rec.rootCreates, rec.unionCreates)
 	}
-	if want, got := "root:Get pods/x", rec.calls[0]; got != want {
+	if want, got := "root:Get secrets/x", rec.calls[0]; got != want {
 		t.Fatalf("want %q got %q", want, got)
 	}
 }
@@ -104,21 +104,21 @@ func TestProjectRoutesToUnionAndRewritesKey(t *testing.T) {
 	m := newMuxForTest(rec)
 	ctx := request.WithProject(context.Background(), "alpha")
 
-	if err := m.Get(ctx, "pods/x", storage.GetOptions{}, nil); err != nil {
+	if err := m.Get(ctx, "secrets/x", storage.GetOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if rec.unionCreates != 1 {
 		t.Fatalf("expected one union create, got %d", rec.unionCreates)
 	}
-	if want, got := "union:Get alpha/pods/x", rec.calls[0]; got != want {
+	if want, got := "union:Get alpha/secrets/x", rec.calls[0]; got != want {
 		t.Fatalf("want %q got %q", want, got)
 	}
 
 	// Leading slash is trimmed
-	if err := m.Get(ctx, "/pods/y", storage.GetOptions{}, nil); err != nil {
+	if err := m.Get(ctx, "/secrets/y", storage.GetOptions{}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if want, got := "union:Get alpha/pods/y", rec.calls[1]; got != want {
+	if want, got := "union:Get alpha/secrets/y", rec.calls[1]; got != want {
 		t.Fatalf("want %q got %q", want, got)
 	}
 }
