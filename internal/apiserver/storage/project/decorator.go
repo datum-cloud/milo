@@ -11,7 +11,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// ProjectAwareDecorator builds (and reuses) a child cacher per project prefix.
+// ProjectAwareDecorator builds one root child (default prefix) and lazily a single
+// shared “union” child under /projects. Project-scoped requests reuse the union
+// child’s watch cache by scoping keys to /projects/<project>/..., avoiding per-project cachers.
 func ProjectAwareDecorator(inner generic.StorageDecorator) generic.StorageDecorator {
 	return func(
 		cfg *storagebackend.ConfigForResource,
