@@ -1,8 +1,8 @@
 package app
 
 import (
+	"go.miloapis.com/milo/internal/apiserver/admission/plugin/namespace/lifecycle"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
 	validatingadmissionpolicy "k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	mutatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/mutating"
 	validatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/validating"
@@ -24,5 +24,8 @@ func DefaultOffAdmissionPlugins() sets.Set[string] {
 		validatingadmissionpolicy.PluginName, // ValidatingAdmissionPolicy, only active when feature gate ValidatingAdmissionPolicy is enabled
 	)
 
-	return sets.New(options.AllOrderedPlugins...).Difference(defaultOnPlugins)
+	universe := sets.New(options.AllOrderedPlugins...)
+	universe.Insert(lifecycle.PluginName)
+
+	return universe.Difference(defaultOnPlugins)
 }

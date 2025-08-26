@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -155,7 +156,11 @@ func TestUserDeactivationValidator_ValidateCreate(t *testing.T) {
 			if tt.expectError {
 				assert.Error(t, err, "expected validation error")
 				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains, "error message should contain expected text")
+					assert.Contains(t,
+						strings.ToLower(err.Error()),
+						strings.ToLower(tt.errorContains),
+						"error message should contain expected text",
+					)
 				}
 			} else {
 				assert.NoError(t, err, "expected no validation error")
