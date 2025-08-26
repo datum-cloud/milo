@@ -24,7 +24,9 @@ func SetupEmailWebhooksWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&notificationv1alpha1.Email{}).
-		WithValidator(&EmailValidator{}).
+		WithValidator(&EmailValidator{
+			Client: mgr.GetClient(),
+		}).
 		Complete()
 }
 
