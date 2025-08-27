@@ -9,9 +9,13 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/storage/cacher"
 
 	generic "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
+
+	"k8s.io/apimachinery/pkg/fields"
+
 	storagebackend "k8s.io/apiserver/pkg/storage/storagebackend"
 	factory "k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
@@ -86,37 +90,77 @@ func (m *projectMux) unionChild() (storage.Interface, error) {
 		return c.s, nil
 	}
 	m.mu.RUnlock()
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if c := m.children["*"]; c != nil {
 		return c.s, nil
 	}
 
-	cfg2 := m.cfg // copy
+	cfg2 := m.cfg
 	cfg2.Config.Prefix = "/projects"
 
-	s, destroy, err := m.inner(
-		&cfg2,
-		m.args.resourcePrefix,
-		m.args.keyFunc,
-		m.args.newFunc,
-		m.args.newListFunc,
-		m.args.getAttrs,
-		m.args.triggerFn,
-		m.args.indexers,
-	)
+	// 1) raw store (same as StorageWithCacher does internally)
+	raw, rawDestroy, err := generic.NewRawStorage(&cfg2, m.args.newFunc, m.args.newListFunc, "")
 	if err != nil {
 		return nil, err
 	}
+
+	// 2) adapter
+	adapter := NewProjectUnionStore(raw, m.args.resourcePrefix, m.args.newFunc, m.args.newListFunc)
+
+	cli, err := newEtcdClientFrom(cfg2.Config) // endpoints + TLS from your storage config
+	if err != nil {
+		rawDestroy()
+		return nil, err
+	}
+	adapter.WithEtcdClient(cli)
+
+	// Ensure non-nil indexers/maps for the cacher
+	triggers := m.args.triggerFn
+	if triggers == nil {
+		triggers = storage.IndexerFuncs{}
+	}
+	indexers := m.args.indexers
+	if indexers == nil {
+		indexers = &cache.Indexers{}
+	}
+
+	c, err := cacher.NewCacherFromConfig(cacher.Config{
+		Storage:        adapter,
+		Versioner:      storage.APIObjectVersioner{},
+		GroupResource:  cfg2.GroupResource,
+		ResourcePrefix: m.args.resourcePrefix,
+		KeyFunc:        m.args.keyFunc,
+		NewFunc:        m.args.newFunc,
+		NewListFunc:    m.args.newListFunc,
+		GetAttrsFunc:   adapter.GetAttrs, // virtual field "project"
+		IndexerFuncs:   triggers,
+		Indexers:       indexers,
+		Codec:          cfg2.Codec,
+	})
+	if err != nil {
+		rawDestroy()
+		adapter.Stop()
+		return nil, err
+	}
+
+	destroy := func() {
+		c.Stop()
+		adapter.Stop()
+		if rawDestroy != nil {
+			rawDestroy()
+		}
+	}
+
 	if m.versioner == nil {
-		m.versioner = s.Versioner()
+		m.versioner = c.Versioner()
 	}
 	if m.children == nil {
 		m.children = make(map[string]*child, 2)
 	}
-	m.children["*"] = &child{s: s, destroy: destroy}
-	return s, nil
+	m.children["*"] = &child{s: c, destroy: destroy}
+	return c, nil
+
 }
 
 func (m *projectMux) destroyAll() {
@@ -140,15 +184,13 @@ func (m *projectMux) pickWithProject(ctx context.Context) (storage.Interface, st
 	return s, "", err
 }
 
-// addProjectToKey inserts "<project>/" in front of the caller-provided key (which is
-// relative to the storage prefix), producing keys under "/projects/<project>/...".
-func addProjectToKey(project, key string) string {
+// /projects/<project>/<original-key>
+func addProjectToKey(_ string, project, key string) string {
 	if project == "" {
-		return key
+		return key // root untouched
 	}
 	k := strings.TrimPrefix(key, "/")
-	// avoid double-prefix (defensive)
-	if strings.HasPrefix(k, project+"/") {
+	if strings.HasPrefix(k, project+"/") { // avoid double prefix
 		return k
 	}
 	return project + "/" + k
@@ -161,23 +203,16 @@ func (m *projectMux) Create(ctx context.Context, key string, obj, out runtime.Ob
 	if err != nil {
 		return err
 	}
-	return s.Create(ctx, addProjectToKey(proj, key), obj, out, ttl)
+	return s.Create(ctx, addProjectToKey(m.args.resourcePrefix, proj, key), obj, out, ttl)
 }
 
-func (m *projectMux) Delete(
-	ctx context.Context,
-	key string,
-	out runtime.Object,
-	precond *storage.Preconditions,
-	validateDeletion storage.ValidateObjectFunc,
-	cachedExistingObject runtime.Object,
-	opts storage.DeleteOptions,
-) error {
+func (m *projectMux) Delete(ctx context.Context, key string, out runtime.Object, precond *storage.Preconditions,
+	validateDeletion storage.ValidateObjectFunc, cachedExistingObject runtime.Object, opts storage.DeleteOptions) error {
 	s, proj, err := m.pickWithProject(ctx)
 	if err != nil {
 		return err
 	}
-	return s.Delete(ctx, addProjectToKey(proj, key), out, precond, validateDeletion, cachedExistingObject, opts)
+	return s.Delete(ctx, addProjectToKey(m.args.resourcePrefix, proj, key), out, precond, validateDeletion, cachedExistingObject, opts)
 }
 
 func (m *projectMux) Watch(ctx context.Context, key string, opts storage.ListOptions) (watch.Interface, error) {
@@ -185,15 +220,11 @@ func (m *projectMux) Watch(ctx context.Context, key string, opts storage.ListOpt
 	if err != nil {
 		return nil, err
 	}
-	return s.Watch(ctx, addProjectToKey(proj, key), opts)
-}
-
-func (m *projectMux) Get(ctx context.Context, key string, opts storage.GetOptions, objPtr runtime.Object) error {
-	s, proj, err := m.pickWithProject(ctx)
-	if err != nil {
-		return err
+	if proj != "" {
+		opts.Predicate.Field = andField(opts.Predicate.Field, fields.OneTermEqualSelector("project", proj))
 	}
-	return s.Get(ctx, addProjectToKey(proj, key), opts, objPtr)
+	// IMPORTANT: do NOT rewrite `key` for watches; let the cacher use its fixed root.
+	return s.Watch(ctx, key, opts)
 }
 
 func (m *projectMux) GetList(ctx context.Context, key string, opts storage.ListOptions, listObj runtime.Object) error {
@@ -201,23 +232,27 @@ func (m *projectMux) GetList(ctx context.Context, key string, opts storage.ListO
 	if err != nil {
 		return err
 	}
-	return s.GetList(ctx, addProjectToKey(proj, key), opts, listObj)
+	if proj != "" {
+		opts.Predicate.Field = andField(opts.Predicate.Field, fields.OneTermEqualSelector("project", proj))
+	}
+	return s.GetList(ctx, key, opts, listObj)
 }
 
-func (m *projectMux) GuaranteedUpdate(
-	ctx context.Context,
-	key string,
-	out runtime.Object,
-	ignoreNotFound bool,
-	precond *storage.Preconditions,
-	tryUpdate storage.UpdateFunc,
-	suggestion runtime.Object,
-) error {
+func (m *projectMux) Get(ctx context.Context, key string, opts storage.GetOptions, objPtr runtime.Object) error {
 	s, proj, err := m.pickWithProject(ctx)
 	if err != nil {
 		return err
 	}
-	return s.GuaranteedUpdate(ctx, addProjectToKey(proj, key), out, ignoreNotFound, precond, tryUpdate, suggestion)
+	return s.Get(ctx, addProjectToKey(m.args.resourcePrefix, proj, key), opts, objPtr)
+}
+
+func (m *projectMux) GuaranteedUpdate(ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
+	precond *storage.Preconditions, tryUpdate storage.UpdateFunc, suggestion runtime.Object) error {
+	s, proj, err := m.pickWithProject(ctx)
+	if err != nil {
+		return err
+	}
+	return s.GuaranteedUpdate(ctx, addProjectToKey(m.args.resourcePrefix, proj, key), out, ignoreNotFound, precond, tryUpdate, suggestion)
 }
 
 // If your k8s minor *doesn't* include Count in storage.Interface, delete this.
@@ -245,4 +280,14 @@ func (m *projectMux) RequestWatchProgress(ctx context.Context) error {
 		return err
 	}
 	return s.RequestWatchProgress(ctx)
+}
+
+func andField(a, b fields.Selector) fields.Selector {
+	if a == nil || a.Empty() {
+		return b
+	}
+	if b == nil || b.Empty() {
+		return a
+	}
+	return fields.AndSelectors(a, b)
 }
