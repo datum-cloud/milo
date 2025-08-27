@@ -37,9 +37,6 @@ type projectUnionStore struct {
 
 	// map object UID -> project (virtual tenancy field; used by GetAttrs)
 	uidToProject sync.Map // map[types.UID]string
-
-	decoder func(ctx context.Context, raw []byte, into runtime.Object) error // optional
-
 }
 
 // NOTE: pass in your etcd client (recommended). If you can't yet, keep cli=nil and
@@ -54,16 +51,7 @@ func NewProjectUnionStore(delegate storage.Interface, resourcePrefix string, new
 	}
 }
 
-func (s *projectUnionStore) WithDecoder(fn func(context.Context, []byte, runtime.Object) error) *projectUnionStore {
-	s.decoder = fn
-	return s
-}
-
 func (s *projectUnionStore) decodeFromWatch(ctx context.Context, raw []byte, rel string, rv int64, into runtime.Object) error {
-	if s.decoder != nil && len(raw) > 0 {
-		return s.decoder(ctx, raw, into)
-	}
-	// fallback: exact-rev re-GET if decoder not available
 	return s.delegate.Get(ctx, rel, storage.GetOptions{ResourceVersion: strconv.FormatInt(rv, 10)}, into)
 }
 
