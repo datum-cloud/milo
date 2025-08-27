@@ -2,7 +2,7 @@ package projectstorage
 
 import (
 	"context"
-	"path"
+	"strings"
 	"sync"
 
 	"go.miloapis.com/milo/pkg/request"
@@ -37,10 +37,10 @@ type decoratorArgs struct {
 	indexers       *cache.Indexers
 }
 
-// projectMux implements storage.Interface and routes to a per-project child.
+// projectMux implements storage.Interface and routes to root vs project-scoped storage.
 type projectMux struct {
 	mu        sync.RWMutex
-	children  map[string]*child
+	children  map[string]*child // "" => root, "*" => union(/projects)
 	versioner storage.Versioner
 
 	inner generic.StorageDecorator
@@ -49,6 +49,38 @@ type projectMux struct {
 }
 
 func (m *projectMux) Versioner() storage.Versioner { return m.versioner }
+
+// rootChild returns/creates the default (non-project) storage.
+func (m *projectMux) rootChild() (storage.Interface, error) {
+	m.mu.RLock()
+	if c := m.children[""]; c != nil {
+		m.mu.RUnlock()
+		return c.s, nil
+	}
+	m.mu.RUnlock()
+
+	// Should already exist (built in decorator), but build defensively if missing.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if c := m.children[""]; c != nil {
+		return c.s, nil
+	}
+	s, destroy, err := m.inner(
+		&m.cfg, m.args.resourcePrefix, m.args.keyFunc, m.args.newFunc, m.args.newListFunc,
+		m.args.getAttrs, m.args.triggerFn, m.args.indexers,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if m.versioner == nil {
+		m.versioner = s.Versioner()
+	}
+	if m.children == nil {
+		m.children = make(map[string]*child, 2)
+	}
+	m.children[""] = &child{s: s, destroy: destroy}
+	return s, nil
+}
 
 // unionChild returns/creates the shared storage rooted at /projects.
 func (m *projectMux) unionChild() (storage.Interface, error) {
