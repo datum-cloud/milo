@@ -3,4 +3,4 @@ kind: Organization
 metadata:
   name: datum
 spec:
-  type: Business
+  type: Standard
