@@ -101,6 +101,51 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
+      path: /validate-notification-miloapis-com-v1alpha1-email
+      port: 9443
+  failurePolicy: Fail
+  name: vemail.notification.miloapis.com
+  rules:
+  - apiGroups:
+    - notification.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - emails
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-notification-miloapis-com-v1alpha1-emailtemplate
+      port: 9443
+  failurePolicy: Fail
+  name: vemailtemplate.notification.miloapis.com
+  rules:
+  - apiGroups:
+    - notification.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - emailtemplates
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
       path: /validate-resourcemanager-miloapis-com-v1alpha1-organization
       port: 9443
   failurePolicy: Fail
