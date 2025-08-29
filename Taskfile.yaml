@@ -14,7 +14,8 @@ vars:
   MILO_IMAGE_TAG: "dev"
   TEST_INFRA_CLUSTER_NAME: "test-infra"
   # Test infra repository configuration - can be overridden with environment variable
-  TEST_INFRA_REPO_REF: 'feature/additional-components'
+  TEST_INFRA_REPO_REF: 'v0.2.0'
+  TEST_INFRA_TASKFILE_CHECKSUM: 50ff1ed78a02bdd7f93b9a7762a40bda06fe49001f278ab018b1876b38cc3baa
 
 includes:
   # Must set TASK_X_REMOTE_TASKFILES=1 to use this feature.
@@ -22,6 +23,7 @@ includes:
   # See: https://taskfile.dev/experiments/remote-taskfiles
   test-infra:
     taskfile: https://raw.githubusercontent.com/datum-cloud/test-infra/{{.TEST_INFRA_REPO_REF}}/Taskfile.yml
+
     vars:
       REPO_REF: "{{.TEST_INFRA_REPO_REF}}"
 
@@ -31,6 +33,12 @@ tasks:
     cmds:
       - task --list
     silent: true
+
+  kubectl:
+    desc: Run kubectl commands against the Milo API server
+    silent: true
+    cmds:
+      - KUBECONFIG=.milo/kubeconfig kubectl {{.CLI_ARGS}}
 
   dev:build:
     desc: Build the Milo container image for development
@@ -76,79 +84,79 @@ tasks:
         # Deploy all components including etcd, API server, controller manager, webhooks, RBAC, and networking
         # Everything is deployed in the milo-system namespace for simplified testing
         echo "📋 Deploying Milo control plane with etcd storage backend..."
-        kubectl apply -k config/overlays/test-infra/
+        task test-infra:kubectl -- apply -k config/overlays/test-infra/
 
         # Wait for etcd Helm release to be complete (ensures deployment is fully reconciled)
         echo "⏳ Waiting for etcd Helm release to be ready..."
-        kubectl wait --for=condition=Ready helmrelease/etcd -n milo-system --timeout=300s
+        task test-infra:kubectl -- wait --for=condition=Ready helmrelease/etcd -n milo-system --timeout=300s
 
         # Wait for etcd pod readiness (API server needs etcd to store data)
         echo "⏳ Waiting for etcd pod to be ready..."
-        kubectl wait --for=condition=Ready pod -l app.kubernetes.io/component=etcd -n milo-system --timeout=180s
+        task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/component=etcd -n milo-system --timeout=180s
 
         # Wait for API server to be ready (required for CRD installation)
         # API server must be running before we can install custom resources
         echo "⏳ Waiting for API server to be ready..."
-        kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-apiserver -n milo-system --timeout=180s
+        task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-apiserver -n milo-system --timeout=180s
 
         # Install CRDs into Milo API server (defines custom resource schemas)
         # Controller manager needs these CRDs to watch and reconcile custom resources
         echo "📋 Installing core control plane CRDs into Milo API server..."
-        KUBECONFIG=.milo/kubeconfig kubectl apply -k config/crd/overlays/core-control-plane/
-        KUBECONFIG=.milo/kubeconfig kubectl wait --for=condition=Established customresourcedefinitions --all
+        task kubectl -- apply -k config/crd/overlays/core-control-plane/
+        task kubectl -- wait --for=condition=Established customresourcedefinitions --all
 
         # Step 6b: Install infrastructure control plane CRDs into Milo API server
         # This includes ProjectControlPlanes needed by the controller manager
         echo "📋 Installing infrastructure control plane CRDs into the infrastructure cluster..."
-        kubectl apply -k config/crd/overlays/infra-control-plane/
-        kubectl wait --for=condition=Established customresourcedefinitions projectcontrolplanes.infrastructure.miloapis.com
+        task test-infra:kubectl -- apply -k config/crd/overlays/infra-control-plane/
+        task test-infra:kubectl -- wait --for=condition=Established customresourcedefinitions projectcontrolplanes.infrastructure.miloapis.com
 
         # Step 7: Verify CRDs are properly installed (sanity check)
         echo "✅ Verifying CRDs are installed..."
-        CRD_COUNT=$(KUBECONFIG=.milo/kubeconfig kubectl get crd --no-headers | grep miloapis | wc -l || echo "0")
+        CRD_COUNT=$(task kubectl -- get crd --no-headers | grep miloapis | wc -l || echo "0")
         echo "Installed $CRD_COUNT Milo CRDs in API server"
 
         # Step 7b: Create test users in Milo API server
         echo "👤 Creating test users in Milo API server..."
-        KUBECONFIG=.milo/kubeconfig kubectl apply -f config/overlays/test-infra/resources/test-users.yaml
+        task kubectl -- apply -f config/overlays/test-infra/resources/test-users.yaml
 
         # Step 8: Wait for controller manager (now that CRDs exist for it to reconcile)
         # Controller manager can only start successfully after CRDs are available
         echo "⏳ Waiting for controller manager to be ready..."
-        kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s || echo "⚠️  Controller manager not ready - continuing anyway (this is expected in test environment)"
+        task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s || echo "⚠️  Controller manager not ready - continuing anyway (this is expected in test environment)"
 
         # Update kubeconfig for easy developer access
         echo "📝 Updating kubeconfig for developer access..."
 
         # Step 9: Restart deployments to ensure they pick up the latest image
         echo "🔄 Restarting deployments to pick up latest image..."
-        kubectl rollout restart deployment/milo-apiserver -n milo-system
-        kubectl rollout restart deployment/milo-controller-manager -n milo-system
+        task test-infra:kubectl -- rollout restart deployment/milo-apiserver -n milo-system
+        task test-infra:kubectl -- rollout restart deployment/milo-controller-manager -n milo-system
 
         # Wait for rollouts to complete
         echo "⏳ Waiting for deployments to restart..."
-        kubectl rollout status deployment/milo-apiserver -n milo-system --timeout=120s
-        kubectl rollout status deployment/milo-controller-manager -n milo-system --timeout=120s
+        task test-infra:kubectl -- rollout status deployment/milo-apiserver -n milo-system --timeout=120s
+        task test-infra:kubectl -- rollout status deployment/milo-controller-manager -n milo-system --timeout=120s
 
         echo ""
         echo "✅ Milo API server and storage deployed successfully!"
         echo ""
         echo "📊 Status:"
-        echo "  etcd: kubectl get pods -n milo-system -l app.kubernetes.io/component=etcd"
-        echo "  API server: kubectl get pods -n milo-system -l app.kubernetes.io/name=milo-apiserver"
-        echo "  Controller manager: kubectl get pods -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
+        echo "  etcd: task test-infra:kubectl -- get pods -n milo-system -l app.kubernetes.io/component=etcd"
+        echo "  API server: task test-infra:kubectl -- get pods -n milo-system -l app.kubernetes.io/name=milo-apiserver"
+        echo "  Controller manager: task test-infra:kubectl -- get pods -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
         echo ""
         echo "🔗 Access:"
         echo "  Gateway: https://localhost:30443 (via Envoy Gateway)"
         echo ""
         echo "🔐 Authentication:"
         echo "  Kubeconfig: .milo/kubeconfig"
-        echo "  Usage: export KUBECONFIG=.milo/kubeconfig"
+        echo "  Usage: task kubectl -- <command>"
         echo ""
         echo "🎯 Test custom resources:"
-        echo "  kubectl get organizations"
-        echo "  kubectl get projects"
-        echo "  kubectl get users    # Should show 'admin' and 'test-user'"
+        echo "  task kubectl -- get organizations"
+        echo "  task kubectl -- get projects"
+        echo "  task kubectl -- get users    # Should show 'admin' and 'test-user'"
         echo ""
         echo "📋 Available tokens:"
         echo "  Admin: test-admin-token (system:masters)"
@@ -171,14 +179,14 @@ tasks:
         echo "Redeploying Milo controller manager..."
 
         # Restart the deployment to pick up new image
-        kubectl rollout restart deployment/milo-controller-manager -n milo-system
+        task test-infra:kubectl -- rollout restart deployment/milo-controller-manager -n milo-system
 
         # Wait for rollout to complete
         echo "Waiting for rollout to complete..."
-        kubectl rollout status deployment/milo-controller-manager -n milo-system --timeout=120s
+        task test-infra:kubectl -- rollout status deployment/milo-controller-manager -n milo-system --timeout=120s
 
         echo "✅ Redeployment complete!"
-        echo "Check logs with: kubectl logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
+        echo "Check logs with: task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
 
   test:end-to-end:
     desc: Run end to end tests using Chainsaw against Milo API server
@@ -193,7 +201,7 @@ tasks:
         set -e
         echo "Running Chainsaw end to end tests against Milo API server..."
         echo "Using Milo API server via .milo/kubeconfig"
-        KUBECONFIG=.milo/kubeconfig "{{.TOOL_DIR}}/chainsaw" test test/
+        task kubectl -- config view --minify > /tmp/milo-kubeconfig && KUBECONFIG=/tmp/milo-kubeconfig "{{.TOOL_DIR}}/chainsaw" test test/
     silent: true
 
   test:unit:

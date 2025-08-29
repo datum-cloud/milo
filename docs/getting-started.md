@@ -71,17 +71,49 @@ The observability stack is optional but recommended for development to monitor M
 
 ### Using kubectl
 
-The deployment creates a pre-configured kubeconfig file at `.milo/kubeconfig`:
+The deployment creates a pre-configured kubeconfig file at `.milo/kubeconfig`. You can use kubectl in two ways:
+
+#### Method 1: Using the task kubectl command (Recommended)
+
+```bash
+# List available API resources (Milo custom resources only)
+task kubectl -- api-resources | grep miloapis
+
+# Get API server version info
+task kubectl -- version
+```
+
+#### Method 2: Setting KUBECONFIG directly
 
 ```bash
 # Set the kubeconfig
 export KUBECONFIG=.milo/kubeconfig
 
-# Verify connectivity
-kubectl cluster-info
-
-# List available API resources
+# List available API resources (Milo custom resources only)
 kubectl api-resources | grep miloapis
+
+# Get API server version info
+kubectl version
+```
+
+### Understanding the Two kubectl Commands
+
+Milo uses two different kubectl commands for different purposes:
+
+- **`task kubectl --`**: Interacts with the **Milo API server** (your custom resources like organizations, projects, users)
+- **`task test-infra:kubectl --`**: Interacts with the **test-infra Kubernetes cluster** (infrastructure components like pods, services, deployments)
+
+Use `task kubectl --` when working with Milo resources:
+```bash
+task kubectl -- get organizations
+task kubectl -- get projects
+task kubectl -- get users
+```
+
+Use `task test-infra:kubectl --` when managing infrastructure:
+```bash
+task test-infra:kubectl -- get pods -n milo-system
+task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/name=milo-apiserver
 ```
 
 ### API Endpoints
@@ -119,17 +151,17 @@ Milo includes sample resources to help you get started. These are located in `co
 
 ```bash
 # Create a sample organization
-kubectl apply -f config/samples/resourcemanager/v1alpha1/organization.yaml
+task kubectl -- apply -f config/samples/resourcemanager/v1alpha1/organization.yaml
 
 # Create a sample project (requires the organization to exist first)
-kubectl apply -f config/samples/resourcemanager/v1alpha1/project.yaml
+task kubectl -- apply -f config/samples/resourcemanager/v1alpha1/project.yaml
 
 # Create a sample user
-kubectl apply -f config/samples/iam/v1alpha1/user.yaml
+task kubectl -- apply -f config/samples/iam/v1alpha1/user.yaml
 
 # Apply all samples in a directory
-kubectl apply -f config/samples/resourcemanager/v1alpha1/
-kubectl apply -f config/samples/iam/v1alpha1/
+task kubectl -- apply -f config/samples/resourcemanager/v1alpha1/
+task kubectl -- apply -f config/samples/iam/v1alpha1/
 ```
 
 ### Sample Resource Examples
@@ -147,19 +179,19 @@ The sample files demonstrate proper resource structure:
 
 ```bash
 # List all organizations
-kubectl get organizations
+task kubectl -- get organizations
 
 # Get detailed organization info
-kubectl describe organization acme-corp
+task kubectl -- describe organization acme-corp
 
 # List all projects across namespaces
-kubectl get projects -A
+task kubectl -- get projects -A
 
 # View users
-kubectl get users
+task kubectl -- get users
 
 # Check organization memberships
-kubectl get organizationmemberships -n organization-acme-corp
+task kubectl -- get organizationmemberships -n organization-acme-corp
 ```
 
 ## Development Workflow
@@ -178,14 +210,14 @@ This rebuilds the image and restarts the deployments.
 ### Viewing Logs
 
 ```bash
-# API Server logs
-kubectl logs -n milo-system -l app.kubernetes.io/name=milo-apiserver -f
+# API Server logs (use test-infra kubectl for infrastructure cluster)
+task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/name=milo-apiserver -f
 
-# Controller Manager logs
-kubectl logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager -f
+# Controller Manager logs (use test-infra kubectl for infrastructure cluster)
+task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager -f
 
-# etcd logs
-kubectl logs -n milo-system -l app.kubernetes.io/component=etcd
+# etcd logs (use test-infra kubectl for infrastructure cluster)
+task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/component=etcd
 ```
 
 ### Observability and Monitoring
@@ -213,10 +245,10 @@ The observability stack automatically collects:
 
 ```bash
 # Run unit tests
-go test ./...
+task test:unit
 
-# Run integration tests (requires running cluster)
-task test-integration
+# Run end-to-end tests (requires running cluster)
+task test:end-to-end
 ```
 
 ## Troubleshooting
@@ -235,20 +267,22 @@ task dev:setup
 
 #### API server not responding
 ```bash
-# Check pod status
-kubectl get pods -n milo-system
+# Check pod status (use test-infra kubectl for infrastructure cluster)
+task test-infra:kubectl -- get pods -n milo-system
 
-# Check API server logs
-kubectl logs -n milo-system -l app.kubernetes.io/name=milo-apiserver --tail=50
+# Check API server logs (use test-infra kubectl for infrastructure cluster)
+task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/name=milo-apiserver --tail=50
 ```
 
 #### Resources not being created
 ```bash
-# Check controller manager logs
-kubectl logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager --tail=50
+# Check controller manager logs (use test-infra kubectl for infrastructure cluster)
+task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager --tail=50
 
-# Verify CRDs are installed
-kubectl get crd | grep miloapis
+# Verify CRDs are installed in Milo API server
+# Note: 'get crd' won't work - CRDs are not exposed in custom API servers
+# Instead, check if the API resources are available:
+task kubectl -- api-resources | grep miloapis
 ```
 
 ### Cleanup
@@ -256,8 +290,8 @@ kubectl get crd | grep miloapis
 To completely remove the test environment:
 
 ```bash
-# Delete the Kind cluster
-kind delete cluster --name test-infra
+# Delete the Kind cluster (using test-infra task)
+task test-infra:cluster-down
 
 # Clean up generated files
 rm -rf .task .test-infra
