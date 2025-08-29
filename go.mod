@@ -7,7 +7,7 @@ require (
 	github.com/go-logr/logr v1.4.3
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.7
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.32.1
 	k8s.io/apiextensions-apiserver v0.32.1
