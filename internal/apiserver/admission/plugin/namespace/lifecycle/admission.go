@@ -278,7 +278,7 @@ func (l *Lifecycle) projectClient(project string) (*kubernetes.Clientset, error)
 	cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
 		return &pathPrefixRT{
 			rt:     rt,
-			prefix: "/projects/" + project + "/control-plane",
+			prefix: "/apis/resourcemanager.miloapis.com/v1alpha1/projects/" + project + "/control-plane",
 		}
 	}
 	cs, err := kubernetes.NewForConfig(cfg)
