@@ -38,6 +38,7 @@ spec:
           - --cert-dir=$(CERT_DIR)
           - --tls-cert-file=$(TLS_CERT_FILE)
           - --tls-private-key-file=$(TLS_PRIVATE_KEY_FILE)
+          - --webhook-cert-dir=$(WEBHOOK_CERT_DIR)
           - --v=$(LOG_LEVEL)
           - --control-plane-scope=$(CONTROL_PLANE_SCOPE)
         env:
@@ -58,6 +59,8 @@ spec:
             value: /etc/kubernetes/pki/webhook/tls.crt
           - name: TLS_PRIVATE_KEY_FILE
             value: /etc/kubernetes/pki/webhook/tls.key
+          - name: WEBHOOK_CERT_DIR
+            value: /etc/kubernetes/pki/webhook
           - name: CONTROL_PLANE_SCOPE
             value: "core"
         resources:
