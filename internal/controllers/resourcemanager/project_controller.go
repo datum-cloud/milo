@@ -9,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -272,7 +271,7 @@ func hasGatewayClassCRD(ctx context.Context, cfg *rest.Config) (bool, error) {
 		if err == nil {
 			return true, nil
 		}
-		if meta.IsNoMatchError(err) {
+		if apimeta.IsNoMatchError(err) {
 			continue // not this version
 		}
 		return false, err
