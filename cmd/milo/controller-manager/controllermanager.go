@@ -406,6 +406,8 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := notificationv1alpha1webhook.SetupEmailWebhooksWithManager(ctrl); err != nil {
 				logger.Error(err, "unable to setup email webhook", "error", err)
+			if err := iamv1alpha1webhook.SetupUserInvitationWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user invitation webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
