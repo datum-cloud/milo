@@ -3,11 +3,13 @@ package resourcemanager
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -18,6 +20,7 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -149,12 +152,21 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Ensure the project's GatewayClass exists
-	if err := ensureGatewayClass(ctx, projCfg,
-		"datum-external-global-proxy",
-		"gateway.networking.datumapis.com/external-global-proxy-controller",
-	); err != nil {
-		logger.Error(err, "ensure gatewayclass failed", "project", project.Name)
+	ok, err := hasGatewayClassCRD(ctx, projCfg)
+	if err != nil {
+		logger.Error(err, "gatewayclass discovery failed")
 		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+	}
+	if ok {
+		if err := ensureGatewayClass(ctx, projCfg,
+			"datum-external-global-proxy",
+			"gateway.networking.datumapis.com/external-global-proxy-controller",
+		); err != nil {
+			logger.Error(err, "ensure gatewayclass failed", "project", project.Name)
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+		}
+	} else {
+		logger.Info("GatewayClass CRD not installed; skipping", "project", project.Name)
 	}
 
 	// Set Ready condition (idempotent)
@@ -242,6 +254,30 @@ func (r *ProjectController) forProject(base *rest.Config, project string) *rest.
 	c := rest.CopyConfig(base)
 	c.Host = strings.TrimSuffix(base.Host, "/") + "/projects/" + project + "/control-plane"
 	return c
+}
+
+func hasGatewayClassCRD(ctx context.Context, cfg *rest.Config) (bool, error) {
+	rm, err := apiutil.NewDynamicRESTMapper(cfg, http.DefaultClient)
+	if err != nil {
+		return false, fmt.Errorf("new dynamic rest mapper: %w", err)
+	}
+
+	kinds := []schema.GroupVersionKind{
+		{Group: "gateway.networking.k8s.io", Version: "v1", Kind: "GatewayClass"},
+		{Group: "gateway.networking.k8s.io", Version: "v1beta1", Kind: "GatewayClass"},
+	}
+
+	for _, gvk := range kinds {
+		_, err = rm.RESTMapping(gvk.GroupKind(), gvk.Version)
+		if err == nil {
+			return true, nil
+		}
+		if meta.IsNoMatchError(err) {
+			continue // not this version
+		}
+		return false, err
+	}
+	return false, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
