@@ -14,8 +14,7 @@ vars:
   MILO_IMAGE_TAG: "dev"
   TEST_INFRA_CLUSTER_NAME: "test-infra"
   # Test infra repository configuration - can be overridden with environment variable
-  TEST_INFRA_REPO_REF: 'v0.2.0'
-  TEST_INFRA_TASKFILE_CHECKSUM: 50ff1ed78a02bdd7f93b9a7762a40bda06fe49001f278ab018b1876b38cc3baa
+  TEST_INFRA_REPO_REF: 'v0.2.1'
 
 includes:
   # Must set TASK_X_REMOTE_TASKFILES=1 to use this feature.
@@ -23,7 +22,7 @@ includes:
   # See: https://taskfile.dev/experiments/remote-taskfiles
   test-infra:
     taskfile: https://raw.githubusercontent.com/datum-cloud/test-infra/{{.TEST_INFRA_REPO_REF}}/Taskfile.yml
-
+    checksum: 6d07b0362d488f3acf15a5f6772e59853e85622ed0b33797b80b625e0f9df92a
     vars:
       REPO_REF: "{{.TEST_INFRA_REPO_REF}}"
 
@@ -124,6 +123,16 @@ tasks:
         # Controller manager can only start successfully after CRDs are available
         echo "⏳ Waiting for controller manager to be ready..."
         task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s || echo "⚠️  Controller manager not ready - continuing anyway (this is expected in test environment)"
+
+        # Step 8b: Install webhook configurations to Milo API server
+        # Webhooks validate and mutate resources submitted to the Milo API server
+        echo "🔒 Installing webhook configurations to Milo API server..."
+        task kubectl -- apply -k config/webhook/
+        # Webhook configurations don't have conditions to wait for - they're ready immediately after creation
+        echo "✅ Webhook configurations installed successfully"
+
+        WEBHOOK_COUNT=$(task kubectl -- get mutatingwebhookconfigurations,validatingwebhookconfigurations --no-headers | grep resourcemanager.miloapis.com | wc -l || echo "0")
+        echo "Installed $WEBHOOK_COUNT webhook configurations in Milo API server"
 
         # Update kubeconfig for easy developer access
         echo "📝 Updating kubeconfig for developer access..."
