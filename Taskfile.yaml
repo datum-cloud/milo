@@ -122,7 +122,7 @@ tasks:
         # Step 8: Wait for controller manager (now that CRDs exist for it to reconcile)
         # Controller manager can only start successfully after CRDs are available
         echo "⏳ Waiting for controller manager to be ready..."
-        task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s || echo "⚠️  Controller manager not ready - continuing anyway (this is expected in test environment)"
+        task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s
 
         # Step 8b: Install webhook configurations to Milo API server
         # Webhooks validate and mutate resources submitted to the Milo API server
