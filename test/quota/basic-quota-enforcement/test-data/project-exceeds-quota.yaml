@@ -1,0 +1,10 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: test-project-2
+  labels:
+    test.miloapis.com/scenario: "basic-quota-enforcement"
+spec:
+  ownerRef:
+    kind: Organization
+    name: test-quota-org

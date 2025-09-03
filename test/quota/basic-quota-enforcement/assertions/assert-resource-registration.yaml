@@ -4,5 +4,5 @@ metadata:
   name: test-projects-per-org
 status:
   conditions:
-    - type: Ready
+    - type: Active
       status: "True"

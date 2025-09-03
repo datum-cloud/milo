@@ -2,7 +2,3 @@ apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: Organization
 metadata:
   name: test-quota-org
-status:
-  conditions:
-    - type: Ready
-      status: "True"

@@ -1,0 +1,12 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: user-1001-membership
+  namespace: organization-test-quota-org
+  labels:
+    test.miloapis.com/quota: "true"
+spec:
+  organizationRef:
+    name: test-quota-org
+  userRef:
+    name: "1001"

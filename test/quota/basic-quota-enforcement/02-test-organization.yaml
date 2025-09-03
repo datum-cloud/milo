@@ -5,5 +5,7 @@ metadata:
   annotations:
     kubernetes.io/display-name: "Test Quota Organization"
     kubernetes.io/description: "Organization for testing quota system"
+  labels:
+    test.miloapis.com/quota: "true"
 spec:
   type: Standard

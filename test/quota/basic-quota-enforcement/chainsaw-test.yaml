@@ -1,0 +1,155 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: basic-quota-enforcement
+spec:
+  # Define clusters for organizational context testing
+  clusters:
+    main:
+      kubeconfig: kubeconfig-main
+    org:
+      kubeconfig: kubeconfig-org-template
+
+  steps:
+    # Clean up any leftover ResourceClaims from previous test runs
+    - name: cleanup-old-resource-claims
+      try:
+        - script:
+            content: |
+              kubectl delete resourceclaims -n milo-system -l test.miloapis.com/scenario=basic-quota-enforcement --ignore-not-found=true
+
+    # Setup base quota infrastructure
+    - name: setup-base-infrastructure
+      try:
+        - apply:
+            file: 01-resource-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: test-projects-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - assert:
+            file: assertions/assert-resource-registration.yaml
+
+    # Create organization and dependencies
+    - name: setup-organization
+      try:
+        - apply:
+            file: 02-test-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-test-quota-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - apply:
+            file: 03-test-user.yaml
+        - apply:
+            file: 04-organization-membership.yaml
+        - assert:
+            file: assertions/assert-organization.yaml
+
+    # Create resource grant with dynamic UID
+    - name: create-resource-grant
+      try:
+        - script:
+            env:
+              - name: SCENARIO_NAME
+                value: "basic-quota-enforcement"
+            content: |
+              export ORG_UID=$(kubectl get organization test-quota-org -o jsonpath='{.metadata.uid}')
+              envsubst < standard-org-grant-template.yaml | kubectl apply -f -
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: test-quota-org-grant
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Setup claim creation policy
+    - name: setup-claim-creation-policy
+      try:
+        - apply:
+            file: project-creation-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ClaimCreationPolicy
+            name: test-project-quota-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+
+    # Test project creation within quota limits (using organizational context)
+    - name: test-projects-within-quota
+      cluster: org
+      try:
+        - apply:
+            file: test-data/projects-within-quota.yaml
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Project
+            name: test-project-1
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - assert:
+            file: assertions/assert-projects-created.yaml
+
+    # Verify resource claims were created and allocated
+    - name: verify-resource-claims
+      try:
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceClaim
+            name: test-project-test-project-1-quota-claim
+            namespace: milo-system
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.state}'
+                value: Allocated
+        - assert:
+            file: assertions/assert-resource-claims.yaml
+
+    # Test quota enforcement - attempt to exceed quota
+    - name: test-quota-enforcement
+      cluster: org
+      try:
+        - apply:
+            file: test-data/project-exceeds-quota.yaml
+            expect:
+              - check:
+                  # Expect this to fail with quota error
+                  (error != null): true
+
+    # Cleanup test resources (projects will be deleted by Chainsaw automatically)
+    - name: cleanup-projects
+      cluster: org
+      try:
+        - delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: Project
+              name: test-project-1
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Project
+            name: test-project-1
+            timeout: 30s
+            for:
+              deletion: {}
