@@ -1,0 +1,26 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: milo-apiserver-tls
+  namespace: milo-system
+spec:
+  secretName: milo-apiserver-tls
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizationalUnits:
+    - Milo Test Infrastructure
+  commonName: milo-apiserver.milo-system.svc.cluster.local
+  dnsNames:
+  - milo-apiserver
+  - milo-apiserver.milo-system
+  - milo-apiserver.milo-system.svc
+  - milo-apiserver.milo-system.svc.cluster.local
+  - milo-api.test.local
+  - localhost
+  ipAddresses:
+  - 127.0.0.1
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

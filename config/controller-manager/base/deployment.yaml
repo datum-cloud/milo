@@ -23,7 +23,7 @@ spec:
       containers:
       - name: milo-controller-manager
         image: ghcr.io/datum-cloud/milo:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         args:
           - controller-manager
           - --leader-elect=true

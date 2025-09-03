@@ -21,7 +21,7 @@
 		"ghcr.io/devcontainers-extra/features/go-task": {},
 		"ghcr.io/audacioustux/devcontainers/kustomize": {},
 		"ghcr.io/devcontainers/features/node": {
-            "version": "22.14.0" 
+            "version": "22.14.0"
         },
 		"ghcr.io/devcontainers-extra/features/pulumi": {}
 	},
@@ -77,6 +77,11 @@
   		"editor.tabSize": 2
 		}
 	},
+	"containerEnv": {
+		// Allow remote task files so we can include the test-infra taskfile for
+		// test cluster management.
+		"TASK_X_REMOTE_TASKFILES": "1",
+	}
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
