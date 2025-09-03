@@ -127,7 +127,7 @@ func (l *Lifecycle) Admit(ctx context.Context, a admission.Attributes, _ admissi
 		}
 
 		if !exists || forceLive {
-			n, err := l.client.CoreV1().Namespaces().Get(context.TODO(), a.GetNamespace(), metav1.GetOptions{})
+			n, err := l.client.CoreV1().Namespaces().Get(ctx, a.GetNamespace(), metav1.GetOptions{})
 			switch {
 			case apierrors.IsNotFound(err):
 				return err
@@ -159,7 +159,7 @@ func (l *Lifecycle) Admit(ctx context.Context, a admission.Attributes, _ admissi
 		return apierrors.NewInternalError(fmt.Errorf("project client init failed: %w", err))
 	}
 
-	n, err := nsClient.CoreV1().Namespaces().Get(context.TODO(), a.GetNamespace(), metav1.GetOptions{})
+	n, err := nsClient.CoreV1().Namespaces().Get(ctx, a.GetNamespace(), metav1.GetOptions{})
 	switch {
 	case apierrors.IsNotFound(err):
 		// Not found in this project cluster
@@ -278,7 +278,7 @@ func (l *Lifecycle) projectClient(project string) (*kubernetes.Clientset, error)
 	cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
 		return &pathPrefixRT{
 			rt:     rt,
-			prefix: "/projects/" + project + "/control-plane",
+			prefix: "/apis/resourcemanager.miloapis.com/v1alpha1/projects/" + project + "/control-plane",
 		}
 	}
 	cs, err := kubernetes.NewForConfig(cfg)
