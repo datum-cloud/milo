@@ -8,7 +8,7 @@ vars:
   # renovate: datasource=go depName=fybrik.io/crdoc
   CRDOC_VERSION: v0.6.4
   # renovate: datasource=go depName=github.com/kyverno/chainsaw
-  CHAINSAW_VERSION: v0.2.12
+  CHAINSAW_VERSION: v0.2.13
   # Container image configuration
   MILO_IMAGE_NAME: "ghcr.io/datum-cloud/milo"
   MILO_IMAGE_TAG: "dev"
@@ -229,9 +229,12 @@ tasks:
           kill -9 $(lsof -i tcp:9443 -t)
         fi
 
+        # Generate clean kubeconfig for chainsaw (--raw to include token)
+        task kubectl -- config view --minify --raw > /tmp/milo-kubeconfig
+
         # Verify connectivity to Milo API server
         echo "Verifying connectivity to Milo API server..."
-        if ! KUBECONFIG=.milo/kubeconfig kubectl get --raw /healthz &>/dev/null; then
+        if ! KUBECONFIG=/tmp/milo-kubeconfig kubectl get --raw /healthz &>/dev/null; then
           echo "Error: Cannot connect to Milo API server"
           echo "Please ensure the test infrastructure is running with 'task dev:setup'"
           echo "You can check the status with:"
