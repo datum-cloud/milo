@@ -66,6 +66,7 @@ import (
 	kubectrlmgrconfig "k8s.io/kubernetes/pkg/controller/apis/config"
 	garbagecollector "k8s.io/kubernetes/pkg/controller/garbagecollector"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 
 	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
@@ -78,7 +79,6 @@ import (
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -337,7 +337,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error building infrastructure cluster")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-
 			// We intentionally use a new configuration here because the one built into
 			// the legacy controller manager component leverages protobuf encoding. The
 			// controller runtime uses JSON encoding when managing CRDs.

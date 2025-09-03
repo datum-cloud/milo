@@ -6,8 +6,10 @@ certs/
 .kube/
 
 .tool-versions
+vendor/
 
 # Location the test-infra repo will be copied to by the remote taskfile.
 .test-infra
 # Files used by the taskfile.
 .task
+
