@@ -2167,13 +2167,39 @@ UserInvitationSpec defines the desired state of UserInvitation
         <td>string</td>
         <td>
           The email of the user being invited.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: email type is immutable</li>
         </td>
         <td>true</td>
+      </tr><tr>
+        <td><b>state</b></td>
+        <td>enum</td>
+        <td>
+          State is the state of the UserInvitation. In order to accept the invitation, the invited user
+must set the state to Accepted.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || oldSelf == 'Pending' || self == oldSelf: state can only transition from Pending to another state and is immutable afterwards</li>
+            <i>Enum</i>: Pending, Accepted, Declined, Expired<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>expirationDate</b></td>
+        <td>string</td>
+        <td>
+          ExpirationDate is the date and time when the UserInvitation will expire.
+If not specified, the UserInvitation will never expire.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: expirationDate type is immutable</li>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>false</td>
       </tr><tr>
         <td><b>familyName</b></td>
         <td>string</td>
         <td>
           The last name of the user being invited.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: familyName type is immutable</li>
         </td>
         <td>false</td>
       </tr><tr>
@@ -2181,6 +2207,17 @@ UserInvitationSpec defines the desired state of UserInvitation
         <td>string</td>
         <td>
           The first name of the user being invited.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: givenName type is immutable</li>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#userinvitationspecinvitedby">invitedBy</a></b></td>
+        <td>object</td>
+        <td>
+          InvitedBy is the user who invited the user. A mutation webhook will default this field to the user who made the request.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: invitedBy type is immutable</li>
         </td>
         <td>false</td>
       </tr><tr>
@@ -2188,8 +2225,37 @@ UserInvitationSpec defines the desired state of UserInvitation
         <td>[]object</td>
         <td>
           The roles that will be assigned to the user when they accept the invitation.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: roles type is immutable</li>
         </td>
         <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### UserInvitation.spec.invitedBy
+<sup><sup>[↩ Parent](#userinvitationspec)</sup></sup>
+
+
+
+InvitedBy is the user who invited the user. A mutation webhook will default this field to the user who made the request.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the User being referenced.<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 
