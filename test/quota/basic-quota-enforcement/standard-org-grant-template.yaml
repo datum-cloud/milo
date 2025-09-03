@@ -1,3 +1,4 @@
+# Template for ResourceGrant - requires ORG_UID and SCENARIO_NAME environment variables
 apiVersion: quota.miloapis.com/v1alpha1
 kind: ResourceGrant
 metadata:
@@ -5,11 +6,13 @@ metadata:
   namespace: milo-system
   labels:
     test.miloapis.com/quota: "true"
+    test.miloapis.com/scenario: "basic-quota-enforcement"
 spec:
   ownerInstanceRef:
     apiGroup: resourcemanager.miloapis.com
     kind: Organization
     name: test-quota-org
+    uid: "${ORG_UID}"
   allowances:
     - resourceType: "resourcemanager.miloapis.com/Project"
       buckets:

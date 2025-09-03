@@ -2,7 +2,6 @@ apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: Project
 metadata:
   name: test-project-1
-  namespace: organization-test-quota-org
 status:
   phase: Active
 ---
@@ -10,7 +9,6 @@ apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: Project
 metadata:
   name: test-project-2
-  namespace: organization-test-quota-org
 status:
   phase: Active
 ---
@@ -18,6 +16,5 @@ apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: Project
 metadata:
   name: test-project-3
-  namespace: organization-test-quota-org
 status:
   phase: Active
