@@ -8,14 +8,9 @@ spec:
       containers:
       - name: milo-controller-manager
         env:
-          # Point to the kubeconfig for Milo API server
+          # Override kubeconfig to point to Milo API server
           - name: KUBECONFIG
             value: "/etc/kubernetes/config/kubeconfig"
-          # Use the API server TLS cert for webhook temporarily
-          - name: TLS_CERT_FILE
-            value: "/etc/kubernetes/pki/webhook/tls.crt"
-          - name: TLS_PRIVATE_KEY_FILE
-            value: "/etc/kubernetes/pki/webhook/tls.key"
         volumeMounts:
           - name: kubeconfig
             mountPath: /etc/kubernetes/config
@@ -28,5 +23,11 @@ spec:
           secret:
             secretName: milo-controller-manager-kubeconfig
         - name: webhook-certs
-          secret:
-            secretName: milo-apiserver-tls
+          csi:
+            driver: csi.cert-manager.io
+            readOnly: true
+            volumeAttributes:
+              csi.cert-manager.io/issuer-name: milo-ca-issuer
+              csi.cert-manager.io/issuer-kind: Issuer
+              csi.cert-manager.io/common-name: milo-controller-manager
+              csi.cert-manager.io/dns-names: milo-controller-manager.milo-system.svc.cluster.local,milo-controller-manager.milo-system.svc,milo-controller-manager.milo-system,milo-controller-manager

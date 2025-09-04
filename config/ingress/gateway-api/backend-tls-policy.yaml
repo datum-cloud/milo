@@ -2,7 +2,6 @@ apiVersion: gateway.networking.k8s.io/v1alpha3
 kind: BackendTLSPolicy
 metadata:
   name: milo-apiserver-tls
-  namespace: milo-system
 spec:
   targetRefs:
   - group: ""

@@ -16,4 +16,4 @@ spec:
       apiGroup: "iam.miloapis.com"
       kind: UserPreference
       # The name would be dynamically set to match the user's preference resource
-      name: "userpreference-${userRef.name}" 
+      name: "userpreference-${userRef.name}"
