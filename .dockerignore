@@ -20,10 +20,18 @@ dev-temp/
 # Location the test-infra repo will be copied to by the remote taskfile.
 .test-infra
 
-# Configuration and manifests (not needed for build)
-config/
+# Configuration and manifests (keep config for potential embedded resources)
+# config/  # Commented out - may be needed for embedded resources
 Taskfile.yaml
+Taskfile.yml
 docker-compose.yaml
+docker-compose*.yaml
+Dockerfile*
+.dockerignore
+
+# Kubernetes files
+kubeconfig*
+*.kubeconfig
 
 # IDE and editor files
 .vscode/

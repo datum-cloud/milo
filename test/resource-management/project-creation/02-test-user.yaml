@@ -1,10 +1,10 @@
 apiVersion: iam.miloapis.com/v1alpha1
 kind: User
 metadata:
-  name: "2001"
+  name: "1001"
   labels:
     test.miloapis.com/scenario: "project-creation"
 spec:
-  email: testuser-2001@test.local
+  email: testuser-1001@test.local
   givenName: ProjectTest
   familyName: User

@@ -30,7 +30,7 @@ spec:
         - wait:
             apiVersion: iam.miloapis.com/v1alpha1
             kind: User
-            name: "2001"
+            name: "1001"
             timeout: 30s
             for:
               condition:
