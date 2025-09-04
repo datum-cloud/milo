@@ -74,9 +74,11 @@ import (
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
+	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
+	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -108,6 +110,7 @@ func init() {
 	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
 }
 
 const (
@@ -395,6 +398,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := iamv1alpha1webhook.SetupUserDeactivationWebhooksWithManager(ctrl, SystemNamespace); err != nil {
 				logger.Error(err, "Error setting up userdeactivation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := notificationv1alpha1webhook.SetupEmailTemplateWebhooksWithManager(ctrl, SystemNamespace); err != nil {
+				logger.Error(err, "Error setting up emailtemplate webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := notificationv1alpha1webhook.SetupEmailWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "unable to setup email webhook", "error", err)
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
