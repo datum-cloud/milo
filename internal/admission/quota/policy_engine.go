@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/utils/ptr"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
@@ -287,23 +288,12 @@ func (e *policyEngine) runWatch() {
 			e.logger.V(1).Info("Watch context cancelled, stopping policy watch")
 			return
 		default:
-			// Get current resource version by listing resources
-			// This ensures we start watching from a valid resource version
-			list, err := e.dynamicClient.Resource(gvr).List(e.watchCtx, metav1.ListOptions{})
-			if err != nil {
-				e.logger.Error(err, "Failed to list policies for watch, retrying in 30 seconds")
-				select {
-				case <-time.After(30 * time.Second):
-					continue
-				case <-e.watchCtx.Done():
-					return
-				}
-			}
-
-			// Start the watch from the current resource version
+			// Start the watch with initial events - this eliminates the need for separate list operation
+			// and removes the race condition between list and watch
 			watchOptions := metav1.ListOptions{
-				ResourceVersion: list.GetResourceVersion(),
-				Watch:           true,
+				Watch:                true,
+				SendInitialEvents:    ptr.To(true),
+				ResourceVersionMatch: "NotOlderThan",
 			}
 
 			watcher, err := e.dynamicClient.Resource(gvr).Watch(e.watchCtx, watchOptions)
@@ -317,7 +307,7 @@ func (e *policyEngine) runWatch() {
 				}
 			}
 
-			e.logger.V(1).Info("Policy watch established successfully", "resourceVersion", list.GetResourceVersion())
+			e.logger.V(1).Info("Policy watch established successfully with initial events")
 			e.watcher = watcher
 
 			// Process watch events
