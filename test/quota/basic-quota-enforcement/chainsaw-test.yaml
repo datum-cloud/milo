@@ -104,9 +104,9 @@ spec:
             name: test-project-1
             timeout: 30s
             for:
-              jsonPath:
-                path: '{.status.phase}'
-                value: Active
+              condition:
+                name: Ready
+                value: 'true'
         - assert:
             file: assertions/assert-projects-created.yaml
 

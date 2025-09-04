@@ -218,6 +218,7 @@ func TestClaimCreationPlugin_Validate(t *testing.T) {
 				dynamicClient:  fakeDynamicClient,
 				policyEngine:   policyEngine,
 				templateEngine: templateEngine,
+				config:         DefaultAdmissionPluginConfig(),
 				logger:         logger.WithName("plugin"),
 			}
 

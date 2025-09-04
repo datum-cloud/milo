@@ -87,7 +87,7 @@ func (p *ClaimCreationPlugin) ValidateInitialization() error {
 	if p.templateEngine == nil {
 		return fmt.Errorf("template engine not initialized")
 	}
-	if p.watchManager == nil {
+	if p.watchManager == nil && !p.config.DisableSharedWatch {
 		return fmt.Errorf("watch manager not initialized")
 	}
 	return nil
@@ -576,7 +576,7 @@ func (p *ClaimCreationPlugin) waitForClaimGrantedIndividual(ctx context.Context,
 			}
 
 			switch event.Type {
-			case watch.Modified:
+			case watch.Added, watch.Modified:
 				claimObj, ok := event.Object.(*unstructured.Unstructured)
 				if !ok {
 					p.logger.Error(fmt.Errorf("unexpected object type"), "Expected unstructured object")

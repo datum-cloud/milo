@@ -41,7 +41,7 @@ var MiloAdmissionPlugins = sets.New[string](
 // This keeps only essential plugins and our custom Milo plugins enabled.
 func DefaultOffAdmissionPlugins() sets.Set[string] {
 	// Plugins we want ON by default
-	defaultOnPlugins := sets.New[string](
+	defaultOnPlugins := sets.New(
 		lifecycle.PluginName,                 // NamespaceLifecycle
 		mutatingwebhook.PluginName,           // MutatingAdmissionWebhook
 		validatingwebhook.PluginName,         // ValidatingAdmissionWebhook
