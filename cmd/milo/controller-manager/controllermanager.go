@@ -397,6 +397,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up userdeactivation webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupUserInvitationWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user invitation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),

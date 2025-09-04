@@ -5,10 +5,12 @@ import (
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // UserInvitation is the Schema for the userinvitations API
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Email",type=string,JSONPath=".spec.email"
+// +kubebuilder:printcolumn:name="Expiration Date",type="string",JSONPath=".spec.expirationDate"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:path=userinvitations,scope=Namespaced
@@ -24,17 +26,41 @@ type UserInvitation struct {
 type UserInvitationSpec struct {
 	// The email of the user being invited.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="email type is immutable"
 	Email string `json:"email"`
+
 	// The first name of the user being invited.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="givenName type is immutable"
 	GivenName string `json:"givenName,omitempty"`
+
 	// The last name of the user being invited.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="familyName type is immutable"
 	FamilyName string `json:"familyName,omitempty"`
 
 	// The roles that will be assigned to the user when they accept the invitation.
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="roles type is immutable"
 	Roles []RoleReference `json:"roles,omitempty"`
+
+	// InvitedBy is the user who invited the user. A mutation webhook will default this field to the user who made the request.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="invitedBy type is immutable"
+	InvitedBy UserReference `json:"invitedBy,omitempty"`
+
+	// ExpirationDate is the date and time when the UserInvitation will expire.
+	// If not specified, the UserInvitation will never expire.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="expirationDate type is immutable"
+	ExpirationDate *metav1.Time `json:"expirationDate,omitempty"`
+
+	// State is the state of the UserInvitation. In order to accept the invitation, the invited user
+	// must set the state to Accepted.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Pending;Accepted;Declined;Expired
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || oldSelf == 'Pending' || self == oldSelf",message="state can only transition from Pending to another state and is immutable afterwards"
+	State string `json:"state"`
 }
 
 // UserInvitationStatus defines the observed state of UserInvitation
@@ -46,6 +72,7 @@ type UserInvitationStatus struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // UserInvitationList contains a list of UserInvitation
 type UserInvitationList struct {
