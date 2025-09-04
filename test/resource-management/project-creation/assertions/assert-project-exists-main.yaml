@@ -1,0 +1,11 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: project-creation-test
+  labels:
+    test.miloapis.com/scenario: "project-creation"
+    resourcemanager.miloapis.com/organization-name: test-project-creation-org
+spec:
+  ownerRef:
+    kind: Organization
+    name: test-project-creation-org

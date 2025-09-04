@@ -1,0 +1,12 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: user-2001-membership
+  namespace: organization-test-project-creation-org
+  labels:
+    test.miloapis.com/scenario: "project-creation"
+spec:
+  organizationRef:
+    name: test-project-creation-org
+  userRef:
+    name: "2001"
