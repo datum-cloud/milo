@@ -360,34 +360,111 @@ tasks:
         echo "PERF_TEST_ROOT = {{.PERF_TEST_ROOT}}"
         echo "PERF_REPORT_DIR= {{.PERF_REPORT_DIR}}"
         echo "KUBECONFIG     = {{.KUBECONFIG | default .PERF_KUBECONFIG}}"
+        echo "ORG_NAME       = {{.ORG_NAME | default .CL2_OWNER_NAME | default "default-org"}}"
+        echo "ORG_KUBECONFIG = {{.PERF_REPORT_DIR}}/kubeconfig.org.{{.ORG_NAME | default .CL2_OWNER_NAME | default "default-org"}}"
         echo "PARALLELISM    = {{.PARALLELISM | default "4"}}"
     silent: true
 
-  perf:mgmt:create:
-    desc: "CL2 mgmt (modules): create Organization & Projects"
+  perf:kube:org:
+    desc: "Generate org-scoped kubeconfig (ephemeral; leaves base untouched)"
     env:
-      KUBECONFIG: '{{.KUBECONFIG | default .PERF_KUBECONFIG}}'
-      CL2_BIN:    '{{.CL2_BIN | default .CL2_BIN_DEFAULT}}'
+      BASE_KUBECONFIG: '{{.KUBECONFIG | default .PERF_KUBECONFIG}}'
+      ORG_NAME:       '{{.ORG_NAME | default .CL2_OWNER_NAME | default "default-org"}}'
+      APIGV:          '{{.APIGV | default "resourcemanager.miloapis.com/v1alpha1"}}'
+      ORG_KUBECONFIG: '{{.PERF_REPORT_DIR}}/kubeconfig.org.{{.ORG_NAME | default .CL2_OWNER_NAME | default "default-org"}}'
     cmds:
       - |
         set -euo pipefail
+        mkdir -p "{{.PERF_REPORT_DIR}}"
+
+        # ensure defaults even if env not passed
+        APIGV="${APIGV:-resourcemanager.miloapis.com/v1alpha1}"
+        ORG_NAME="${ORG_NAME:-default-org}"
+
+        BASE_SERVER="$(kubectl config view --kubeconfig "$BASE_KUBECONFIG" --raw --minify -o jsonpath='{.clusters[0].cluster.server}')"
+        ORG_SERVER="${BASE_SERVER%/}/apis/${APIGV}/organizations/${ORG_NAME}/control-plane"
+
+        USER_NAME="$(kubectl config view --kubeconfig "$BASE_KUBECONFIG" --raw --minify -o jsonpath='{.contexts[0].context.user}')"
+        TOKEN="$(kubectl config view --kubeconfig "$BASE_KUBECONFIG" --raw --minify -o jsonpath='{.users[0].user.token}')"
+        INSECURE="$(kubectl config view --kubeconfig "$BASE_KUBECONFIG" --raw --minify -o jsonpath='{.clusters[0].cluster.insecure-skip-tls-verify}')"
+        if [ "${INSECURE:-}" = "true" ]; then INSECURE_FLAG="--insecure-skip-tls-verify=true"; else INSECURE_FLAG=""; fi
+
+        if [ -n "${TOKEN:-}" ]; then
+          kubectl config --kubeconfig "$ORG_KUBECONFIG" set-cluster "milo-org-${ORG_NAME}" --server="$ORG_SERVER" $INSECURE_FLAG
+          kubectl config --kubeconfig "$ORG_KUBECONFIG" set-credentials "$USER_NAME" --token="$TOKEN"
+          kubectl config --kubeconfig "$ORG_KUBECONFIG" set-context "milo-org-${ORG_NAME}" --cluster="milo-org-${ORG_NAME}" --user="$USER_NAME"
+          kubectl config --kubeconfig "$ORG_KUBECONFIG" use-context "milo-org-${ORG_NAME}"
+        else
+          # fallback: copy minified config and patch only the server line
+          tmp="$(mktemp)"
+          kubectl config view --kubeconfig "$BASE_KUBECONFIG" --raw --minify > "$tmp"
+          esc_old=$(printf '%s\n' "$BASE_SERVER" | sed -e 's/[\/&]/\\&/g')
+          esc_new=$(printf '%s\n' "$ORG_SERVER" | sed -e 's/[\/&]/\\&/g')
+          sed -E "s|(^[[:space:]]*server:[[:space:]]*)$esc_old|\1$esc_new|" "$tmp" > "$ORG_KUBECONFIG"
+          rm -f "$tmp"
+        fi
+
+        # (optional) sanity check
+        kubectl --kubeconfig "$ORG_KUBECONFIG" get --raw /apis >/dev/null
+
+        echo "$ORG_KUBECONFIG" > "{{.PERF_REPORT_DIR}}/.org_kubeconfig_path"
+        echo "ORG_KUBECONFIG=$ORG_KUBECONFIG"
+
+
+  perf:org:bootstrap:
+    desc: "Ensure Organization exists (root context)"
+    env:
+      KUBECONFIG: '{{.KUBECONFIG | default .PERF_KUBECONFIG}}'
+      ORG_NAME:   '{{.ORG_NAME | default .CL2_OWNER_NAME | default "default-org"}}'
+      ORG_TYPE:   '{{.ORG_TYPE | default "Standard"}}'
+    cmds:
+      - |
+        set -euo pipefail
+        cat <<'YAML' | ORG_NAME="${ORG_NAME}" ORG_TYPE="${ORG_TYPE}" envsubst | kubectl --kubeconfig "$KUBECONFIG" apply -f -
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Organization
+        metadata:
+          name: ${ORG_NAME}
+          labels: { cl2-role: owner }
+        spec: { type: ${ORG_TYPE} }
+        YAML
+
+  perf:mgmt:create:
+    desc: "CL2 mgmt: create Projects (org-context)"
+    deps:
+      - perf:org:bootstrap
+      - perf:kube:org
+    env:
+      CL2_BIN: '{{.CL2_BIN | default .CL2_BIN_DEFAULT}}'
+      ORG_KUBECONFIG: '{{.PERF_REPORT_DIR}}/kubeconfig.org.{{.ORG_NAME | default .CL2_OWNER_NAME | default "default-org"}}'
+    cmds:
+      - |
+        set -euo pipefail
+        tmp_over="$(mktemp)"
+        cat "{{.PERF_TEST_ROOT}}/configs/overrides.yaml" > "$tmp_over"
+        # Skip org creation + CRD checks when using org-context
+        printf '\nCL2_ORG_REPLICAS: "0"\nCL2_CHECK_CRDS: "false"\n' >> "$tmp_over"
         "$CL2_BIN" \
           --testconfig="{{.PERF_TEST_ROOT}}/configs/00-projects.create.yaml" \
-          --testoverrides="{{.PERF_TEST_ROOT}}/configs/overrides.yaml" \
+          --testoverrides="$tmp_over" \
           --provider=skeleton \
           --nodes=1 \
           --skip-cluster-verification=true \
           --delete-stale-namespaces=true \
           --enable-exec-service=false \
-          --kubeconfig="$KUBECONFIG" \
+          --kubeconfig="$ORG_KUBECONFIG" \
           --report-dir="{{.PERF_REPORT_DIR}}/mgmt" \
           --v=4
 
   perf:mgmt:cleanup:
-    desc: "CL2 mgmt (modules): delete Projects & Organization"
+    desc: "CL2 mgmt: delete Projects (org-context) then delete Organization (root)"
+    deps:
+      - perf:kube:org
     env:
+      CL2_BIN: '{{.CL2_BIN | default .CL2_BIN_DEFAULT}}'
+      ORG_KUBECONFIG: '{{.PERF_REPORT_DIR}}/kubeconfig.org.{{.ORG_NAME | default .CL2_OWNER_NAME | default "default-org"}}'
       KUBECONFIG: '{{.KUBECONFIG | default .PERF_KUBECONFIG}}'
-      CL2_BIN:    '{{.CL2_BIN | default .CL2_BIN_DEFAULT}}'
+      ORG_NAME:   '{{.ORG_NAME | default .CL2_OWNER_NAME | default "default-org"}}'
     cmds:
       - |
         set -euo pipefail
@@ -399,13 +476,17 @@ tasks:
           --skip-cluster-verification=true \
           --delete-stale-namespaces=true \
           --enable-exec-service=false \
-          --kubeconfig="$KUBECONFIG" \
+          --kubeconfig="$ORG_KUBECONFIG" \
           --report-dir="{{.PERF_REPORT_DIR}}/mgmt" \
           --v=4
+        # Delete the org with the root kubeconfig (outside CL2)
+        kubectl --kubeconfig "$KUBECONFIG" delete organizations.resourcemanager.miloapis.com "$ORG_NAME" --ignore-not-found
 
   perf:all:
     desc: "Create → per-project CL2 tests → cleanup"
     cmds:
+      - task: perf:org:bootstrap
+      - task: perf:kube:org
       - task: perf:mgmt:create
       - task: perf:projects
       - task: perf:mgmt:cleanup

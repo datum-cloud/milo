@@ -1,0 +1,7 @@
+{
+  "clusterMetrics": {
+    "availabilityPercentage": 100,
+    "longestUnavailablePeriod": "0s"
+  },
+  "hostMetrics": null
+}

@@ -11,76 +11,22 @@ tuningSets:
       burst: {{ DefaultParam .CL2_BURST 20 }}
 
 steps:
-  # ---------- Preflight: CRDs must still exist ----------
-  - name: "Preflight ensure CRDs exist"
-    measurements:
-      - identifier: "WaitOrgCRD"
-        method: "WaitForGenericK8sObjects"
-        params:
-          action: "start"
-          objectGroup: "apiextensions.k8s.io"
-          objectVersion: "v1"
-          objectResource: "customresourcedefinitions"
-          fieldSelector: "metadata.name=organizations.resourcemanager.miloapis.com"
-          successfulConditions: ["Established=True"]
-          failedConditions: ["Terminating=True"]
-          minDesiredObjectCount: 1
-          maxFailedObjectCount: 0
-          timeout: "5m"
-      - identifier: "WaitOrgCRD"
-        method: "WaitForGenericK8sObjects"
-        params:
-          action: "gather"
-          objectGroup: "apiextensions.k8s.io"
-          objectVersion: "v1"
-          objectResource: "customresourcedefinitions"
-          fieldSelector: "metadata.name=organizations.resourcemanager.miloapis.com"
-          successfulConditions: ["Established=True"]
-          failedConditions: ["Terminating=True"]
-          minDesiredObjectCount: 1
-          maxFailedObjectCount: 0
-          timeout: "5m"
-
-      - identifier: "WaitProjCRD"
-        method: "WaitForGenericK8sObjects"
-        params:
-          action: "start"
-          objectGroup: "apiextensions.k8s.io"
-          objectVersion: "v1"
-          objectResource: "customresourcedefinitions"
-          fieldSelector: "metadata.name=projects.resourcemanager.miloapis.com"
-          successfulConditions: ["Established=True"]
-          failedConditions: ["Terminating=True"]
-          minDesiredObjectCount: 1
-          maxFailedObjectCount: 0
-          timeout: "5m"
-      - identifier: "WaitProjCRD"
-        method: "WaitForGenericK8sObjects"
-        params:
-          action: "gather"
-          objectGroup: "apiextensions.k8s.io"
-          objectVersion: "v1"
-          objectResource: "customresourcedefinitions"
-          fieldSelector: "metadata.name=projects.resourcemanager.miloapis.com"
-          successfulConditions: ["Established=True"]
-          failedConditions: ["Terminating=True"]
-          minDesiredObjectCount: 1
-          maxFailedObjectCount: 0
-          timeout: "5m"
-
-  # ---------- Start system measurements (keep minimal) ----------
+  # ---------- Start system measurements (minimal) ----------
   - name: "Start system measurements (cleanup)"
     measurements:
       - identifier: "Avail"
         method: "APIAvailability"
-        params: { action: "start", mode: "cluster", pollFrequency: "1s", timeout: "10m" }
+        params:
+          action: "start"
+          mode: "cluster"
+          pollFrequency: "1s"
+          timeout: "10m"
+      # (Optional) enable later with real control-plane IPs:
       # - identifier: "Etcd"
       #   method: "EtcdMetrics"
       #   params:
       #     action: "start"
-      #     masterIPs:
-      #       - "<CONTROL-PLANE-IP-1>:2379"
-      #       - "<CONTROL-PLANE-IP-2>:2379"
+      #     masterIPs: ["<CONTROL-PLANE-IP-1>:2379", "<CONTROL-PLANE-IP-2>:2379"]
 
   - name: "Start timer (delete)"
     measurements:
@@ -104,10 +50,12 @@ steps:
               apiVersion: "resourcemanager.miloapis.com/v1alpha1"
               kind: "Project"
               namespaced: false
-              labelSelector: "cl2-group=projects"
+              labelSelector:
+                matchLabels:
+                  cl2-group: "projects"
               delete: true
 
-  # Wait until all Projects are gone
+  # ---------- Wait until all Projects are gone ----------
   - name: "Wait for Projects deletion"
     measurements:
       - identifier: "WaitNoProjects"
@@ -118,6 +66,8 @@ steps:
           objectVersion: "v1alpha1"
           objectResource: "projects"
           labelSelector: "cl2-group=projects"
+          successfulConditions: []
+          failedConditions: []
           minDesiredObjectCount: 0
           maxFailedObjectCount: 0
           timeout: "10m"
@@ -129,50 +79,8 @@ steps:
           objectVersion: "v1alpha1"
           objectResource: "projects"
           labelSelector: "cl2-group=projects"
-          minDesiredObjectCount: 0
-          maxFailedObjectCount: 0
-          timeout: "10m"
-
-  # ---------- Delete Organization (cluster-scoped) ----------
-  - name: "Delete Organization"
-    phases:
-      - replicasPerNamespace: 0
-        tuningSet: "projects-qps"
-        objectBundle:
-          - basename: "org"
-            objectTemplatePath: "../templates/organization.yaml"
-            templateFillMap:
-              name: {{ DefaultParam .CL2_OWNER_NAME "default-org" }}
-              orgType: "Standard"
-            listUnknownObjectOptions:
-              apiVersion: "resourcemanager.miloapis.com/v1alpha1"
-              kind: "Organization"
-              namespaced: false
-              labelSelector: "cl2-role=owner"
-              delete: true
-
-  # Wait until the Organization is gone
-  - name: "Wait for Organization deletion"
-    measurements:
-      - identifier: "WaitNoOrg"
-        method: "WaitForGenericK8sObjects"
-        params:
-          action: "start"
-          objectGroup: "resourcemanager.miloapis.com"
-          objectVersion: "v1alpha1"
-          objectResource: "organizations"
-          labelSelector: "cl2-role=owner"
-          minDesiredObjectCount: 0
-          maxFailedObjectCount: 0
-          timeout: "10m"
-      - identifier: "WaitNoOrg"
-        method: "WaitForGenericK8sObjects"
-        params:
-          action: "gather"
-          objectGroup: "resourcemanager.miloapis.com"
-          objectVersion: "v1alpha1"
-          objectResource: "organizations"
-          labelSelector: "cl2-role=owner"
+          successfulConditions: []
+          failedConditions: []
           minDesiredObjectCount: 0
           maxFailedObjectCount: 0
           timeout: "10m"
@@ -192,6 +100,4 @@ steps:
       #   method: "EtcdMetrics"
       #   params:
       #     action: "gather"
-      #     masterIPs:
-      #       - "<CONTROL-PLANE-IP-1>:2379"
-      #       - "<CONTROL-PLANE-IP-2>:2379"
+      #     masterIPs: ["<CONTROL-PLANE-IP-1>:2379", "<CONTROL-PLANE-IP-2>:2379"]

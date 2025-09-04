@@ -1,22 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-  <testsuite name="ClusterLoaderV2" tests="0" failures="2" errors="0" time="44.205">
-      <testcase name="create-100-projects overall (test/performance/clusterloader2/configs/00-projects.create.yaml)" classname="ClusterLoaderV2" time="44.20359275">
-          <failure type="Failure">:0&#xA;[measurement call ResourceUsageSummary - ResUsage error: listing pods error: the server could not find the requested resource]&#xA;:0</failure>
-      </testcase>
-      <testcase name="create-100-projects: [step: 01] Preflight ensure CRDs exist [00] - WaitOrgCRD" classname="ClusterLoaderV2" time="30.119547042"></testcase>
-      <testcase name="create-100-projects: [step: 01] Preflight ensure CRDs exist [01] - WaitOrgCRD" classname="ClusterLoaderV2" time="30.118610542"></testcase>
-      <testcase name="create-100-projects: [step: 01] Preflight ensure CRDs exist [02] - WaitProjCRD" classname="ClusterLoaderV2" time="30.118572042"></testcase>
-      <testcase name="create-100-projects: [step: 01] Preflight ensure CRDs exist [03] - WaitProjCRD" classname="ClusterLoaderV2" time="30.118709542"></testcase>
-      <testcase name="create-100-projects: [step: 02] Start system measurements [00] - Avail" classname="ClusterLoaderV2" time="0.002958459"></testcase>
-      <testcase name="create-100-projects: [step: 02] Start system measurements [01] - ResUsage" classname="ClusterLoaderV2" time="0.004131709">
-          <failure type="Failure">:0&#xA;[measurement call ResourceUsageSummary - ResUsage error: listing pods error: the server could not find the requested resource]&#xA;:0</failure>
-      </testcase>
-      <testcase name="create-100-projects: [step: 02] Start system measurements [02] - Etcd" classname="ClusterLoaderV2" time="0.002980292"></testcase>
-      <testcase name="create-100-projects: [step: 03] Start timer (create) [00] - PhaseTimer" classname="ClusterLoaderV2" time="0.000755583"></testcase>
-      <testcase name="create-100-projects: [step: 04] Create default Organization" classname="ClusterLoaderV2" time="0.011833292"></testcase>
-      <testcase name="create-100-projects: [step: 05] Create Projects" classname="ClusterLoaderV2" time="4.042010875"></testcase>
-      <testcase name="create-100-projects: [step: 06] Stop timer (create) [00] - PhaseTimer" classname="ClusterLoaderV2" time="0.001231458"></testcase>
-      <testcase name="create-100-projects: [step: 07] Gather system measurements [00] - Avail" classname="ClusterLoaderV2" time="0.00124875"></testcase>
-      <testcase name="create-100-projects: [step: 07] Gather system measurements [01] - ResUsage" classname="ClusterLoaderV2" time="0.001170833"></testcase>
-      <testcase name="create-100-projects: [step: 07] Gather system measurements [02] - Etcd" classname="ClusterLoaderV2" time="0.000779708"></testcase>
+  <testsuite name="ClusterLoaderV2" tests="0" failures="0" errors="0" time="40.152">
+      <testcase name="cleanup-100-projects overall (test/performance/clusterloader2/configs/00-projects.cleanup.yaml)" classname="ClusterLoaderV2" time="40.151216583"></testcase>
+      <testcase name="cleanup-100-projects: [step: 01] Start system measurements (cleanup) [00] - Avail" classname="ClusterLoaderV2" time="0.003273542"></testcase>
+      <testcase name="cleanup-100-projects: [step: 02] Start timer (delete) [00] - PhaseTimer" classname="ClusterLoaderV2" time="0.000914791"></testcase>
+      <testcase name="cleanup-100-projects: [step: 03] Delete Projects" classname="ClusterLoaderV2" time="0.006442917"></testcase>
+      <testcase name="cleanup-100-projects: [step: 04] Wait for Projects deletion [00] - WaitNoProjects" classname="ClusterLoaderV2" time="30.104028458"></testcase>
+      <testcase name="cleanup-100-projects: [step: 04] Wait for Projects deletion [01] - WaitNoProjects" classname="ClusterLoaderV2" time="30.103995666"></testcase>
+      <testcase name="cleanup-100-projects: [step: 05] Stop timer (delete) [00] - PhaseTimer" classname="ClusterLoaderV2" time="0.004132833"></testcase>
+      <testcase name="cleanup-100-projects: [step: 06] Gather system measurements (cleanup) [00] - Avail" classname="ClusterLoaderV2" time="0.004165"></testcase>
   </testsuite>

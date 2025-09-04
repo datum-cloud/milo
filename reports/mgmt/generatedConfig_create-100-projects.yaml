@@ -3,82 +3,12 @@ dependencies: []
 automanagednamespaces: 0
 namespace:
   number: 1
-  prefix: test-yrgaaj
+  prefix: test-i76ih1
   deletestalenamespaces: true
   deleteautomanagednamespaces: true
   enableexistingnamespaces: false
   deletenamespacetimeout: 600000000000
 steps:
-- phases: []
-  measurements:
-  - method: WaitForGenericK8sObjects
-    params:
-      action: start
-      failedConditions:
-      - Terminating=True
-      fieldSelector: metadata.name=organizations.resourcemanager.miloapis.com
-      maxFailedObjectCount: 0
-      minDesiredObjectCount: 1
-      objectGroup: apiextensions.k8s.io
-      objectResource: customresourcedefinitions
-      objectVersion: v1
-      successfulConditions:
-      - Established=True
-      timeout: 5m
-    identifier: WaitOrgCRD
-    instances: []
-  - method: WaitForGenericK8sObjects
-    params:
-      action: gather
-      failedConditions:
-      - Terminating=True
-      fieldSelector: metadata.name=organizations.resourcemanager.miloapis.com
-      maxFailedObjectCount: 0
-      minDesiredObjectCount: 1
-      objectGroup: apiextensions.k8s.io
-      objectResource: customresourcedefinitions
-      objectVersion: v1
-      successfulConditions:
-      - Established=True
-      timeout: 5m
-    identifier: WaitOrgCRD
-    instances: []
-  - method: WaitForGenericK8sObjects
-    params:
-      action: start
-      failedConditions:
-      - Terminating=True
-      fieldSelector: metadata.name=projects.resourcemanager.miloapis.com
-      maxFailedObjectCount: 0
-      minDesiredObjectCount: 1
-      objectGroup: apiextensions.k8s.io
-      objectResource: customresourcedefinitions
-      objectVersion: v1
-      successfulConditions:
-      - Established=True
-      timeout: 5m
-    identifier: WaitProjCRD
-    instances: []
-  - method: WaitForGenericK8sObjects
-    params:
-      action: gather
-      failedConditions:
-      - Terminating=True
-      fieldSelector: metadata.name=projects.resourcemanager.miloapis.com
-      maxFailedObjectCount: 0
-      minDesiredObjectCount: 1
-      objectGroup: apiextensions.k8s.io
-      objectResource: customresourcedefinitions
-      objectVersion: v1
-      successfulConditions:
-      - Established=True
-      timeout: 5m
-    identifier: WaitProjCRD
-    instances: []
-  module:
-    path: ""
-    params: {}
-  name: Preflight ensure CRDs exist
 - phases: []
   measurements:
   - method: APIAvailability
@@ -88,18 +18,6 @@ steps:
       pollFrequency: 1s
       timeout: 10m
     identifier: Avail
-    instances: []
-  - method: ResourceUsageSummary
-    params:
-      action: start
-    identifier: ResUsage
-    instances: []
-  - method: EtcdMetrics
-    params:
-      action: start
-      masterIPs:
-      - etcd.etcd-system.svc.cluster.local:2379
-    identifier: Etcd
     instances: []
   module:
     path: ""
@@ -117,23 +35,6 @@ steps:
     path: ""
     params: {}
   name: Start timer (create)
-- phases:
-  - namespacerange: null
-    namespacelist: []
-    replicaspernamespace: 1
-    tuningset: projects-qps
-    objectbundle:
-    - basename: org
-      objecttemplatepath: ../templates/organization.yaml
-      templatefillmap:
-        name: default-org
-        orgType: Standard
-      listunknownobjectoptions: null
-  measurements: []
-  module:
-    path: ""
-    params: {}
-  name: Create default Organization
 - phases:
   - namespacerange: null
     namespacelist: []
@@ -170,18 +71,6 @@ steps:
     params:
       action: gather
     identifier: Avail
-    instances: []
-  - method: ResourceUsageSummary
-    params:
-      action: gather
-    identifier: ResUsage
-    instances: []
-  - method: EtcdMetrics
-    params:
-      action: gather
-      masterIPs:
-      - etcd.etcd-system.svc.cluster.local:2379
-    identifier: Etcd
     instances: []
   module:
     path: ""
