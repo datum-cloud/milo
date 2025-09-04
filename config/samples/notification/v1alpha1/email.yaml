@@ -2,6 +2,7 @@ apiVersion: notification.miloapis.com/v1alpha1
 kind: Email
 metadata:
   name: user-invitation-sample
+  namespace: milo-system
 spec:
   templateRef:
     name: user-invitation
