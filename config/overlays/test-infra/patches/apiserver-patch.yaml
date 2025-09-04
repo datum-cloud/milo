@@ -34,9 +34,6 @@ spec:
           # Disable tracing for test environment
           - name: TRACING_CONFIG_FILE
             value: ""
-          # Disable client CA for test environment
-          - name: CLIENT_CA_FILE
-            value: ""
           # Enable anonymous auth for test environment
           - name: ANONYMOUS_AUTH
             value: "true"
@@ -44,6 +41,9 @@ spec:
             value: /etc/kubernetes/pki/apiserver/ca.crt
           - name: SERVICE_ACCOUNT_KEY_FILE
             value: /etc/kubernetes/pki/apiserver/ca.crt
+          # Use SSL_CERT_DIR to include our custom CA
+          - name: SSL_CERT_DIR
+            value: /etc/certs/ssl
         # Add volume mount for token auth
         volumeMounts:
           - name: auth-tokens
@@ -52,6 +52,10 @@ spec:
           - name: tls-certs
             mountPath: /etc/kubernetes/pki/apiserver
             readOnly: true
+          - name: system-certs
+            mountPath: /etc/certs/ssl/milo-ca.crt
+            readOnly: true
+            subPath: ca.crt
       volumes:
         - name: auth-tokens
           secret:
@@ -59,3 +63,9 @@ spec:
         - name: tls-certs
           secret:
             secretName: milo-apiserver-tls
+        - name: system-certs
+          secret:
+            secretName: milo-apiserver-tls
+            items:
+              - key: ca.crt
+                path: ca.crt

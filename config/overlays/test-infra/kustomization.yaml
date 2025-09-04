@@ -13,7 +13,6 @@ resources:
   # Milo control plane components - will be in milo-system
   - ../../apiserver
   - ../../controller-manager/overlays/core-control-plane
-  - ../../webhook
 
   # Ingress configuration (shared Gateway API with Envoy)
   - ../../ingress/gateway-api
@@ -21,6 +20,7 @@ resources:
 components:
   - components/auth
   - components/certificates
+  - ../../components/certificates
 
 patches:
   # Configure API server for etcd connection
