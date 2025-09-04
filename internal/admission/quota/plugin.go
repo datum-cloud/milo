@@ -39,6 +39,8 @@ type ClaimCreationPlugin struct {
 	dynamicClient  dynamic.Interface
 	policyEngine   PolicyEngine
 	templateEngine TemplateEngine
+	watchManager   ClaimWatchManager
+	config         *AdmissionPluginConfig
 	logger         logr.Logger
 }
 
@@ -55,6 +57,7 @@ func NewClaimCreationPlugin() (*ClaimCreationPlugin, error) {
 	// Create the admission plugin - engines will be initialized when dependencies are injected
 	plugin := &ClaimCreationPlugin{
 		Handler: admission.NewHandler(admission.Create),
+		config:  DefaultAdmissionPluginConfig(),
 		logger:  logger,
 	}
 
@@ -66,9 +69,10 @@ func (p *ClaimCreationPlugin) SetDynamicClient(dynamicClient dynamic.Interface) 
 	p.dynamicClient = dynamicClient
 	p.logger.V(2).Info("Dynamic client set", "plugin", PluginName)
 
-	// Initialize engines now that we have the dynamic client
+	// Initialize engines and watch manager now that we have the dynamic client
 	if dynamicClient != nil {
 		p.initializeEngines()
+		p.initializeWatchManager()
 	}
 }
 
@@ -82,6 +86,9 @@ func (p *ClaimCreationPlugin) ValidateInitialization() error {
 	}
 	if p.templateEngine == nil {
 		return fmt.Errorf("template engine not initialized")
+	}
+	if p.watchManager == nil {
+		return fmt.Errorf("watch manager not initialized")
 	}
 	return nil
 }
@@ -117,6 +124,29 @@ func (p *ClaimCreationPlugin) initializeEngines() {
 	p.logger.V(1).Info("Policy engine will load policies lazily to avoid circular dependency")
 
 	p.logger.V(1).Info("Engines initialized successfully")
+}
+
+// initializeWatchManager initializes the shared watch manager
+func (p *ClaimCreationPlugin) initializeWatchManager() {
+	if p.config.DisableSharedWatch {
+		p.logger.Info("Shared watch manager disabled by configuration")
+		return
+	}
+
+	p.logger.V(1).Info("Initializing shared watch manager for admission plugin")
+
+	// Create shared watch manager
+	p.watchManager = NewClaimWatchManager(p.dynamicClient, p.logger.WithName("watch-manager"))
+
+	// Start the watch manager in the background
+	// Note: We use context.Background() here because the watch manager needs to outlive individual requests
+	go func() {
+		if err := p.watchManager.Start(context.Background()); err != nil {
+			p.logger.Error(err, "Failed to start shared watch manager")
+		}
+	}()
+
+	p.logger.V(1).Info("Shared watch manager initialized successfully")
 }
 
 // handleAdmission is the main admission logic - called for each API request.
@@ -338,6 +368,10 @@ func (p *ClaimCreationPlugin) createResourceClaim(ctx context.Context, policy *q
 // checkForExistingDeniedClaims checks if there are recently denied ResourceClaims
 // for the same resource type to fail fast when quota is exhausted.
 func (p *ClaimCreationPlugin) checkForExistingDeniedClaims(ctx context.Context, evalContext *EvaluationContext, namespace string) error {
+	// Check if fast failure is enabled
+	if !p.config.EnableDenialFastFail {
+		return nil
+	}
 	gvr := schema.GroupVersionResource{
 		Group:    "quota.miloapis.com",
 		Version:  "v1alpha1",
@@ -359,7 +393,7 @@ func (p *ClaimCreationPlugin) checkForExistingDeniedClaims(ctx context.Context, 
 	}
 
 	// Check if any recent ResourceClaims with our prefix have been denied
-	recentDenialCutoff := time.Now().Add(-5 * time.Minute) // Consider denials in last 5 minutes
+	recentDenialCutoff := time.Now().Add(-p.config.DenialCheckWindow)
 
 	for _, item := range claims.Items {
 		claimName := item.GetName()
@@ -375,8 +409,8 @@ func (p *ClaimCreationPlugin) checkForExistingDeniedClaims(ctx context.Context, 
 		}
 
 		// Check if this claim is denied
-		if p.isClaimDenied(&item) {
-			reason := p.getClaimDenialReason(&item)
+		if isClaimDenied(&item) {
+			reason := getClaimDenialReason(&item)
 			p.logger.Info("Found recent denied ResourceClaim, failing fast",
 				"existingClaim", claimName,
 				"reason", reason,
@@ -459,6 +493,54 @@ func (p *ClaimCreationPlugin) buildEvaluationContext(attrs admission.Attributes,
 
 // waitForClaimGranted watches a ResourceClaim and waits for it to be granted or denied.
 func (p *ClaimCreationPlugin) waitForClaimGranted(ctx context.Context, claimName, namespace string) error {
+	// Use configured timeout
+	timeout := p.config.WatchManager.DefaultTimeout
+
+	if p.config.DisableSharedWatch || p.watchManager == nil {
+		// Fallback to individual watch (old behavior)
+		p.logger.V(1).Info("Using fallback individual watch for ResourceClaim status",
+			"name", claimName, "namespace", namespace, "reason", "shared watch disabled")
+		return p.waitForClaimGrantedIndividual(ctx, claimName, namespace, timeout)
+	}
+
+	p.logger.V(1).Info("Registering with shared watch manager for ResourceClaim status",
+		"name", claimName, "namespace", namespace, "timeout", timeout)
+
+	// Register with shared watch manager
+	resultChan, cancelFunc := p.watchManager.RegisterClaimWaiter(claimName, namespace, timeout)
+	defer cancelFunc()
+
+	// Wait for result from shared watch manager
+	select {
+	case result, ok := <-resultChan:
+		if !ok {
+			// Channel was closed, likely due to cancellation
+			return fmt.Errorf("watch was cancelled")
+		}
+
+		if result.Error != nil {
+			return result.Error
+		}
+
+		if result.Granted {
+			p.logger.Info("ResourceClaim granted via shared watch manager",
+				"name", claimName, "namespace", namespace)
+			return nil
+		} else {
+			p.logger.Info("ResourceClaim denied via shared watch manager",
+				"name", claimName, "namespace", namespace, "reason", result.Reason)
+			return fmt.Errorf("ResourceClaim was denied: %s", result.Reason)
+		}
+
+	case <-ctx.Done():
+		// Request context was cancelled
+		p.watchManager.UnregisterClaimWaiter(claimName, namespace)
+		return ctx.Err()
+	}
+}
+
+// waitForClaimGrantedIndividual is the fallback individual watch method (original implementation)
+func (p *ClaimCreationPlugin) waitForClaimGrantedIndividual(ctx context.Context, claimName, namespace string, timeout time.Duration) error {
 	gvr := schema.GroupVersionResource{
 		Group:    "quota.miloapis.com",
 		Version:  "v1alpha1",
@@ -466,10 +548,10 @@ func (p *ClaimCreationPlugin) waitForClaimGranted(ctx context.Context, claimName
 	}
 
 	// Create a timeout context
-	watchCtx, cancel := context.WithTimeout(ctx, ClaimWaitTimeout)
+	watchCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	p.logger.V(1).Info("Starting watch for ResourceClaim status", "name", claimName, "namespace", namespace)
+	p.logger.V(1).Info("Starting individual watch for ResourceClaim status", "name", claimName, "namespace", namespace)
 
 	// Start watching for changes
 	watcher, err := p.dynamicClient.Resource(gvr).Namespace(namespace).Watch(watchCtx, metav1.ListOptions{
@@ -479,14 +561,14 @@ func (p *ClaimCreationPlugin) waitForClaimGranted(ctx context.Context, claimName
 		ResourceVersionMatch: "NotOlderThan",
 	})
 	if err != nil {
-		return fmt.Errorf("failed to start watch: %w", err)
+		return fmt.Errorf("failed to start individual watch: %w", err)
 	}
 	defer watcher.Stop()
 
 	for {
 		select {
 		case <-watchCtx.Done():
-			return fmt.Errorf("timeout waiting for ResourceClaim to be granted after %v", ClaimWaitTimeout)
+			return fmt.Errorf("timeout waiting for ResourceClaim to be granted after %v", timeout)
 
 		case event, ok := <-watcher.ResultChan():
 			if !ok {
@@ -503,25 +585,19 @@ func (p *ClaimCreationPlugin) waitForClaimGranted(ctx context.Context, claimName
 
 				p.logger.V(2).Info("ResourceClaim status updated", "name", claimName, "namespace", namespace)
 
-				// Check if granted
-				if p.isClaimGranted(claimObj) {
+				// Check if granted (using utility functions)
+				if isClaimGranted(claimObj) {
 					p.logger.Info("ResourceClaim granted", "name", claimName, "namespace", namespace)
 					return nil
 				}
 
 				// Check if denied
-				if p.isClaimDenied(claimObj) {
-					reason := p.getClaimDenialReason(claimObj)
+				if isClaimDenied(claimObj) {
+					reason := getClaimDenialReason(claimObj)
 					p.logger.Info("ResourceClaim denied, rejecting resource creation",
 						"name", claimName, "reason", reason)
 					return fmt.Errorf("ResourceClaim was denied: %s", reason)
 				}
-
-				// Debug logging for condition detection
-				p.logger.V(2).Info("ResourceClaim conditions status",
-					"name", claimName,
-					"granted", p.isClaimGranted(claimObj),
-					"denied", p.isClaimDenied(claimObj))
 
 			case watch.Deleted:
 				return fmt.Errorf("ResourceClaim was deleted while waiting for grant")
@@ -533,8 +609,8 @@ func (p *ClaimCreationPlugin) waitForClaimGranted(ctx context.Context, claimName
 	}
 }
 
-// isClaimGranted checks if a ResourceClaim has been granted.
-func (p *ClaimCreationPlugin) isClaimGranted(claim *unstructured.Unstructured) bool {
+// isClaimGranted checks if a ResourceClaim has been granted (utility function)
+func isClaimGranted(claim *unstructured.Unstructured) bool {
 	conditions, found, err := unstructured.NestedSlice(claim.Object, "status", "conditions")
 	if err != nil || !found {
 		return false
@@ -556,8 +632,8 @@ func (p *ClaimCreationPlugin) isClaimGranted(claim *unstructured.Unstructured) b
 	return false
 }
 
-// isClaimDenied checks if a ResourceClaim has been denied.
-func (p *ClaimCreationPlugin) isClaimDenied(claim *unstructured.Unstructured) bool {
+// isClaimDenied checks if a ResourceClaim has been denied (utility function)
+func isClaimDenied(claim *unstructured.Unstructured) bool {
 	conditions, found, err := unstructured.NestedSlice(claim.Object, "status", "conditions")
 	if err != nil || !found {
 		return false
@@ -582,8 +658,8 @@ func (p *ClaimCreationPlugin) isClaimDenied(claim *unstructured.Unstructured) bo
 	return false
 }
 
-// getClaimDenialReason returns the reason why a ResourceClaim was denied.
-func (p *ClaimCreationPlugin) getClaimDenialReason(claim *unstructured.Unstructured) string {
+// getClaimDenialReason returns the reason why a ResourceClaim was denied (utility function)
+func getClaimDenialReason(claim *unstructured.Unstructured) string {
 	conditions, found, err := unstructured.NestedSlice(claim.Object, "status", "conditions")
 	if err != nil || !found {
 		return "unknown reason"
