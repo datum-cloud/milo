@@ -1,0 +1,197 @@
+name: "cleanup-100-projects"
+
+namespace:
+  number: 0
+
+tuningSets:
+  - name: "projects-qps"
+    initialDelay: {{ DefaultParam .CL2_INITIAL_DELAY "0s" }}
+    globalQpsLoad:
+      qps: {{ DefaultParam .CL2_QPS 20 }}
+      burst: {{ DefaultParam .CL2_BURST 20 }}
+
+steps:
+  # ---------- Preflight: CRDs must still exist ----------
+  - name: "Preflight ensure CRDs exist"
+    measurements:
+      - identifier: "WaitOrgCRD"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "start"
+          objectGroup: "apiextensions.k8s.io"
+          objectVersion: "v1"
+          objectResource: "customresourcedefinitions"
+          fieldSelector: "metadata.name=organizations.resourcemanager.miloapis.com"
+          successfulConditions: ["Established=True"]
+          failedConditions: ["Terminating=True"]
+          minDesiredObjectCount: 1
+          maxFailedObjectCount: 0
+          timeout: "5m"
+      - identifier: "WaitOrgCRD"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "gather"
+          objectGroup: "apiextensions.k8s.io"
+          objectVersion: "v1"
+          objectResource: "customresourcedefinitions"
+          fieldSelector: "metadata.name=organizations.resourcemanager.miloapis.com"
+          successfulConditions: ["Established=True"]
+          failedConditions: ["Terminating=True"]
+          minDesiredObjectCount: 1
+          maxFailedObjectCount: 0
+          timeout: "5m"
+
+      - identifier: "WaitProjCRD"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "start"
+          objectGroup: "apiextensions.k8s.io"
+          objectVersion: "v1"
+          objectResource: "customresourcedefinitions"
+          fieldSelector: "metadata.name=projects.resourcemanager.miloapis.com"
+          successfulConditions: ["Established=True"]
+          failedConditions: ["Terminating=True"]
+          minDesiredObjectCount: 1
+          maxFailedObjectCount: 0
+          timeout: "5m"
+      - identifier: "WaitProjCRD"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "gather"
+          objectGroup: "apiextensions.k8s.io"
+          objectVersion: "v1"
+          objectResource: "customresourcedefinitions"
+          fieldSelector: "metadata.name=projects.resourcemanager.miloapis.com"
+          successfulConditions: ["Established=True"]
+          failedConditions: ["Terminating=True"]
+          minDesiredObjectCount: 1
+          maxFailedObjectCount: 0
+          timeout: "5m"
+
+  # ---------- Start system measurements (keep minimal) ----------
+  - name: "Start system measurements (cleanup)"
+    measurements:
+      - identifier: "Avail"
+        method: "APIAvailability"
+        params: { action: "start", mode: "cluster", pollFrequency: "1s", timeout: "10m" }
+      # - identifier: "Etcd"
+      #   method: "EtcdMetrics"
+      #   params:
+      #     action: "start"
+      #     masterIPs:
+      #       - "<CONTROL-PLANE-IP-1>:2379"
+      #       - "<CONTROL-PLANE-IP-2>:2379"
+
+  - name: "Start timer (delete)"
+    measurements:
+      - identifier: "PhaseTimer"
+        method: "Timer"
+        params: { action: "start", label: "delete-projects" }
+
+  # ---------- Delete Projects (cluster-scoped) ----------
+  - name: "Delete Projects"
+    phases:
+      - replicasPerNamespace: 0
+        tuningSet: "projects-qps"
+        objectBundle:
+          - basename: {{ DefaultParam .CL2_PROJECT_BASENAME "proj" }}
+            objectTemplatePath: "../templates/project.yaml"
+            templateFillMap:
+              ownerName: {{ DefaultParam .CL2_OWNER_NAME "default-org" }}
+              labels:
+                cl2-group: "projects"
+            listUnknownObjectOptions:
+              apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+              kind: "Project"
+              namespaced: false
+              labelSelector: "cl2-group=projects"
+              delete: true
+
+  # Wait until all Projects are gone
+  - name: "Wait for Projects deletion"
+    measurements:
+      - identifier: "WaitNoProjects"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "start"
+          objectGroup: "resourcemanager.miloapis.com"
+          objectVersion: "v1alpha1"
+          objectResource: "projects"
+          labelSelector: "cl2-group=projects"
+          minDesiredObjectCount: 0
+          maxFailedObjectCount: 0
+          timeout: "10m"
+      - identifier: "WaitNoProjects"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "gather"
+          objectGroup: "resourcemanager.miloapis.com"
+          objectVersion: "v1alpha1"
+          objectResource: "projects"
+          labelSelector: "cl2-group=projects"
+          minDesiredObjectCount: 0
+          maxFailedObjectCount: 0
+          timeout: "10m"
+
+  # ---------- Delete Organization (cluster-scoped) ----------
+  - name: "Delete Organization"
+    phases:
+      - replicasPerNamespace: 0
+        tuningSet: "projects-qps"
+        objectBundle:
+          - basename: "org"
+            objectTemplatePath: "../templates/organization.yaml"
+            templateFillMap:
+              name: {{ DefaultParam .CL2_OWNER_NAME "default-org" }}
+              orgType: "Standard"
+            listUnknownObjectOptions:
+              apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+              kind: "Organization"
+              namespaced: false
+              labelSelector: "cl2-role=owner"
+              delete: true
+
+  # Wait until the Organization is gone
+  - name: "Wait for Organization deletion"
+    measurements:
+      - identifier: "WaitNoOrg"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "start"
+          objectGroup: "resourcemanager.miloapis.com"
+          objectVersion: "v1alpha1"
+          objectResource: "organizations"
+          labelSelector: "cl2-role=owner"
+          minDesiredObjectCount: 0
+          maxFailedObjectCount: 0
+          timeout: "10m"
+      - identifier: "WaitNoOrg"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "gather"
+          objectGroup: "resourcemanager.miloapis.com"
+          objectVersion: "v1alpha1"
+          objectResource: "organizations"
+          labelSelector: "cl2-role=owner"
+          minDesiredObjectCount: 0
+          maxFailedObjectCount: 0
+          timeout: "10m"
+
+  - name: "Stop timer (delete)"
+    measurements:
+      - identifier: "PhaseTimer"
+        method: "Timer"
+        params: { action: "stop", label: "delete-projects" }
+
+  - name: "Gather system measurements (cleanup)"
+    measurements:
+      - identifier: "Avail"
+        method: "APIAvailability"
+        params: { action: "gather" }
+      # - identifier: "Etcd"
+      #   method: "EtcdMetrics"
+      #   params:
+      #     action: "gather"
+      #     masterIPs:
+      #       - "<CONTROL-PLANE-IP-1>:2379"
+      #       - "<CONTROL-PLANE-IP-2>:2379"

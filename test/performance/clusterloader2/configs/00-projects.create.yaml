@@ -1,0 +1,152 @@
+name: "create-100-projects"
+
+# Keep it tiny: no automanaged namespaces; everything is cluster-scoped
+namespace:
+  number: 0
+
+tuningSets:
+  - name: "projects-qps"
+    initialDelay: {{ DefaultParam .CL2_INITIAL_DELAY "0s" }}
+    globalQpsLoad:
+      qps: {{ DefaultParam .CL2_QPS 20 }}
+      burst: {{ DefaultParam .CL2_BURST 20 }}
+
+steps:
+  # ---------- Preflight: make sure CRDs are present ----------
+  - name: "Preflight ensure CRDs exist"
+    measurements:
+      - identifier: "WaitOrgCRD"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "start"
+          objectGroup: "apiextensions.k8s.io"
+          objectVersion: "v1"
+          objectResource: "customresourcedefinitions"
+          fieldSelector: "metadata.name=organizations.resourcemanager.miloapis.com"
+          successfulConditions: ["Established=True"]
+          failedConditions: ["Terminating=True"]
+          minDesiredObjectCount: 1
+          maxFailedObjectCount: 0
+          timeout: "5m"
+
+      - identifier: "WaitOrgCRD"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "gather"
+          objectGroup: "apiextensions.k8s.io"
+          objectVersion: "v1"
+          objectResource: "customresourcedefinitions"
+          fieldSelector: "metadata.name=organizations.resourcemanager.miloapis.com"
+          successfulConditions: ["Established=True"]
+          failedConditions: ["Terminating=True"]
+          minDesiredObjectCount: 1
+          maxFailedObjectCount: 0
+          timeout: "5m"
+
+      - identifier: "WaitProjCRD"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "start"
+          objectGroup: "apiextensions.k8s.io"
+          objectVersion: "v1"
+          objectResource: "customresourcedefinitions"
+          fieldSelector: "metadata.name=projects.resourcemanager.miloapis.com"
+          successfulConditions: ["Established=True"]
+          failedConditions: ["Terminating=True"]
+          minDesiredObjectCount: 1
+          maxFailedObjectCount: 0
+          timeout: "5m"
+
+      - identifier: "WaitProjCRD"
+        method: "WaitForGenericK8sObjects"
+        params:
+          action: "gather"
+          objectGroup: "apiextensions.k8s.io"
+          objectVersion: "v1"
+          objectResource: "customresourcedefinitions"
+          fieldSelector: "metadata.name=projects.resourcemanager.miloapis.com"
+          successfulConditions: ["Established=True"]
+          failedConditions: ["Terminating=True"]
+          minDesiredObjectCount: 1
+          maxFailedObjectCount: 0
+          timeout: "5m"
+
+  - name: "Start system measurements"
+    measurements:
+      - identifier: "Avail"
+        method: "APIAvailability"
+        params: { action: "start", mode: "cluster", pollFrequency: "1s", timeout: "10m" }
+
+      - identifier: "Etcd"
+        method: "EtcdMetrics"
+        params:
+          action: "start"
+          masterIPs:
+            - "etcd.etcd-system.svc.cluster.local:2379"
+
+      # # ---- Prometheus-backed (safe to include; will auto-skip if no Prometheus) ----
+      # - identifier: "APISimple"
+      #   method: "APIResponsivenessPrometheusSimple"
+      #   params:
+      #     action: "start"
+
+  - name: "Start timer (create)"
+    measurements:
+      - identifier: "PhaseTimer"
+        method: "Timer"
+        params:
+          action: "start"
+          label: "create-projects"
+
+  # ---------- Reconcile Organization (1x cluster-scoped) ----------
+  - name: "Create default Organization"
+    phases:
+      - replicasPerNamespace: 1
+        tuningSet: "projects-qps"
+        objectBundle:
+          - basename: "org"
+            objectTemplatePath: "../templates/organization.yaml"
+            templateFillMap:
+              name: {{ DefaultParam .CL2_OWNER_NAME "default-org" }}
+              orgType: "Standard"   # or "Personal"
+
+  # ---------- Create N Projects (cluster-scoped) ----------
+  - name: "Create Projects"
+    phases:
+      - replicasPerNamespace: {{ DefaultParam .CL2_PROJECT_COUNT 100 }}
+        tuningSet: "projects-qps"
+        objectBundle:
+          - basename: {{ DefaultParam .CL2_PROJECT_BASENAME "proj" }}
+            objectTemplatePath: "../templates/project.yaml"
+            templateFillMap:
+              ownerName: {{ DefaultParam .CL2_OWNER_NAME "default-org" }}
+              labels:
+                cl2-group: "projects"
+
+  - name: "Stop timer (create)"
+    measurements:
+      - identifier: "PhaseTimer"
+        method: "Timer"
+        params:
+          action: "stop"
+          label: "create-projects"
+
+  - name: "Gather system measurements"
+    measurements:
+      - identifier: "Avail"
+        method: "APIAvailability"
+        params:
+          action: "gather"
+
+      - identifier: "Etcd"
+        method: "EtcdMetrics"
+        params:
+          action: "gather"
+          masterIPs:
+            - "etcd.etcd-system.svc.cluster.local:2379"
+
+      # - identifier: "APISimple"
+      #   method: "APIResponsivenessPrometheusSimple"
+      #   params:
+      #     action: "gather"
+

@@ -16,6 +16,13 @@ vars:
   # Test infra repository configuration - can be overridden with environment variable
   TEST_INFRA_REPO_REF: 'v0.2.1'
 
+  # --- PERF TESTING (ClusterLoader2) -------------------------------------------
+  PERF_TEST_ROOT: "test/performance/clusterloader2"
+  PERF_REPORT_DIR: "reports"
+  # Default kubeconfig for local kind (your dev flow)
+  PERF_KUBECONFIG: ".milo/kubeconfig"
+  CL2_BIN_DEFAULT: "./bin/clusterloader"
+
 includes:
   # Must set TASK_X_REMOTE_TASKFILES=1 to use this feature.
   #
@@ -343,3 +350,62 @@ tasks:
           (cd "$_TOOL_DIR" && ln -sf "$_NAME-$_VERSION" "$_NAME")
           echo "Tool $_NAME is now available at $_SYMLINK_PATH (points to $_VERSIONED_TOOL_PATH)"
         fi
+
+# --- PERF TESTING (ClusterLoader2) -------------------------------------------
+  perf:env:
+    desc: Show effective perf test environment
+    cmds:
+      - |
+        echo "CL2_BIN        = {{.CL2_BIN | default .CL2_BIN_DEFAULT}}"
+        echo "PERF_TEST_ROOT = {{.PERF_TEST_ROOT}}"
+        echo "PERF_REPORT_DIR= {{.PERF_REPORT_DIR}}"
+        echo "KUBECONFIG     = {{.KUBECONFIG | default .PERF_KUBECONFIG}}"
+        echo "PARALLELISM    = {{.PARALLELISM | default "4"}}"
+    silent: true
+
+  perf:mgmt:create:
+    desc: "CL2 mgmt (modules): create Organization & Projects"
+    env:
+      KUBECONFIG: '{{.KUBECONFIG | default .PERF_KUBECONFIG}}'
+      CL2_BIN:    '{{.CL2_BIN | default .CL2_BIN_DEFAULT}}'
+    cmds:
+      - |
+        set -euo pipefail
+        "$CL2_BIN" \
+          --testconfig="{{.PERF_TEST_ROOT}}/configs/00-projects.create.yaml" \
+          --testoverrides="{{.PERF_TEST_ROOT}}/configs/overrides.yaml" \
+          --provider=skeleton \
+          --nodes=1 \
+          --skip-cluster-verification=true \
+          --delete-stale-namespaces=true \
+          --enable-exec-service=false \
+          --kubeconfig="$KUBECONFIG" \
+          --report-dir="{{.PERF_REPORT_DIR}}/mgmt" \
+          --v=4
+
+  perf:mgmt:cleanup:
+    desc: "CL2 mgmt (modules): delete Projects & Organization"
+    env:
+      KUBECONFIG: '{{.KUBECONFIG | default .PERF_KUBECONFIG}}'
+      CL2_BIN:    '{{.CL2_BIN | default .CL2_BIN_DEFAULT}}'
+    cmds:
+      - |
+        set -euo pipefail
+        "$CL2_BIN" \
+          --testconfig="{{.PERF_TEST_ROOT}}/configs/00-projects.cleanup.yaml" \
+          --testoverrides="{{.PERF_TEST_ROOT}}/configs/overrides.yaml" \
+          --provider=skeleton \
+          --nodes=1 \
+          --skip-cluster-verification=true \
+          --delete-stale-namespaces=true \
+          --enable-exec-service=false \
+          --kubeconfig="$KUBECONFIG" \
+          --report-dir="{{.PERF_REPORT_DIR}}/mgmt" \
+          --v=4
+
+  perf:all:
+    desc: "Create → per-project CL2 tests → cleanup"
+    cmds:
+      - task: perf:mgmt:create
+      - task: perf:projects
+      - task: perf:mgmt:cleanup

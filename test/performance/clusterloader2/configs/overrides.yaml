@@ -1,0 +1,9 @@
+# Default CL2 params you can override with --testoverrides (already wired in your Taskfile)
+CL2_OWNER_NAME: "default-org"
+CL2_PROJECT_COUNT: 100
+CL2_PROJECT_BASENAME: "proj"
+CL2_QPS: 20          # how fast to create Projects
+CL2_BURST: 20
+CL2_INITIAL_DELAY: "0s"
+
+
