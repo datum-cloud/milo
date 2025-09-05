@@ -15,7 +15,7 @@ This test verifies:
 
 ### Setup Phase
 - Creates a test organization (`test-project-ready-org`)
-- Creates a test user (`2001`)
+- Creates a test user (`1001`)
 - Creates organization membership to link user to organization
 
 ### Test Phase
