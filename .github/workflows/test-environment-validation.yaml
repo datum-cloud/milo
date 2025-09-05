@@ -8,16 +8,7 @@ on:
         required: false
         default: ''
         type: string
-  push: {}
-  pull_request:
-    paths:
-      - 'config/**'
-      - 'Taskfile.yaml'
-      - 'test/**'
-      - '.github/workflows/test-environment-validation.yaml'
-  schedule:
-    # Run daily at 2 AM UTC to catch infrastructure drift
-    - cron: '0 2 * * *'
+  pull_request: {}
 
 env:
   # Enable experimental remote taskfiles feature
