@@ -1,0 +1,94 @@
+name: create-100-projects
+dependencies: []
+automanagednamespaces: 0
+namespace:
+  number: 1
+  prefix: test-i76ih1
+  deletestalenamespaces: true
+  deleteautomanagednamespaces: true
+  enableexistingnamespaces: false
+  deletenamespacetimeout: 600000000000
+steps:
+- phases: []
+  measurements:
+  - method: APIAvailability
+    params:
+      action: start
+      mode: cluster
+      pollFrequency: 1s
+      timeout: 10m
+    identifier: Avail
+    instances: []
+  module:
+    path: ""
+    params: {}
+  name: Start system measurements
+- phases: []
+  measurements:
+  - method: Timer
+    params:
+      action: start
+      label: create-projects
+    identifier: PhaseTimer
+    instances: []
+  module:
+    path: ""
+    params: {}
+  name: Start timer (create)
+- phases:
+  - namespacerange: null
+    namespacelist: []
+    replicaspernamespace: 100
+    tuningset: projects-qps
+    objectbundle:
+    - basename: proj
+      objecttemplatepath: ../templates/project.yaml
+      templatefillmap:
+        labels:
+          cl2-group: projects
+        ownerName: default-org
+      listunknownobjectoptions: null
+  measurements: []
+  module:
+    path: ""
+    params: {}
+  name: Create Projects
+- phases: []
+  measurements:
+  - method: Timer
+    params:
+      action: stop
+      label: create-projects
+    identifier: PhaseTimer
+    instances: []
+  module:
+    path: ""
+    params: {}
+  name: Stop timer (create)
+- phases: []
+  measurements:
+  - method: APIAvailability
+    params:
+      action: gather
+    identifier: Avail
+    instances: []
+  module:
+    path: ""
+    params: {}
+  name: Gather system measurements
+tuningsets:
+- name: projects-qps
+  initialdelay: 0
+  qpsload: null
+  randomizedload: null
+  steppedload: null
+  timelimitedload: null
+  randomizedtimelimitedload: null
+  parallelismlimitedload: null
+  globalqpsload:
+    qps: 20
+    burst: 20
+  poissonload: null
+chaosmonkey:
+  nodefailure: null
+  excludednodes: {}
