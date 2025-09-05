@@ -40,7 +40,7 @@ Unlike the quota enforcement tests which focus on resource allocation and limits
 ## Files
 
 - `01-test-organization.yaml`: Test organization resource
-- `02-test-user.yaml`: Test user resource  
+- `02-test-user.yaml`: Test user resource
 - `03-organization-membership.yaml`: Organization membership linking user to org
 - `04-test-project.yaml`: Test project to be created
 - `kubeconfig-org-template`: Kubeconfig for organizational context access
@@ -54,7 +54,7 @@ Unlike the quota enforcement tests which focus on resource allocation and limits
 # Run the project-ready test specifically
 task test:end-to-end -- project-ready
 
-# Or run with chainsaw directly  
+# Or run with chainsaw directly
 chainsaw test test/project-ready/ --test-timeout=120s
 ```
 
