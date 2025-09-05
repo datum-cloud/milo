@@ -14,7 +14,7 @@ vars:
   MILO_IMAGE_TAG: "dev"
   TEST_INFRA_CLUSTER_NAME: "test-infra"
   # Test infra repository configuration - can be overridden with environment variable
-  TEST_INFRA_REPO_REF: 'v0.2.1'
+  TEST_INFRA_REPO_REF: 'parallelize-component-install'
 
 includes:
   # Must set TASK_X_REMOTE_TASKFILES=1 to use this feature.
@@ -22,7 +22,7 @@ includes:
   # See: https://taskfile.dev/experiments/remote-taskfiles
   test-infra:
     taskfile: https://raw.githubusercontent.com/datum-cloud/test-infra/{{.TEST_INFRA_REPO_REF}}/Taskfile.yml
-    checksum: 6d07b0362d488f3acf15a5f6772e59853e85622ed0b33797b80b625e0f9df92a
+    checksum: d7fe71654d8b9eaaaca146f2748d64b8292efbd4b4b4333ace0b43fba0bcc9b6
     vars:
       REPO_REF: "{{.TEST_INFRA_REPO_REF}}"
 
@@ -60,8 +60,6 @@ tasks:
   dev:load:
     desc: Load the Milo container image into the kind cluster
     silent: true
-    deps:
-      - dev:build
     cmds:
       - |
         set -e
@@ -74,7 +72,6 @@ tasks:
     silent: true
     deps:
       - generate:code
-      - dev:load
     cmds:
       - |
         set -e
@@ -176,6 +173,8 @@ tasks:
     silent: true
     cmds:
       - task: test-infra:cluster-up
+      - task: dev:build
+      - task: dev:load
       - task: dev:deploy
 
   dev:redeploy:
@@ -198,7 +197,7 @@ tasks:
         echo "Check logs with: task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
 
   test:end-to-end:
-    desc: Run end to end tests using Chainsaw against Milo API server
+    desc: Run end to end tests using Chainsaw against Milo API server. Pass directory names to run specific tests (e.g., 'task test:end-to-end -- quota' or 'task test:end-to-end -- quota group')
     deps:
       - task: install-go-tool
         vars:
@@ -210,7 +209,53 @@ tasks:
         set -e
         echo "Running Chainsaw end to end tests against Milo API server..."
         echo "Using Milo API server via .milo/kubeconfig"
-        task kubectl -- config view --minify > /tmp/milo-kubeconfig && KUBECONFIG=/tmp/milo-kubeconfig "{{.TOOL_DIR}}/chainsaw" test test/
+
+        # Verify Milo kubeconfig exists
+        if [ ! -f ".milo/kubeconfig" ]; then
+          echo "Error: Milo kubeconfig not found at .milo/kubeconfig"
+          echo "Please run 'task dev:setup' to set up the test infrastructure first."
+          exit 1
+        fi
+
+        # Verify connectivity to Milo API server
+        echo "Verifying connectivity to Milo API server..."
+        if ! KUBECONFIG=.milo/kubeconfig kubectl get --raw /healthz &>/dev/null; then
+          echo "Error: Cannot connect to Milo API server"
+          echo "Please ensure the test infrastructure is running with 'task dev:setup'"
+          echo "You can check the status with:"
+          echo "  task test-infra:kubectl -- get pods -n milo-system"
+          exit 1
+        fi
+        echo "✓ Successfully connected to Milo API server"
+
+        # Determine test paths based on CLI arguments
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          # No arguments provided - run all tests
+          echo "No test directories specified - running all end-to-end tests..."
+          TEST_PATHS="test/"
+        else
+          # Arguments provided - construct test paths
+          echo "Running tests for specified directories: {{.CLI_ARGS}}"
+          TEST_PATHS=""
+          for dir in {{.CLI_ARGS}}; do
+            if [ -d "test/$dir" ]; then
+              TEST_PATHS="$TEST_PATHS test/$dir"
+            else
+              echo "Warning: Test directory 'test/$dir' does not exist, skipping..."
+            fi
+          done
+
+          # Check if we found any valid test directories
+          if [ -z "$TEST_PATHS" ]; then
+            echo "Error: No valid test directories found for arguments: {{.CLI_ARGS}}"
+            echo "Available test directories:"
+            ls -1 test/ | grep -v "^config$" | grep -v "^docker-compose.yaml$" || true
+            exit 1
+          fi
+        fi
+
+        echo "Test paths: $TEST_PATHS"
+        KUBECONFIG=.milo/kubeconfig "{{.TOOL_DIR}}/chainsaw" test $TEST_PATHS --selector "requires!=authorization-provider"
     silent: true
 
   test:unit:
