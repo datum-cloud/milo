@@ -20,8 +20,8 @@ dev-temp/
 # Location the test-infra repo will be copied to by the remote taskfile.
 .test-infra
 
-# Configuration and manifests (keep config for potential embedded resources)
-# config/  # Commented out - may be needed for embedded resources
+# Configuration and manifests
+config/
 Taskfile.yaml
 Taskfile.yml
 docker-compose.yaml
