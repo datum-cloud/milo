@@ -2172,6 +2172,15 @@ UserInvitationSpec defines the desired state of UserInvitation
         </td>
         <td>true</td>
       </tr><tr>
+        <td><b><a href="#userinvitationspecorganizationref">organizationRef</a></b></td>
+        <td>object</td>
+        <td>
+          OrganizationRef is a reference to the Organization that the user is invoted to.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: organizationRef type is immutable</li>
+        </td>
+        <td>true</td>
+      </tr><tr>
         <td><b>state</b></td>
         <td>enum</td>
         <td>
@@ -2179,7 +2188,7 @@ UserInvitationSpec defines the desired state of UserInvitation
 must set the state to Accepted.<br/>
           <br/>
             <i>Validations</i>:<li>type(oldSelf) == null_type || oldSelf == 'Pending' || self == oldSelf: state can only transition from Pending to another state and is immutable afterwards</li>
-            <i>Enum</i>: Pending, Accepted, Declined, Expired<br/>
+            <i>Enum</i>: Pending, Accepted, Declined<br/>
         </td>
         <td>true</td>
       </tr><tr>
@@ -2229,6 +2238,33 @@ If not specified, the UserInvitation will never expire.<br/>
             <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: roles type is immutable</li>
         </td>
         <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### UserInvitation.spec.organizationRef
+<sup><sup>[↩ Parent](#userinvitationspec)</sup></sup>
+
+
+
+OrganizationRef is a reference to the Organization that the user is invoted to.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of resource being referenced<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 

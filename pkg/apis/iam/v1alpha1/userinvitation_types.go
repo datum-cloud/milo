@@ -1,7 +1,29 @@
 package v1alpha1
 
 import (
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+type UserInvitationStateType string
+type UserInvitationConditionType string
+type UserInvitationReasonType string
+
+const (
+	UserInvitationStatePending  UserInvitationStateType = "Pending"
+	UserInvitationStateAccepted UserInvitationStateType = "Accepted"
+	UserInvitationStateDeclined UserInvitationStateType = "Declined"
+)
+
+const (
+	UserInvitationStateExpiredReason  UserInvitationReasonType = "Expired"
+	UserInvitationStateDeclinedReason UserInvitationReasonType = "Declined"
+	UserInvitationStateAcceptedReason UserInvitationReasonType = "Accepted"
+)
+
+const (
+	UserInvitationReadyCondition   UserInvitationConditionType = "Ready"
+	UserInvitationExpiredCondition UserInvitationConditionType = "Expired"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -24,6 +46,11 @@ type UserInvitation struct {
 
 // UserInvitationSpec defines the desired state of UserInvitation
 type UserInvitationSpec struct {
+	// OrganizationRef is a reference to the Organization that the user is invoted to.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="organizationRef type is immutable"
+	OrganizationRef resourcemanagerv1alpha1.OrganizationReference `json:"organizationRef"`
+
 	// The email of the user being invited.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="email type is immutable"
@@ -58,9 +85,9 @@ type UserInvitationSpec struct {
 	// State is the state of the UserInvitation. In order to accept the invitation, the invited user
 	// must set the state to Accepted.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=Pending;Accepted;Declined;Expired
+	// +kubebuilder:validation:Enum=Pending;Accepted;Declined
 	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || oldSelf == 'Pending' || self == oldSelf",message="state can only transition from Pending to another state and is immutable afterwards"
-	State string `json:"state"`
+	State UserInvitationStateType `json:"state"`
 }
 
 // UserInvitationStatus defines the observed state of UserInvitation
