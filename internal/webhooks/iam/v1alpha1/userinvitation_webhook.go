@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -20,14 +21,15 @@ import (
 var userinvitationlog = logf.Log.WithName("userinvitation-resource")
 
 // SetupUserInvitationWebhooksWithManager sets up the webhooks for UserInvitation resources.
-func SetupUserInvitationWebhooksWithManager(mgr ctrl.Manager) error {
+func SetupUserInvitationWebhooksWithManager(mgr ctrl.Manager, systemNamespace string) error {
 	userinvitationlog.Info("Setting up iam.miloapis.com userinvitation webhooks")
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.UserInvitation{}).
 		WithDefaulter(&UserInvitationMutator{}).
 		WithValidator(&UserInvitationValidator{
-			client: mgr.GetClient(),
+			client:          mgr.GetClient(),
+			systemNamespace: systemNamespace,
 		}).
 		Complete()
 }
@@ -61,7 +63,8 @@ func (m *UserInvitationMutator) Default(ctx context.Context, obj runtime.Object)
 
 // UserInvitationValidator validates UserInvitation resources.
 type UserInvitationValidator struct {
-	client client.Client
+	client          client.Client
+	systemNamespace string
 }
 
 // ValidateCreate ensures the expiration date, if provided, is not already expired.
@@ -100,7 +103,8 @@ func (v *UserInvitationValidator) ValidateCreate(ctx context.Context, obj runtim
 			canGetRole = false
 			errs = append(errs, field.Invalid(field.NewPath("spec").Child("roles").Index(i).Child("name"), role.Name, "name is required"))
 		}
-		if role.Namespace == "" {
+		allowedNamespaces := []string{req.Namespace, v.systemNamespace}
+		if !slices.Contains(allowedNamespaces, role.Namespace) {
 			canGetRole = false
 			errs = append(errs, field.Invalid(field.NewPath("spec").Child("roles").Index(i).Child("namespace"), role.Namespace, "namespace is required"))
 		}
