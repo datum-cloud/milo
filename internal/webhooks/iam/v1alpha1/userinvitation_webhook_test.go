@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,8 +60,9 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 			invitation: &iamv1alpha1.UserInvitation{
 				ObjectMeta: metav1.ObjectMeta{Name: "no-expiration"},
 				Spec: iamv1alpha1.UserInvitationSpec{
-					Email: "abc@example.com",
-					State: "Pending",
+					Email:           "abc@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
 				},
 			},
 			expectError: false,
@@ -69,9 +71,10 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 			invitation: &iamv1alpha1.UserInvitation{
 				ObjectMeta: metav1.ObjectMeta{Name: "future-expiration"},
 				Spec: iamv1alpha1.UserInvitationSpec{
-					Email:          "future@example.com",
-					State:          "Pending",
-					ExpirationDate: &future,
+					Email:           "future@example.com",
+					State:           "Pending",
+					ExpirationDate:  &future,
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
 				},
 			},
 			expectError: false,
@@ -80,21 +83,56 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 			invitation: &iamv1alpha1.UserInvitation{
 				ObjectMeta: metav1.ObjectMeta{Name: "past-expiration"},
 				Spec: iamv1alpha1.UserInvitationSpec{
-					Email:          "past@example.com",
-					State:          "Pending",
-					ExpirationDate: &past,
+					Email:           "past@example.com",
+					State:           "Pending",
+					ExpirationDate:  &past,
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
 				},
 			},
 			expectError:    true,
 			errorSubstring: "expirationDate must be in the future",
 		},
+		"error when organizationRef is not set": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "no-organization"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email: "no-org@example.com",
+					State: "Pending",
+				},
+			},
+			expectError:    true,
+			errorSubstring: "organizationRef must be the same as the requesting user's organization",
+		},
+		"error when organizationRef is not in the same namespace": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "no-organization"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email:           "no-org@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg-1"},
+				},
+			},
+			expectError:    true,
+			errorSubstring: "organizationRef must be the same as the requesting user's organization",
+		},
 	}
 
 	validator := &UserInvitationValidator{}
 
+	// Common admission request used across sub-tests
+	req := admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Namespace: "organization-testorg",
+			UserInfo:  authenticationv1.UserInfo{Username: "tester"},
+		},
+	}
+
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			warnings, err := validator.ValidateCreate(context.Background(), tc.invitation)
+			// Ensure OrganizationRef is set so validator passes namespace check
+			ctx := admission.NewContextWithRequest(context.Background(), req)
+
+			warnings, err := validator.ValidateCreate(ctx, tc.invitation)
 			if tc.expectError {
 				assert.Error(t, err)
 				if tc.errorSubstring != "" {
