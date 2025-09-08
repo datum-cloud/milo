@@ -224,6 +224,12 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}
 
+	// Send an email to the invitee user to accept the invitation
+	if err := r.sendInvitationEmail(ctx, user, ui); err != nil {
+		log.Error(err, "Failed to send invitation email to user", "userInvitation", ui.GetName())
+		return ctrl.Result{}, fmt.Errorf("failed to send invitation email to user: %w", err)
+	}
+
 	// Update the UserInvitation status
 	if err := r.updateUserInvitationStatus(ctx, ui.DeepCopy(), metav1.Condition{
 		Type:    string(iamv1alpha1.UserInvitationPendingCondition),
@@ -433,6 +439,23 @@ func deletePolicyBinding(ctx context.Context, c client.Client, roleRef *iamv1alp
 	}
 
 	log.Info("PolicyBinding deleted", "name", getDeterministicPolicyBindingName(roleRef.Name, ui))
+
+	return nil
+}
+
+// sendInvitationEmail sends an email to the invitee user to accept the invitation.
+// This is an idempotent operation.
+func (r *UserInvitationController) sendInvitationEmail(ctx context.Context, user *iamv1alpha1.User, ui *iamv1alpha1.UserInvitation) error {
+	log := logf.FromContext(ctx).WithName("userinvitation-send-invitation-email")
+	log.Info("Sending invitation email to user", "userInvitation", ui.GetName(), "user", user.GetName())
+
+	emailName := fmt.Sprintf("user-invitation-%s", ui.GetName())
+
+	log.Info("Email name", "emailName", emailName)
+
+	// TODO: Get Email
+
+	// TODO: Send email if not already sent
 
 	return nil
 }
