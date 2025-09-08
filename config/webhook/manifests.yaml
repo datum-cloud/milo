@@ -32,30 +32,6 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
-      path: /create-resourceclaim-miloapis-com-v1alpha1
-      port: 9443
-  failurePolicy: Fail
-  name: mresourceclaimcreation.quota.miloapis.com
-  rules:
-  - apiGroups:
-    - resourcemanager.miloapis.com
-    - networking.datumapis.com
-    apiVersions:
-    - v1alpha1
-    - v1alpha
-    operations:
-    - CREATE
-    resources:
-    - projects
-    - httpproxies
-  sideEffects: NoneOnDryRun
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: milo-controller-manager
-      namespace: milo-system
       path: /mutate-resourcemanager-miloapis-com-v1alpha1-project
       port: 9443
   failurePolicy: Fail
