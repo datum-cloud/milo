@@ -17,6 +17,12 @@ rules:
   - update
   - watch
 - apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - get
+- apiGroups:
   - gateway.networking.k8s.io
   resources:
   - gatewayclasses
@@ -68,8 +74,11 @@ rules:
   - policybindings
   verbs:
   - delete
+  - get
   - list
+  - patch
   - update
+  - watch
 - apiGroups:
   - iam.miloapis.com
   resources:
@@ -77,6 +86,16 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - userpreferences
+  verbs:
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - iam.miloapis.com
