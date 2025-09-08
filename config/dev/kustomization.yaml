@@ -47,10 +47,6 @@ patches:
     target:
       kind: MutatingWebhookConfiguration
       name: resourcemanager.miloapis.com
-  - path: patches/webhook-ca-injection.yaml
-    target:
-      kind: MutatingWebhookConfiguration
-      name: quota.miloapis.com
 
 images:
   - name: ghcr.io/datum-cloud/milo
