@@ -82,7 +82,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.client.Get(ctx, req.NamespacedName, ui); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("UserInvitation not found, probably deleted. Skipping reconciliation")
-			return ctrl.Result{}, fmt.Errorf("UserInvitation not found: %w", err)
+			return ctrl.Result{}, nil
 		}
 		log.Error(err, "Failed to get UserInvitation")
 		return ctrl.Result{}, fmt.Errorf("failed to get UserInvitation: %w", err)
@@ -163,6 +163,9 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		log.Info("UserInvitation reconciled. User accepted the invitation", "userInvitation", ui.GetName())
+		return ctrl.Result{}, nil
 	}
 
 	if ui.Spec.State == iamv1alpha1.UserInvitationStateDeclined {
@@ -185,6 +188,15 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
+
+		log.Info("UserInvitation reconciled. User declined the invitation", "userInvitation", ui.GetName())
+		return ctrl.Result{}, nil
+	}
+
+	// Check if the UserInvitation is ready
+	if meta.IsStatusConditionTrue(ui.Status.Conditions, string(iamv1alpha1.UserInvitationPendingCondition)) {
+		log.Info("UserInvitation is pending, skipping reconciliation")
+		return ctrl.Result{}, nil
 	}
 
 	// Grant permissions to the invitee user so they can accept the invitation
@@ -197,6 +209,16 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			log.Error(err, "Failed to create policy binding with %s role", role, "userInvitation", ui.GetName())
 			return ctrl.Result{}, fmt.Errorf("failed to create policy binding with %s role: %w", role, err)
 		}
+	}
+
+	// Update the UserInvitation status
+	if err := r.updateUserInvitationStatus(ctx, ui.DeepCopy(), metav1.Condition{
+		Type:    string(iamv1alpha1.UserInvitationPendingCondition),
+		Status:  metav1.ConditionTrue,
+		Reason:  string(iamv1alpha1.UserInvitationStatePendingReason),
+		Message: fmt.Sprintf("User invitation is pending, ui: %s", ui.GetName()),
+	}); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	log.Info("UserInvitation reconciled", "userInvitation", ui.GetName())
