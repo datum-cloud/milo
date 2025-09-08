@@ -13,9 +13,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/finalizer"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const (
@@ -72,6 +78,13 @@ func (r *UserInvitationController) SetupController(mgr ctrl.Manager, systemNames
 const (
 	userEmailIndexKey = "spec.email"
 )
+
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations/status,verbs=update
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizationmemberships,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizations,verbs=get;list;watch
 
 func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx).WithName("userinvitation-reconciler")
@@ -252,8 +265,23 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 		return fmt.Errorf("failed to set field index on User by .spec.email: %w", err)
 	}
 
+	// Register field indexer for UserInvitation email for efficient lookup
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(),
+		&iamv1alpha1.UserInvitation{}, userEmailIndexKey,
+		func(obj client.Object) []string {
+			ui := obj.(*iamv1alpha1.UserInvitation)
+			return []string{strings.ToLower(ui.Spec.Email)}
+		}); err != nil {
+		return fmt.Errorf("failed to set field index on UserInvitation by .spec.email: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&iamv1alpha1.UserInvitation{}).
+		Watches(
+			&iamv1alpha1.User{},
+			handler.EnqueueRequestsFromMapFunc(r.findUserInvitationsForUser),
+			builder.WithPredicates(userCreateOnlyPredicate),
+		).
 		Named("userinvitation").
 		Complete(r)
 }
@@ -459,4 +487,47 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 	log.Info("OrganizationMembership created", "name", organizationMembership.GetName())
 
 	return nil
+}
+
+// findUserInvitationsForUser finds all UserInvitation resources that reference a given User email.
+// This is used to reconcile the UserInvitation resources when a User is created, in the case that the User was invited by a UserInvitation
+// and the User was created after the UserInvitation was created.
+func (r *UserInvitationController) findUserInvitationsForUser(ctx context.Context, obj client.Object) []reconcile.Request {
+	log := logf.FromContext(ctx).WithName("find-userinvitations-for-user")
+
+	user, ok := obj.(*iamv1alpha1.User)
+	if !ok {
+		log.Error(fmt.Errorf("unexpected object type %T, expected *iamv1alpha1.User", obj), "unexpected object type")
+		return nil
+	}
+
+	if user.Spec.Email == "" {
+		log.Error(fmt.Errorf("user has no email"), "user has no email")
+		return nil
+	}
+
+	// List UserInvitations matching this user's email (case-insensitive)
+	var uiList iamv1alpha1.UserInvitationList
+	if err := r.client.List(ctx, &uiList, client.MatchingFields{userEmailIndexKey: strings.ToLower(user.Spec.Email)}); err != nil {
+		log.Error(err, "failed to list UserInvitations by email")
+		return nil
+	}
+
+	requests := make([]reconcile.Request, 0, len(uiList.Items))
+	for i := range uiList.Items {
+		ui := uiList.Items[i]
+		requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKey{Name: ui.GetName(), Namespace: ui.GetNamespace()}})
+	}
+
+	log.Info("Found UserInvitations for user", "Number of UserInvitations", len(requests), "user", user.GetName())
+
+	return requests
+}
+
+// userCreateOnlyPredicate triggers only on User create events.
+var userCreateOnlyPredicate = predicate.Funcs{
+	CreateFunc:  func(e event.CreateEvent) bool { return true },
+	UpdateFunc:  func(e event.UpdateEvent) bool { return false },
+	DeleteFunc:  func(e event.DeleteEvent) bool { return false },
+	GenericFunc: func(e event.GenericEvent) bool { return false },
 }
