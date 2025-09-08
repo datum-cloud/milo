@@ -17,6 +17,12 @@ rules:
   - update
   - watch
 - apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - get
+- apiGroups:
   - gateway.networking.k8s.io
   resources:
   - gatewayclasses
@@ -28,12 +34,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - '*'
-  resources:
-  - '*'
-  verbs:
-  - get
 - apiGroups:
   - iam.miloapis.com
   resources:
