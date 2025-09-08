@@ -206,7 +206,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	// Check if the UserInvitation is ready
+	// Check if the UserInvitation is pending
 	if meta.IsStatusConditionTrue(ui.Status.Conditions, string(iamv1alpha1.UserInvitationPendingCondition)) {
 		log.Info("UserInvitation is pending, skipping reconciliation")
 		return ctrl.Result{}, nil
@@ -321,7 +321,7 @@ func (r *UserInvitationController) createPolicyBinding(
 
 	// Check if the PolicyBinding already exists
 	policyBinding := &iamv1alpha1.PolicyBinding{}
-	if err := r.client.Get(ctx, client.ObjectKey{Name: getDeterministicPolicyBindingName(roleRef.Name, *invitation), Namespace: roleRef.Namespace}, policyBinding); err != nil {
+	if err := r.client.Get(ctx, client.ObjectKey{Name: getDeterministicResourceName(roleRef.Name, *invitation), Namespace: roleRef.Namespace}, policyBinding); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("PolicyBinding not found, creating")
 		} else {
@@ -341,7 +341,7 @@ func (r *UserInvitationController) createPolicyBinding(
 	// Build the PolicyBinding
 	policyBinding = &iamv1alpha1.PolicyBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      getDeterministicPolicyBindingName(roleRef.Name, *invitation),
+			Name:      getDeterministicResourceName(roleRef.Name, *invitation),
 			Namespace: roleRef.Namespace,
 		},
 		Spec: iamv1alpha1.PolicyBindingSpec{
@@ -372,9 +372,10 @@ func (r *UserInvitationController) createPolicyBinding(
 	return nil
 }
 
-// getDeterministicName generates a deterministic name for the PolicyBinding. This can be used in order to get/create the PolicyBinding.
-func getDeterministicPolicyBindingName(roleName string, ui iamv1alpha1.UserInvitation) string {
-	return fmt.Sprintf("%s-%s-%s", roleName, ui.Spec.OrganizationRef.Name, string(ui.GetUID()))
+// getDeterministicResourceName generates a deterministic name for a resource to create based on the UserInvitation.
+// This can be used in order to get/create the PolicyBinding, or other resources.
+func getDeterministicResourceName(name string, ui iamv1alpha1.UserInvitation) string {
+	return fmt.Sprintf("%s-%s", string(ui.GetUID()), name)
 }
 
 // getResourceRef generates a ResourceRef for the PolicyBinding. As the ResourceRef depends on the roleRef
@@ -419,7 +420,7 @@ func deletePolicyBinding(ctx context.Context, c client.Client, roleRef *iamv1alp
 
 	// Check if the PolicyBinding exists
 	policyBinding := &iamv1alpha1.PolicyBinding{}
-	if err := c.Get(ctx, client.ObjectKey{Name: getDeterministicPolicyBindingName(roleRef.Name, ui), Namespace: roleRef.Namespace}, policyBinding); err != nil {
+	if err := c.Get(ctx, client.ObjectKey{Name: getDeterministicResourceName(roleRef.Name, ui), Namespace: roleRef.Namespace}, policyBinding); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("PolicyBinding not found, skipping deletion")
 			return nil
@@ -431,14 +432,14 @@ func deletePolicyBinding(ctx context.Context, c client.Client, roleRef *iamv1alp
 	// Delete the PolicyBinding
 	if err := c.Delete(ctx, &iamv1alpha1.PolicyBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      getDeterministicPolicyBindingName(roleRef.Name, ui),
+			Name:      getDeterministicResourceName(roleRef.Name, ui),
 			Namespace: roleRef.Namespace,
 		},
 	}); err != nil {
 		return fmt.Errorf("failed to delete policy binding resource: %w", err)
 	}
 
-	log.Info("PolicyBinding deleted", "name", getDeterministicPolicyBindingName(roleRef.Name, ui))
+	log.Info("PolicyBinding deleted", "name", getDeterministicResourceName(roleRef.Name, ui))
 
 	return nil
 }
