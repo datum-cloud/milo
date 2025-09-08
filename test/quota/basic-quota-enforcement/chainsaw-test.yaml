@@ -116,7 +116,7 @@ spec:
         - wait:
             apiVersion: quota.miloapis.com/v1alpha1
             kind: ResourceClaim
-            name: test-project-test-project-1-quota-claim
+            # Don't specify name since ResourceClaims use generateName
             namespace: milo-system
             timeout: 30s
             for:

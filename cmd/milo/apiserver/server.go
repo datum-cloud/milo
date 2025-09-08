@@ -34,6 +34,9 @@ import (
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/klog/v2"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
+
+	// Register JSON logging format
+	_ "k8s.io/component-base/logs/json/register"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
 	"k8s.io/kubernetes/pkg/controlplane/apiserver/options"
 
@@ -44,6 +47,8 @@ import (
 
 func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+	// Enable JSON logging support by default
+	utilfeature.DefaultMutableFeatureGate.Set("LoggingBetaOptions=true")
 }
 
 var (
@@ -216,13 +221,13 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregator, error) {
 	// 1. CRDs
 	notFoundHandler := notfoundhandler.New(config.ControlPlane.Generic.Serializer, genericapifilters.NoMuxAndDiscoveryIncompleteKey)
-	
+
 	config.APIExtensions.GenericConfig.RESTOptionsGetter =
 		projectstorage.WithProjectAwareDecorator(config.APIExtensions.GenericConfig.RESTOptionsGetter)
 
 	config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter =
 		projectstorage.WithProjectAwareDecorator(config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter)
-		
+
 	apiExtensionsServer, err := config.APIExtensions.New(genericapiserver.NewEmptyDelegateWithCustomHandler(notFoundHandler))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create apiextensions-apiserver: %w", err)
