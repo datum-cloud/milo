@@ -40,6 +40,7 @@ spec:
           - --tls-private-key-file=$(TLS_PRIVATE_KEY_FILE)
           - --logging-format=$(LOGGING_FORMAT)
           - --webhook-cert-dir=$(WEBHOOK_CERT_DIR)
+          - --logging-format=$(LOGGING_FORMAT)
           - --v=$(LOG_LEVEL)
           - --control-plane-scope=$(CONTROL_PLANE_SCOPE)
         env:

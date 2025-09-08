@@ -13,8 +13,6 @@ import (
 	"sort"
 	"time"
 
-	// Datum webhook and API type imports
-
 	"github.com/blang/semver/v4"
 	"github.com/spf13/cobra"
 	coordinationv1 "k8s.io/api/coordination/v1"
