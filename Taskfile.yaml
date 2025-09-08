@@ -196,6 +196,41 @@ tasks:
         echo "✅ Redeployment complete!"
         echo "Check logs with: task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
 
+  dev:install-observability:
+    desc: "Install test-infra observability, then apply Milo-specific scraping manifests"
+    silent: true
+    cmds:
+      - |
+        set -euo pipefail
+        echo "🔧 Installing base observability stack via test-infra…"
+        task test-infra:install-observability
+
+        echo "📦 Applying Prometheus Operator CRDs…"
+        task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/crds/
+
+        echo "⏳ Waiting for Prometheus CRDs to be Established…"
+        for crd in \
+          servicemonitors.monitoring.coreos.com \
+          podmonitors.monitoring.coreos.com \
+          probes.monitoring.coreos.com \
+          prometheuses.monitoring.coreos.com \
+          prometheusrules.monitoring.coreos.com \
+          alertmanagers.monitoring.coreos.com \
+          thanosrulers.monitoring.coreos.com
+        do
+          echo "  • $crd"
+          task test-infra:kubectl -- wait --for=condition=Established "crd/${crd}" --timeout=120s
+        done
+
+        echo "📎 Applying Milo observability (ServiceMonitor + cert)…"
+        task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/service-monitors/
+
+        echo "⏳ Waiting for vmagent & vmsingle to be Ready (best-effort)…"
+        task test-infra:kubectl -- wait --for=condition=Available deploy -l app.kubernetes.io/name=vmagent -n telemetry-system --timeout=120s || true
+        task test-infra:kubectl -- wait --for=condition=Available deploy -l app.kubernetes.io/name=vmsingle -n telemetry-system --timeout=120s || true
+
+        echo "✅ Observability overlay applied."
+
   test:end-to-end:
     desc: Run end to end tests using Chainsaw against Milo API server. Pass directory names to run specific tests (e.g., 'task test:end-to-end -- quota' or 'task test:end-to-end -- quota group')
     deps:

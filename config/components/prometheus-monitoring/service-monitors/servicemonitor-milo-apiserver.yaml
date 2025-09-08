@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: milo-apiserver-metrics
+  namespace: milo-system
+spec:
+  namespaceSelector:
+    matchNames: ["milo-system"]
+  selector:
+    matchLabels:
+      app: milo-apiserver
+  endpoints:
+    - path: /metrics
+      port: https                              
+      scheme: https
+      interval: 15s
+      tlsConfig:
+        insecureSkipVerify: true
+        ca:
+          secret: { name: service-monitoring, key: ca.crt }
+        cert:
+          secret: { name: service-monitoring, key: tls.crt }
+        keySecret:
+          name: service-monitoring
+          key: tls.key
