@@ -28,18 +28,18 @@ const (
 	userInvitationFinalizerKey = "iam.miloapis.com/userinvitation"
 )
 
-var uiRelatedRoles []iamv1alpha1.RoleReference
-
 type UserInvitationController struct {
 	client                   client.Client
 	finalizer                finalizer.Finalizers
 	systemNamespace          string
 	getInvitationRoleName    string
 	acceptInvitationRoleName string
+	uiRelatedRoles           []iamv1alpha1.RoleReference
 }
 
 type userInvitationFinalizer struct {
-	client client.Client
+	client         client.Client
+	uiRelatedRoles []iamv1alpha1.RoleReference
 }
 
 func (f *userInvitationFinalizer) Finalize(ctx context.Context, obj client.Object) (finalizer.Result, error) {
@@ -52,7 +52,7 @@ func (f *userInvitationFinalizer) Finalize(ctx context.Context, obj client.Objec
 	}
 
 	// Delete the PolicyBindings invitation-related roles
-	for _, roleRe := range uiRelatedRoles {
+	for _, roleRe := range f.uiRelatedRoles {
 		if err := deletePolicyBinding(ctx, f.client, &iamv1alpha1.RoleReference{
 			Name:      roleRe.Name,
 			Namespace: roleRe.Namespace,
@@ -213,7 +213,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Grant permissions to the invitee user so they can accept the invitation
-	for _, role := range uiRelatedRoles {
+	for _, role := range r.uiRelatedRoles {
 		err := r.createPolicyBinding(ctx, user, ui, &iamv1alpha1.RoleReference{
 			Name:      role.Name,
 			Namespace: role.Namespace,
@@ -246,7 +246,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
-	uiRelatedRoles = append(uiRelatedRoles, iamv1alpha1.RoleReference{
+	r.uiRelatedRoles = append(r.uiRelatedRoles, iamv1alpha1.RoleReference{
 		Name:      r.getInvitationRoleName,
 		Namespace: r.systemNamespace,
 	}, iamv1alpha1.RoleReference{
@@ -256,7 +256,8 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 
 	r.finalizer = finalizer.NewFinalizers()
 	if err := r.finalizer.Register(userInvitationFinalizerKey, &userInvitationFinalizer{
-		client: r.client,
+		client:         r.client,
+		uiRelatedRoles: r.uiRelatedRoles,
 	}); err != nil {
 		return fmt.Errorf("failed to register user invitation finalizer: %w", err)
 	}
@@ -383,7 +384,7 @@ func (r *UserInvitationController) getResourceRef(ctx context.Context, roleRef *
 	log := logf.FromContext(ctx).WithName("userinvitation-generate-resource-ref")
 	log.Info("Generating ResourceRef for UserInvitation", "roleRef", roleRef, "uiName", ui.GetName())
 
-	for _, role := range uiRelatedRoles {
+	for _, role := range r.uiRelatedRoles {
 		if role.Name == roleRef.Name && role.Namespace == roleRef.Namespace {
 			// If the roleRef contains the invitation-related roles, then the resourceRef is the UserInvitation
 			return iamv1alpha1.ResourceReference{
