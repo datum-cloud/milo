@@ -19,11 +19,13 @@ const (
 	UserInvitationStateExpiredReason  UserInvitationReasonType = "Expired"
 	UserInvitationStateDeclinedReason UserInvitationReasonType = "Declined"
 	UserInvitationStateAcceptedReason UserInvitationReasonType = "Accepted"
+	UserInvitationStatePendingReason  UserInvitationReasonType = "Pending"
 )
 
 const (
 	UserInvitationReadyCondition   UserInvitationConditionType = "Ready"
 	UserInvitationExpiredCondition UserInvitationConditionType = "Expired"
+	UserInvitationPendingCondition UserInvitationConditionType = "Pending"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
