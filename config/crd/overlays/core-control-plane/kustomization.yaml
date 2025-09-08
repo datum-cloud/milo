@@ -2,3 +2,4 @@ resources:
 - ../../bases/iam/
 - ../../bases/resourcemanager/
 - ../../bases/quota/
+- ../../bases/notification/

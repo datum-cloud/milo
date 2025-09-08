@@ -31,3 +31,4 @@ spec:
               csi.cert-manager.io/issuer-kind: Issuer
               csi.cert-manager.io/common-name: milo-controller-manager
               csi.cert-manager.io/dns-names: milo-controller-manager.milo-system.svc.cluster.local,milo-controller-manager.milo-system.svc,milo-controller-manager.milo-system,milo-controller-manager
+              csi.cert-manager.io/fs-group: "65534"

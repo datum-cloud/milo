@@ -1,0 +1,11 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: test-project-creation-org
+  labels:
+    test.miloapis.com/scenario: "project-creation"
+  annotations:
+    kubernetes.io/description: "Organization for testing project creation"
+    kubernetes.io/display-name: "Test Project Creation Organization"
+spec:
+  type: Standard
