@@ -35,12 +35,6 @@ type ResourceGrantSpec struct {
 	//
 	// +kubebuilder:validation:Required
 	OwnerInstanceRef OwnerInstanceRef `json:"ownerInstanceRef"`
-	// Flag to determine if this a default grant or one created in the Staff
-	// Portal. Defaults to false.
-	//
-	// +kubebuilder:default=false
-	// +kubebuilder:validation:Optional
-	IsDefault bool `json:"isDefault,omitempty"`
 	// List of allowances this grant contains
 	//
 	// +kubebuilder:validation:Required

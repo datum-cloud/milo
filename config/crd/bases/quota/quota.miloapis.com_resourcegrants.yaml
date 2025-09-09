@@ -120,12 +120,6 @@ spec:
                   type: object
                 minItems: 1
                 type: array
-              isDefault:
-                default: false
-                description: |-
-                  Flag to determine if this a default grant or one created in the Staff
-                  Portal. Defaults to false.
-                type: boolean
               ownerInstanceRef:
                 description: Reference to the owner resource specific object instance.
                 properties:
