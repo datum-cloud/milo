@@ -18,11 +18,11 @@ spec:
         insecureSkipVerify: true
         ca:
           secret:
-            name: service-monitoring, 
+            name: service-monitoring
             key: ca.crt 
         cert:
           secret: 
-            name: service-monitoring, 
+            name: service-monitoring
             key: tls.crt 
         keySecret:
           name: service-monitoring
