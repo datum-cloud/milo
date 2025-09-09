@@ -205,9 +205,6 @@ tasks:
         echo "🔧 Installing base observability stack via test-infra…"
         task test-infra:install-observability
 
-        echo "📦 Applying Prometheus Operator CRDs…"
-        task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/crds/
-
         echo "⏳ Waiting for Prometheus CRDs to be Established…"
         for crd in \
           servicemonitors.monitoring.coreos.com \
@@ -223,7 +220,7 @@ tasks:
         done
 
         echo "📎 Applying Milo observability (ServiceMonitor + cert)…"
-        task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/service-monitors/
+        task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/
 
         echo "⏳ Waiting for vmagent & vmsingle to be Ready (best-effort)…"
         task test-infra:kubectl -- wait --for=condition=Available deploy -l app.kubernetes.io/name=vmagent -n telemetry-system --timeout=120s || true
