@@ -17,9 +17,13 @@ spec:
       tlsConfig:
         insecureSkipVerify: true
         ca:
-          secret: { name: service-monitoring, key: ca.crt }
+          secret:
+            name: service-monitoring, 
+            key: ca.crt 
         cert:
-          secret: { name: service-monitoring, key: tls.crt }
+          secret: 
+            name: service-monitoring, 
+            key: tls.crt 
         keySecret:
           name: service-monitoring
           key: tls.key
