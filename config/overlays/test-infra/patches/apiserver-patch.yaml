@@ -34,9 +34,6 @@ spec:
           # Disable tracing for test environment
           - name: TRACING_CONFIG_FILE
             value: ""
-          # Disable client CA for test environment
-          - name: CLIENT_CA_FILE
-            value: ""
           # Enable anonymous auth for test environment
           - name: ANONYMOUS_AUTH
             value: "true"

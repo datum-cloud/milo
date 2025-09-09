@@ -1,0 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: service-monitoring
+  namespace: milo-system
+spec:
+  secretName: service-monitoring
+  duration: 720h
+  renewBefore: 528h
+  commonName: "service-monitoring"
+  subject:
+    organizations:
+      - system:masters
+  usages: ["client auth"]
+  issuerRef:
+    kind: Issuer
+    name: milo-ca-issuer
