@@ -478,13 +478,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			defaultResourceGrantCtrl := quotacontroller.DefaultResourceGrantController{
-				Client: ctrl.GetClient(),
-			}
-			if err := defaultResourceGrantCtrl.SetupWithManager(ctrl); err != nil {
-				logger.Error(err, "Error setting up default resource grant controller")
-				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-			}
 
 			resourceQuotaSummaryCtrl := quotacontroller.ResourceQuotaSummaryController{
 				Client: ctrl.GetClient(),
