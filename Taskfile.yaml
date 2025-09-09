@@ -205,20 +205,6 @@ tasks:
         echo "🔧 Installing base observability stack via test-infra…"
         task test-infra:install-observability
 
-        echo "⏳ Waiting for Prometheus CRDs to be Established…"
-        for crd in \
-          servicemonitors.monitoring.coreos.com \
-          podmonitors.monitoring.coreos.com \
-          probes.monitoring.coreos.com \
-          prometheuses.monitoring.coreos.com \
-          prometheusrules.monitoring.coreos.com \
-          alertmanagers.monitoring.coreos.com \
-          thanosrulers.monitoring.coreos.com
-        do
-          echo "  • $crd"
-          task test-infra:kubectl -- wait --for=condition=Established "crd/${crd}" --timeout=120s
-        done
-
         echo "📎 Applying Milo observability (ServiceMonitor + cert)…"
         task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/
 
