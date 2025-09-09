@@ -3,7 +3,6 @@ package resourcemanager
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -256,7 +255,11 @@ func (r *ProjectController) forProject(base *rest.Config, project string) *rest.
 }
 
 func hasGatewayClassCRD(ctx context.Context, cfg *rest.Config) (bool, error) {
-	rm, err := apiutil.NewDynamicRESTMapper(cfg, http.DefaultClient)
+	httpClient, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		return false, fmt.Errorf("create HTTP client: %w", err)
+	}
+	rm, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
 		return false, fmt.Errorf("new dynamic rest mapper: %w", err)
 	}
