@@ -14,7 +14,7 @@ vars:
   MILO_IMAGE_TAG: "dev"
   TEST_INFRA_CLUSTER_NAME: "test-infra"
   # Test infra repository configuration - can be overridden with environment variable
-  TEST_INFRA_REPO_REF: 'v0.3.0'
+  TEST_INFRA_REPO_REF: 'v0.4.0'
 
 includes:
   # Must set TASK_X_REMOTE_TASKFILES=1 to use this feature.
@@ -22,7 +22,7 @@ includes:
   # See: https://taskfile.dev/experiments/remote-taskfiles
   test-infra:
     taskfile: https://raw.githubusercontent.com/datum-cloud/test-infra/{{.TEST_INFRA_REPO_REF}}/Taskfile.yml
-    checksum: d7fe71654d8b9eaaaca146f2748d64b8292efbd4b4b4333ace0b43fba0bcc9b6
+    checksum: 4995ce0e9bc4290b3a0175dee77af2570d715b435d5f3ff65f9cb6c491837bcb
     vars:
       REPO_REF: "{{.TEST_INFRA_REPO_REF}}"
 
