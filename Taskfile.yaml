@@ -208,10 +208,6 @@ tasks:
         echo "📎 Applying Milo observability (ServiceMonitor + cert)…"
         task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/
 
-        echo "⏳ Waiting for vmagent & vmsingle to be Ready (best-effort)…"
-        task test-infra:kubectl -- wait --for=condition=Available deploy -l app.kubernetes.io/name=vmagent -n telemetry-system --timeout=120s || true
-        task test-infra:kubectl -- wait --for=condition=Available deploy -l app.kubernetes.io/name=vmsingle -n telemetry-system --timeout=120s || true
-
         echo "✅ Observability overlay applied."
 
   test:end-to-end:
