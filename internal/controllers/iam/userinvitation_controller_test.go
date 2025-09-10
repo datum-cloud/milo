@@ -8,6 +8,7 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 
+	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -397,5 +398,53 @@ func TestUserInvitationController_findUserInvitationsForUser(t *testing.T) {
 	dummy := &iamv1alpha1.UserInvitation{}
 	if r := uic.findUserInvitationsForUser(ctx, dummy); r != nil {
 		t.Errorf("expected nil for unexpected type, got %v", r)
+	}
+}
+
+// Test_deletePolicyBinding verifies deletion behavior and idempotency.
+func Test_deletePolicyBinding(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	roleRef := &iamv1alpha1.RoleReference{Name: "get-invitation-role", Namespace: "milo-system"}
+
+	ui := iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "inv",
+			Namespace: "default",
+			UID:       types.UID("ui-uid"),
+		},
+	}
+
+	// Build PolicyBinding that should be deleted
+	pbName := getDeterministicResourceName(roleRef.Name, ui)
+	pb := &iamv1alpha1.PolicyBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pbName,
+			Namespace: roleRef.Namespace,
+		},
+	}
+
+	// Case 1: resource exists then deleted, second delete is no-op
+	clientWithPB := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pb).Build()
+
+	if err := deletePolicyBinding(ctx, clientWithPB, roleRef, ui); err != nil {
+		t.Fatalf("unexpected error deleting existing PolicyBinding: %v", err)
+	}
+
+	// Verify it is gone
+	if err := clientWithPB.Get(ctx, types.NamespacedName{Name: pbName, Namespace: roleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); !apierr.IsNotFound(err) {
+		t.Fatalf("expected PolicyBinding to be deleted, got err=%v", err)
+	}
+
+	// Second call should still succeed (idempotent)
+	if err := deletePolicyBinding(ctx, clientWithPB, roleRef, ui); err != nil {
+		t.Fatalf("second deletePolicyBinding call returned error: %v", err)
+	}
+
+	// Case 2: resource never existed
+	clientNoPB := fake.NewClientBuilder().WithScheme(scheme).Build()
+	if err := deletePolicyBinding(ctx, clientNoPB, roleRef, ui); err != nil {
+		t.Fatalf("deletePolicyBinding should succeed when resource absent, got: %v", err)
 	}
 }
