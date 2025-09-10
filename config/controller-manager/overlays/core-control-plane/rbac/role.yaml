@@ -122,10 +122,11 @@ rules:
   - quota.miloapis.com
   resources:
   - allowancebuckets
-  - resourcequotasummaries
-  - resourceregistrations
+  - resourceclaims
+  - resourcegrants
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
@@ -138,7 +139,6 @@ rules:
   - claimcreationpolicies/status
   - resourceclaims/status
   - resourcegrants/status
-  - resourcequotasummaries/status
   - resourceregistrations/status
   verbs:
   - get
@@ -147,12 +147,9 @@ rules:
 - apiGroups:
   - quota.miloapis.com
   resources:
-  - claimcreationpolicies
-  - resourceclaims
-  - resourcegrants
+  - resourceregistrations
   verbs:
   - create
-  - delete
   - get
   - list
   - patch

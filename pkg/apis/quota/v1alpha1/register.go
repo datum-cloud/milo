@@ -34,8 +34,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ResourceGrantList{},
 		&ResourceClaim{},
 		&ResourceClaimList{},
-		&ResourceQuotaSummary{},
-		&ResourceQuotaSummaryList{},
 		&AllowanceBucket{},
 		&AllowanceBucketList{},
 		&ClaimCreationPolicy{},

@@ -2,8 +2,6 @@ package quota
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -159,95 +157,107 @@ func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 // evaluateResourceRequest evaluates a single resource request against the available quota
-// by reading AllowanceBuckets for usage and active ResourceGrants for limits.
+// by finding or creating the appropriate AllowanceBucket and checking available quota.
 // It returns a boolean indicating if the request was granted, a message describing the result,
 // and an error if the evaluation fails.
 func (r *ResourceClaimController) evaluateResourceRequest(ctx context.Context, claim *quotav1alpha1.ResourceClaim, request quotav1alpha1.ResourceRequest) (bool, string, error) {
-	// Get a logger for this context.
 	logger := log.FromContext(ctx)
 
-	// Determine current usage from the specific AllowanceBucket that matches
-	// the resource claim request
-	bucketName := r.generateAllowanceBucketName(claim.Namespace, request.ResourceType, request.Dimensions)
-	var bucket quotav1alpha1.AllowanceBucket
-	currentUsage := int64(0)
-
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: claim.Namespace,
-		Name:      bucketName,
-	}, &bucket); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return false, "", fmt.Errorf("failed to get AllowanceBucket: %w", err)
-		}
-		logger.Info("AllowanceBucket not found as resources have not been used", "bucketName", bucketName)
-	} else {
-		// Set the allocated amount as current usage
-		currentUsage = bucket.Status.Allocated
+	// Get or create the AllowanceBucket for this resource/dimension combination
+	bucket, err := r.getOrCreateAllowanceBucket(ctx, claim, request)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to get or create AllowanceBucket: %w", err)
 	}
 
-	// Calculate applicable limit from active ResourceGrants
-	var grants quotav1alpha1.ResourceGrantList
-	if err := r.List(ctx, &grants, client.InNamespace(claim.Namespace)); err != nil {
-		return false, "", fmt.Errorf("failed to list ResourceGrants: %w", err)
-	}
-
-	var totalEffectiveLimit int64
-	for _, grant := range grants.Items {
-		// Only consider active grants
-		if !r.isResourceGrantActive(&grant) {
-			continue
-		}
-
-		// Check each allowance in the grant
-		for _, allowance := range grant.Spec.Allowances {
-			if allowance.ResourceType != request.ResourceType {
-				continue
-			}
-
-			// Check each bucket in the allowance
-			for _, allowanceBucket := range allowance.Buckets {
-				// Check if this allowance's dimensionSelector matches the claim's dimensions
-				if r.dimensionSelectorMatches(allowanceBucket.DimensionSelector, request.Dimensions) {
-					totalEffectiveLimit += allowanceBucket.Amount
-				}
-			}
-		}
-	}
-
-	// Evaluate quota
-	logger.Info("quota evaluation",
-		"resourceType", request.ResourceType,
-		"requestAmount", request.Amount,
-		"currentUsage", currentUsage,
-		"totalEffectiveLimit", totalEffectiveLimit,
-		"available", totalEffectiveLimit-currentUsage)
-
-	if currentUsage+request.Amount <= totalEffectiveLimit {
-		// Claim can be granted due to quota availability
-		message := fmt.Sprintf("Granted %d units of %s (current usage: %d, applicable limit: %d, available: %d)",
-			request.Amount, request.ResourceType, currentUsage, totalEffectiveLimit, totalEffectiveLimit-currentUsage)
+	// Check if there's enough quota available
+	if bucket.Status.Available >= request.Amount {
+		// Claim can be granted
+		message := fmt.Sprintf("Granted %d units of %s (current usage: %d, limit: %d, available: %d)",
+			request.Amount, request.ResourceType, bucket.Status.Allocated, bucket.Status.Limit, bucket.Status.Available)
 
 		logger.Info("resource claim request granted",
 			"resourceType", request.ResourceType,
 			"requestAmount", request.Amount,
-			"currentUsage", currentUsage,
-			"totalEffectiveLimit", totalEffectiveLimit)
+			"bucketAllocated", bucket.Status.Allocated,
+			"bucketLimit", bucket.Status.Limit,
+			"bucketAvailable", bucket.Status.Available)
 
 		return true, message, nil
 	} else {
 		// Request exceeds available quota
-		available := totalEffectiveLimit - currentUsage
-		message := fmt.Sprintf("Denied %d units of %s - would exceed quota (current usage: %d, applicable limit: %d, available: %d)",
-			request.Amount, request.ResourceType, currentUsage, totalEffectiveLimit, available)
+		message := fmt.Sprintf("Denied %d units of %s - would exceed quota (current usage: %d, limit: %d, available: %d)",
+			request.Amount, request.ResourceType, bucket.Status.Allocated, bucket.Status.Limit, bucket.Status.Available)
 
 		logger.Info("resource claim request denied",
 			"resourceType", request.ResourceType,
 			"requestAmount", request.Amount,
-			"currentUsage", currentUsage,
-			"totalEffectiveLimit", totalEffectiveLimit)
+			"bucketAllocated", bucket.Status.Allocated,
+			"bucketLimit", bucket.Status.Limit,
+			"bucketAvailable", bucket.Status.Available)
 
 		return false, message, nil
 	}
+}
+
+// getOrCreateAllowanceBucket finds an existing AllowanceBucket or creates a new one
+// for the given resource request.
+func (r *ResourceClaimController) getOrCreateAllowanceBucket(ctx context.Context, claim *quotav1alpha1.ResourceClaim, request quotav1alpha1.ResourceRequest) (*quotav1alpha1.AllowanceBucket, error) {
+	logger := log.FromContext(ctx)
+
+	bucketName := GenerateAllowanceBucketName(claim.Namespace, request.ResourceType, claim.Spec.OwnerInstanceRef, request.Dimensions)
+
+	var bucket quotav1alpha1.AllowanceBucket
+	err := r.Get(ctx, client.ObjectKey{
+		Namespace: claim.Namespace,
+		Name:      bucketName,
+	}, &bucket)
+
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to get AllowanceBucket: %w", err)
+		}
+
+		// Bucket doesn't exist, create it
+		logger.Info("Creating new AllowanceBucket", "bucketName", bucketName)
+
+		newBucket := &quotav1alpha1.AllowanceBucket{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      bucketName,
+				Namespace: claim.Namespace,
+				Labels: map[string]string{
+					"quota.miloapis.com/resource-type": request.ResourceType,
+					"quota.miloapis.com/owner-kind":    claim.Spec.OwnerInstanceRef.Kind,
+					"quota.miloapis.com/owner-name":    claim.Spec.OwnerInstanceRef.Name,
+				},
+			},
+			Spec: quotav1alpha1.AllowanceBucketSpec{
+				OwnerInstanceRef: claim.Spec.OwnerInstanceRef,
+				ResourceType:     request.ResourceType,
+				Dimensions:       request.Dimensions,
+			},
+			Status: quotav1alpha1.AllowanceBucketStatus{
+				// Initial values - will be calculated by AllowanceBucket controller
+				Limit:     0,
+				Allocated: 0,
+				Available: 0,
+			},
+		}
+
+		if err := r.Create(ctx, newBucket); err != nil {
+			return nil, fmt.Errorf("failed to create AllowanceBucket: %w", err)
+		}
+
+		// Get the created bucket to ensure we have the latest status
+		// (AllowanceBucket controller may have already reconciled it)
+		if err := r.Get(ctx, client.ObjectKey{
+			Namespace: claim.Namespace,
+			Name:      bucketName,
+		}, &bucket); err != nil {
+			return nil, fmt.Errorf("failed to get newly created AllowanceBucket: %w", err)
+		}
+	}
+
+	return &bucket, nil
 }
 
 // isResourceGrantActive checks if a ResourceGrant has an Active condition with status True
@@ -278,17 +288,15 @@ func (r *ResourceClaimController) dimensionSelectorMatches(selector metav1.Label
 	return true
 }
 
-// Creates a deterministic name for AllowanceBucket using hash,
-// which should match the logic in ResourceQuotaSummary controller.
+// generateAllowanceBucketName creates a deterministic name for AllowanceBucket
+// Deprecated: Use GenerateAllowanceBucketName from allowancebucket_controller.go instead
 func (r *ResourceClaimController) generateAllowanceBucketName(namespace, resourceType string, dimensions map[string]string) string {
-	dimensionsBytes, _ := json.Marshal(dimensions)
-
-	// Create hash of namespace + resourceType + dimensions
-	input := fmt.Sprintf("%s%s%s", namespace, resourceType, string(dimensionsBytes))
-	hash := sha256.Sum256([]byte(input))
-
-	// Return first part of hex hash for readability
-	return fmt.Sprintf("bucket-%x", hash)[:19]
+	// For backwards compatibility during transition
+	ownerRef := quotav1alpha1.OwnerInstanceRef{
+		Kind: "Unknown",
+		Name: "unknown",
+	}
+	return GenerateAllowanceBucketName(namespace, resourceType, ownerRef, dimensions)
 }
 
 // validateResourceRegistrations validates that all resource types in the claim

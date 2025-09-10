@@ -2,15 +2,12 @@ package quota
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -18,6 +15,7 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
+// ResourceGrantController reconciles a ResourceGrant object
 type ResourceGrantController struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -26,14 +24,15 @@ type ResourceGrantController struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
-// +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcequotasummaries,verbs=get;create;update;patch
 
+// Reconcile manages the lifecycle of ResourceGrant objects.
 func (r *ResourceGrantController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	logger.Info("Reconciling ResourceGrant")
 
-	// Fetch the ResourceGrant instance
+	// Fetch the ResourceGrant
 	var grant quotav1alpha1.ResourceGrant
-	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: quotav1alpha1.MiloSystemNamespace}, &grant); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, &grant); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("ResourceGrant not found")
 			return ctrl.Result{}, nil
@@ -41,127 +40,82 @@ func (r *ResourceGrantController) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, fmt.Errorf("failed to get ResourceGrant: %w", err)
 	}
 
-	// If the resource is being deleted, stop reconciliation.
-	if !grant.DeletionTimestamp.IsZero() {
-		logger.Info("ResourceGrant is being deleted")
-		return ctrl.Result{}, nil
+	// Update observed generation and conditions
+	if err := r.updateResourceGrantStatus(ctx, &grant); err != nil {
+		return ctrl.Result{}, err
 	}
 
-	// Log that reconciliation is proceeding
-	logger.Info("reconciling ResourceGrant",
-		"name", grant.Name,
-		"namespace", grant.Namespace,
-		"generation", grant.Generation)
-
-	return ctrl.Result{}, r.updateResourceGrantStatus(ctx, &grant)
+	return ctrl.Result{}, nil
 }
 
-// updateResourceGrantStatus updates the status of the ResourceGrant
+// Update the status of the ResourceGrant
 func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
 	logger := log.FromContext(ctx)
 
 	// Create a deep copy of the original status to compare against later
 	originalStatus := grant.Status.DeepCopy()
 
-	// Always update the observed generation to match the current spec
+	// Always update the observed generation in the status to match the current generation of the spec.
 	grant.Status.ObservedGeneration = grant.Generation
+
+	// Validate that all required registrations exist before marking the grant as active
+	if err := r.validateResourceRegistrationsForGrant(ctx, grant); err != nil {
+		logger.Info("ResourceGrant validation failed", "error", err)
+
+		// Set the condition to indicate validation failed
+		validationFailedCondition := metav1.Condition{
+			Type:    quotav1alpha1.ResourceGrantActive,
+			Status:  metav1.ConditionFalse,
+			Reason:  quotav1alpha1.ResourceGrantValidationFailedReason,
+			Message: fmt.Sprintf("Validation failed: %v", err),
+		}
+		apimeta.SetStatusCondition(&grant.Status.Conditions, validationFailedCondition)
+
+		// Update status and return
+		if err := r.Status().Update(ctx, grant); err != nil {
+			return fmt.Errorf("failed to update ResourceGrant status: %w", err)
+		}
+		return nil
+	}
 
 	// Get the current active condition from the status or create a new one
 	activeCondition := apimeta.FindStatusCondition(grant.Status.Conditions, quotav1alpha1.ResourceGrantActive)
 	if activeCondition == nil {
 		activeCondition = &metav1.Condition{
 			Type:               quotav1alpha1.ResourceGrantActive,
-			Status:             metav1.ConditionFalse,
-			Reason:             quotav1alpha1.ResourceGrantPendingReason,
+			Status:             metav1.ConditionTrue,
+			Reason:             quotav1alpha1.ResourceGrantActiveReason,
+			Message:            "ResourceGrant is active",
 			ObservedGeneration: grant.Generation,
 		}
 	} else {
 		activeCondition = activeCondition.DeepCopy()
+		activeCondition.Status = metav1.ConditionTrue
+		activeCondition.Reason = quotav1alpha1.ResourceGrantActiveReason
+		activeCondition.Message = "ResourceGrant is active"
 		activeCondition.ObservedGeneration = grant.Generation
 	}
 
-	// Validate that all required registrations exist before marking the grant as active
-	if err := r.validateResourceRegistrationsForGrant(ctx, grant); err != nil {
-		logger.Info("ResourceGrant validation failed", "error", err)
-		activeCondition.Status = metav1.ConditionFalse
-		activeCondition.Reason = quotav1alpha1.ResourceGrantValidationFailedReason
-		activeCondition.Message = fmt.Sprintf("Validation failed: %v", err)
-	} else {
-		// Set the grant status as active
-		activeCondition.Status = metav1.ConditionTrue
-		activeCondition.Reason = quotav1alpha1.ResourceGrantActiveReason
-		activeCondition.Message = "The grant has been successfully activated and will now be taken into account when evaluating future claims."
-	}
-
-	// Set the condition on the status
 	apimeta.SetStatusCondition(&grant.Status.Conditions, *activeCondition)
 
-	// Only call the API to update the status if something has actually changed
-	if !equality.Semantic.DeepEqual(originalStatus, &grant.Status) {
+	// Only update the status if it has changed
+	if !apimeta.IsStatusConditionPresentAndEqual(originalStatus.Conditions, quotav1alpha1.ResourceGrantActive, activeCondition.Status) ||
+		grant.Status.ObservedGeneration != originalStatus.ObservedGeneration {
+
 		if err := r.Status().Update(ctx, grant); err != nil {
 			return fmt.Errorf("failed to update ResourceGrant status: %w", err)
 		}
-		logger.Info("ResourceGrant status updated",
+
+		logger.Info("Updated ResourceGrant status",
 			"name", grant.Name,
 			"namespace", grant.Namespace,
 			"active", activeCondition.Status)
 	}
 
-	// If the grant is active, ensure the ResourceQuotaSummary exists.
-	// This is done after the status update to ensure the grant's active status
-	// is persisted first.
-	// The ResourceQuotaSummary status.totalLimit is updated by the
-	// ResourceQuotaSummary controller when the ResourceGrant becomes active.
-	if activeCondition.Status == metav1.ConditionTrue {
-		if err := r.validateOrCreateResourceQuotaSummary(ctx, grant); err != nil {
-			logger.Error(err, "Failed to validate or create ResourceQuotaSummary")
-			// trigger requeue
-			return err
-		}
-	}
+	// AllowanceBuckets will be created/updated by a separate AllowanceBucket controller
+	// that watches both ResourceGrants and ResourceClaims to maintain limit and usage
 
 	return nil
-}
-
-// validateOrCreateResourceQuotaSummary creates or updates ResourceQuotaSummaries based on the allowances in a ResourceGrant.
-func (r *ResourceGrantController) validateOrCreateResourceQuotaSummary(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
-	logger := log.FromContext(ctx)
-
-	for _, allowance := range grant.Spec.Allowances {
-		resourceQuotaSummaryName := r.generateResourceQuotaSummaryName(grant.Namespace, allowance.ResourceType, grant.Spec.OwnerInstanceRef)
-		var resourceQuotaSummary quotav1alpha1.ResourceQuotaSummary
-
-		err := r.Get(ctx, types.NamespacedName{Name: resourceQuotaSummaryName, Namespace: grant.Namespace}, &resourceQuotaSummary)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				// ResourceQuotaSummary does not exist, so it needs to be created.
-				logger.Info("Creating ResourceQuotaSummary", "name", resourceQuotaSummaryName)
-				newResourceQuotaSummary := &quotav1alpha1.ResourceQuotaSummary{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceQuotaSummaryName,
-						Namespace: grant.Namespace,
-					},
-					Spec: quotav1alpha1.ResourceQuotaSummarySpec{
-						ResourceType:     allowance.ResourceType,
-						OwnerInstanceRef: grant.Spec.OwnerInstanceRef,
-					},
-				}
-				if createErr := r.Create(ctx, newResourceQuotaSummary); createErr != nil {
-					return fmt.Errorf("failed to create ResourceQuotaSummary %s: %w", resourceQuotaSummaryName, createErr)
-				}
-			} else {
-				return fmt.Errorf("failed to get ResourceQuotaSummary %s: %w", resourceQuotaSummaryName, err)
-			}
-		}
-	}
-	return nil
-}
-
-// generateResourceQuotaSummaryName creates a deterministic name for a ResourceQuotaSummary.
-func (r *ResourceGrantController) generateResourceQuotaSummaryName(namespace, resourceType string, ownerRef quotav1alpha1.OwnerInstanceRef) string {
-	input := fmt.Sprintf("%s%s%s%s", namespace, resourceType, ownerRef.Kind, ownerRef.Name)
-	hash := sha256.Sum256([]byte(input))
-	return fmt.Sprintf("rqs-%x", hash)[:12]
 }
 
 // validateResourceRegistrations validates that all resource types in the grant
