@@ -157,6 +157,23 @@ func (r *UserController) ensureOwnerReferences(ctx context.Context, user *iamv1a
 		log.Info("Updated UserPreference with owner reference", "user", user.Name)
 	}
 
+	// Update UserPreference PolicyBinding for user preference management
+	userPreferencePolicyBindingName := fmt.Sprintf("userpreference-self-manage-%s", user.Name)
+	userPreferencePolicyBinding := &iamv1alpha1.PolicyBinding{}
+	err = r.Client.Get(ctx, types.NamespacedName{Name: userPreferencePolicyBindingName, Namespace: "milo-system"}, userPreferencePolicyBinding)
+	if apierrors.IsNotFound(err) {
+		// UserPreference PolicyBinding doesn't exist, webhook should have created it
+		log.Info("UserPreference PolicyBinding not found, skipping (webhook should create it)", "user", user.Name, "policyBinding", userPreferencePolicyBindingName)
+	} else if err != nil {
+		return fmt.Errorf("failed to get user preference policy binding: %w", err)
+	} else if !hasOwnerReference(userPreferencePolicyBinding.OwnerReferences, ownerRef) {
+		userPreferencePolicyBinding.OwnerReferences = append(userPreferencePolicyBinding.OwnerReferences, ownerRef)
+		if err := r.Client.Update(ctx, userPreferencePolicyBinding); err != nil {
+			return fmt.Errorf("failed to update user preference policy binding with owner reference: %w", err)
+		}
+		log.Info("Updated UserPreference PolicyBinding with owner reference", "user", user.Name)
+	}
+
 	return nil
 }
 

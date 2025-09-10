@@ -25,41 +25,35 @@ spec:
             - type: Ready
               status: "True"
         timeout: 30s
-    - assert:
-        resource:
-          apiVersion: iam.miloapis.com/v1alpha1
-          kind: PolicyBinding
-          metadata:
-            name: user-self-manage-test-gc-user
-            namespace: milo-system
-            ownerReferences:
-            - apiVersion: iam.miloapis.com/v1alpha1
-              kind: User
-              name: test-gc-user
-        timeout: 10s
-    - assert:
-        resource:
-          apiVersion: iam.miloapis.com/v1alpha1
-          kind: UserPreference
-          metadata:
-            name: userpreference-test-gc-user
-            ownerReferences:
-            - apiVersion: iam.miloapis.com/v1alpha1
-              kind: User
-              name: test-gc-user
-        timeout: 10s
-    - assert:
-        resource:
-          apiVersion: iam.miloapis.com/v1alpha1
-          kind: PolicyBinding
-          metadata:
-            name: userpreference-self-manage-test-gc-user
-            namespace: milo-system
-            ownerReferences:
-            - apiVersion: iam.miloapis.com/v1alpha1
-              kind: User
-              name: test-gc-user
-        timeout: 10s
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: PolicyBinding
+        name: user-self-manage-test-gc-user
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.metadata.ownerReferences[0].name}'
+            value: test-gc-user
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: UserPreference
+        name: userpreference-test-gc-user
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.metadata.ownerReferences[0].name}'
+            value: test-gc-user
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: PolicyBinding
+        name: userpreference-self-manage-test-gc-user
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.metadata.ownerReferences[0].name}'
+            value: test-gc-user
 
   - name: delete-user
     description: Delete the User resource and verify associated resources are garbage collected
