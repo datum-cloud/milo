@@ -17,12 +17,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - '*'
-  resources:
-  - '*'
-  verbs:
-  - get
-- apiGroups:
   - gateway.networking.k8s.io
   resources:
   - gatewayclasses

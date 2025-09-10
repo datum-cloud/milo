@@ -134,16 +134,6 @@ tasks:
         # Update kubeconfig for easy developer access
         echo "📝 Updating kubeconfig for developer access..."
 
-        # Step 9: Restart deployments to ensure they pick up the latest image
-        echo "🔄 Restarting deployments to pick up latest image..."
-        task test-infra:kubectl -- rollout restart deployment/milo-apiserver -n milo-system
-        task test-infra:kubectl -- rollout restart deployment/milo-controller-manager -n milo-system
-
-        # Wait for rollouts to complete
-        echo "⏳ Waiting for deployments to restart..."
-        task test-infra:kubectl -- rollout status deployment/milo-apiserver -n milo-system --timeout=120s
-        task test-infra:kubectl -- rollout status deployment/milo-controller-manager -n milo-system --timeout=120s
-
         echo ""
         echo "✅ Milo API server and storage deployed successfully!"
         echo ""
