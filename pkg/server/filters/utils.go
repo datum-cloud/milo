@@ -9,7 +9,7 @@ import (
 // Returns a copy of the given user.DefaultInfo with Extra data safely added
 //
 // User structs are cached in the auth layer and can be accessed concurrently
-// accross requests, so we need to perform a shallow copy and add extra info
+// across requests, so we need to perform a shallow copy and add extra info
 // into the new struct.
 func userWithExtra(u *user.DefaultInfo, extra map[string][]string) *user.DefaultInfo {
 	uCopy := *u

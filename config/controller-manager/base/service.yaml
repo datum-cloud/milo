@@ -10,7 +10,7 @@ spec:
     app.kubernetes.io/name: milo-controller-manager
   ports:
   - name: https
-    port: 443
+    port: 6443
     protocol: TCP
     targetPort: https
   - name: ctrl-mgr

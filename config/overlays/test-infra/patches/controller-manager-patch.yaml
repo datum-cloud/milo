@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milo-controller-manager
+spec:
+  template:
+    spec:
+      containers:
+      - name: milo-controller-manager
+        env:
+          # Override kubeconfig to point to Milo API server
+          - name: KUBECONFIG
+            value: "/etc/kubernetes/config/kubeconfig"
+        volumeMounts:
+          - name: kubeconfig
+            mountPath: /etc/kubernetes/config
+            readOnly: true
+          - name: webhook-certs
+            mountPath: /etc/kubernetes/pki/webhook
+            readOnly: true
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: milo-controller-manager-kubeconfig
+        - name: webhook-certs
+          csi:
+            driver: csi.cert-manager.io
+            readOnly: true
+            volumeAttributes:
+              csi.cert-manager.io/issuer-name: milo-ca-issuer
+              csi.cert-manager.io/issuer-kind: Issuer
+              csi.cert-manager.io/common-name: milo-controller-manager
+              csi.cert-manager.io/dns-names: milo-controller-manager.milo-system.svc.cluster.local,milo-controller-manager.milo-system.svc,milo-controller-manager.milo-system,milo-controller-manager
+              csi.cert-manager.io/fs-group: "65534"

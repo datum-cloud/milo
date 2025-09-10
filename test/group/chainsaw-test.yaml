@@ -2,6 +2,8 @@ apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
   name: group
+  labels:
+    requires: authorization-provider
 spec:
   steps:
   - name: create-groups-and-policy-binding

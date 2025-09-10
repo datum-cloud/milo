@@ -27,6 +27,31 @@ help a new class of service providers gain hyperscaler advantages. We decided
 that instead of simply using the lessons we'd learned over the years to build
 our own kick-butt back office, we should make it available to others. Et voila!
 
+## Quick Start
+
+Get Milo running locally in under 5 minutes:
+
+```bash
+# Prerequisites: Docker, Kind, kubectl, and Task installed
+git clone https://github.com/datum-cloud/milo.git
+cd milo
+
+# Enable remote task files to be used
+export TASK_X_REMOTE_TASKFILES=1
+task dev:setup
+```
+
+This deploys a complete Milo environment with API server, storage, and
+controllers. Access it with:
+
+```bash
+export KUBECONFIG=.milo/kubeconfig
+kubectl get organizations
+```
+
+📚 **[Full setup guide →](docs/getting-started.md)**
+📖 **[API documentation →](docs/api/)**
+
 ## What We Prefer Not to Build
 
 Projects with such a wide surface area can engender a "build everything"
@@ -43,6 +68,7 @@ scaled vendors. Here are some examples:
 - Tax and financial compliance can be provided by Avalara, NetSuite, etc.
 
 ## What We're Starting With
+
 There are a few big "System of Record" buckets to which we think folks should
 have programmatic access, namely: contacts, accounts, products, vendors, and
 assets.

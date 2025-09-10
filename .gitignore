@@ -1,8 +1,15 @@
 node_modules
-test/config/zitadel/secrets/machine-key.json
 bin/
 # Generated certificates for local development
 certs/
 # Generated kubeconfig for local development
 .kube/
+
 .tool-versions
+vendor/
+
+# Location the test-infra repo will be copied to by the remote taskfile.
+.test-infra
+# Files used by the taskfile.
+.task
+
