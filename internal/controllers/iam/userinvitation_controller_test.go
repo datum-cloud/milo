@@ -211,3 +211,103 @@ func TestUserInvitationController_getDeterministicResourceName(t *testing.T) {
 		t.Fatalf("expected name to start with %s, got %s", wantPrefix, name3)
 	}
 }
+
+func TestUserInvitationController_getResourceRef(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	// Shared objects
+	org := &resourcemanagerv1alpha1.Organization{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-org",
+			UID:  types.UID("org-uid"),
+		},
+	}
+
+	ui := iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "inv",
+			Namespace: "default",
+			UID:       types.UID("ui-uid"),
+		},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: org.Name},
+			Email:           "test@example.com",
+		},
+	}
+
+	invitationRole := iamv1alpha1.RoleReference{Name: "get-invitation-role", Namespace: "milo-system"}
+	orgRole := iamv1alpha1.RoleReference{Name: "org-admin", Namespace: "milo-system"}
+
+	cases := []struct {
+		name          string
+		roleRef       iamv1alpha1.RoleReference
+		uiRelated     []iamv1alpha1.RoleReference
+		withOrg       bool
+		wantErr       bool
+		wantKind      string
+		wantName      string
+		wantUID       string
+		wantNamespace string
+	}{
+		{
+			name:          "invitation related role",
+			roleRef:       invitationRole,
+			uiRelated:     []iamv1alpha1.RoleReference{invitationRole},
+			withOrg:       true,
+			wantKind:      "UserInvitation",
+			wantName:      ui.Name,
+			wantUID:       string(ui.UID),
+			wantNamespace: ui.Namespace,
+			wantErr:       false,
+		},
+		{
+			name:          "organization role",
+			roleRef:       orgRole,
+			uiRelated:     []iamv1alpha1.RoleReference{invitationRole},
+			withOrg:       true,
+			wantKind:      "Organization",
+			wantName:      org.Name,
+			wantUID:       string(org.UID),
+			wantNamespace: "",
+			wantErr:       false,
+		},
+		{
+			name:      "organization role but org missing",
+			roleRef:   orgRole,
+			uiRelated: []iamv1alpha1.RoleReference{invitationRole},
+			withOrg:   false,
+			wantErr:   true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := fake.NewClientBuilder().WithScheme(scheme)
+			if tc.withOrg {
+				builder = builder.WithObjects(org)
+			}
+			c := builder.Build()
+
+			uic := &UserInvitationController{
+				Client:         c,
+				uiRelatedRoles: tc.uiRelated,
+			}
+
+			ref, err := uic.getResourceRef(ctx, &tc.roleRef, ui)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error but got none, ref=%+v", ref)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("getResourceRef returned error: %v", err)
+			}
+
+			if ref.Kind != tc.wantKind || ref.Name != tc.wantName || ref.UID != tc.wantUID || ref.Namespace != tc.wantNamespace {
+				t.Fatalf("unexpected ResourceRef: %+v, want kind=%s name=%s uid=%s namespace=%s", ref, tc.wantKind, tc.wantName, tc.wantUID, tc.wantNamespace)
+			}
+		})
+	}
+}
