@@ -1,0 +1,182 @@
+package iam
+
+import (
+	"context"
+	"testing"
+
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+)
+
+// getTestScheme returns a runtime.Scheme with all Milo APIs registered.
+func getTestScheme() *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	_ = iamv1alpha1.AddToScheme(scheme)
+	_ = resourcemanagerv1alpha1.AddToScheme(scheme)
+	return scheme
+}
+
+// TestUserInvitationController_createPolicyBinding verifies that createPolicyBinding creates a PolicyBinding CR.
+func TestUserInvitationController_createPolicyBinding(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	// Arrange test objects
+	user := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-user",
+			UID:  types.UID("user-uid"),
+		},
+		Spec: iamv1alpha1.UserSpec{
+			Email: "test@example.com",
+		},
+	}
+
+	ui := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-invitation",
+			Namespace: "default",
+			UID:       types.UID("ui-uid"),
+		},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email: user.Spec.Email,
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
+				Name: "test-org",
+			},
+		},
+	}
+
+	// Role that grants the ability to view the invitation. This must be included in uiRelatedRoles so that getResourceRef
+	// points the PolicyBinding to the UserInvitation CR.
+	roleRef := iamv1alpha1.RoleReference{
+		Name:      "get-invitation-role",
+		Namespace: "milo-system",
+	}
+
+	// Build fake client with initial objects.
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(user, ui).Build()
+
+	uic := &UserInvitationController{
+		Client:         c,
+		uiRelatedRoles: []iamv1alpha1.RoleReference{roleRef},
+	}
+
+	// Act
+	if err := uic.createPolicyBinding(ctx, user, ui, &roleRef); err != nil {
+		t.Fatalf("createPolicyBinding returned error: %v", err)
+	}
+
+	// Assert – the PolicyBinding should exist with deterministic name
+	expectedName := getDeterministicResourceName(roleRef.Name, *ui)
+	pb := &iamv1alpha1.PolicyBinding{}
+	if err := c.Get(ctx, types.NamespacedName{Name: expectedName, Namespace: roleRef.Namespace}, pb); err != nil {
+		t.Fatalf("expected PolicyBinding %s to be created: %v", expectedName, err)
+	}
+
+	// Verify key fields
+	if pb.Spec.RoleRef.Name != roleRef.Name || pb.Spec.RoleRef.Namespace != roleRef.Namespace {
+		t.Errorf("PolicyBinding has unexpected RoleRef: %+v", pb.Spec.RoleRef)
+	}
+	if len(pb.Spec.Subjects) != 1 || pb.Spec.Subjects[0].Name != user.Name {
+		t.Errorf("PolicyBinding has unexpected Subjects: %+v", pb.Spec.Subjects)
+	}
+
+	// Call createPolicyBinding again to ensure idempotency
+	if err := uic.createPolicyBinding(ctx, user, ui, &roleRef); err != nil {
+		t.Fatalf("second createPolicyBinding call returned error: %v", err)
+	}
+
+	// List PolicyBindings in the namespace to ensure only one exists
+	var pbList iamv1alpha1.PolicyBindingList
+	if err := c.List(ctx, &pbList, client.InNamespace(roleRef.Namespace)); err != nil {
+		t.Fatalf("failed to list PolicyBindings: %v", err)
+	}
+	if len(pbList.Items) != 1 {
+		t.Errorf("expected 1 PolicyBinding after idempotent call, got %d", len(pbList.Items))
+	}
+}
+
+// TestUserInvitationController_createOrganizationMembership verifies that createOrganizationMembership creates an OrganizationMembership CR.
+func TestUserInvitationController_createOrganizationMembership(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	// Arrange test objects
+	user := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-user",
+			UID:  types.UID("user-uid"),
+		},
+		Spec: iamv1alpha1.UserSpec{
+			Email: "test@example.com",
+		},
+	}
+
+	ui := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-invitation",
+			Namespace: "default",
+			UID:       types.UID("ui-uid"),
+		},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email: user.Spec.Email,
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
+				Name: "test-org",
+			},
+		},
+	}
+
+	// Pre-create Organization so that OrganizationMembership namespace ("organization-<name>") is valid in case the test environment validates namespaces.
+	org := &resourcemanagerv1alpha1.Organization{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-org",
+			UID:  types.UID("org-uid"),
+		},
+	}
+
+	// Build fake client with initial objects.
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(user, ui, org).Build()
+
+	uic := &UserInvitationController{Client: c}
+
+	// Act
+	if err := uic.createOrganizationMembership(ctx, user, ui); err != nil {
+		t.Fatalf("createOrganizationMembership returned error: %v", err)
+	}
+
+	// Assert – the OrganizationMembership should exist
+	expectedName := "member-" + user.Name
+	expectedNamespace := "organization-" + ui.Spec.OrganizationRef.Name
+	om := &resourcemanagerv1alpha1.OrganizationMembership{}
+	if err := c.Get(ctx, types.NamespacedName{Name: expectedName, Namespace: expectedNamespace}, om); err != nil {
+		t.Fatalf("expected OrganizationMembership %s/%s to be created: %v", expectedNamespace, expectedName, err)
+	}
+
+	// Verify basic fields
+	if om.Spec.UserRef.Name != user.Name {
+		t.Errorf("OrganizationMembership has unexpected UserRef: %+v", om.Spec.UserRef)
+	}
+	if om.Spec.OrganizationRef.Name != ui.Spec.OrganizationRef.Name {
+		t.Errorf("OrganizationMembership has unexpected OrganizationRef: %+v", om.Spec.OrganizationRef)
+	}
+
+	// Call createOrganizationMembership again to ensure idempotency
+	if err := uic.createOrganizationMembership(ctx, user, ui); err != nil {
+		t.Fatalf("second createOrganizationMembership call returned error: %v", err)
+	}
+
+	// List OrganizationMemberships in the namespace to ensure only one exists
+	var omList resourcemanagerv1alpha1.OrganizationMembershipList
+	if err := c.List(ctx, &omList, client.InNamespace(expectedNamespace)); err != nil {
+		t.Fatalf("failed to list OrganizationMemberships: %v", err)
+	}
+	if len(omList.Items) != 1 {
+		t.Errorf("expected 1 OrganizationMembership after idempotent call, got %d", len(omList.Items))
+	}
+}
