@@ -68,6 +68,9 @@ import (
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 
+	// Register JSON logging format
+	_ "k8s.io/component-base/logs/json/register"
+
 	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
@@ -104,6 +107,8 @@ var (
 func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 	utilruntime.Must(metricsfeatures.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+	// Enable JSON logging support by default
+	utilfeature.DefaultMutableFeatureGate.Set("LoggingBetaOptions=true")
 	utilruntime.Must(corev1.AddToScheme(Scheme))
 
 	// Add Milo API types to the global scheme

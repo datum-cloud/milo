@@ -1,0 +1,8 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: UserPreference
+metadata:
+  name: userpreference-test-gc-user
+  ownerReferences:
+  - apiVersion: iam.miloapis.com/v1alpha1
+    kind: User
+    name: test-gc-user

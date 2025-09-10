@@ -38,6 +38,7 @@ spec:
           - --cert-dir=$(CERT_DIR)
           - --tls-cert-file=$(TLS_CERT_FILE)
           - --tls-private-key-file=$(TLS_PRIVATE_KEY_FILE)
+          - --logging-format=$(LOGGING_FORMAT)
           - --v=$(LOG_LEVEL)
           - --control-plane-scope=$(CONTROL_PLANE_SCOPE)
         env:
@@ -46,6 +47,8 @@ spec:
           # Default to INFO level logging
           - name: LOG_LEVEL
             value: "4"
+          - name: LOGGING_FORMAT
+            value: "json"
           - name: KUBECONFIG
             value: /etc/kubernetes/config/kubeconfig
           # Default to using the in-cluster config to connect to the
