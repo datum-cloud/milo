@@ -180,3 +180,34 @@ func TestUserInvitationController_createOrganizationMembership(t *testing.T) {
 		t.Errorf("expected 1 OrganizationMembership after idempotent call, got %d", len(omList.Items))
 	}
 }
+
+// TestGetDeterministicResourceName verifies that the helper produces a stable deterministic name.
+func TestUserInvitationController_getDeterministicResourceName(t *testing.T) {
+	ui := iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:  types.UID("abc-123"),
+			Name: "invitation-name",
+		},
+	}
+
+	name1 := getDeterministicResourceName("role-a", ui)
+	expected := "abc-123-role-a"
+	if name1 != expected {
+		t.Fatalf("expected %s, got %s", expected, name1)
+	}
+
+	// Calling again with same inputs should yield identical result (determinism)
+	name2 := getDeterministicResourceName("role-a", ui)
+	if name2 != name1 {
+		t.Fatalf("deterministic function returned different results: %s vs %s", name1, name2)
+	}
+
+	// A different role name should change the output but still include the UID prefix
+	name3 := getDeterministicResourceName("role-b", ui)
+	if name3 == name1 {
+		t.Fatalf("expected different names for different role inputs, got same %s", name3)
+	}
+	if wantPrefix := "abc-123-"; len(name3) <= len(wantPrefix) || name3[:len(wantPrefix)] != wantPrefix {
+		t.Fatalf("expected name to start with %s, got %s", wantPrefix, name3)
+	}
+}
