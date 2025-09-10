@@ -48,14 +48,6 @@ func (r *QuotaControllerRegistry) registerControllers() {
 		return controller.SetupWithManager(mgr)
 	}
 
-	// DefaultResourceGrant controller
-	r.controllers["DefaultResourceGrantController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
-		controller := &DefaultResourceGrantController{
-			Client: mgr.GetClient(),
-		}
-		return controller.SetupWithManager(mgr)
-	}
-
 	// ResourceQuotaSummary controller
 	r.controllers["ResourceQuotaSummaryController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
 		controller := &ResourceQuotaSummaryController{
@@ -110,11 +102,11 @@ func (r *QuotaControllerRegistry) SetupAllControllers(mgr ctrl.Manager, dynamicC
 
 	for name, setupFunc := range r.controllers {
 		r.logger.V(1).Info("Setting up quota controller", "controller", name)
-		
+
 		if err := setupFunc(mgr, dynamicClient); err != nil {
 			return fmt.Errorf("failed to setup %s: %w", name, err)
 		}
-		
+
 		r.logger.V(1).Info("Successfully set up quota controller", "controller", name)
 	}
 

@@ -659,5 +659,6 @@ func (r *ResourceQuotaSummaryController) SetupWithManager(mgr ctrl.Manager) erro
 			}),
 			builder.WithPredicates(resourceClaimStatusPredicate),
 		).
+		Named("resource-quota-summary").
 		Complete(r)
 }

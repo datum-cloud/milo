@@ -199,5 +199,6 @@ func (r *ClaimCreationPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Watches(&quotav1alpha1.ResourceRegistration{}, handler.EnqueueRequestsFromMapFunc(
 			r.enqueueAffectedPolicies,
 		)).
+		Named("claim-creation-policy").
 		Complete(r)
 }

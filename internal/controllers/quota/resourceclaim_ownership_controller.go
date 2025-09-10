@@ -307,5 +307,6 @@ func (r *ResourceClaimOwnershipController) discoverResourceVersion(apiGroup, kin
 func (r *ResourceClaimOwnershipController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&quotav1alpha1.ResourceClaim{}).
+		Named("resource-claim-ownership").
 		Complete(r)
 }
