@@ -2352,7 +2352,7 @@ UserInvitationStatus defines the observed state of UserInvitation
         <td>
           Conditions provide conditions that represent the current status of the UserInvitation.<br/>
           <br/>
-            <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for control plane to reconcile reason:Unknown status:Unknown type:Ready]]<br/>
+            <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for control plane to reconcile reason:Unknown status:Unknown type:Unknown]]<br/>
         </td>
         <td>false</td>
       </tr></tbody>

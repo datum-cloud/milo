@@ -154,7 +154,7 @@ spec:
                   message: Waiting for control plane to reconcile
                   reason: Unknown
                   status: Unknown
-                  type: Ready
+                  type: Unknown
                 description: Conditions provide conditions that represent the current
                   status of the UserInvitation.
                 items:
