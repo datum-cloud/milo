@@ -522,3 +522,55 @@ func TestUserInvitationController_updateUserInvitationStatus(t *testing.T) {
 		t.Fatalf("expected exactly 1 Ready condition, got %d", count)
 	}
 }
+
+// Test_userInvitationFinalizer_Finalize verifies that PolicyBindings for uiRelatedRoles are deleted and that the operation is idempotent.
+func Test_userInvitationFinalizer_Finalize(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	// Prepare UserInvitation
+	ui := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "inv",
+			Namespace: "default",
+			UID:       types.UID("ui-uid"),
+		},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email: "test@example.com",
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
+				Name: "org",
+			},
+		},
+	}
+
+	// Two invitation-related roles
+	roleA := iamv1alpha1.RoleReference{Name: "get-invitation-role", Namespace: "milo-system"}
+	roleB := iamv1alpha1.RoleReference{Name: "accept-invitation-role", Namespace: "milo-system"}
+
+	// Corresponding PolicyBindings that should be deleted by the finalizer
+	pbA := &iamv1alpha1.PolicyBinding{ObjectMeta: metav1.ObjectMeta{Name: getDeterministicResourceName(roleA.Name, *ui), Namespace: roleA.Namespace}}
+	pbB := &iamv1alpha1.PolicyBinding{ObjectMeta: metav1.ObjectMeta{Name: getDeterministicResourceName(roleB.Name, *ui), Namespace: roleB.Namespace}}
+
+	// Build fake client with PBs present
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pbA, pbB).Build()
+
+	f := &userInvitationFinalizer{client: c, uiRelatedRoles: []iamv1alpha1.RoleReference{roleA, roleB}}
+
+	// First call should delete both PolicyBindings
+	if _, err := f.Finalize(ctx, ui); err != nil {
+		t.Fatalf("Finalize returned error: %v", err)
+	}
+
+	// Verify deletion
+	for _, r := range []iamv1alpha1.RoleReference{roleA, roleB} {
+		name := getDeterministicResourceName(r.Name, *ui)
+		if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: r.Namespace}, &iamv1alpha1.PolicyBinding{}); !apierr.IsNotFound(err) {
+			t.Fatalf("expected PolicyBinding %s to be deleted, err=%v", name, err)
+		}
+	}
+
+	// Second call should still succeed (idempotent)
+	if _, err := f.Finalize(ctx, ui); err != nil {
+		t.Fatalf("Finalize second call errored: %v", err)
+	}
+}
