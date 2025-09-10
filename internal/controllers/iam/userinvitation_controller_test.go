@@ -9,6 +9,7 @@ import (
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 
 	apierr "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -446,5 +447,78 @@ func Test_deletePolicyBinding(t *testing.T) {
 	clientNoPB := fake.NewClientBuilder().WithScheme(scheme).Build()
 	if err := deletePolicyBinding(ctx, clientNoPB, roleRef, ui); err != nil {
 		t.Fatalf("deletePolicyBinding should succeed when resource absent, got: %v", err)
+	}
+}
+
+// TestUserInvitationController_updateUserInvitationStatus verifies that status conditions are correctly updated and that repeated calls remain idempotent.
+func TestUserInvitationController_updateUserInvitationStatus(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	initialUI := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{Name: "inv", Namespace: "default"},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email:           "test2@example.com",
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "org"},
+			State:           iamv1alpha1.UserInvitationStatePending,
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithStatusSubresource(&iamv1alpha1.UserInvitation{}).
+		WithObjects(initialUI.DeepCopy()).Build()
+
+	uic := &UserInvitationController{Client: c}
+
+	cond := metav1.Condition{
+		Type:   string(iamv1alpha1.UserInvitationReadyCondition),
+		Status: metav1.ConditionTrue,
+		Reason: string(iamv1alpha1.UserInvitationStateExpiredReason),
+	}
+
+	// Fetch object from client to ensure ResourceVersion populated
+	ui := &iamv1alpha1.UserInvitation{}
+	_ = c.Get(ctx, types.NamespacedName{Name: initialUI.Name, Namespace: initialUI.Namespace}, ui)
+
+	if meta.IsStatusConditionTrue(ui.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
+		t.Fatalf("Ready condition unexpectedly true before status update")
+	}
+
+	if err := uic.updateUserInvitationStatus(ctx, ui, cond); err != nil {
+		t.Fatalf("updateUserInvitationStatus returned error: %v", err)
+	}
+
+	// Fetch updated resource
+	updated := &iamv1alpha1.UserInvitation{}
+	if err := c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, updated); err != nil {
+		t.Fatalf("failed to get updated UserInvitation: %v", err)
+	}
+
+	readyCond := meta.FindStatusCondition(updated.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition))
+	if readyCond == nil {
+		t.Fatalf("Ready condition missing after update: %+v", updated.Status.Conditions)
+	}
+	if readyCond.Status != metav1.ConditionTrue {
+		t.Fatalf("Ready condition Status expected True, got %s", readyCond.Status)
+	}
+	if readyCond.Reason != string(iamv1alpha1.UserInvitationStateExpiredReason) {
+		t.Fatalf("Ready condition Reason expected %s, got %s", iamv1alpha1.UserInvitationStateExpiredReason, readyCond.Reason)
+	}
+
+	// Call again with same condition to ensure idempotency (no duplicate conditions should be added)
+	if err := uic.updateUserInvitationStatus(ctx, updated, cond); err != nil {
+		t.Fatalf("second updateUserInvitationStatus call errored: %v", err)
+	}
+
+	again := &iamv1alpha1.UserInvitation{}
+	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, again)
+	count := 0
+	for _, cnd := range again.Status.Conditions {
+		if cnd.Type == string(iamv1alpha1.UserInvitationReadyCondition) {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly 1 Ready condition, got %d", count)
 	}
 }
