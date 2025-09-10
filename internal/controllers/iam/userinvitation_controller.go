@@ -147,6 +147,15 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Grant roles to the invitee user for the organization if the invitation is accepted
 	if ui.Spec.State == iamv1alpha1.UserInvitationStateAccepted {
+		log.Info("Deleting PolicyBindings for accepting the invitation, as the invitation has been accepted", "userInvitation", ui.GetName())
+		if err := deletePolicyBinding(ctx, r.Client, &iamv1alpha1.RoleReference{
+			Name:      r.AcceptInvitationRoleName,
+			Namespace: r.SystemNamespace,
+		}, *ui); err != nil {
+			log.Error(err, "Failed to delete PolicyBinding for accepting the invitation")
+			return ctrl.Result{}, fmt.Errorf("failed to delete PolicyBinding for accepting the invitation: %w", err)
+		}
+
 		log.Info("Granting roles to the invitee user for the organization, as the invitation is accepted", "user", user.Name, "roles", ui.Spec.Roles)
 
 		// Create the OrganizationMembership
