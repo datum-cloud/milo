@@ -9,7 +9,7 @@ spec:
         - alert: ProjectStuckCreatingSLOViolation
           expr: |
             (time() - milo_projects_created_timestamp) > 60
-            unless ignoring(type, reason, status) (milo_projects_status_condition{type="Ready", status="True"} == 1)
+            unless ignoring(type, reason) (milo_projects_status_condition{type="Ready"} == 1)
           for: 0s
           labels:
             severity: critical
