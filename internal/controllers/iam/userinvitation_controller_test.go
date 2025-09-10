@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -572,5 +573,200 @@ func Test_userInvitationFinalizer_Finalize(t *testing.T) {
 	// Second call should still succeed (idempotent)
 	if _, err := f.Finalize(ctx, ui); err != nil {
 		t.Fatalf("Finalize second call errored: %v", err)
+	}
+}
+
+// TestUserInvitationController_Reconcile_StateTransitionCreatesBindings performs two full reconciliation cycles for a pending UserInvitation
+// and then when the invitation is updated to Accepted a new PolicyBinding (for organization role) is created.
+func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	// Objects
+	user := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-user", UID: types.UID("u-uid")},
+		Spec:       iamv1alpha1.UserSpec{Email: "test@example.com"},
+	}
+
+	ui := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{Name: "inv", Namespace: "default", UID: types.UID("ui-uid")},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email:           user.Spec.Email,
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "org"},
+			State:           iamv1alpha1.UserInvitationStatePending,
+			Roles:           []iamv1alpha1.RoleReference{{Name: "org-admin", Namespace: "milo-system"}},
+		},
+	}
+
+	org := &resourcemanagerv1alpha1.Organization{
+		ObjectMeta: metav1.ObjectMeta{Name: "org", UID: types.UID("org-uid")},
+	}
+
+	// Invitation-related role needed so that controller grants access to accept invitation.
+	invitationRoleRef := iamv1alpha1.RoleReference{Name: "get-invitation-role", Namespace: "milo-system"}
+
+	// Build fake client with status subresource enabled for UserInvitation so status updates work.
+	builder := fake.NewClientBuilder().WithScheme(scheme).
+		WithStatusSubresource(&iamv1alpha1.UserInvitation{}).
+		WithObjects(user.DeepCopy(), ui.DeepCopy(), org.DeepCopy())
+
+	// add indexes required by reconciler
+	builder = builder.WithIndex(&iamv1alpha1.User{}, userEmailIndexKey, func(obj client.Object) []string {
+		u := obj.(*iamv1alpha1.User)
+		return []string{strings.ToLower(u.Spec.Email)}
+	})
+	builder = builder.WithIndex(&iamv1alpha1.UserInvitation{}, userEmailIndexKey, func(obj client.Object) []string {
+		inv := obj.(*iamv1alpha1.UserInvitation)
+		return []string{strings.ToLower(inv.Spec.Email)}
+	})
+
+	c := builder.Build()
+
+	uic := &UserInvitationController{
+		Client:          c,
+		SystemNamespace: "milo-system",
+		uiRelatedRoles:  []iamv1alpha1.RoleReference{invitationRoleRef},
+	}
+
+	// First reconcile (Pending)
+	if _, err := uic.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}}); err != nil {
+		t.Fatalf("first reconcile error: %v", err)
+	}
+
+	// Verify invitation-related PolicyBinding exists
+	pbInviteName := getDeterministicResourceName(invitationRoleRef.Name, *ui)
+	if err := c.Get(ctx, types.NamespacedName{Name: pbInviteName, Namespace: invitationRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err != nil {
+		t.Fatalf("expected invitation PolicyBinding created: %v", err)
+	}
+
+	// Check Pending condition true, Ready false
+	afterFirst := &iamv1alpha1.UserInvitation{}
+	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, afterFirst)
+	if !meta.IsStatusConditionTrue(afterFirst.Status.Conditions, string(iamv1alpha1.UserInvitationPendingCondition)) {
+		t.Fatalf("Pending condition should be true after first reconcile")
+	}
+	if meta.IsStatusConditionTrue(afterFirst.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
+		t.Fatalf("Ready condition should not be true before acceptance")
+	}
+
+	// Ensure organization role PolicyBinding does NOT exist yet
+	orgRoleRef := ui.Spec.Roles[0]
+	pbOrgName := getDeterministicResourceName(orgRoleRef.Name, *ui)
+	if err := c.Get(ctx, types.NamespacedName{Name: pbOrgName, Namespace: orgRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err == nil {
+		t.Fatalf("organization PolicyBinding should not exist before acceptance")
+	}
+
+	// Update state to Accepted
+	refreshed := &iamv1alpha1.UserInvitation{}
+	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, refreshed)
+	refreshed.Spec.State = iamv1alpha1.UserInvitationStateAccepted
+	if err := c.Update(ctx, refreshed); err != nil {
+		t.Fatalf("failed to update UI state: %v", err)
+	}
+
+	// Second reconcile after state change
+	if _, err := uic.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}}); err != nil {
+		t.Fatalf("second reconcile error: %v", err)
+	}
+
+	// Verify organization role PolicyBinding created
+	if err := c.Get(ctx, types.NamespacedName{Name: pbOrgName, Namespace: orgRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err != nil {
+		t.Fatalf("expected organization PolicyBinding created: %v", err)
+	}
+
+	// Ready condition should now be true, Pending may remain true
+	final := &iamv1alpha1.UserInvitation{}
+	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
+	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
+		t.Fatalf("Ready condition should be true after acceptance")
+	}
+}
+
+// Test when UserInvitation exists before User resource; controller should act once user appears and then on acceptance.
+func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	// Initial objects: UserInvitation only
+	ui := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{Name: "inv", Namespace: "default", UID: types.UID("ui-uid")},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email:           "later@example.com",
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "org"},
+			State:           iamv1alpha1.UserInvitationStatePending,
+			Roles:           []iamv1alpha1.RoleReference{{Name: "org-admin", Namespace: "milo-system"}},
+		},
+	}
+
+	org := &resourcemanagerv1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: "org", UID: types.UID("org-uid")}}
+
+	invitationRoleRef := iamv1alpha1.RoleReference{Name: "get-invitation-role", Namespace: "milo-system"}
+
+	builder := fake.NewClientBuilder().WithScheme(scheme).
+		WithStatusSubresource(&iamv1alpha1.UserInvitation{}).
+		WithObjects(ui.DeepCopy(), org.DeepCopy())
+
+	// indexes
+	builder = builder.WithIndex(&iamv1alpha1.User{}, userEmailIndexKey, func(obj client.Object) []string {
+		u := obj.(*iamv1alpha1.User)
+		return []string{strings.ToLower(u.Spec.Email)}
+	})
+	builder = builder.WithIndex(&iamv1alpha1.UserInvitation{}, userEmailIndexKey, func(obj client.Object) []string {
+		inv := obj.(*iamv1alpha1.UserInvitation)
+		return []string{strings.ToLower(inv.Spec.Email)}
+	})
+	c := builder.Build()
+
+	uic := &UserInvitationController{Client: c, SystemNamespace: "milo-system", uiRelatedRoles: []iamv1alpha1.RoleReference{invitationRoleRef}}
+
+	// First reconcile: no User yet
+	if _, err := uic.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}}); err != nil {
+		t.Fatalf("first reconcile error: %v", err)
+	}
+
+	// Expect no PolicyBindings created
+	pbInviteName := getDeterministicResourceName(invitationRoleRef.Name, *ui)
+	if err := c.Get(ctx, types.NamespacedName{Name: pbInviteName, Namespace: invitationRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err == nil {
+		t.Fatalf("PolicyBinding should not exist when User absent")
+	}
+
+	// Create User now
+	user := &iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "later-user", UID: types.UID("u-uid")}, Spec: iamv1alpha1.UserSpec{Email: "later@example.com"}}
+	if err := c.Create(ctx, user); err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	// Second reconcile: should create invitation PB and Pending condition
+	if _, err := uic.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}}); err != nil {
+		t.Fatalf("second reconcile error: %v", err)
+	}
+
+	if err := c.Get(ctx, types.NamespacedName{Name: pbInviteName, Namespace: invitationRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err != nil {
+		t.Fatalf("expected invitation PolicyBinding created after user appears: %v", err)
+	}
+
+	// Update state to Accepted
+	refreshed := &iamv1alpha1.UserInvitation{}
+	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, refreshed)
+	refreshed.Spec.State = iamv1alpha1.UserInvitationStateAccepted
+	if err := c.Update(ctx, refreshed); err != nil {
+		t.Fatalf("update UI state: %v", err)
+	}
+
+	// Third reconcile
+	if _, err := uic.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}}); err != nil {
+		t.Fatalf("third reconcile error: %v", err)
+	}
+
+	orgRoleRef := ui.Spec.Roles[0]
+	pbOrgName := getDeterministicResourceName(orgRoleRef.Name, *ui)
+	if err := c.Get(ctx, types.NamespacedName{Name: pbOrgName, Namespace: orgRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err != nil {
+		t.Fatalf("expected org role PolicyBinding after acceptance: %v", err)
+	}
+
+	final := &iamv1alpha1.UserInvitation{}
+	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
+	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
+		t.Fatalf("Ready condition should be true after acceptance")
 	}
 }
