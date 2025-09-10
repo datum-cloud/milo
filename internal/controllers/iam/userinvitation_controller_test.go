@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
@@ -309,5 +310,92 @@ func TestUserInvitationController_getResourceRef(t *testing.T) {
 				t.Fatalf("unexpected ResourceRef: %+v, want kind=%s name=%s uid=%s namespace=%s", ref, tc.wantKind, tc.wantName, tc.wantUID, tc.wantNamespace)
 			}
 		})
+	}
+}
+
+// TestUserInvitationController_findUserInvitationsForUser tests mapping from User to related UserInvitations.
+func TestUserInvitationController_findUserInvitationsForUser(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	user := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-user",
+		},
+		Spec: iamv1alpha1.UserSpec{Email: "Test@Example.com"},
+	}
+
+	ui1 := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{Name: "inv1", Namespace: "default"},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email:           "test@example.com", // lower-case matches user email case-insensitively
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "org"},
+		},
+	}
+	ui2 := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{Name: "inv2", Namespace: "other-ns"},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email:           "TEST@example.com", // upper-case variant
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "org"},
+		},
+	}
+	ui3 := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{Name: "inv3", Namespace: "other-ns"},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email:           "notused@example.com",
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "org"},
+		},
+	}
+
+	// Build fake client with userinvitations; user object does not need to be in the client for the list operation.
+	builder := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ui1, ui2, ui3)
+	builder = builder.WithIndex(&iamv1alpha1.UserInvitation{}, userEmailIndexKey, func(obj client.Object) []string {
+		ui := obj.(*iamv1alpha1.UserInvitation)
+		return []string{strings.ToLower(ui.Spec.Email)}
+	})
+	c := builder.Build()
+
+	uic := &UserInvitationController{Client: c}
+
+	// Case 1: normal mapping
+	reqs := uic.findUserInvitationsForUser(ctx, user)
+	if len(reqs) != 2 {
+		t.Fatalf("expected 2 reconcile requests, got %d", len(reqs))
+	}
+
+	// Ensure names collected are inv1 and inv2 regardless of order
+	got := map[string]struct{}{}
+	for _, r := range reqs {
+		got[r.Name] = struct{}{}
+	}
+	if _, ok := got["inv1"]; !ok {
+		t.Errorf("inv1 not found in requests: %v", reqs)
+	}
+	if _, ok := got["inv2"]; !ok {
+		t.Errorf("inv2 not found in requests: %v", reqs)
+	}
+
+	// Case 2: user without email should return nil/empty slice
+	userNoEmail := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{Name: "no-email"},
+		Spec:       iamv1alpha1.UserSpec{Email: "nonui@test.com"},
+	}
+	if r := uic.findUserInvitationsForUser(ctx, userNoEmail); len(r) != 0 {
+		t.Errorf("expected 0 requests for user without email, got %d", len(r))
+	}
+
+	// Case 3: user with different email should return 0 requests
+	userOther := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{Name: "other"},
+		Spec:       iamv1alpha1.UserSpec{Email: "other@example.com"},
+	}
+	if r := uic.findUserInvitationsForUser(ctx, userOther); len(r) != 0 {
+		t.Errorf("expected 0 requests for user with different email, got %d", len(r))
+	}
+
+	// Case 3: unexpected object type returns nil
+	dummy := &iamv1alpha1.UserInvitation{}
+	if r := uic.findUserInvitationsForUser(ctx, dummy); r != nil {
+		t.Errorf("expected nil for unexpected type, got %v", r)
 	}
 }
