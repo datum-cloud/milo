@@ -29,11 +29,11 @@ const (
 )
 
 type UserInvitationController struct {
-	client                   client.Client
+	Client                   client.Client
 	finalizer                finalizer.Finalizers
-	systemNamespace          string
-	getInvitationRoleName    string
-	acceptInvitationRoleName string
+	SystemNamespace          string
+	GetInvitationRoleName    string
+	AcceptInvitationRoleName string
 	uiRelatedRoles           []iamv1alpha1.RoleReference
 }
 
@@ -68,10 +68,10 @@ func (f *userInvitationFinalizer) Finalize(ctx context.Context, obj client.Objec
 }
 
 func (r *UserInvitationController) SetupController(mgr ctrl.Manager, systemNamespace, getInvitationRoleName, acceptInvitationRoleName string) error {
-	r.client = mgr.GetClient()
-	r.systemNamespace = systemNamespace
-	r.getInvitationRoleName = getInvitationRoleName
-	r.acceptInvitationRoleName = acceptInvitationRoleName
+	r.Client = mgr.GetClient()
+	r.SystemNamespace = systemNamespace
+	r.GetInvitationRoleName = getInvitationRoleName
+	r.AcceptInvitationRoleName = acceptInvitationRoleName
 	return nil
 }
 
@@ -92,7 +92,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Get the UserInvitation
 	ui := &iamv1alpha1.UserInvitation{}
-	if err := r.client.Get(ctx, req.NamespacedName, ui); err != nil {
+	if err := r.Client.Get(ctx, req.NamespacedName, ui); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("UserInvitation not found, probably deleted. Skipping reconciliation")
 			return ctrl.Result{}, nil
@@ -135,7 +135,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Get the User that was invited by the UserInvitation
 	var users iamv1alpha1.UserList
-	if err := r.client.List(ctx, &users, client.MatchingFields{userEmailIndexKey: strings.ToLower(ui.Spec.Email)}); err != nil {
+	if err := r.Client.List(ctx, &users, client.MatchingFields{userEmailIndexKey: strings.ToLower(ui.Spec.Email)}); err != nil {
 		log.Error(err, "Failed to list Users by email")
 		return ctrl.Result{}, fmt.Errorf("failed to list Users by email: %w", err)
 	}
@@ -184,9 +184,9 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 	if ui.Spec.State == iamv1alpha1.UserInvitationStateDeclined {
 		// Delete the PolicyBindings for the invitation-related roles
 		log.Info("Deleting PolicyBindings for accepting the invitation, as the invitation is declined", "userInvitation", ui.GetName())
-		if err := deletePolicyBinding(ctx, r.client, &iamv1alpha1.RoleReference{
-			Name:      r.acceptInvitationRoleName,
-			Namespace: r.systemNamespace,
+		if err := deletePolicyBinding(ctx, r.Client, &iamv1alpha1.RoleReference{
+			Name:      r.AcceptInvitationRoleName,
+			Namespace: r.SystemNamespace,
 		}, *ui); err != nil {
 			log.Error(err, "Failed to delete PolicyBinding for accepting the invitation")
 			return ctrl.Result{}, err
@@ -247,16 +247,16 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 
 func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 	r.uiRelatedRoles = append(r.uiRelatedRoles, iamv1alpha1.RoleReference{
-		Name:      r.getInvitationRoleName,
-		Namespace: r.systemNamespace,
+		Name:      r.GetInvitationRoleName,
+		Namespace: r.SystemNamespace,
 	}, iamv1alpha1.RoleReference{
-		Name:      r.acceptInvitationRoleName,
-		Namespace: r.systemNamespace,
+		Name:      r.AcceptInvitationRoleName,
+		Namespace: r.SystemNamespace,
 	})
 
 	r.finalizer = finalizer.NewFinalizers()
 	if err := r.finalizer.Register(userInvitationFinalizerKey, &userInvitationFinalizer{
-		client:         r.client,
+		client:         r.Client,
 		uiRelatedRoles: r.uiRelatedRoles,
 	}); err != nil {
 		return fmt.Errorf("failed to register user invitation finalizer: %w", err)
@@ -300,7 +300,7 @@ func (r *UserInvitationController) updateUserInvitationStatus(ctx context.Contex
 
 	meta.SetStatusCondition(&ui.Status.Conditions, condition)
 
-	if err := r.client.Status().Update(ctx, ui); err != nil {
+	if err := r.Client.Status().Update(ctx, ui); err != nil {
 		log.Error(err, "failed to update UserInvitation status", "userInvitation", ui.Name)
 		return fmt.Errorf("failed to update UserInvitation status: %w", err)
 	}
@@ -322,7 +322,7 @@ func (r *UserInvitationController) createPolicyBinding(
 
 	// Check if the PolicyBinding already exists
 	policyBinding := &iamv1alpha1.PolicyBinding{}
-	if err := r.client.Get(ctx, client.ObjectKey{Name: getDeterministicResourceName(roleRef.Name, *invitation), Namespace: roleRef.Namespace}, policyBinding); err != nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: getDeterministicResourceName(roleRef.Name, *invitation), Namespace: roleRef.Namespace}, policyBinding); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("PolicyBinding not found, creating")
 		} else {
@@ -364,7 +364,7 @@ func (r *UserInvitationController) createPolicyBinding(
 	}
 
 	// Create the PolicyBinding
-	if err := r.client.Create(ctx, policyBinding); err != nil {
+	if err := r.Client.Create(ctx, policyBinding); err != nil {
 		return fmt.Errorf("failed to create policy binding resource: %w", err)
 	}
 
@@ -401,7 +401,7 @@ func (r *UserInvitationController) getResourceRef(ctx context.Context, roleRef *
 
 	// Get the Organization
 	org := &resourcemanagerv1alpha1.Organization{}
-	if err := r.client.Get(ctx, client.ObjectKey{Name: ui.Spec.OrganizationRef.Name}, org); err != nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: ui.Spec.OrganizationRef.Name}, org); err != nil {
 		return iamv1alpha1.ResourceReference{}, fmt.Errorf("failed to get Organization: %w", err)
 	}
 
@@ -469,7 +469,7 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 
 	// Check if the OrganizationMembership already exists
 	organizationMembership := &resourcemanagerv1alpha1.OrganizationMembership{}
-	if err := r.client.Get(ctx, client.ObjectKey{Name: fmt.Sprintf("member-%s", user.Name), Namespace: fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name)}, organizationMembership); err != nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: fmt.Sprintf("member-%s", user.Name), Namespace: fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name)}, organizationMembership); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("OrganizationMembership not found, creating")
 		} else {
@@ -505,7 +505,7 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 	}
 
 	// Create the OrganizationMembership
-	if err := r.client.Create(ctx, organizationMembership); err != nil {
+	if err := r.Client.Create(ctx, organizationMembership); err != nil {
 		return fmt.Errorf("failed to create organization membership resource: %w", err)
 	}
 
@@ -533,7 +533,7 @@ func (r *UserInvitationController) findUserInvitationsForUser(ctx context.Contex
 
 	// List UserInvitations matching this user's email (case-insensitive)
 	var uiList iamv1alpha1.UserInvitationList
-	if err := r.client.List(ctx, &uiList, client.MatchingFields{userEmailIndexKey: strings.ToLower(user.Spec.Email)}); err != nil {
+	if err := r.Client.List(ctx, &uiList, client.MatchingFields{userEmailIndexKey: strings.ToLower(user.Spec.Email)}); err != nil {
 		log.Error(err, "failed to list UserInvitations by email")
 		return nil
 	}
