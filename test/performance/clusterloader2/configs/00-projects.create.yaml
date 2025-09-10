@@ -1,0 +1,62 @@
+name: "create-100-projects"
+
+# Everything is cluster-scoped; no automanaged namespaces
+namespace:
+  number: 0
+
+tuningSets:
+  - name: "projects-qps"
+    initialDelay: {{ DefaultParam .CL2_INITIAL_DELAY "0s" }}
+    globalQpsLoad:
+      qps: {{ DefaultParam .CL2_QPS 20 }}
+      burst: {{ DefaultParam .CL2_BURST 20 }}
+
+steps:
+  # Keep measurements minimal for now
+  - name: "Start system measurements"
+    measurements:
+      - identifier: "Avail"
+        method: "APIAvailability"
+        params: { action: "start", mode: "cluster", pollFrequency: "1s", timeout: "10m" }
+      # Enable EtcdMetrics later with real control-plane IPs (hostnames are ignored by CL2)
+      # - identifier: "Etcd"
+      #   method: "EtcdMetrics"
+      #   params:
+      #     action: "start"
+      #     masterIPs: ["<CONTROL-PLANE-IP-1>:2379", "<CONTROL-PLANE-IP-2>:2379"]
+
+  - name: "Start timer (create)"
+    measurements:
+      - identifier: "PhaseTimer"
+        method: "Timer"
+        params: { action: "start", label: "create-projects" }
+
+  # ---------- Create N Projects (cluster-scoped) ----------
+  - name: "Create Projects"
+    phases:
+      - replicasPerNamespace: {{ DefaultParam .CL2_PROJECT_COUNT 100 }}
+        tuningSet: "projects-qps"
+        objectBundle:
+          - basename: {{ DefaultParam .CL2_PROJECT_BASENAME "proj" }}
+            objectTemplatePath: "../templates/project.yaml"
+            templateFillMap:
+              ownerName: {{ DefaultParam .CL2_OWNER_NAME "default-org" }}
+              labels:
+                cl2-group: "projects"
+
+  - name: "Stop timer (create)"
+    measurements:
+      - identifier: "PhaseTimer"
+        method: "Timer"
+        params: { action: "stop", label: "create-projects" }
+
+  - name: "Gather system measurements"
+    measurements:
+      - identifier: "Avail"
+        method: "APIAvailability"
+        params: { action: "gather" }
+      # - identifier: "Etcd"
+      #   method: "EtcdMetrics"
+      #   params:
+      #     action: "gather"
+      #     masterIPs: ["<CONTROL-PLANE-IP-1>:2379", "<CONTROL-PLANE-IP-2>:2379"]

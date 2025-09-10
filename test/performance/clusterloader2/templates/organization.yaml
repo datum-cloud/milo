@@ -1,0 +1,10 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  # Use the templated name passed from the config (e.g., "default-org")
+  name: {{ .name }}
+  labels:
+    cl2-role: "owner"
+spec:
+  # This field is required by your CRD (Enum: Personal|Standard)
+  type: {{ DefaultParam .orgType "Standard" }}
