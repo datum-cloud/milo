@@ -1,0 +1,8 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-email-admin
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: notification-email-creator
