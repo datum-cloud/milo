@@ -392,3 +392,35 @@ tasks:
           (cd "$_TOOL_DIR" && ln -sf "$_NAME-$_VERSION" "$_NAME")
           echo "Tool $_NAME is now available at $_SYMLINK_PATH (points to $_VERSIONED_TOOL_PATH)"
         fi
+
+  validate-kustomizations:
+      desc: Validate all kustomization.yaml files using kustomize build
+      cmds:
+        - echo "# Kustomize Validation Results"
+        - echo ""
+        - |
+          HAS_ERRORS=0
+          KUSTOMIZATION_DIRS=$(find . -name "kustomization.yaml" -exec dirname {} \;)
+          for dir in $KUSTOMIZATION_DIRS; do
+            echo "🔍 Validating: $dir"
+            if ! OUTPUT=$(kustomize build "$dir" 2>&1); then
+              echo ""
+              echo "❌ Error in '$dir':"
+              echo "----------------------------------------"
+              echo "$OUTPUT"
+              echo "----------------------------------------"
+              echo ""
+              HAS_ERRORS=1
+            else
+              echo "✅ $dir is valid"
+            fi
+          done
+          if [ "$HAS_ERRORS" -eq 1 ]; then
+            echo ""
+            echo "🚨 One or more kustomizations failed validation."
+            exit 1
+          else
+            echo ""
+            echo "🎉 All kustomizations are valid."
+          fi
+      silent: false
