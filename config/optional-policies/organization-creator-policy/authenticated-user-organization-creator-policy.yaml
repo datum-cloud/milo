@@ -11,7 +11,7 @@ spec:
     namespace: milo-system
   subjects:
     - kind: Group
-      name: "system:authenticated-users"
+      name: "system:authenticated"
   resourceSelector:
     resourceKind:
       apiGroup: "resourcemanager.miloapis.com"
