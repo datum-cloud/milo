@@ -1,0 +1,11 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-email-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    # Read-only permissions for Email resources
+    - notification.miloapis.com/emails.get
+    - notification.miloapis.com/emails.list
+    - notification.miloapis.com/emails.watch

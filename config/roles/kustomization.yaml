@@ -19,3 +19,6 @@ resources:
   - iam-user-deactivations-reader.yaml
   - iam-user-deactivations-editor.yaml
   - iam-user-deactivations-admin.yaml
+  - notification-email-reader.yaml
+  - notification-email-creator.yaml
+  - notification-email-admin.yaml
