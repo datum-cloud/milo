@@ -1,4 +1,4 @@
-apiVersion: notification.miloapis.com/v1alpha1
+apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: notification-email-creator
