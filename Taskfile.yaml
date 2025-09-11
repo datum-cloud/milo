@@ -7,6 +7,24 @@ vars:
   CONTROLLER_TOOLS_VERSION: v0.18.0
   # renovate: datasource=go depName=fybrik.io/crdoc
   CRDOC_VERSION: v0.6.4
+  # renovate: datasource=go depName=github.com/kyverno/chainsaw
+  CHAINSAW_VERSION: v0.2.12
+  # Container image configuration
+  MILO_IMAGE_NAME: "ghcr.io/datum-cloud/milo"
+  MILO_IMAGE_TAG: "dev"
+  TEST_INFRA_CLUSTER_NAME: "test-infra"
+  # Test infra repository configuration - can be overridden with environment variable
+  TEST_INFRA_REPO_REF: 'v0.4.0'
+
+includes:
+  # Must set TASK_X_REMOTE_TASKFILES=1 to use this feature.
+  #
+  # See: https://taskfile.dev/experiments/remote-taskfiles
+  test-infra:
+    taskfile: https://raw.githubusercontent.com/datum-cloud/test-infra/{{.TEST_INFRA_REPO_REF}}/Taskfile.yml
+    checksum: 4995ce0e9bc4290b3a0175dee77af2570d715b435d5f3ff65f9cb6c491837bcb
+    vars:
+      REPO_REF: "{{.TEST_INFRA_REPO_REF}}"
 
 tasks:
   default:
@@ -15,37 +33,252 @@ tasks:
       - task --list
     silent: true
 
-  generate-dev-certs:
-    desc: Generate self-signed certificates for local webhook development
+  kubectl:
+    desc: Run kubectl commands against the Milo API server
+    silent: true
     cmds:
-      - mkdir -p "{{.CERTS_DIR}}"
+      - KUBECONFIG=.milo/kubeconfig kubectl {{.CLI_ARGS}}
+
+  dev:build:
+    desc: Build the Milo container image for development
+    silent: true
+    cmds:
       - |
         set -e
-        echo "Generating self-signed certificates for local development..."
+        echo "Building Milo container image: {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}"
+        docker build -t "{{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}" .
+        echo "Successfully built {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}"
+    sources:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "Dockerfile"
+    generates:
+      - ".task-build-timestamp"
+    method: timestamp
 
-        CERTS_DIR="{{.CERTS_DIR}}"
+  dev:load:
+    desc: Load the Milo container image into the kind cluster
+    silent: true
+    cmds:
+      - |
+        set -e
+        echo "Loading image {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}} into kind cluster '{{.TEST_INFRA_CLUSTER_NAME}}'..."
+        kind load docker-image "{{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}" --name "{{.TEST_INFRA_CLUSTER_NAME}}"
+        echo "Successfully loaded image into kind cluster"
 
-        # Generate private key
-        openssl genrsa -out "$CERTS_DIR/tls.key" 2048
+  dev:deploy:
+    desc: Deploy complete Milo control plane (etcd + API server + controller manager) to test-infra cluster
+    silent: true
+    deps:
+      - generate:code
+    cmds:
+      - |
+        set -e
+        echo "🚀 Deploying complete Milo control plane to test-infra cluster..."
 
-        # Generate certificate signing request and self-signed certificate
-        # Using localhost and 127.0.0.1 for local development
-        openssl req -new -x509 -key "$CERTS_DIR/tls.key" -out "$CERTS_DIR/tls.crt" -days 365 \
-          -subj "/C=US/ST=Development/L=Local/O=Milo/OU=Development/CN=localhost" \
-          -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:::1"
+        # Deploy all components including etcd, API server, controller manager, webhooks, RBAC, and networking
+        # Everything is deployed in the milo-system namespace for simplified testing
+        echo "📋 Deploying Milo control plane with etcd storage backend..."
+        task test-infra:kubectl -- apply -k config/overlays/test-infra/
 
-        echo "Certificates generated in $CERTS_DIR/"
-        echo "  - Private key: $CERTS_DIR/tls.key"
-        echo "  - Certificate: $CERTS_DIR/tls.crt"
+        # Wait for etcd Helm release to be complete (ensures deployment is fully reconciled)
+        echo "⏳ Waiting for etcd Helm release to be ready..."
+        task test-infra:kubectl -- wait --for=condition=Ready helmrelease/etcd -n milo-system --timeout=300s
+
+        # Wait for etcd pod readiness (API server needs etcd to store data)
+        echo "⏳ Waiting for etcd pod to be ready..."
+        task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/component=etcd -n milo-system --timeout=180s
+
+        # Wait for API server to be ready (required for CRD installation)
+        # API server must be running before we can install custom resources
+        echo "⏳ Waiting for API server to be ready..."
+        task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-apiserver -n milo-system --timeout=180s
+
+        # Install CRDs into Milo API server (defines custom resource schemas)
+        # Controller manager needs these CRDs to watch and reconcile custom resources
+        echo "📋 Installing core control plane CRDs into Milo API server..."
+        task kubectl -- apply -k config/crd/overlays/core-control-plane/
+        task kubectl -- wait --for=condition=Established customresourcedefinitions --all
+
+        # Step 6b: Install infrastructure control plane CRDs into Milo API server
+        # This includes ProjectControlPlanes needed by the controller manager
+        echo "📋 Installing infrastructure control plane CRDs into the infrastructure cluster..."
+        task test-infra:kubectl -- apply -k config/crd/overlays/infra-control-plane/
+        task test-infra:kubectl -- wait --for=condition=Established customresourcedefinitions projectcontrolplanes.infrastructure.miloapis.com
+
+        # Step 7: Verify CRDs are properly installed (sanity check)
+        echo "✅ Verifying CRDs are installed..."
+        CRD_COUNT=$(task kubectl -- get crd --no-headers | grep miloapis | wc -l || echo "0")
+        echo "Installed $CRD_COUNT Milo CRDs in API server"
+
+        # Step 7b: Create test users in Milo API server
+        echo "👤 Creating test users in Milo API server..."
+        task kubectl -- apply -f config/overlays/test-infra/resources/test-users.yaml
+
+        # Step 8: Wait for controller manager (now that CRDs exist for it to reconcile)
+        # Controller manager can only start successfully after CRDs are available
+        echo "⏳ Waiting for controller manager to be ready..."
+        task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s
+
+        # Step 8b: Install webhook configurations to Milo API server
+        # Webhooks validate and mutate resources submitted to the Milo API server
+        echo "🔒 Installing webhook configurations to Milo API server..."
+        task kubectl -- apply -k config/webhook/
+        # Webhook configurations don't have conditions to wait for - they're ready immediately after creation
+        echo "✅ Webhook configurations installed successfully"
+
+        WEBHOOK_COUNT=$(task kubectl -- get mutatingwebhookconfigurations,validatingwebhookconfigurations --no-headers | grep resourcemanager.miloapis.com | wc -l || echo "0")
+        echo "Installed $WEBHOOK_COUNT webhook configurations in Milo API server"
+
+        # Update kubeconfig for easy developer access
+        echo "📝 Updating kubeconfig for developer access..."
+
         echo ""
-        echo "To use these certificates, run the controller manager with:"
-        echo "  --tls-cert-file=$CERTS_DIR/tls.crt --tls-private-key-file=$CERTS_DIR/tls.key"
-    status:
-      - test -f "{{.CERTS_DIR}}/tls.key"
-      - test -f "{{.CERTS_DIR}}/tls.crt"
+        echo "✅ Milo API server and storage deployed successfully!"
+        echo ""
+        echo "📊 Status:"
+        echo "  etcd: task test-infra:kubectl -- get pods -n milo-system -l app.kubernetes.io/component=etcd"
+        echo "  API server: task test-infra:kubectl -- get pods -n milo-system -l app.kubernetes.io/name=milo-apiserver"
+        echo "  Controller manager: task test-infra:kubectl -- get pods -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
+        echo ""
+        echo "🔗 Access:"
+        echo "  Gateway: https://localhost:30443 (via Envoy Gateway)"
+        echo ""
+        echo "🔐 Authentication:"
+        echo "  Kubeconfig: .milo/kubeconfig"
+        echo "  Usage: task kubectl -- <command>"
+        echo ""
+        echo "🎯 Test custom resources:"
+        echo "  task kubectl -- get organizations"
+        echo "  task kubectl -- get projects"
+        echo "  task kubectl -- get users    # Should show 'admin' and 'test-user'"
+        echo ""
+        echo "📋 Available tokens:"
+        echo "  Admin: test-admin-token (system:masters)"
+        echo "  User: test-user-token (system:authenticated)"
+
+  dev:setup:
+    desc: Complete setup of test-infra cluster with full Milo control plane
+    silent: true
+    cmds:
+      - task: test-infra:cluster-up
+      - task: dev:build
+      - task: dev:load
+      - task: dev:deploy
+
+  dev:redeploy:
+    desc: Quick rebuild and redeploy for development iterations
+    deps:
+      - dev:load
+    cmds:
+      - |
+        set -e
+        echo "Redeploying Milo controller manager..."
+
+        # Restart the deployment to pick up new image
+        task test-infra:kubectl -- rollout restart deployment/milo-controller-manager -n milo-system
+
+        # Wait for rollout to complete
+        echo "Waiting for rollout to complete..."
+        task test-infra:kubectl -- rollout status deployment/milo-controller-manager -n milo-system --timeout=120s
+
+        echo "✅ Redeployment complete!"
+        echo "Check logs with: task test-infra:kubectl -- logs -n milo-system -l app.kubernetes.io/name=milo-controller-manager"
+
+  dev:install-observability:
+    desc: "Install test-infra observability, then apply Milo-specific scraping manifests"
+    silent: true
+    cmds:
+      - |
+        set -euo pipefail
+        echo "🔧 Installing base observability stack via test-infra…"
+        task test-infra:install-observability
+
+        echo "📎 Applying Milo observability (ServiceMonitor + cert)…"
+        task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/
+
+        echo "✅ Observability overlay applied."
+
+  test:end-to-end:
+    desc: Run end to end tests using Chainsaw against Milo API server. Pass directory names to run specific tests (e.g., 'task test:end-to-end -- quota' or 'task test:end-to-end -- quota group')
+    deps:
+      - task: install-go-tool
+        vars:
+          NAME: chainsaw
+          PACKAGE: github.com/kyverno/chainsaw
+          VERSION: "{{.CHAINSAW_VERSION}}"
+    cmds:
+      - |
+        set -e
+        echo "Running Chainsaw end to end tests against Milo API server..."
+        echo "Using Milo API server via .milo/kubeconfig"
+
+        # Verify Milo kubeconfig exists
+        if [ ! -f ".milo/kubeconfig" ]; then
+          echo "Error: Milo kubeconfig not found at .milo/kubeconfig"
+          echo "Please run 'task dev:setup' to set up the test infrastructure first."
+          exit 1
+        fi
+
+        # Verify connectivity to Milo API server
+        echo "Verifying connectivity to Milo API server..."
+        if ! KUBECONFIG=.milo/kubeconfig kubectl get --raw /healthz &>/dev/null; then
+          echo "Error: Cannot connect to Milo API server"
+          echo "Please ensure the test infrastructure is running with 'task dev:setup'"
+          echo "You can check the status with:"
+          echo "  task test-infra:kubectl -- get pods -n milo-system"
+          exit 1
+        fi
+        echo "✓ Successfully connected to Milo API server"
+
+        # Determine test paths based on CLI arguments
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          # No arguments provided - run all tests
+          echo "No test directories specified - running all end-to-end tests..."
+          TEST_PATHS="test/"
+        else
+          # Arguments provided - construct test paths
+          echo "Running tests for specified directories: {{.CLI_ARGS}}"
+          TEST_PATHS=""
+          for dir in {{.CLI_ARGS}}; do
+            if [ -d "test/$dir" ]; then
+              TEST_PATHS="$TEST_PATHS test/$dir"
+            else
+              echo "Warning: Test directory 'test/$dir' does not exist, skipping..."
+            fi
+          done
+
+          # Check if we found any valid test directories
+          if [ -z "$TEST_PATHS" ]; then
+            echo "Error: No valid test directories found for arguments: {{.CLI_ARGS}}"
+            echo "Available test directories:"
+            ls -1 test/ | grep -v "^config$" | grep -v "^docker-compose.yaml$" || true
+            exit 1
+          fi
+        fi
+
+        echo "Test paths: $TEST_PATHS"
+        KUBECONFIG=.milo/kubeconfig "{{.TOOL_DIR}}/chainsaw" test $TEST_PATHS --selector "requires!=authorization-provider"
     silent: true
 
+  test:unit:
+    desc: Run unit tests
+    cmds:
+      - |
+        set -e
+        echo "Running unit tests..."
+        go test ./... -v
+    silent: true
+
+  # Code generation tasks
   generate:
+    desc: Generate code (alias for generate:code for backward compatibility)
+    cmds:
+      - task: generate:code
+      - task: generate:docs
+
+  generate:code:
     desc: Generate code including deepcopy, objects, CRDs, and potentially protobuf marshallers
     deps:
       - task: install-go-tool
@@ -72,7 +305,7 @@ tasks:
       - "\"{{.TOOL_DIR}}/controller-gen\" rbac:roleName=milo-controller-manager paths=\"./internal/controllers/...\" output:dir=\"./config/controller-manager/overlays/core-control-plane/rbac\""
     silent: true
 
-  api-docs:
+  generate:docs:
     desc: Generate API docs
     deps:
       - task: install-go-tool
@@ -93,6 +326,7 @@ tasks:
 
   install-go-tool:
     desc: Install a Go tool to {{.TOOL_DIR}}/{{.NAME}} (symlinked from {{.TOOL_DIR}}/{{.NAME}}-{{.VERSION}})
+    silent: true
     internal: true
     # vars: - Variables that need to be set when depending on this task
     #   NAME:
@@ -158,5 +392,3 @@ tasks:
           (cd "$_TOOL_DIR" && ln -sf "$_NAME-$_VERSION" "$_NAME")
           echo "Tool $_NAME is now available at $_SYMLINK_PATH (points to $_VERSIONED_TOOL_PATH)"
         fi
-
-    silent: true

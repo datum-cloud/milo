@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: milo-system
+
+resources:
+  # Test infrastructure namespace
+  - resources/namespace.yaml
+
+  # Etcd dependency for test environment
+  - ../../dependencies/etcd
+
+  # Milo control plane components - will be in milo-system
+  - ../../apiserver
+  - ../../controller-manager/overlays/core-control-plane
+
+  # Ingress configuration (shared Gateway API with Envoy)
+  - ../../ingress/gateway-api
+
+components:
+  - components/auth
+  - components/certificates
+  - ../../components/certificates
+
+patches:
+  # Configure API server for etcd connection
+  - path: patches/apiserver-patch.yaml
+    target:
+      kind: Deployment
+      name: milo-apiserver
+
+  # Configure controller manager for test environment
+  - path: patches/controller-manager-patch.yaml
+    target:
+      kind: Deployment
+      name: milo-controller-manager
+
+images:
+  - name: ghcr.io/datum-cloud/milo
+    newTag: dev

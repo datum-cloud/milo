@@ -23,7 +23,7 @@ spec:
       containers:
       - name: milo-controller-manager
         image: ghcr.io/datum-cloud/milo:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         args:
           - controller-manager
           - --leader-elect=true
@@ -32,12 +32,13 @@ spec:
           - --leader-elect-retry-period=2s
           - --leader-elect-resource-namespace=$(LEADER_ELECT_RESOURCE_NAMESPACE)
           - --authentication-skip-lookup
-          - --secure-port=443
+          - --secure-port=6443
           - --kubeconfig=$(KUBECONFIG)
           - --infra-cluster-kubeconfig=$(INFRA_CLUSTER_KUBECONFIG)
           - --cert-dir=$(CERT_DIR)
           - --tls-cert-file=$(TLS_CERT_FILE)
           - --tls-private-key-file=$(TLS_PRIVATE_KEY_FILE)
+          - --logging-format=$(LOGGING_FORMAT)
           - --v=$(LOG_LEVEL)
           - --control-plane-scope=$(CONTROL_PLANE_SCOPE)
         env:
@@ -46,6 +47,8 @@ spec:
           # Default to INFO level logging
           - name: LOG_LEVEL
             value: "4"
+          - name: LOGGING_FORMAT
+            value: "json"
           - name: KUBECONFIG
             value: /etc/kubernetes/config/kubeconfig
           # Default to using the in-cluster config to connect to the
@@ -67,8 +70,17 @@ spec:
           limits:
             cpu: "1"
             memory: 512Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          runAsGroup: 65534
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+              - ALL
         ports:
-        - containerPort: 443
+        - containerPort: 6443
           name: https
           protocol: TCP
         # The controller manager webhook is exposed on a separate port than the

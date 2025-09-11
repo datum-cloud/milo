@@ -1,0 +1,20 @@
+# Test users that correspond to the authentication tokens configured in auth-tokens-secret.yaml
+# These users are automatically created when running 'task dev:setup'
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: User
+metadata:
+  name: admin
+spec:
+  email: admin@test.local
+  givenName: Admin
+  familyName: User
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: User
+metadata:
+  name: test-user
+spec:
+  email: test-user@test.local
+  givenName: Test
+  familyName: User

@@ -1,0 +1,26 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Email
+metadata:
+  name: user-invitation-sample
+  namespace: milo-system
+spec:
+  templateRef:
+    name: user-invitation
+  # Reference one User custom resources that will receive the e-mail.
+  userRef:
+    name: "87898762149765435787"
+  # Optional: additional recipients.
+  cc:
+    - hr@example.com
+  bcc:
+    - audit@example.com
+  # Provide values for each variable declared in the referenced EmailTemplate.
+  variables:
+    - name: UserName
+      value: "Alice"
+    - name: CompanyName
+      value: "Acme Corp"
+    - name: InviteLink
+      value: "https://invite.example.com/activate"
+  # Optional: influence processing order (low | normal | high).
+  priority: normal

@@ -8,10 +8,13 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"go.miloapis.com/milo/internal/apiserver/admission/plugin/namespace/lifecycle"
+	projectstorage "go.miloapis.com/milo/internal/apiserver/storage/project"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // ← add / keep this
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apiserver/pkg/admission"
 	_ "k8s.io/apiserver/pkg/admission"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -30,12 +33,17 @@ import (
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/klog/v2"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
+
+	// Register JSON logging format
+	_ "k8s.io/component-base/logs/json/register"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
 	"k8s.io/kubernetes/pkg/controlplane/apiserver/options"
 )
 
 func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+	// Enable JSON logging support by default
+	utilfeature.DefaultMutableFeatureGate.Set("LoggingBetaOptions=true")
 }
 
 var (
@@ -143,6 +151,15 @@ func NewOptions() *options.Options {
 	s := options.NewOptions()
 	s.Admission.GenericAdmission.DefaultOffPlugins = DefaultOffAdmissionPlugins()
 
+	if s.Admission.GenericAdmission.Plugins == nil {
+		s.Admission.GenericAdmission.Plugins = admission.NewPlugins()
+	}
+	lifecycle.Register(s.Admission.GenericAdmission.Plugins)
+
+	s.Admission.GenericAdmission.RecommendedPluginOrder =
+		append(s.Admission.GenericAdmission.RecommendedPluginOrder, lifecycle.PluginName)
+	s.Admission.GenericAdmission.EnablePlugins = append(s.Admission.GenericAdmission.EnablePlugins, lifecycle.PluginName)
+
 	wd, _ := os.Getwd()
 	s.SecureServing.ServerCert.CertDirectory = filepath.Join(wd, ".sample-minimal-controlplane")
 
@@ -187,6 +204,13 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregator, error) {
 	// 1. CRDs
 	notFoundHandler := notfoundhandler.New(config.ControlPlane.Generic.Serializer, genericapifilters.NoMuxAndDiscoveryIncompleteKey)
+
+	config.APIExtensions.GenericConfig.RESTOptionsGetter =
+		projectstorage.WithProjectAwareDecorator(config.APIExtensions.GenericConfig.RESTOptionsGetter)
+
+	config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter =
+		projectstorage.WithProjectAwareDecorator(config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter)
+
 	apiExtensionsServer, err := config.APIExtensions.New(genericapiserver.NewEmptyDelegateWithCustomHandler(notFoundHandler))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create apiextensions-apiserver: %w", err)
@@ -207,7 +231,12 @@ func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregat
 		return nil, fmt.Errorf("failed to create storage providers: %w", err)
 	}
 
-	if err := nativeAPIs.InstallAPIs(storageProviders...); err != nil {
+	wrapped := make([]controlplaneapiserver.RESTStorageProvider, 0, len(storageProviders))
+	for _, p := range storageProviders {
+		wrapped = append(wrapped, projectstorage.WrapProvider(p))
+	}
+
+	if err := nativeAPIs.InstallAPIs(wrapped...); err != nil {
 		return nil, fmt.Errorf("failed to install APIs: %w", err)
 	}
 

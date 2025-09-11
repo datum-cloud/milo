@@ -1,0 +1,16 @@
+apiVersion: gateway.networking.k8s.io/v1alpha3
+kind: BackendTLSPolicy
+metadata:
+  name: milo-apiserver-tls
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: milo-apiserver
+  validation:
+    # Use the CA certificate from the milo-apiserver TLS secret
+    hostname: milo-apiserver.milo-system.svc.cluster.local
+    caCertificateRefs:
+    - name: milo-apiserver-tls
+      group: ""
+      kind: Secret

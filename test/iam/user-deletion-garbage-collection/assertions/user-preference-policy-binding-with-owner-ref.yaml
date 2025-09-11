@@ -1,0 +1,9 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: userpreference-self-manage-test-gc-user
+  namespace: milo-system
+  ownerReferences:
+  - apiVersion: iam.miloapis.com/v1alpha1
+    kind: User
+    name: test-gc-user

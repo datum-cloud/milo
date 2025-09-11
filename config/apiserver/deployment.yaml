@@ -22,10 +22,11 @@ spec:
       automountServiceAccountToken: false
       containers:
       - image: ghcr.io/datum-cloud/milo:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         args:
           - apiserver
           - --authorization-mode=$(AUTHORIZATION_MODE)
+          - --authentication-config=$(AUTHENTICATION_CONFIG)
           - --authentication-token-webhook-config-file=$(AUTHENTICATION_WEBHOOK_CONFIG_FILE)
           - --authentication-token-webhook-version=$(AUTHENTICATION_TOKEN_WEBHOOK_VERSION)
           - --authorization-webhook-config-file=$(AUTHORIZATION_WEBHOOK_CONFIG_FILE)
@@ -43,12 +44,18 @@ spec:
           - --service-account-issuer=$(SERVICE_ACCOUNT_ISSUER)
           - --client-ca-file=$(CLIENT_CA_FILE)
           - --tracing-config-file=$(TRACING_CONFIG_FILE)
+          - --token-auth-file=$(TOKEN_AUTH_FILE)
+          - --logging-format=$(LOGGING_FORMAT)
           - --v=$(LOG_LEVEL)
         env:
           - name: LOG_LEVEL
             value: "4"
+          - name: LOGGING_FORMAT
+            value: "json"
           - name: AUTHORIZATION_MODE
             value: "RBAC,Webhook"
+          - name: AUTHENTICATION_CONFIG
+            value: ""
           - name: AUTHENTICATION_WEBHOOK_CONFIG_FILE
             value: "/etc/kubernetes/config/authentication-config.yaml"
           - name: AUTHENTICATION_TOKEN_WEBHOOK_VERSION
@@ -83,6 +90,8 @@ spec:
             value: https://milo-apiserver.milo-system.svc.cluster.local
           - name: TRACING_CONFIG_FILE
             value: /etc/kubernetes/config/tracing-config.yaml
+          - name: TOKEN_AUTH_FILE
+            value: ""
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -130,7 +139,7 @@ spec:
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
-      podSecurityContext:
+      securityContext:
         runAsUser: 65534
         runAsGroup: 65534
         fsGroup: 65534

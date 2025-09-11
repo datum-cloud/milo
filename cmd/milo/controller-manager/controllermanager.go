@@ -66,6 +66,10 @@ import (
 	kubectrlmgrconfig "k8s.io/kubernetes/pkg/controller/apis/config"
 	garbagecollector "k8s.io/kubernetes/pkg/controller/garbagecollector"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
+
+	// Register JSON logging format
+	_ "k8s.io/component-base/logs/json/register"
 
 	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
@@ -73,12 +77,13 @@ import (
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
+	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
+	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -102,12 +107,15 @@ var (
 func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 	utilruntime.Must(metricsfeatures.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
+	// Enable JSON logging support by default
+	utilfeature.DefaultMutableFeatureGate.Set("LoggingBetaOptions=true")
 	utilruntime.Must(corev1.AddToScheme(Scheme))
 
 	// Add Milo API types to the global scheme
 	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
 }
 
 const (
@@ -337,7 +345,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error building infrastructure cluster")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-
 			// We intentionally use a new configuration here because the one built into
 			// the legacy controller manager component leverages protobuf encoding. The
 			// controller runtime uses JSON encoding when managing CRDs.
@@ -396,6 +403,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := iamv1alpha1webhook.SetupUserDeactivationWebhooksWithManager(ctrl, SystemNamespace); err != nil {
 				logger.Error(err, "Error setting up userdeactivation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := notificationv1alpha1webhook.SetupEmailTemplateWebhooksWithManager(ctrl, SystemNamespace); err != nil {
+				logger.Error(err, "Error setting up emailtemplate webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := notificationv1alpha1webhook.SetupEmailWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "unable to setup email webhook", "error", err)
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

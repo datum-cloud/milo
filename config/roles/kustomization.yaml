@@ -19,5 +19,3 @@ resources:
   - iam-user-deactivations-reader.yaml
   - iam-user-deactivations-editor.yaml
   - iam-user-deactivations-admin.yaml
-
-namespace: milo-system
