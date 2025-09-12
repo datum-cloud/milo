@@ -1,0 +1,11 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-email-creator
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: notification-email-reader
+  includedPermissions:
+    # Create-only permissions for Email resources (notifications cannot be updated or deleted)
+    - notification.miloapis.com/emails.create

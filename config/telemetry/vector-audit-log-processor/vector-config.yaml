@@ -4,84 +4,25 @@ sources:
   internal_metrics:
     type: internal_metrics
 
-  # Dedicated webhook server for project control plane audit logs
-  project_audit_log_webhook:
+  # Webhook server for Milo audit logs (project context derived from user.extra)
+  audit_log_webhook:
     type: http_server
-    address: 0.0.0.0:8080
-    # Project control planes send to /audit/v1alpha1/projects/{project-name}
-    path: /audit/v1alpha1/projects
+    address: 0.0.0.0:8081
+    path: /
     strict_path: false
     decoding:
       codec: json
 
-  # Dedicated webhook server for core control plane audit logs
-  core_audit_log_webhook:
-    type: http_server
-    address: 0.0.0.0:8081
-    # Core control plane sends to /audit/v1alpha1/core
-    path: /audit/v1alpha1/core
-    strict_path: true
-    decoding:
-      codec: json
-
 transforms:
-  # Transform project control plane audit logs
-  project_audit_log_transformer:
+  # Transform Milo audit logs (handles both project and non-project requests)
+  audit_log_transformer:
     type: remap
     # When errors occur, we don't want to send bad data upstream. We'd prefer to
     # have a log of the error and drop it. Alerts should file to notify us when
     # the vector configuration is not working as expected.
     drop_on_error: true
     inputs:
-      - project_audit_log_webhook
-    source: |
-      # Extract the project name from the path using regex capture
-      project_matches, err = parse_regex(.path, r'/audit/v1alpha1/projects/(?P<project>[^/]+)')
-      if err != null {
-        log("failed to extract project name from path", level: "error", rate_limit_secs: 0)
-        log(encode_json(.), level: "error", rate_limit_secs: 0)
-        abort
-      }
-
-      project_name = project_matches.project
-
-      if !is_array(.items) {
-        log("failed to convert items to array", level: "error", rate_limit_secs: 0)
-        abort
-      }
-
-      audit_logs = []
-
-      # Transform each item in the items array
-      for_each(array!(.items)) -> |_index, item| {
-        log = object!(item)
-
-        # Initialize annotations if they don't exist
-        if !exists(log.annotations) {
-          log.annotations = {}
-        }
-        annotations = object!(log.annotations)
-
-        # Set project control plane specific metadata
-        annotations = set!(value: annotations, path: ["resourcemanager.miloapis.com/project-name"], data: project_name)
-        annotations = set!(value: annotations, path: ["telemetry.miloapis.com/control-plane-type"], data: "project")
-
-        log.annotations = annotations
-
-        audit_logs = push(audit_logs, log)
-      }
-
-      . = audit_logs
-
-  # Transform core control plane audit logs
-  core_audit_log_transformer:
-    type: remap
-    # When errors occur, we don't want to send bad data upstream. We'd prefer to
-    # have a log of the error and drop it. Alerts should file to notify us when
-    # the vector configuration is not working as expected.
-    drop_on_error: true
-    inputs:
-      - core_audit_log_webhook
+      - audit_log_webhook
     source: |
       if !is_array(.items) {
         log("failed to convert items to array", level: "error", rate_limit_secs: 0)
@@ -107,8 +48,9 @@ transforms:
           annotations = set!(value: annotations, path: ["resourcemanager.miloapis.com/project-name"], data: log.objectRef.name)
         }
 
-        # Handle organization attribution for core control plane
+        # Handle organization and project attribution for core control plane
         organization_name = null
+        project_name = null
 
         # Option 1: Extract from namespace if it follows organization-{org-name} pattern
         if exists(log.objectRef.namespace) {
@@ -153,6 +95,18 @@ transforms:
                 annotations = set!(value: annotations, path: ["resourcemanager.miloapis.com/organization-name"], data: organization_name)
               }
 
+            } else if parent_type[0] == "Project" {
+              if length(parent_name) > 0 {
+                project_name = parent_name[0]
+              } else {
+                log("failed to extract project name from parent resource as parent-name is empty for parent-type Project", level: "error", rate_limit_secs: 0)
+                abort
+              }
+
+              if project_name != null {
+                annotations = set!(value: annotations, path: ["resourcemanager.miloapis.com/project-name"], data: project_name)
+              }
+
             } else if parent_type[0] == "User" {
               user_name = null
 
@@ -171,8 +125,13 @@ transforms:
           }
         }
 
-        # Set core control plane specific metadata
-        annotations = set!(value: annotations, path: ["telemetry.miloapis.com/control-plane-type"], data: "core")
+        # Set control plane metadata. If a project was identified via user extra,
+        # classify as project control-plane for downstream filtering; else core.
+        if project_name != null {
+          annotations = set!(value: annotations, path: ["telemetry.miloapis.com/control-plane-type"], data: "project")
+        } else {
+          annotations = set!(value: annotations, path: ["telemetry.miloapis.com/control-plane-type"], data: "core")
+        }
 
         log.annotations = annotations
 
@@ -189,8 +148,7 @@ transforms:
     # the vector configuration is not working as expected.
     drop_on_error: true
     inputs:
-      - project_audit_log_transformer
-      - core_audit_log_transformer
+      - audit_log_transformer
     source: |
       # Filter internal cluster IPs from sourceIPs array
       if exists(.sourceIPs) && is_array(.sourceIPs) {

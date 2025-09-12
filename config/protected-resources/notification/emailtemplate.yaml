@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: notification.miloapis.com-emailtemplate
+spec:
+  serviceRef:
+    name: "notification.miloapis.com"
+  kind: EmailTemplate
+  plural: emailtemplates
+  singular: emailtemplate
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
