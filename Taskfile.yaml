@@ -198,7 +198,10 @@ tasks:
         echo "📎 Applying Milo observability (ServiceMonitor + cert)…"
         task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/
 
-        echo "✅ Observability overlay applied."
+        echo "🔍 Installing Milo telemetry components (Vector audit log processor)…"
+        task test-infra:kubectl -- apply -k config/telemetry/
+
+        echo "✅ Observability stack with telemetry components deployed."
 
   test:end-to-end:
     desc: Run end to end tests using Chainsaw against Milo API server. Pass directory names to run specific tests (e.g., 'task test:end-to-end -- quota' or 'task test:end-to-end -- quota group')

@@ -1,6 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
+resources:
+  - audit-policy-configmap.yaml
+  - audit-webhook-configmap.yaml
+
 patches:
   - patch: |-
       - op: add
@@ -35,6 +39,34 @@ patches:
         value:
           name: AUDIT_WEBHOOK_MODE
           value: "batch"
+      # Add volume mounts for audit configuration files
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          name: audit-policy-config
+          mountPath: /etc/kubernetes/config/audit-policy-config.yaml
+          subPath: audit-policy-config.yaml
+          readOnly: true
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          name: audit-webhook-config
+          mountPath: /etc/kubernetes/config/audit-webhook-config.yaml
+          subPath: audit-webhook-config.yaml
+          readOnly: true
+      # Add volumes for audit configuration files
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: audit-policy-config
+          configMap:
+            name: audit-policy-config
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: audit-webhook-config
+          configMap:
+            name: audit-webhook-config
     target:
       group: apps
       version: v1
