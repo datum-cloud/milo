@@ -8,25 +8,22 @@ organization, project, and user-scoped log analysis.
 ## Architecture Overview
 
 The Vector Audit Log Processor serves as a centralized audit log collection and
-processing hub for the Milo platform. It receives audit logs from both the core
-control plane and project-specific control planes, enriches them with contextual
+processing hub for the Milo platform. It receives audit logs from the Milo API server
+(covering both platform and project-scoped requests), enriches them with contextual
 metadata, and forwards them to downstream observability systems.
 
 ```mermaid
 
 graph TB
-    subgraph "Milo Control Planes"
-        CoreAPI["Core API Server<br/>(milo-apiserver)"]
-        ProjAPI1["Project API Server 1<br/>(project-alpha)"]
-        ProjAPI2["Project API Server 2<br/>(project-beta)"]
+    subgraph "Milo API Server"
+        MiloAPI["milo-apiserver"]
     end
 
     subgraph "Vector Audit Log Processor"
         Webhook["Webhook Server<br/>:8081 (path '/')"]
 
         subgraph "Transformers"
-            CoreTransform["Core Log Transformer"]
-            ProjTransform["Project Log Transformer"]
+            Transform["Log Transformer"]
             CommonProcessor["Common Log Processor"]
         end
 
@@ -39,13 +36,11 @@ graph TB
     end
 
     %% API Server to Vector connections
-    CoreAPI -->|"POST (batch audit events)"| Webhook
-    ProjAPI1 -->|"POST (batch audit events; project via user.extra)"| Webhook
-    ProjAPI2 -->|"POST (batch audit events; project via user.extra)"| Webhook
+    MiloAPI -->|"POST (batch audit events; project via user.extra when applicable)"| Webhook
 
     %% Vector processing flow
-    Webhook --> CoreTransform
-    CoreTransform --> |Sends individual audit logs to| CommonProcessor
+    Webhook --> Transform
+    Transform --> |Sends individual audit logs to| CommonProcessor
 
     %% Output to downstream systems
     CommonProcessor --> Loki
@@ -57,8 +52,8 @@ graph TB
     classDef vector fill:#f3e5f5
     classDef downstream fill:#e8f5e8
 
-    class CoreAPI,ProjAPI1,ProjAPI2 apiServer
-    class CoreWebhook,ProjWebhook,CoreTransform,ProjTransform,CommonProcessor,Metrics vector
+    class MiloAPI apiServer
+    class Webhook,Transform,CommonProcessor,Metrics vector
     class Loki,Prometheus downstream
 ```
 
