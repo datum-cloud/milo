@@ -1,3 +1,7 @@
+// QuotaControllerRegistry centralizes setup for quota controllers.
+//
+// Why: A single registration point reduces boilerplate wiring in controller
+// manager and keeps controller lifecycle consistent across the package.
 package quota
 
 import (
@@ -48,24 +52,24 @@ func (r *QuotaControllerRegistry) registerControllers() {
 		return controller.SetupWithManager(mgr)
 	}
 
-    // ResourceQuotaSummary removed in current architecture
+	// ResourceQuotaSummary removed in current architecture
 
-    // ResourceClaim controller
-    r.controllers["ResourceClaimController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
-        controller := &ResourceClaimController{
-            Client: mgr.GetClient(),
-        }
-        return controller.SetupWithManager(mgr)
-    }
+	// ResourceClaim controller
+	r.controllers["ResourceClaimController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
+		controller := &ResourceClaimController{
+			Client: mgr.GetClient(),
+		}
+		return controller.SetupWithManager(mgr)
+	}
 
-    // AllowanceBucket controller (single source of aggregated quota data)
-    r.controllers["AllowanceBucketController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
-        controller := &AllowanceBucketController{
-            Client: mgr.GetClient(),
-            Scheme: mgr.GetScheme(),
-        }
-        return controller.SetupWithManager(mgr)
-    }
+	// AllowanceBucket controller (single source of aggregated quota data)
+	r.controllers["AllowanceBucketController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
+		controller := &AllowanceBucketController{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}
+		return controller.SetupWithManager(mgr)
+	}
 
 	// ClaimCreationPolicy controller
 	r.controllers["ClaimCreationPolicyReconciler"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {

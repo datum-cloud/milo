@@ -1,3 +1,10 @@
+// ResourceClaimController evaluates quota requests.
+//
+// This controller reads aggregated AllowanceBucket state to keep decisions O(1).
+// To tolerate eventual consistency between controllers, it falls back to
+// recomputing limit/allocated when a bucket is not yet available. Bucket
+// lifecycle is centralized in AllowanceBucketController to avoid write races;
+// this controller never writes buckets.
 package quota
 
 import (
@@ -51,6 +58,24 @@ func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Reques
 	// Create a deep copy of the original status to compare against later
 	originalStatus := claim.Status.DeepCopy()
 
+	// Check if the claim is already granted - if so, skip re-evaluation
+	// The AllowanceBucketController is responsible for granting claims
+	existingCondition := apimeta.FindStatusCondition(claim.Status.Conditions, quotav1alpha1.ResourceClaimGranted)
+	if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
+		logger.V(1).Info("ResourceClaim already granted, skipping re-evaluation",
+			"name", claim.Name,
+			"namespace", claim.Namespace,
+			"reason", existingCondition.Reason)
+		// Just update observed generation if needed
+		if claim.Status.ObservedGeneration != claim.Generation {
+			claim.Status.ObservedGeneration = claim.Generation
+			if err := r.Status().Update(ctx, &claim); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to update ResourceClaim observed generation: %w", err)
+			}
+		}
+		return ctrl.Result{}, nil
+	}
+
 	// Always update the observed generation in the status to match the current generation of the spec.
 	claim.Status.ObservedGeneration = claim.Generation
 
@@ -75,6 +100,8 @@ func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Evaluate each resource request within the claim's spec.
+	// Here "granted" means "eligible"; the AllowanceBucketController reserves
+	// capacity and ultimately marks the claim Granted.
 	allRequestsGranted := true
 	// Variable to store the outcome message for each request evaluation.
 	var evaluationMessages []string
@@ -102,18 +129,17 @@ func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Reques
 		evaluationMessages = append(evaluationMessages, message)
 	}
 
-	// Set the 'Granted' condition on the status based on the overall evaluation result.
+	// Set the 'Granted' condition intent. The bucket controller performs the
+	// actual reservation and sets Granted=True upon success.
 	var grantedCondition metav1.Condition
-	// If all requests were granted, set the condition to True.
 	if allRequestsGranted {
 		grantedCondition = metav1.Condition{
 			Type:    quotav1alpha1.ResourceClaimGranted,
-			Status:  metav1.ConditionTrue,
-			Reason:  quotav1alpha1.ResourceClaimGrantedReason,
-			Message: "Claim granted due to quota availability",
+			Status:  metav1.ConditionFalse,
+			Reason:  quotav1alpha1.ResourceClaimPendingReason,
+			Message: "Awaiting capacity reservation",
 		}
 	} else {
-		// If any of the requests were denied, set the condition to False.
 		grantedCondition = metav1.Condition{
 			Type:    quotav1alpha1.ResourceClaimGranted,
 			Status:  metav1.ConditionFalse,
@@ -163,101 +189,128 @@ func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *ResourceClaimController) evaluateResourceRequest(ctx context.Context, claim *quotav1alpha1.ResourceClaim, request quotav1alpha1.ResourceRequest) (bool, string, error) {
 	logger := log.FromContext(ctx)
 
-	// Get or create the AllowanceBucket for this resource/dimension combination
-	bucket, err := r.getOrCreateAllowanceBucket(ctx, claim, request)
-	if err != nil {
-		return false, "", fmt.Errorf("failed to get or create AllowanceBucket: %w", err)
-	}
-
-	// Check if there's enough quota available
-	if bucket.Status.Available >= request.Amount {
-		// Claim can be granted
-		message := fmt.Sprintf("Granted %d units of %s (current usage: %d, limit: %d, available: %d)",
-			request.Amount, request.ResourceType, bucket.Status.Allocated, bucket.Status.Limit, bucket.Status.Available)
-
-		logger.Info("resource claim request granted",
-			"resourceType", request.ResourceType,
-			"requestAmount", request.Amount,
-			"bucketAllocated", bucket.Status.Allocated,
-			"bucketLimit", bucket.Status.Limit,
-			"bucketAvailable", bucket.Status.Available)
-
-		return true, message, nil
-	} else {
-		// Request exceeds available quota
-		message := fmt.Sprintf("Denied %d units of %s - would exceed quota (current usage: %d, limit: %d, available: %d)",
-			request.Amount, request.ResourceType, bucket.Status.Allocated, bucket.Status.Limit, bucket.Status.Available)
-
+	// Prefer reading the aggregated bucket for O(1) decisions
+	bucketName := GenerateAllowanceBucketName(claim.Namespace, request.ResourceType, claim.Spec.ConsumerRef, request.Dimensions)
+	var bucket quotav1alpha1.AllowanceBucket
+	if err := r.Get(ctx, client.ObjectKey{Namespace: claim.Namespace, Name: bucketName}, &bucket); err == nil {
+		available := bucket.Status.Limit - bucket.Status.Allocated
+		if available < 0 {
+			available = 0
+		}
+		if available >= request.Amount {
+			message := fmt.Sprintf("Granted %d units of %s (current usage: %d, limit: %d, available: %d)", request.Amount, request.ResourceType, bucket.Status.Allocated, bucket.Status.Limit, available)
+			logger.Info("resource claim request granted",
+				"resourceType", request.ResourceType,
+				"requestAmount", request.Amount,
+				"bucketAllocated", bucket.Status.Allocated,
+				"bucketLimit", bucket.Status.Limit,
+				"bucketAvailable", available)
+			return true, message, nil
+		}
+		message := fmt.Sprintf("Denied %d units of %s - would exceed quota (current usage: %d, limit: %d, available: %d)", request.Amount, request.ResourceType, bucket.Status.Allocated, bucket.Status.Limit, available)
 		logger.Info("resource claim request denied",
 			"resourceType", request.ResourceType,
 			"requestAmount", request.Amount,
 			"bucketAllocated", bucket.Status.Allocated,
 			"bucketLimit", bucket.Status.Limit,
-			"bucketAvailable", bucket.Status.Available)
-
+			"bucketAvailable", available)
 		return false, message, nil
+	} else if !apierrors.IsNotFound(err) {
+		return false, "", fmt.Errorf("failed to get AllowanceBucket: %w", err)
 	}
+
+	// Fallback: recompute limits/usage when a bucket hasn't been reconciled yet
+	limit, allocated, ferr := r.computeLimitAndAllocated(ctx, claim, request)
+	if ferr != nil {
+		return false, "", ferr
+	}
+	available := limit - allocated
+	if available < 0 {
+		available = 0
+	}
+	if available >= request.Amount {
+		message := fmt.Sprintf("Granted %d units of %s (current usage: %d, limit: %d, available: %d)", request.Amount, request.ResourceType, allocated, limit, available)
+		logger.Info("resource claim request granted (fallback)", "resourceType", request.ResourceType, "allocated", allocated, "limit", limit)
+		return true, message, nil
+	}
+	message := fmt.Sprintf("Denied %d units of %s - would exceed quota (current usage: %d, limit: %d, available: %d)", request.Amount, request.ResourceType, allocated, limit, available)
+	logger.Info("resource claim request denied (fallback)", "resourceType", request.ResourceType, "allocated", allocated, "limit", limit)
+	return false, message, nil
 }
 
-// getOrCreateAllowanceBucket finds an existing AllowanceBucket or creates a new one
-// for the given resource request.
-func (r *ResourceClaimController) getOrCreateAllowanceBucket(ctx context.Context, claim *quotav1alpha1.ResourceClaim, request quotav1alpha1.ResourceRequest) (*quotav1alpha1.AllowanceBucket, error) {
-	logger := log.FromContext(ctx)
+// Buckets are not created in this controller. Centralizing writes in
+// AllowanceBucketController avoids write races across controllers.
 
-	bucketName := GenerateAllowanceBucketName(claim.Namespace, request.ResourceType, claim.Spec.OwnerInstanceRef, request.Dimensions)
-
-	var bucket quotav1alpha1.AllowanceBucket
-	err := r.Get(ctx, client.ObjectKey{
-		Namespace: claim.Namespace,
-		Name:      bucketName,
-	}, &bucket)
-
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to get AllowanceBucket: %w", err)
+// computeLimitAndAllocated recomputes limits/usage as a consistency safety net.
+// Used only when a bucket hasn't been reconciled yet; not the hot path.
+// for the given owner/resourceType/dimensions combination.
+func (r *ResourceClaimController) computeLimitAndAllocated(ctx context.Context, claim *quotav1alpha1.ResourceClaim, request quotav1alpha1.ResourceRequest) (int64, int64, error) {
+	// Compute limit
+	var grants quotav1alpha1.ResourceGrantList
+	if err := r.List(ctx, &grants, client.InNamespace(claim.Namespace)); err != nil {
+		return 0, 0, fmt.Errorf("failed to list ResourceGrants: %w", err)
+	}
+	var totalLimit int64
+	for _, grant := range grants.Items {
+		if !r.isResourceGrantActive(&grant) {
+			continue
 		}
-
-		// Bucket doesn't exist, create it
-		logger.Info("Creating new AllowanceBucket", "bucketName", bucketName)
-
-		newBucket := &quotav1alpha1.AllowanceBucket{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      bucketName,
-				Namespace: claim.Namespace,
-				Labels: map[string]string{
-					"quota.miloapis.com/resource-type": request.ResourceType,
-					"quota.miloapis.com/owner-kind":    claim.Spec.OwnerInstanceRef.Kind,
-					"quota.miloapis.com/owner-name":    claim.Spec.OwnerInstanceRef.Name,
-				},
-			},
-			Spec: quotav1alpha1.AllowanceBucketSpec{
-				OwnerInstanceRef: claim.Spec.OwnerInstanceRef,
-				ResourceType:     request.ResourceType,
-				Dimensions:       request.Dimensions,
-			},
-			Status: quotav1alpha1.AllowanceBucketStatus{
-				// Initial values - will be calculated by AllowanceBucket controller
-				Limit:     0,
-				Allocated: 0,
-				Available: 0,
-			},
+		if grant.Spec.ConsumerRef.Kind != claim.Spec.ConsumerRef.Kind || grant.Spec.ConsumerRef.Name != claim.Spec.ConsumerRef.Name {
+			continue
 		}
-
-		if err := r.Create(ctx, newBucket); err != nil {
-			return nil, fmt.Errorf("failed to create AllowanceBucket: %w", err)
-		}
-
-		// Get the created bucket to ensure we have the latest status
-		// (AllowanceBucket controller may have already reconciled it)
-		if err := r.Get(ctx, client.ObjectKey{
-			Namespace: claim.Namespace,
-			Name:      bucketName,
-		}, &bucket); err != nil {
-			return nil, fmt.Errorf("failed to get newly created AllowanceBucket: %w", err)
+		for _, allowance := range grant.Spec.Allowances {
+			if allowance.ResourceType != request.ResourceType {
+				continue
+			}
+			for _, ab := range allowance.Buckets {
+				if r.dimensionSelectorMatches(ab.DimensionSelector, request.Dimensions) {
+					totalLimit += ab.Amount
+				}
+			}
 		}
 	}
-
-	return &bucket, nil
+	// Compute allocated
+	var claims quotav1alpha1.ResourceClaimList
+	if err := r.List(ctx, &claims, client.InNamespace(claim.Namespace)); err != nil {
+		return 0, 0, fmt.Errorf("failed to list ResourceClaims: %w", err)
+	}
+	var allocated int64
+	for _, c := range claims.Items {
+		// Granted only
+		granted := false
+		for _, cond := range c.Status.Conditions {
+			if cond.Type == quotav1alpha1.ResourceClaimGranted && cond.Status == metav1.ConditionTrue {
+				granted = true
+				break
+			}
+		}
+		if !granted {
+			continue
+		}
+		if c.Spec.ConsumerRef.Kind != claim.Spec.ConsumerRef.Kind || c.Spec.ConsumerRef.Name != claim.Spec.ConsumerRef.Name {
+			continue
+		}
+		for _, req := range c.Spec.Requests {
+			if req.ResourceType != request.ResourceType {
+				continue
+			}
+			// Dimensions must match exactly
+			if len(req.Dimensions) != len(request.Dimensions) {
+				continue
+			}
+			match := true
+			for k, v := range request.Dimensions {
+				if req.Dimensions[k] != v {
+					match = false
+					break
+				}
+			}
+			if match {
+				allocated += req.Amount
+			}
+		}
+	}
+	return totalLimit, allocated, nil
 }
 
 // isResourceGrantActive checks if a ResourceGrant has an Active condition with status True
@@ -292,7 +345,7 @@ func (r *ResourceClaimController) dimensionSelectorMatches(selector metav1.Label
 // Deprecated: Use GenerateAllowanceBucketName from allowancebucket_controller.go instead
 func (r *ResourceClaimController) generateAllowanceBucketName(namespace, resourceType string, dimensions map[string]string) string {
 	// For backwards compatibility during transition
-	ownerRef := quotav1alpha1.OwnerInstanceRef{
+	ownerRef := quotav1alpha1.ConsumerRef{
 		Kind: "Unknown",
 		Name: "unknown",
 	}

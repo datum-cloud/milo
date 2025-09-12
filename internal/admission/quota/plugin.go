@@ -2,6 +2,7 @@ package quota
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -319,8 +320,7 @@ func (p *ClaimCreationPlugin) createResourceClaim(ctx context.Context, policy *q
 		annotations[key] = value
 	}
 
-	// Populate the UID from the target resource
-	spec.OwnerInstanceRef.UID = string(evalContext.Object.GetUID())
+	// Note: UID removed from ConsumerRef for name/kind-only matching
 
 	// Create the ResourceClaim with GenerateName for automatic unique naming
 	claim := &quotav1alpha1.ResourceClaim{
@@ -333,11 +333,29 @@ func (p *ClaimCreationPlugin) createResourceClaim(ctx context.Context, policy *q
 		Spec: *spec,
 	}
 
-	// Convert ResourceClaim to unstructured for dynamic client
-	unstructuredClaim, err := runtime.DefaultUnstructuredConverter.ToUnstructured(claim)
+	// Debug: Log the claim before conversion
+	p.logger.V(1).Info("Creating ResourceClaim",
+		"claimName", claimNamePrefix,
+		"consumerRef", claim.Spec.ConsumerRef,
+		"consumerRefKind", claim.Spec.ConsumerRef.Kind,
+		"consumerRefName", claim.Spec.ConsumerRef.Name)
+
+	// Convert ResourceClaim to unstructured using JSON marshaling to preserve types
+	claimBytes, err := json.Marshal(claim)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to convert ResourceClaim to unstructured: %w", err)
+		return "", "", fmt.Errorf("failed to marshal ResourceClaim: %w", err)
 	}
+
+	var unstructuredClaim map[string]interface{}
+	if err := json.Unmarshal(claimBytes, &unstructuredClaim); err != nil {
+		return "", "", fmt.Errorf("failed to unmarshal ResourceClaim to unstructured: %w", err)
+	}
+
+	// Debug: Log the consumerRef
+	p.logger.V(1).Info("Creating ResourceClaim with consumerRef",
+		"claimName", claimNamePrefix,
+		"consumerRefKind", spec.ConsumerRef.Kind,
+		"consumerRefName", spec.ConsumerRef.Name)
 
 	unstructuredObj := &unstructured.Unstructured{Object: unstructuredClaim}
 	unstructuredObj.SetGroupVersionKind(schema.GroupVersionKind{

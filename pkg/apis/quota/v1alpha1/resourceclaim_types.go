@@ -26,7 +26,7 @@ type ResourceClaimSpec struct {
 	// Reference to the owner resource specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	OwnerInstanceRef OwnerInstanceRef `json:"ownerInstanceRef"`
+	ConsumerRef ConsumerRef `json:"consumerRef"`
 	// List of resource requests defined by this claim
 	//
 	// +kubebuilder:validation:Required

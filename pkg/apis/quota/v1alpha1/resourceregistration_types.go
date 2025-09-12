@@ -6,7 +6,7 @@ import (
 
 // OwnerTypeRef defines the resource type that owns the registration,
 // and the grants and claims that will be created for it.
-type OwnerTypeRef struct {
+type ConsumerTypeRef struct {
 	// API group of the resource type that owns the registration
 	//
 	// +kubebuilder:validation:Required
@@ -29,7 +29,7 @@ type ResourceRegistrationSpec struct {
 	// not owned by any specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	OwnerTypeRef OwnerTypeRef `json:"ownerTypeRef"`
+	ConsumerTypeRef ConsumerTypeRef `json:"consumerTypeRef"`
 	// Type is the type of registration (Entity, Allocation).
 	//
 	// +kubebuilder:validation:Enum=Entity;Allocation

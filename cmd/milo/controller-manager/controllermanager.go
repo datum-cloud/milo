@@ -29,12 +29,12 @@ import (
 	"k8s.io/apiserver/pkg/server/mux"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/metadata"
 	metadatainformer "k8s.io/client-go/metadata/metadatainformer"
 	restclient "k8s.io/client-go/rest"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/leaderelection"
@@ -67,12 +67,12 @@ import (
 	garbagecollector "k8s.io/kubernetes/pkg/controller/garbagecollector"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 	controllerruntime "sigs.k8s.io/controller-runtime"
-    "sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-    // Register JSON logging format
+	// Register JSON logging format
 	_ "k8s.io/component-base/logs/json/register"
 
 	controlplane "go.miloapis.com/milo/internal/control-plane"
@@ -465,19 +465,18 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			// Setup all quota controllers using the registry
+			dynamicClient, err := dynamic.NewForConfig(ctrlConfig)
+			if err != nil {
+				logger.Error(err, "Error creating dynamic client for quota controllers")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
-				// Setup all quota controllers using the registry
-				dynamicClient, err := dynamic.NewForConfig(ctrlConfig)
-				if err != nil {
-					logger.Error(err, "Error creating dynamic client for quota controllers")
-					klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-				}
-
-				quotaRegistry := quotacontroller.NewQuotaControllerRegistry(logger.WithName("quota-registry"))
-				if err := quotaRegistry.SetupAllControllers(ctrl, dynamicClient); err != nil {
-					logger.Error(err, "Error setting up quota controllers")
-					klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-				}
+			quotaRegistry := quotacontroller.NewQuotaControllerRegistry(logger.WithName("quota-registry"))
+			if err := quotaRegistry.SetupAllControllers(ctrl, dynamicClient); err != nil {
+				logger.Error(err, "Error setting up quota controllers")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			userCtrl := iamcontroller.UserController{
 				Client: ctrl.GetClient(),
@@ -486,7 +485,6 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up user controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-
 
 			go func() {
 				if err := infraCluster.Start(ctx); err != nil {

@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
@@ -23,7 +23,7 @@ func TestPolicyEngineReadyFiltering(t *testing.T) {
 	}
 
 	enabled := true
-	
+
 	tests := []struct {
 		name           string
 		policy         *quotav1alpha1.ClaimCreationPolicy
@@ -97,7 +97,7 @@ func TestPolicyEngineReadyFiltering(t *testing.T) {
 				t.Errorf("isPolicyReady() = %v, want %v", isReady, tt.shouldBeLoaded)
 			}
 
-			// Test updatePolicy behavior  
+			// Test updatePolicy behavior
 			err := engine.updatePolicy(tt.policy)
 			if err != nil {
 				t.Fatalf("updatePolicy() error = %v", err)
@@ -106,7 +106,7 @@ func TestPolicyEngineReadyFiltering(t *testing.T) {
 			// Check if policy was indexed
 			gvk := tt.policy.Spec.TargetResource.GetGVK()
 			_, exists := engine.gvkIndex.Load(gvk.String())
-			
+
 			if exists != tt.shouldBeLoaded {
 				t.Errorf("Policy indexed = %v, want %v", exists, tt.shouldBeLoaded)
 			}
@@ -133,7 +133,7 @@ func TestPolicyEngineGVKLookup(t *testing.T) {
 		},
 		Spec: quotav1alpha1.ClaimCreationPolicySpec{
 			TargetResource: quotav1alpha1.TargetResource{
-				APIVersion: "apps/v1", 
+				APIVersion: "apps/v1",
 				Kind:       "Deployment",
 			},
 			Enabled: &enabled,
@@ -155,7 +155,7 @@ func TestPolicyEngineGVKLookup(t *testing.T) {
 		Spec: quotav1alpha1.ClaimCreationPolicySpec{
 			TargetResource: quotav1alpha1.TargetResource{
 				APIVersion: "apps/v1",
-				Kind:       "StatefulSet", 
+				Kind:       "StatefulSet",
 			},
 			Enabled: &disabled,
 		},
@@ -175,10 +175,10 @@ func TestPolicyEngineGVKLookup(t *testing.T) {
 
 	// Test lookups
 	tests := []struct {
-		name          string
-		gvk           schema.GroupVersionKind
-		expectPolicy  bool
-		expectedName  string
+		name         string
+		gvk          schema.GroupVersionKind
+		expectPolicy bool
+		expectedName string
 	}{
 		{
 			name: "find_enabled_policy",

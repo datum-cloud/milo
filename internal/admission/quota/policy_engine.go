@@ -82,16 +82,16 @@ func (e *policyEngine) GetPolicyForGVK(gvk schema.GroupVersionKind) (*quotav1alp
 // startPolicyLoadingLoop starts the background loop to continuously load policies and establish watch
 func (e *policyEngine) startPolicyLoadingLoop() {
 	e.logger.Info("Starting policy loading loop in background")
-	
+
 	// Create a context for the loading loop
 	ctx := context.Background()
-	
+
 	for {
 		e.logger.V(1).Info("Attempting to load ClaimCreationPolicies")
-		
+
 		if err := e.loadPolicies(ctx); err != nil {
 			e.logger.Error(err, "Failed to load policies, retrying in 30 seconds")
-			
+
 			// Wait before retrying
 			select {
 			case <-time.After(30 * time.Second):
@@ -101,19 +101,19 @@ func (e *policyEngine) startPolicyLoadingLoop() {
 				return
 			}
 		}
-		
+
 		e.logger.Info("Successfully loaded policies and established watch")
-		
+
 		// Mark as initialized
 		e.mu.Lock()
 		e.initialized = true
 		e.mu.Unlock()
-		
+
 		// Wait for the watch context to be done before restarting
 		if e.watchCtx != nil {
 			<-e.watchCtx.Done()
 			e.logger.Info("Watch context ended, restarting policy loading loop")
-			
+
 			// Reset initialization status to allow reloading
 			e.mu.Lock()
 			e.initialized = false

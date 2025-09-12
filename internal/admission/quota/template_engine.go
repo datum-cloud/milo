@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-logr/logr"
 
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
@@ -20,7 +21,7 @@ import (
 type TemplateEngine interface {
 	// RenderResourceClaim renders a ResourceClaimTemplateSpec into a ResourceClaimSpec.
 	RenderResourceClaim(ctx context.Context, template quotav1alpha1.ResourceClaimTemplateSpec, evalContext *EvaluationContext, policyEngine PolicyEngine) (*quotav1alpha1.ResourceClaimSpec, error)
-	
+
 	// BuildTemplateContext creates a template context for Go template rendering.
 	BuildTemplateContext(evalContext *EvaluationContext) TemplateContext
 }
@@ -32,17 +33,17 @@ type TemplateContext struct {
 	Namespace    string
 	Kind         string
 	APIVersion   string
-	
+
 	// User information
 	UserName   string
 	UserUID    string
 	UserGroups []string
-	
+
 	// Request information
 	Verb        string
 	Resource    string
 	Subresource string
-	
+
 	// Context information
 	GVK          string
 	RandomSuffix string
@@ -109,7 +110,7 @@ func (e *templateEngine) RenderResourceClaim(ctx context.Context, templateSpec q
 		if err != nil {
 			return nil, fmt.Errorf("failed to render resource request %d: %w", i, err)
 		}
-		
+
 		// Skip request if condition evaluation results in false
 		if request == nil {
 			e.logger.V(1).Info("Skipping resource request due to condition",
@@ -117,7 +118,7 @@ func (e *templateEngine) RenderResourceClaim(ctx context.Context, templateSpec q
 				"resourceName", templateContext.ResourceName)
 			continue
 		}
-		
+
 		resourceRequests = append(resourceRequests, *request)
 	}
 
@@ -125,15 +126,16 @@ func (e *templateEngine) RenderResourceClaim(ctx context.Context, templateSpec q
 		return nil, fmt.Errorf("no resource requests generated after template evaluation")
 	}
 
+	// Resolve consumer reference - try user extra data first, then fallback to resource-based
+	consumerRef, err := e.resolveConsumerRef(evalContext, templateContext)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve consumer reference: %w", err)
+	}
+
 	// Build the ResourceClaimSpec
 	spec := &quotav1alpha1.ResourceClaimSpec{
-		OwnerInstanceRef: quotav1alpha1.OwnerInstanceRef{
-			APIGroup: evalContext.GVK.Group,
-			Kind:     templateContext.Kind,
-			Name:     templateContext.ResourceName,
-			// UID will be populated by the admission plugin
-		},
-		Requests: resourceRequests,
+		ConsumerRef: *consumerRef,
+		Requests:    resourceRequests,
 	}
 
 	e.logger.V(1).Info("Successfully rendered ResourceClaim",
@@ -152,13 +154,13 @@ func (e *templateEngine) renderResourceRequest(ctx context.Context, requestTempl
 		if err != nil {
 			return nil, fmt.Errorf("failed to evaluate condition expression '%s': %w", requestTemplate.ConditionExpression, err)
 		}
-		
+
 		// Convert result to boolean
 		shouldInclude, ok := result.(bool)
 		if !ok {
 			return nil, fmt.Errorf("condition expression must return boolean, got %T", result)
 		}
-		
+
 		if !shouldInclude {
 			return nil, nil // Skip this request
 		}
@@ -204,14 +206,14 @@ func (e *templateEngine) renderAmount(ctx context.Context, requestTemplate *quot
 		// Static value
 		return *requestTemplate.Amount, nil
 	}
-	
+
 	if requestTemplate.AmountExpression != "" {
 		// CEL expression
 		result, err := e.celEngine.EvaluateExpression(ctx, requestTemplate.AmountExpression, evalContext)
 		if err != nil {
 			return 0, fmt.Errorf("failed to evaluate amount expression '%s': %w", requestTemplate.AmountExpression, err)
 		}
-		
+
 		// Convert result to int64
 		switch v := result.(type) {
 		case int64:
@@ -230,30 +232,30 @@ func (e *templateEngine) renderAmount(ctx context.Context, requestTemplate *quot
 			return 0, fmt.Errorf("amount expression must return numeric value, got %T", result)
 		}
 	}
-	
+
 	return 0, fmt.Errorf("either amount or amountExpression must be specified")
 }
 
 // renderDimensions renders dimensions using static values and/or CEL expressions.
 func (e *templateEngine) renderDimensions(ctx context.Context, requestTemplate *quotav1alpha1.ResourceRequestTemplate, evalContext *EvaluationContext, templateContext TemplateContext) (map[string]string, error) {
 	dimensions := make(map[string]string)
-	
+
 	// Add static dimensions first
 	for key, value := range requestTemplate.Dimensions {
 		dimensions[key] = value
 	}
-	
+
 	// Add CEL expression dimensions (these take precedence for duplicate keys)
 	for key, expression := range requestTemplate.DimensionExpressions {
 		result, err := e.celEngine.EvaluateExpression(ctx, expression, evalContext)
 		if err != nil {
 			return nil, fmt.Errorf("failed to evaluate dimension expression for key '%s': %w", key, err)
 		}
-		
+
 		// Convert result to string
 		dimensions[key] = fmt.Sprintf("%v", result)
 	}
-	
+
 	return dimensions, nil
 }
 
@@ -261,13 +263,13 @@ func (e *templateEngine) renderDimensions(ctx context.Context, requestTemplate *
 func (e *templateEngine) BuildTemplateContext(evalContext *EvaluationContext) TemplateContext {
 	// Generate random suffix for unique naming
 	randomSuffix := e.generateRandomSuffix(6)
-	
+
 	// Extract resource information
 	resourceName := ""
 	if evalContext.Object != nil {
 		resourceName = evalContext.Object.GetName()
 	}
-	
+
 	// Build user groups string
 	userGroups := evalContext.User.Groups
 	if userGroups == nil {
@@ -279,15 +281,15 @@ func (e *templateEngine) BuildTemplateContext(evalContext *EvaluationContext) Te
 		Namespace:    evalContext.Namespace,
 		Kind:         evalContext.GVK.Kind,
 		APIVersion:   fmt.Sprintf("%s/%s", evalContext.GVK.Group, evalContext.GVK.Version),
-		
+
 		UserName:   evalContext.User.Name,
 		UserUID:    evalContext.User.UID,
 		UserGroups: userGroups,
-		
+
 		Verb:        evalContext.RequestInfo.Verb,
 		Resource:    evalContext.RequestInfo.Resource,
 		Subresource: evalContext.RequestInfo.Subresource,
-		
+
 		GVK:          fmt.Sprintf("%s/%s/%s", evalContext.GVK.Group, evalContext.GVK.Version, evalContext.GVK.Kind),
 		RandomSuffix: randomSuffix,
 		Timestamp:    time.Now().Format("20060102150405"),
@@ -329,6 +331,79 @@ func (e *templateEngine) generateRandomSuffix(length int) string {
 		suffix[i] = charset[e.random.Intn(len(charset))]
 	}
 	return string(suffix)
+}
+
+// resolveConsumerRef determines the quota consumer reference from user extra data or resource-based fallback
+func (e *templateEngine) resolveConsumerRef(evalContext *EvaluationContext, templateContext TemplateContext) (*quotav1alpha1.ConsumerRef, error) {
+	// Try user extra data first (primary method)
+	consumerRef, err := e.extractConsumerFromUserExtra(evalContext)
+	if err == nil {
+		e.logger.V(1).Info("Resolved consumer from user extra data",
+			"consumer", consumerRef.Kind+"/"+consumerRef.Name,
+			"apiGroup", consumerRef.APIGroup)
+		return consumerRef, nil
+	}
+
+	// Fallback to resource-based resolution for backward compatibility
+	e.logger.V(1).Info("User extra data not available, using resource-based consumer resolution", "error", err)
+
+	return &quotav1alpha1.ConsumerRef{
+		APIGroup: evalContext.GVK.Group,
+		Kind:     templateContext.Kind,
+		Name:     templateContext.ResourceName,
+	}, nil
+}
+
+// extractConsumerFromUserExtra extracts consumer information from user authentication extra data
+func (e *templateEngine) extractConsumerFromUserExtra(evalContext *EvaluationContext) (*quotav1alpha1.ConsumerRef, error) {
+	userInfo := evalContext.User
+	e.logger.V(1).Info("Checking user extra data for consumer resolution",
+		"userName", userInfo.Name,
+		"extraKeys", func() []string {
+			if userInfo.Extra == nil {
+				return nil
+			}
+			keys := make([]string, 0, len(userInfo.Extra))
+			for k := range userInfo.Extra {
+				keys = append(keys, k)
+			}
+			return keys
+		}())
+
+	if userInfo.Extra == nil {
+		return nil, fmt.Errorf("user extra data is nil")
+	}
+
+	// Extract parent/consumer information
+	parentName := getExtraValue(userInfo.Extra, iamv1alpha1.ParentNameExtraKey)
+	parentKind := getExtraValue(userInfo.Extra, iamv1alpha1.ParentKindExtraKey)
+	parentAPIGroup := getExtraValue(userInfo.Extra, iamv1alpha1.ParentAPIGroupExtraKey)
+
+	e.logger.V(1).Info("Extracted parent information from user extra data",
+		"parentName", parentName,
+		"parentKind", parentKind,
+		"parentAPIGroup", parentAPIGroup,
+		"parentNameKey", iamv1alpha1.ParentNameExtraKey,
+		"parentKindKey", iamv1alpha1.ParentKindExtraKey,
+		"parentAPIGroupKey", iamv1alpha1.ParentAPIGroupExtraKey)
+
+	if parentName == "" || parentKind == "" {
+		return nil, fmt.Errorf("required parent information missing from user extra data")
+	}
+
+	return &quotav1alpha1.ConsumerRef{
+		APIGroup: parentAPIGroup,
+		Kind:     parentKind,
+		Name:     parentName,
+	}, nil
+}
+
+// getExtraValue safely extracts a single value from user extra data
+func getExtraValue(extra map[string][]string, key string) string {
+	if values, exists := extra[key]; exists && len(values) > 0 {
+		return values[0]
+	}
+	return ""
 }
 
 // Template function implementations

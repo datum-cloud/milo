@@ -34,7 +34,7 @@ type ResourceGrantSpec struct {
 	// Reference to the owner resource specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	OwnerInstanceRef OwnerInstanceRef `json:"ownerInstanceRef"`
+	ConsumerRef ConsumerRef `json:"consumerRef"`
 	// List of allowances this grant contains
 	//
 	// +kubebuilder:validation:Required

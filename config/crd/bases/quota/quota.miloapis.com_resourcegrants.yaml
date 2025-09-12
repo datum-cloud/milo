@@ -120,7 +120,7 @@ spec:
                   type: object
                 minItems: 1
                 type: array
-              ownerInstanceRef:
+              consumerRef:
                 description: Reference to the owner resource specific object instance.
                 properties:
                   apiGroup:
@@ -134,17 +134,13 @@ spec:
                   name:
                     description: Name of the owning resource object instance.
                     type: string
-                  uid:
-                    description: UID of the owning resource object instance.
-                    type: string
                 required:
                 - kind
                 - name
-                - uid
                 type: object
             required:
             - allowances
-            - ownerInstanceRef
+            - consumerRef
             type: object
           status:
             description: ResourceGrantStatus defines the observed state of ResourceGrant.

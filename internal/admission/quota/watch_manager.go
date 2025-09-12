@@ -260,8 +260,8 @@ func (m *sharedClaimWatchManager) establishWatch() error {
 	// Start watch with initial events - this eliminates the need for separate list operation
 	// and removes the race condition between list and watch
 	watchOptions := metav1.ListOptions{
-		Watch:             true,
-		SendInitialEvents: ptr.To(true),
+		Watch:                true,
+		SendInitialEvents:    ptr.To(true),
 		ResourceVersionMatch: "NotOlderThan",
 	}
 
@@ -318,7 +318,15 @@ func (m *sharedClaimWatchManager) handleClaimEvent(claim *unstructured.Unstructu
 	namespace := claim.GetNamespace()
 	key := fmt.Sprintf("%s/%s", namespace, claimName)
 
-	m.logger.V(3).Info("Processing claim event", "claimName", claimName, "namespace", namespace)
+	m.logger.V(1).Info("Processing claim event",
+		"claimName", claimName,
+		"namespace", namespace,
+		"waitingFor", func() bool {
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+			_, exists := m.waiters[key]
+			return exists
+		}())
 
 	m.mu.RLock()
 	waiter, exists := m.waiters[key]
@@ -332,6 +340,9 @@ func (m *sharedClaimWatchManager) handleClaimEvent(claim *unstructured.Unstructu
 
 	// Check if the claim is granted or denied
 	if granted := m.isClaimGranted(claim); granted {
+		m.logger.V(1).Info("Claim granted, notifying waiter",
+			"claimName", claimName,
+			"namespace", namespace)
 		m.sendResult(key, waiter, ClaimResult{
 			Granted: true,
 			Reason:  "ResourceClaim granted",
@@ -339,11 +350,19 @@ func (m *sharedClaimWatchManager) handleClaimEvent(claim *unstructured.Unstructu
 		})
 	} else if denied := m.isClaimDenied(claim); denied {
 		reason := m.getClaimDenialReason(claim)
+		m.logger.Info("Claim denied, notifying waiter",
+			"claimName", claimName,
+			"namespace", namespace,
+			"reason", reason)
 		m.sendResult(key, waiter, ClaimResult{
 			Granted: false,
 			Reason:  reason,
 			Error:   fmt.Errorf("ResourceClaim was denied: %s", reason),
 		})
+	} else {
+		m.logger.V(1).Info("Claim still pending, continuing to wait",
+			"claimName", claimName,
+			"namespace", namespace)
 	}
 	// If neither granted nor denied, continue waiting
 }

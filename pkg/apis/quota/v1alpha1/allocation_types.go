@@ -5,7 +5,7 @@ type Allocation struct {
 	// Reference to the claim's specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	ClaimRef OwnerInstanceRef `json:"claimRef"`
+	ClaimRef ConsumerRef `json:"claimRef"`
 	// The amount of quota allocated.
 	///
 	// +kubebuilder:validation:Required

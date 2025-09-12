@@ -70,7 +70,7 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 		if err := r.Status().Update(ctx, &policy); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update ClaimCreationPolicy status: %w", err)
 		}
-		logger.V(1).Info("Updated ClaimCreationPolicy status", 
+		logger.V(1).Info("Updated ClaimCreationPolicy status",
 			"policy", policy.Name,
 			"ready", apimeta.IsStatusConditionTrue(policy.Status.Conditions, quotav1alpha1.ClaimCreationPolicyReady))
 	}

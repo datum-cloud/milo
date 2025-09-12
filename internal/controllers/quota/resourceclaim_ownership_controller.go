@@ -27,10 +27,10 @@ import (
 // after their target resources are created.
 type ResourceClaimOwnershipController struct {
 	client.Client
-	DynamicClient    dynamic.Interface
-	DiscoveryClient  discovery.DiscoveryInterface
-	Scheme           *runtime.Scheme
-	logger           logr.Logger
+	DynamicClient   dynamic.Interface
+	DiscoveryClient discovery.DiscoveryInterface
+	Scheme          *runtime.Scheme
+	logger          logr.Logger
 	// Cache for resource versions to avoid repeated discovery calls
 	versionCache     sync.Map // key: group/kind -> value: version
 	versionCacheLock sync.RWMutex
@@ -84,7 +84,7 @@ func (r *ResourceClaimOwnershipController) Reconcile(ctx context.Context, req ct
 	logger.V(1).Info("Processing ResourceClaim for owner reference",
 		"claim", claim.Name,
 		"age", claimAge,
-		"ownerInstanceRef", claim.Spec.OwnerInstanceRef)
+		"consumerRef", claim.Spec.ConsumerRef)
 
 	// Try to find target resource
 	targetObj, err := r.findTargetResource(ctx, &claim)
@@ -97,14 +97,14 @@ func (r *ResourceClaimOwnershipController) Reconcile(ctx context.Context, req ct
 					"claim", claim.Name,
 					"age", claimAge,
 					"maxAge", maxAge,
-					"targetName", claim.Spec.OwnerInstanceRef.Name)
+					"targetName", claim.Spec.ConsumerRef.Name)
 				return ctrl.Result{}, r.Delete(ctx, &claim)
 			}
 
 			// Resource doesn't exist yet - keep waiting
 			logger.V(1).Info("Target resource not found, will retry",
 				"claim", claim.Name,
-				"targetName", claim.Spec.OwnerInstanceRef.Name,
+				"targetName", claim.Spec.ConsumerRef.Name,
 				"age", claimAge)
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
@@ -133,16 +133,16 @@ func (r *ResourceClaimOwnershipController) Reconcile(ctx context.Context, req ct
 
 // findTargetResource finds the target resource referenced by the ResourceClaim.
 func (r *ResourceClaimOwnershipController) findTargetResource(ctx context.Context, claim *quotav1alpha1.ResourceClaim) (*unstructured.Unstructured, error) {
-	// Get the API group from OwnerInstanceRef
-	apiGroup := claim.Spec.OwnerInstanceRef.APIGroup
-	kind := claim.Spec.OwnerInstanceRef.Kind
-	
+	// Get the API group from ConsumerRef
+	apiGroup := claim.Spec.ConsumerRef.APIGroup
+	kind := claim.Spec.ConsumerRef.Kind
+
 	// Get the correct version for this resource using discovery
 	version, err := r.discoverResourceVersion(apiGroup, kind)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover version for %s/%s: %w", apiGroup, kind, err)
 	}
-	
+
 	// Build GVR for dynamic client
 	gvr := schema.GroupVersionResource{
 		Group:    apiGroup,
@@ -155,7 +155,7 @@ func (r *ResourceClaimOwnershipController) findTargetResource(ctx context.Contex
 	gvk := schema.GroupVersionKind{
 		Group:   apiGroup,
 		Version: version,
-		Kind:    claim.Spec.OwnerInstanceRef.Kind,
+		Kind:    claim.Spec.ConsumerRef.Kind,
 	}
 	if !r.isClusterScoped(gvk) {
 		// For namespaced resources, use the claim's namespace
@@ -165,17 +165,13 @@ func (r *ResourceClaimOwnershipController) findTargetResource(ctx context.Contex
 	// Get target resource using the UID for verification
 	resource, err := r.DynamicClient.Resource(gvr).
 		Namespace(namespace).
-		Get(ctx, claim.Spec.OwnerInstanceRef.Name, metav1.GetOptions{})
+		Get(ctx, claim.Spec.ConsumerRef.Name, metav1.GetOptions{})
 
 	if err != nil {
 		return nil, err
 	}
 
-	// Verify UID matches to ensure we found the correct resource
-	if string(resource.GetUID()) != claim.Spec.OwnerInstanceRef.UID {
-		return nil, fmt.Errorf("resource UID mismatch: expected %s, found %s",
-			claim.Spec.OwnerInstanceRef.UID, resource.GetUID())
-	}
+	// Note: UID verification removed for quota scenarios to support name/kind matching
 
 	return resource, nil
 }

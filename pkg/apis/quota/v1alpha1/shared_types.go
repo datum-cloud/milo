@@ -1,8 +1,8 @@
 package v1alpha1
 
-// OwnerInstanceRef is a reference to the specific owning resource object
-// instance.
-type OwnerInstanceRef struct {
+// ConsumerRef references the quota consumer (the subject that receives limits
+// and consumes capacity). Historically named OwnerInstanceRef.
+type ConsumerRef struct {
 	// APIGroup of the target resource (e.g., "resourcemanager.miloapis.com").
 	// Empty string for core API group.
 	//
@@ -18,11 +18,6 @@ type OwnerInstanceRef struct {
 	//
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
-
-	// UID of the owning resource object instance.
-	//
-	// +kubebuilder:validation:Required
-	UID string `json:"uid"`
 }
 
 type ContributingResourceRef struct {
@@ -35,6 +30,14 @@ type ContributingResourceRef struct {
 	//
 	// +kubebuilder:validation:Required
 	ObservedGeneration int64 `json:"observedGeneration"`
+}
+
+// MatchesConsumer checks if two ConsumerRef instances refer to the same consumer.
+// Matching is based on name/kind/apiGroup.
+func (c ConsumerRef) MatchesConsumer(other ConsumerRef) bool {
+	return c.Name == other.Name &&
+		c.Kind == other.Kind &&
+		c.APIGroup == other.APIGroup
 }
 
 const (

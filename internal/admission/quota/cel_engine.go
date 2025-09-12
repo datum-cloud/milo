@@ -50,7 +50,6 @@ type UserContext struct {
 	Extra map[string][]string
 }
 
-
 // celEngine implements CELEngine using Google CEL-Go.
 type celEngine struct {
 	env    *cel.Env
@@ -242,16 +241,16 @@ func BuildEvaluationContextFromAdmission(req admission.Request, obj *unstructure
 	// Build RequestInfo from admission request data
 	// Map admission operation to HTTP verb equivalents
 	verb := strings.ToLower(string(req.Operation))
-	
+
 	requestInfo := &request.RequestInfo{
 		IsResourceRequest: true,
-		Verb:             verb,
-		APIGroup:         req.Kind.Group,
-		APIVersion:       req.Kind.Version,
-		Namespace:        req.Namespace,
-		Resource:         strings.ToLower(req.Kind.Kind) + "s", // Pluralize kind for resource
-		Subresource:      req.SubResource,
-		Name:             req.Name,
+		Verb:              verb,
+		APIGroup:          req.Kind.Group,
+		APIVersion:        req.Kind.Version,
+		Namespace:         req.Namespace,
+		Resource:          strings.ToLower(req.Kind.Kind) + "s", // Pluralize kind for resource
+		Subresource:       req.SubResource,
+		Name:              req.Name,
 	}
 
 	return &EvaluationContext{

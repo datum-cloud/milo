@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/apis/audit"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -22,14 +22,14 @@ import (
 
 func TestClaimCreationPlugin_Validate(t *testing.T) {
 	tests := []struct {
-		name           string
-		policy         *quotav1alpha1.ClaimCreationPolicy
-		obj            *unstructured.Unstructured
-		gvk            schema.GroupVersionKind
-		user           user.Info
-		operation      admission.Operation
-		expectClaim    bool
-		expectError    bool
+		name        string
+		policy      *quotav1alpha1.ClaimCreationPolicy
+		obj         *unstructured.Unstructured
+		gvk         schema.GroupVersionKind
+		user        user.Info
+		operation   admission.Operation
+		expectClaim bool
+		expectError bool
 	}{
 		{
 			name: "basic policy creates claim",
@@ -173,7 +173,7 @@ func TestClaimCreationPlugin_Validate(t *testing.T) {
 			// Create fake dynamic client
 			scheme := runtime.NewScheme()
 			quotav1alpha1.AddToScheme(scheme)
-			
+
 			// Convert policy to unstructured for dynamic client
 			var objects []runtime.Object
 			if tt.policy != nil {
@@ -189,11 +189,11 @@ func TestClaimCreationPlugin_Validate(t *testing.T) {
 				})
 				objects = append(objects, policyObj)
 			}
-			
+
 			fakeDynamicClient := &fakeGrantingDynamicClient{
 				FakeDynamicClient: fake.NewSimpleDynamicClient(scheme, objects...),
 			}
-			
+
 			// Create logger
 			logger := zap.New(zap.UseDevMode(true))
 
@@ -291,8 +291,6 @@ func (e *testPolicyEngine) removePolicyForTest(policyName string) {
 	e.policy = nil
 }
 
-
-
 type testAdmissionAttributes struct {
 	operation   admission.Operation
 	object      *unstructured.Unstructured
@@ -313,10 +311,10 @@ func (a *testAdmissionAttributes) GetNamespace() string              { return a.
 func (a *testAdmissionAttributes) GetResource() schema.GroupVersionResource {
 	return schema.GroupVersionResource{}
 }
-func (a *testAdmissionAttributes) GetSubresource() string        { return a.subResource }
-func (a *testAdmissionAttributes) GetUserInfo() user.Info        { return a.userInfo }
-func (a *testAdmissionAttributes) IsDryRun() bool                { return a.dryRun }
-func (a *testAdmissionAttributes) GetOperationOptions() runtime.Object { return nil }
+func (a *testAdmissionAttributes) GetSubresource() string                { return a.subResource }
+func (a *testAdmissionAttributes) GetUserInfo() user.Info                { return a.userInfo }
+func (a *testAdmissionAttributes) IsDryRun() bool                        { return a.dryRun }
+func (a *testAdmissionAttributes) GetOperationOptions() runtime.Object   { return nil }
 func (a *testAdmissionAttributes) AddAnnotation(key, value string) error { return nil }
 func (a *testAdmissionAttributes) AddAnnotationWithLevel(key, value string, level audit.Level) error {
 	return nil
@@ -343,7 +341,7 @@ type fakeGrantingDynamicClient struct {
 func (f *fakeGrantingDynamicClient) Resource(resource schema.GroupVersionResource) dynamic.NamespaceableResourceInterface {
 	return &fakeGrantingNamespaceableResource{
 		NamespaceableResourceInterface: f.FakeDynamicClient.Resource(resource),
-		gvr:                           resource,
+		gvr:                            resource,
 	}
 }
 
@@ -355,8 +353,8 @@ type fakeGrantingNamespaceableResource struct {
 func (f *fakeGrantingNamespaceableResource) Namespace(namespace string) dynamic.ResourceInterface {
 	return &fakeGrantingResource{
 		ResourceInterface: f.NamespaceableResourceInterface.Namespace(namespace),
-		gvr:              f.gvr,
-		namespace:        namespace,
+		gvr:               f.gvr,
+		namespace:         namespace,
 	}
 }
 
@@ -383,7 +381,7 @@ func (f *fakeGrantingResource) Create(ctx context.Context, obj *unstructured.Uns
 				"message": "Automatically granted for testing",
 			},
 		}
-		
+
 		unstructured.SetNestedSlice(created.Object, conditions, "status", "conditions")
 	}
 
@@ -412,14 +410,14 @@ func (f *fakeGrantingWatcher) Stop() {
 
 func (f *fakeGrantingWatcher) ResultChan() <-chan watch.Event {
 	ch := make(chan watch.Event, 1)
-	
+
 	go func() {
 		defer close(ch)
-		
+
 		if !f.sent {
 			// Send a granted event after a small delay
 			time.Sleep(100 * time.Millisecond)
-			
+
 			// Create a fake ResourceClaim with granted status
 			claim := &unstructured.Unstructured{
 				Object: map[string]interface{}{
@@ -441,7 +439,7 @@ func (f *fakeGrantingWatcher) ResultChan() <-chan watch.Event {
 					},
 				},
 			}
-			
+
 			ch <- watch.Event{
 				Type:   watch.Modified,
 				Object: claim,
@@ -449,6 +447,6 @@ func (f *fakeGrantingWatcher) ResultChan() <-chan watch.Event {
 			f.sent = true
 		}
 	}()
-	
+
 	return ch
 }

@@ -46,7 +46,7 @@ spec:
           spec:
             description: ResourceClaimSpec defines the desired state of ResourceClaim.
             properties:
-              ownerInstanceRef:
+              consumerRef:
                 description: Reference to the owner resource specific object instance.
                 properties:
                   apiGroup:
@@ -60,13 +60,9 @@ spec:
                   name:
                     description: Name of the owning resource object instance.
                     type: string
-                  uid:
-                    description: UID of the owning resource object instance.
-                    type: string
                 required:
                 - kind
                 - name
-                - uid
                 type: object
               requests:
                 description: List of resource requests defined by this claim
@@ -96,7 +92,7 @@ spec:
                 minItems: 1
                 type: array
             required:
-            - ownerInstanceRef
+            - consumerRef
             - requests
             type: object
           status:

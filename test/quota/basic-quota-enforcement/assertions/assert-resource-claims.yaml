@@ -1,56 +1,60 @@
-apiVersion: quota.miloapis.com/v1alpha1
-kind: ResourceClaim
-metadata:
-  name: test-project-test-project-1-quota-claim
-  namespace: milo-system
-  labels:
-    quota.miloapis.com/auto-created: "true"
-    quota.miloapis.com/test: "true"
-spec:
-  ownerInstanceRef:
-    apiGroup: resourcemanager.miloapis.com
-    kind: Organization
-    name: test-quota-org
-  requests:
-    - resourceType: "resourcemanager.miloapis.com/Project"
-      amount: 1
-status:
-  state: "Allocated"
----
-apiVersion: quota.miloapis.com/v1alpha1
-kind: ResourceClaim
-metadata:
-  name: test-project-test-project-2-quota-claim
-  namespace: milo-system
-  labels:
-    quota.miloapis.com/auto-created: "true"
-    quota.miloapis.com/test: "true"
-spec:
-  ownerInstanceRef:
-    apiGroup: resourcemanager.miloapis.com
-    kind: Organization
-    name: test-quota-org
-  requests:
-    - resourceType: "resourcemanager.miloapis.com/Project"
-      amount: 1
-status:
-  state: "Allocated"
----
-apiVersion: quota.miloapis.com/v1alpha1
-kind: ResourceClaim
-metadata:
-  name: test-project-test-project-3-quota-claim
-  namespace: milo-system
-  labels:
-    quota.miloapis.com/auto-created: "true"
-    quota.miloapis.com/test: "true"
-spec:
-  ownerInstanceRef:
-    apiGroup: resourcemanager.miloapis.com
-    kind: Organization
-    name: test-quota-org
-  requests:
-    - resourceType: "resourcemanager.miloapis.com/Project"
-      amount: 1
-status:
-  state: "Allocated"
+apiVersion: v1
+kind: List
+items:
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceClaim
+  metadata:
+    namespace: milo-system
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/test: "true"
+  spec:
+    consumerRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: test-quota-org
+    requests:
+      - resourceType: "resourcemanager.miloapis.com/Project"
+        amount: 1
+  status:
+    conditions:
+    - type: Granted
+      status: "True"
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceClaim
+  metadata:
+    namespace: milo-system
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/test: "true"
+  spec:
+    consumerRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: test-quota-org
+    requests:
+      - resourceType: "resourcemanager.miloapis.com/Project"
+        amount: 1
+  status:
+    conditions:
+    - type: Granted
+      status: "True"
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceClaim
+  metadata:
+    namespace: milo-system
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/test: "true"
+  spec:
+    consumerRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: test-quota-org
+    requests:
+      - resourceType: "resourcemanager.miloapis.com/Project"
+        amount: 1
+  status:
+    conditions:
+    - type: Granted
+      status: "True"

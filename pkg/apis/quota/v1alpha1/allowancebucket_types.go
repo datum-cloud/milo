@@ -27,7 +27,7 @@ type AllowanceBucketSpec struct {
 	// Reference to the owner resource specific object instance.
 	//
 	// +kubebuilder:validation:Required
-	OwnerInstanceRef OwnerInstanceRef `json:"ownerInstanceRef"`
+	ConsumerRef ConsumerRef `json:"consumerRef"`
 	// The resource type this bucket tracks quota usage for
 	//
 	// +kubebuilder:validation:Required

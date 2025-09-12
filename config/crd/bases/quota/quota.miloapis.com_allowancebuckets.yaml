@@ -62,12 +62,7 @@ spec:
           spec:
             description: AllowanceBucketSpec defines the desired state of AllowanceBucket.
             properties:
-              dimensions:
-                additionalProperties:
-                  type: string
-                description: Dimensions for this bucket as key-value pairs
-                type: object
-              ownerInstanceRef:
+              consumerRef:
                 description: Reference to the owner resource specific object instance.
                 properties:
                   apiGroup:
@@ -81,20 +76,21 @@ spec:
                   name:
                     description: Name of the owning resource object instance.
                     type: string
-                  uid:
-                    description: UID of the owning resource object instance.
-                    type: string
                 required:
                 - kind
                 - name
-                - uid
+                type: object
+              dimensions:
+                additionalProperties:
+                  type: string
+                description: Dimensions for this bucket as key-value pairs
                 type: object
               resourceType:
                 description: The resource type this bucket tracks quota usage for
                 pattern: ^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$
                 type: string
             required:
-            - ownerInstanceRef
+            - consumerRef
             - resourceType
             type: object
           status:

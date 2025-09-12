@@ -57,23 +57,7 @@ spec:
                   "millicores", "bytes")
                 maxLength: 50
                 type: string
-              description:
-                description: Human-readable description of the registration
-                minLength: 1
-                type: string
-              dimensions:
-                description: |-
-                  List of dimension names that can be used in ResourceGrant selectors for
-                  this resource type. Each dimension should be a fully qualified name
-                  matching the pattern: apiGroup/resourceType
-                items:
-                  type: string
-                type: array
-              displayUnit:
-                description: Unit of measurement that user interfaces should present
-                maxLength: 50
-                type: string
-              ownerTypeRef:
+              consumerTypeRef:
                 description: |-
                   Reference to the owning resource type that will create grant and claim objects
                   for this registration.
@@ -93,6 +77,22 @@ spec:
                 - apiGroup
                 - kind
                 type: object
+              description:
+                description: Human-readable description of the registration
+                minLength: 1
+                type: string
+              dimensions:
+                description: |-
+                  List of dimension names that can be used in ResourceGrant selectors for
+                  this resource type. Each dimension should be a fully qualified name
+                  matching the pattern: apiGroup/resourceType
+                items:
+                  type: string
+                type: array
+              displayUnit:
+                description: Unit of measurement that user interfaces should present
+                maxLength: 50
+                type: string
               resourceType:
                 description: |-
                   Fully qualified name of the resource type being registered
@@ -116,8 +116,8 @@ spec:
                 type: integer
             required:
             - baseUnit
+            - consumerTypeRef
             - displayUnit
-            - ownerTypeRef
             - resourceType
             - type
             - unitConversionFactor

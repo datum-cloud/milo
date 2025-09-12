@@ -5,7 +5,7 @@ metadata:
   labels:
     test.miloapis.com/quota: "true"
 spec:
-  ownerTypeRef:
+  consumerTypeRef:
     apiGroup: resourcemanager.miloapis.com
     kind: Organization
   type: "Entity"

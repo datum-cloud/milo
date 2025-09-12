@@ -1,7 +1,7 @@
 apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: Project
 metadata:
-  name: test-project-2
+  name: test-project-4
   labels:
     test.miloapis.com/scenario: "basic-quota-enforcement"
 spec:

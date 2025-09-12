@@ -72,7 +72,6 @@ type ResourceClaimTemplateSpec struct {
 	//
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
-
 }
 
 // ResourceRequestTemplate defines how to create individual resource requests.
@@ -115,7 +114,6 @@ type ResourceRequestTemplate struct {
 	// +optional
 	ConditionExpression string `json:"conditionExpression,omitempty"`
 }
-
 
 // ClaimCreationPolicyStatus defines the observed state of ClaimCreationPolicy.
 type ClaimCreationPolicyStatus struct {

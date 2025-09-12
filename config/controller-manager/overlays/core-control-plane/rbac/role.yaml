@@ -122,6 +122,7 @@ rules:
   - quota.miloapis.com
   resources:
   - allowancebuckets
+  - claimcreationpolicies
   - resourceclaims
   - resourcegrants
   verbs:
