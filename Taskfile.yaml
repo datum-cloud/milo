@@ -170,10 +170,21 @@ tasks:
   dev:redeploy:
     desc: Quick rebuild and redeploy for development iterations
     deps:
+      - dev:build
       - dev:load
+      - dev:deploy
     cmds:
       - |
         set -e
+        echo "Redeploying Milo's apiserver..."
+
+        # Restart the deployment to pick up new image
+        task test-infra:kubectl -- rollout restart deployment/milo-apiserver -n milo-system
+
+        # Wait for rollout to complete
+        echo "Waiting for rollout to complete..."
+        task test-infra:kubectl -- rollout status deployment/milo-apiserver -n milo-system --timeout=120s
+
         echo "Redeploying Milo controller manager..."
 
         # Restart the deployment to pick up new image
@@ -447,17 +458,17 @@ tasks:
         - |
           HAS_ERRORS=0
           TEST_FILES=$(find test/prometheus-rules -name "*-tests.yaml" 2>/dev/null)
-          
+
           if [ -z "$TEST_FILES" ]; then
             echo "⚠️  No Prometheus test files found in test/prometheus-rules/"
             exit 0
           fi
-          
+
           for test_file in $TEST_FILES; do
             test_dir=$(dirname "$test_file")
             test_name=$(basename "$test_file")
             echo "🔍 Testing: $test_file"
-            
+
             if ! OUTPUT=$(cd "$test_dir" && promtool test rules "$test_name" 2>&1); then
               echo ""
               echo "❌ Test failed for '$test_file':"
@@ -470,7 +481,7 @@ tasks:
               echo "✅ $test_file passed"
             fi
           done
-          
+
           if [ "$HAS_ERRORS" -eq 1 ]; then
             echo ""
             echo "🚨 One or more Prometheus rule tests failed."
