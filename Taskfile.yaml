@@ -396,3 +396,77 @@ tasks:
           (cd "$_TOOL_DIR" && ln -sf "$_NAME-$_VERSION" "$_NAME")
           echo "Tool $_NAME is now available at $_SYMLINK_PATH (points to $_VERSIONED_TOOL_PATH)"
         fi
+
+  validate-kustomizations:
+      desc: Validate all kustomization.yaml files using kustomize build
+      cmds:
+        - echo "# Kustomize Validation Results"
+        - echo ""
+        - |
+          HAS_ERRORS=0
+          KUSTOMIZATION_DIRS=$(find . -name "kustomization.yaml" -exec dirname {} \;)
+          for dir in $KUSTOMIZATION_DIRS; do
+            echo "🔍 Validating: $dir"
+            if ! OUTPUT=$(kustomize build "$dir" 2>&1); then
+              echo ""
+              echo "❌ Error in '$dir':"
+              echo "----------------------------------------"
+              echo "$OUTPUT"
+              echo "----------------------------------------"
+              echo ""
+              HAS_ERRORS=1
+            else
+              echo "✅ $dir is valid"
+            fi
+          done
+          if [ "$HAS_ERRORS" -eq 1 ]; then
+            echo ""
+            echo "🚨 One or more kustomizations failed validation."
+            exit 1
+          else
+            echo ""
+            echo "🎉 All kustomizations are valid."
+          fi
+      silent: false
+
+  test-prometheus-rules:
+      desc: Run unit tests for Prometheus alerting rules
+      cmds:
+        - echo "# Prometheus Rules Test Results"
+        - echo ""
+        - |
+          HAS_ERRORS=0
+          TEST_FILES=$(find test/prometheus-rules -name "*-tests.yaml" 2>/dev/null)
+          
+          if [ -z "$TEST_FILES" ]; then
+            echo "⚠️  No Prometheus test files found in test/prometheus-rules/"
+            exit 0
+          fi
+          
+          for test_file in $TEST_FILES; do
+            test_dir=$(dirname "$test_file")
+            test_name=$(basename "$test_file")
+            echo "🔍 Testing: $test_file"
+            
+            if ! OUTPUT=$(cd "$test_dir" && promtool test rules "$test_name" 2>&1); then
+              echo ""
+              echo "❌ Test failed for '$test_file':"
+              echo "----------------------------------------"
+              echo "$OUTPUT"
+              echo "----------------------------------------"
+              echo ""
+              HAS_ERRORS=1
+            else
+              echo "✅ $test_file passed"
+            fi
+          done
+          
+          if [ "$HAS_ERRORS" -eq 1 ]; then
+            echo ""
+            echo "🚨 One or more Prometheus rule tests failed."
+            exit 1
+          else
+            echo ""
+            echo "🎉 All Prometheus rule tests passed."
+          fi
+      silent: false

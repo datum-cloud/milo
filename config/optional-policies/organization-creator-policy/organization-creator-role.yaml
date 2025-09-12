@@ -1,0 +1,9 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: organization-creator
+  namespace: milo-system
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - resourcemanager.miloapis.com/organizations.create

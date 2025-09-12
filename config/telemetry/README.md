@@ -14,13 +14,13 @@ This directory contains telemetry processors that:
 ## Components
 
 ### Vector Audit Log Processor
-**Location**: `vector-audit-log-proccessor/`
+**Location**: `vector-audit-log-processor/`
 
 Processes Kubernetes audit logs from both core and project-specific Milo control
 planes, adding contextual metadata for organization and project-scoped analysis.
 
 See
-[vector-audit-log-proccessor/README.md](vector-audit-log-proccessor/README.md)
+[vector-audit-log-processor/README.md](vector-audit-log-processor/README.md)
 for detailed documentation.
 
 ## Getting Started

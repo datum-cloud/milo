@@ -1,0 +1,18 @@
+# Creates a new policy binding that grants authenticated users access to create
+# organizations.
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: authenticated-user-organization-creator
+  namespace: milo-system
+spec:
+  roleRef:
+    name: organization-creator
+    namespace: milo-system
+  subjects:
+    - kind: Group
+      name: "system:authenticated"
+  resourceSelector:
+    resourceKind:
+      apiGroup: "resourcemanager.miloapis.com"
+      kind: Organization
