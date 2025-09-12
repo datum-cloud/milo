@@ -22,8 +22,7 @@ graph TB
     end
 
     subgraph "Vector Audit Log Processor"
-        CoreWebhook["Core Webhook Server<br/>:8081/audit/v1alpha1/core"]
-        ProjWebhook["Project Webhook Server<br/>:8080/audit/v1alpha1/projects"]
+        Webhook["Webhook Server<br/>:8081 (path '/')"]
 
         subgraph "Transformers"
             CoreTransform["Core Log Transformer"]
@@ -40,15 +39,13 @@ graph TB
     end
 
     %% API Server to Vector connections
-    CoreAPI -->|"POST /audit/v1alpha1/core<br/>Batch audit events"| CoreWebhook
-    ProjAPI1 -->|"POST /audit/v1alpha1/projects/alpha<br/>Batch audit events"| ProjWebhook
-    ProjAPI2 -->|"POST /audit/v1alpha1/projects/beta<br/>Batch audit events"| ProjWebhook
+    CoreAPI -->|"POST (batch audit events)"| Webhook
+    ProjAPI1 -->|"POST (batch audit events; project via user.extra)"| Webhook
+    ProjAPI2 -->|"POST (batch audit events; project via user.extra)"| Webhook
 
     %% Vector processing flow
-    CoreWebhook --> CoreTransform
-    ProjWebhook --> ProjTransform
+    Webhook --> CoreTransform
     CoreTransform --> |Sends individual audit logs to| CommonProcessor
-    ProjTransform --> |Sends individual audit logs to| CommonProcessor
 
     %% Output to downstream systems
     CommonProcessor --> Loki
@@ -75,20 +72,18 @@ graph TB
 
 ### Log Transformation Details
 
-#### Core Log Transformer
-The core control plane transformer processes audit logs from the main Milo API server and performs the following enrichments:
+#### Log Transformer
+The transformer processes audit logs from the Milo API server and performs the following enrichments:
 
-- **Control Plane Type**: Adds `telemetry.miloapis.com/control-plane-type: "core"`
+- **Control Plane Type**: Adds `telemetry.miloapis.com/control-plane-type: "project"` when project context is detected via `user.extra`; otherwise sets `"core"`
 - **Organization Context**: Extracts organization names from:
   - Namespace patterns (e.g., `organization-{org-name}`)
   - User extra data when parent resource type is "Organization"
+- **Project Context**: If `user.extra` indicates a parent resource of type `Project`, extracts the project name and adds annotation `resourcemanager.miloapis.com/project-name: "{project-name}"`
 - **User Context**: Extracts user names from user extra data when parent resource type is "User"
 
 #### Project Log Transformer
-The project control plane transformer processes audit logs from project-specific API servers:
-
-- **Control Plane Type**: Adds `telemetry.miloapis.com/control-plane-type: "project"`
-- **Project Context**: Extracts project name from the webhook URL path (`/audit/v1alpha1/projects/{project-name}`)
+Consolidated into the single transformer. Project context is derived from `user.extra` when `parent-type` is `Project`.
 
 #### Common Log Processor
 The common processor applies shared transformations to all audit logs from both control planes:
@@ -100,21 +95,21 @@ This consolidates duplicate logic and ensures consistent processing across all a
 
 ## Data Flow
 
-### Core Control Plane Audit Logs
-- **Source**: Core Milo API Server
-- **Endpoint**: `http://vector:8081/audit/v1alpha1/core`
+### Non-project (platform) Audit Logs
+- **Source**: Milo API Server
+- **Endpoint**: `http://vector:8081/`
 - **Context Added**:
   - Control plane type: `core`
   - Organization name (extracted from namespace or user extra data)
   - User name (when applicable)
   - Service name (based on API group)
 
-### Project Control Plane Audit Logs
-- **Source**: Project-specific Milo API Servers
-- **Endpoint**: `http://vector:8080/audit/v1alpha1/projects/{project-name}`
+### Project-Scoped Audit Logs
+- **Source**: Project-scoped requests routed through the Milo API server (virtual control planes)
+- **Endpoint**: `http://vector:8081/`
 - **Context Added**:
-  - Control plane type: `project`
-  - Project name (extracted from URL path)
+  - Control plane type: `project` (derived from `user.extra`)
+  - Project name (from `iam.miloapis.com/parent-name` when `parent-type` is `Project`)
   - Service name (based on API group)
 
 ## Integration with Milo API Servers
@@ -133,11 +128,7 @@ To enable audit logging on a Milo API server, the control planes must be configu
 
 1. **Mounting ConfigMaps**: Mount audit policy and webhook configuration files to the API server pods at the expected locations (e.g., `/etc/kubernetes/config/`)
 2. **Audit Policy Configuration**: Define which events should be audited and at what level
-3. **Webhook Configuration**: Configure the API server to send audit events to the appropriate Vector endpoint:
-   - Core control plane →
-     `http://vector-audit-log-processor:8081/audit/v1alpha1/core`
-   - Project control plane →
-     `http://vector-audit-log-processor:8080/audit/v1alpha1/projects/{project-name}`
+3. **Webhook Configuration**: Configure the API server to send audit events to the appropriate Vector endpoint: `http://vector-audit-log-processor:8081/`
 
 The `apiserver-audit-logging` Kustomize component provides a reference implementation for patching API server deployments with the necessary audit configuration flags and environment variables.
 

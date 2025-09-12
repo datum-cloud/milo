@@ -31,11 +31,8 @@ spec:
             - containerPort: 9598
               name: metrics
               protocol: TCP
-            - containerPort: 8080
-              name: proj-audit-log
-              protocol: TCP
             - containerPort: 8081
-              name: core-audit-log
+              name: audit-log
               protocol: TCP
           resources:
             requests:
