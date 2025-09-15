@@ -1,0 +1,79 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: CorporationTypeConfig
+metadata:
+  name: default-corporation-types
+  annotations:
+    kubernetes.io/display-name: "Default Corporation Types"
+spec:
+  active: true
+  corporationTypes:
+    - code: "llc"
+      displayName: "Limited Liability Company (LLC)"
+      description: "A business structure that combines the pass-through taxation of a partnership or sole proprietorship with the limited liability of a corporation"
+      enabled: true
+      sortOrder: 10
+    - code: "s-corp"
+      displayName: "S Corporation"
+      description: "A special type of corporation that passes corporate income, losses, deductions, and credits through to shareholders for federal tax purposes"
+      enabled: true
+      sortOrder: 20
+    - code: "c-corp"
+      displayName: "C Corporation"
+      description: "A legal structure for a corporation in which the owners, or shareholders, are taxed separately from the entity"
+      enabled: true
+      sortOrder: 30
+    - code: "partnership"
+      displayName: "Partnership"
+      description: "A business structure in which two or more individuals manage and operate a business in accordance with the terms and objectives set out in a Partnership Deed"
+      enabled: true
+      sortOrder: 40
+    - code: "sole-proprietorship"
+      displayName: "Sole Proprietorship"
+      description: "A business structure in which an individual and their company are considered a single entity for tax and liability purposes"
+      enabled: true
+      sortOrder: 50
+    - code: "nonprofit"
+      displayName: "Non-Profit Corporation"
+      description: "A corporation that has been granted tax-exempt status by the IRS because it furthers a social cause and provides a public benefit"
+      enabled: true
+      sortOrder: 60
+    - code: "b-corp"
+      displayName: "Benefit Corporation (B-Corp)"
+      description: "A type of for-profit corporate entity that includes positive impact on society, workers, the community and the environment in addition to profit as legally defined goals"
+      enabled: true
+      sortOrder: 70
+    - code: "other"
+      displayName: "Other"
+      description: "Other business structure not listed above"
+      enabled: true
+      sortOrder: 100
+---
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: CorporationTypeConfig
+metadata:
+  name: international-corporation-types
+  annotations:
+    kubernetes.io/display-name: "International Corporation Types"
+spec:
+  active: false
+  corporationTypes:
+    - code: "ltd"
+      displayName: "Limited Company (Ltd.)"
+      description: "A private limited company, common in the UK and other Commonwealth countries"
+      enabled: true
+      sortOrder: 10
+    - code: "gmbh"
+      displayName: "Gesellschaft mit beschränkter Haftung (GmbH)"
+      description: "A type of legal entity in Germany, Austria, and Switzerland"
+      enabled: true
+      sortOrder: 20
+    - code: "sarl"
+      displayName: "Société à Responsabilité Limitée (SARL)"
+      description: "A type of business entity in France and other French-speaking countries"
+      enabled: true
+      sortOrder: 30
+    - code: "bv"
+      displayName: "Besloten Vennootschap (B.V.)"
+      description: "A private limited liability company in the Netherlands"
+      enabled: true
+      sortOrder: 40

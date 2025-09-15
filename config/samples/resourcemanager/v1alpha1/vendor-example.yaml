@@ -1,0 +1,63 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Vendor
+metadata:
+  name: acme-corp
+  annotations:
+    kubernetes.io/display-name: "ACME Corporation"
+spec:
+  profileType: business
+  legalName: "ACME Corporation LLC"
+  nickname: "ACME Corp"
+  description: "A leading provider of innovative solutions"
+  website: "https://acme-corp.example.com"
+  status: active
+  corporationType: llc
+  corporationDBA: "ACME"
+  registrationNumber: "123456789"
+  stateOfIncorporation: "Delaware"
+  billingAddress:
+    street: "123 Business Ave"
+    street2: "Suite 100"
+    city: "New York"
+    state: "NY"
+    postalCode: "10001"
+    country: "United States"
+  mailingAddress:
+    street: "456 Mail St"
+    city: "New York"
+    state: "NY"
+    postalCode: "10002"
+    country: "United States"
+  taxInfo:
+    taxIdType: EIN
+    taxId: "12-3456789"
+    country: "United States"
+    taxDocument: "W-9"
+    taxVerified: true
+    verificationTimestamp: "2024-01-15T10:30:00Z"
+---
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Vendor
+metadata:
+  name: john-doe-consulting
+  annotations:
+    kubernetes.io/display-name: "John Doe Consulting"
+spec:
+  profileType: person
+  legalName: "John Doe"
+  nickname: "John"
+  description: "Independent consultant specializing in cloud architecture"
+  website: "https://johndoe.example.com"
+  status: pending
+  billingAddress:
+    street: "789 Home St"
+    city: "San Francisco"
+    state: "CA"
+    postalCode: "94102"
+    country: "United States"
+  taxInfo:
+    taxIdType: SSN
+    taxId: "123-45-6789"
+    country: "United States"
+    taxDocument: "W-9"
+    taxVerified: false
