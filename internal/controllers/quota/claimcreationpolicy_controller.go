@@ -83,7 +83,7 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 func (r *ClaimCreationPolicyReconciler) validateResourceTypes(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy) error {
 	logger := log.FromContext(ctx)
 
-	for i, requestTemplate := range policy.Spec.ResourceClaimTemplate.Requests {
+	for _, requestTemplate := range policy.Spec.ResourceClaimTemplate.Requests {
 		resourceType := requestTemplate.ResourceType
 
 		// Find the ResourceRegistration for this resource type
@@ -101,18 +101,18 @@ func (r *ClaimCreationPolicyReconciler) validateResourceTypes(ctx context.Contex
 		}
 
 		if registration == nil {
-			return fmt.Errorf("request %d: resource type '%s' is not registered", i, resourceType)
+			return fmt.Errorf("resource type '%s' is not registered - please create a ResourceRegistration for this resource type", resourceType)
 		}
 
 		// Check if the ResourceRegistration is active
 		activeCondition := apimeta.FindStatusCondition(registration.Status.Conditions, quotav1alpha1.ResourceRegistrationActive)
 		if activeCondition == nil {
-			return fmt.Errorf("request %d: resource type '%s' registration has no active status condition", i, resourceType)
+			return fmt.Errorf("resource type '%s' is not ready - the ResourceRegistration is missing status conditions", resourceType)
 		}
 
 		if activeCondition.Status != metav1.ConditionTrue {
-			return fmt.Errorf("request %d: resource type '%s' is registered but not active (status: %s, reason: %s)",
-				i, resourceType, activeCondition.Status, activeCondition.Reason)
+			return fmt.Errorf("resource type '%s' is not active - ResourceRegistration status: %s (%s)",
+				resourceType, activeCondition.Status, activeCondition.Reason)
 		}
 
 		logger.V(2).Info("Resource type validation passed", "resourceType", resourceType, "registration", registration.Name)

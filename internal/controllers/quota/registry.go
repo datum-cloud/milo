@@ -80,8 +80,8 @@ func (r *QuotaControllerRegistry) registerControllers() {
 		return controller.SetupWithManager(mgr)
 	}
 
-	// ResourceClaimOwnership controller (requires dynamic client)
-	r.controllers["ResourceClaimOwnershipController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
+	// ResourceClaimOrphan controller (provides orphan detection and cleanup)
+	r.controllers["ResourceClaimOrphanController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
 		// Get discovery client from the REST config
 		restConfig := mgr.GetConfig()
 
@@ -89,16 +89,38 @@ func (r *QuotaControllerRegistry) registerControllers() {
 		discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
 		if err != nil {
 			// Log warning but continue without discovery client
-			r.logger.Info("Failed to create discovery client, will use default versions",
+			r.logger.Info("Failed to create discovery client for ResourceClaimOrphanController, will use default versions",
 				"error", err)
 		}
 
-		controller := &ResourceClaimOwnershipController{
+		controller := &ResourceClaimOrphanController{
 			Client:          mgr.GetClient(),
 			DynamicClient:   dynamicClient,
 			DiscoveryClient: discoveryClient,
 			Scheme:          mgr.GetScheme(),
 		}
+		return controller.SetupWithManager(mgr)
+	}
+
+	// Dynamic Ownership controller (provides immediate ownership references through dynamic watches)
+	r.controllers["DynamicOwnershipController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
+		// Get discovery client from the REST config
+		restConfig := mgr.GetConfig()
+
+		// Create discovery client
+		discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+		if err != nil {
+			// Log warning but continue without discovery client
+			r.logger.Info("Failed to create discovery client for DynamicOwnershipController, will use default versions",
+				"error", err)
+		}
+
+		controller := NewDynamicOwnershipController(
+			mgr.GetClient(),
+			dynamicClient,
+			discoveryClient,
+			mgr.GetScheme(),
+		)
 		return controller.SetupWithManager(mgr)
 	}
 }

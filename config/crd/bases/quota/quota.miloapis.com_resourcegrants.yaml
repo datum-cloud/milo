@@ -18,6 +18,17 @@ spec:
     - jsonPath: .status.conditions[?(@.type=='Active')].status
       name: Active
       type: string
+    - jsonPath: .spec.consumerRef.kind/.spec.consumerRef.name
+      name: Consumer
+      priority: 1
+      type: string
+    - jsonPath: .spec.allowances[*]
+      name: Allowances
+      priority: 1
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:

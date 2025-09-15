@@ -1,0 +1,23 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: test-invalid-missing-resource-policy
+  labels:
+    test.miloapis.com/quota: "true"
+    test.miloapis.com/scenario: "invalid-missing-resource"
+spec:
+  enabled: true
+  targetResource:
+    apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+    kind: "Project"
+  resourceClaimTemplate:
+    namespace: "milo-system"
+    nameTemplate: "test-project-{{.ResourceName}}-quota-claim"
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/test: "true"
+    annotations:
+      quota.miloapis.com/description: "Test quota claim for project creation"
+    requests:
+      - resourceType: "nonexistent.miloapis.com/InvalidResource"  # Invalid resource type
+        amount: 1

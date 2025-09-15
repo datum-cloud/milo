@@ -1,0 +1,128 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: quota-core-functionality
+spec:
+  # Define clusters for organizational context testing
+  clusters:
+    main:
+      kubeconfig: kubeconfig-main
+    org:
+      kubeconfig: kubeconfig-org-template
+
+  steps:
+    # Setup base quota infrastructure - MUST be first
+    - name: setup-base-infrastructure
+      try:
+        - apply:
+            file: 01-resource-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: core-test-projects-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - assert:
+            file: assertions/assert-resource-registration.yaml
+
+    # Setup claim creation policy - depends on ResourceRegistration being active
+    - name: setup-claim-creation-policy
+      try:
+        - apply:
+            file: project-creation-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ClaimCreationPolicy
+            name: core-test-project-quota-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+
+    # Create basic organization for testing
+    - name: setup-basic-organization
+      try:
+        - apply:
+            file: 02-basic-quota-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-core-test-basic-quota-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - apply:
+            file: 03-test-user.yaml
+        - apply:
+            file: 04-basic-quota-membership.yaml
+        - assert:
+            file: assertions/assert-organization.yaml
+
+    # Create resource grant for the organization
+    - name: create-basic-resource-grant
+      try:
+        - apply:
+            file: basic-quota-grant.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: core-test-basic-quota-org-grant
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Test project creation within quota limits
+    - name: test-projects-within-quota
+      cluster: org
+      try:
+        # Create projects within quota limits
+        - apply:
+            file: test-data/projects-within-quota.yaml
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Project
+            name: core-test-basic-project-1
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Project
+            name: core-test-basic-project-2
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        - assert:
+            file: assertions/assert-projects-created.yaml
+
+    # Verify resource claims were created automatically
+    - name: verify-resource-claims
+      try:
+        # Wait for ResourceClaims to be processed
+        - sleep:
+            duration: 5s
+        - assert:
+            file: assertions/assert-resource-claims.yaml
+
+    # Test basic quota enforcement
+    - name: test-quota-enforcement
+      cluster: org
+      try:
+        - apply:
+            file: test-data/project-exceeds-quota.yaml
+            expect:
+              - check:
+                  ($error != null): true

@@ -1,0 +1,149 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: multi-resource-claims
+spec:
+  # Define clusters for organizational context testing
+  clusters:
+    main:
+      kubeconfig: kubeconfig-main
+    org:
+      kubeconfig: kubeconfig-org-template
+
+  steps:
+    # Setup base infrastructure with multiple resource types
+    - name: setup-base-infrastructure
+      try:
+        # Setup project resource registration
+        - apply:
+            file: 01-resource-registration-projects.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: multi-test-projects-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Setup additional resource registrations
+        - apply:
+            file: 01-multi-resource-registrations.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: multi-test-users-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: multi-test-clusters-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Create organization for multi-resource testing
+    - name: setup-multi-resource-organization
+      try:
+        - apply:
+            file: 02-multi-resource-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-multi-test-multi-resource-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - apply:
+            file: 03-test-user.yaml
+        - apply:
+            file: 04-multi-resource-membership.yaml
+
+    # Create multiple resource grants
+    - name: setup-multi-resource-grants
+      try:
+        - apply:
+            file: multi-resource-grants.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: multi-multi-test-multi-resource-org-user-grant
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: multi-multi-test-multi-resource-org-cluster-grant
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: multi-multi-test-multi-resource-org-project-grant
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Test successful multi-resource claim
+    - name: multi-test-multi-resource-claim-success
+      try:
+        - apply:
+            file: test-data/multi-resource-claim.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceClaim
+            name: multi-test-multi-resource-claim
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Granted
+                value: 'True'
+        - assert:
+            file: assertions/assert-multi-resource-claim.yaml
+
+    # Test partial denial multi-resource claim
+    - name: multi-test-multi-resource-claim-partial-deny
+      try:
+        - apply:
+            file: test-data/multi-resource-claim-partial-deny.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceClaim
+            name: multi-test-multi-resource-claim-partial-deny
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Granted
+                value: 'False'
+        - assert:
+            file: assertions/assert-multi-resource-claim-partial-deny.yaml
+
+    # Test invalid duplicate resource claim
+    - name: test-invalid-duplicate-claim
+      try:
+        - apply:
+            file: test-data/invalid-duplicate-resource-claim.yaml
+            expect:
+              - check:
+                  ($error != null): true

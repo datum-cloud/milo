@@ -1,0 +1,112 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: quota-enforcement-edge-cases
+spec:
+  # Define clusters for organizational context testing
+  clusters:
+    main:
+      kubeconfig: kubeconfig-main
+    org:
+      kubeconfig: kubeconfig-org-template
+
+  steps:
+    # Setup base quota infrastructure
+    - name: setup-base-infrastructure
+      try:
+        - apply:
+            file: 01-resource-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: edge-test-projects-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Setup claim creation policy
+    - name: setup-claim-creation-policy
+      try:
+        - apply:
+            file: project-creation-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ClaimCreationPolicy
+            name: edge-test-project-quota-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+
+    # Create organization with strict quota enforcement
+    - name: setup-quota-enforcement-organization
+      try:
+        - apply:
+            file: 02-quota-enforcement-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-edge-test-quota-enforcement-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - apply:
+            file: 03-test-user.yaml
+        - apply:
+            file: 04-quota-enforcement-membership.yaml
+
+    # Create resource grant with limited allowance
+    - name: create-limited-resource-grant
+      try:
+        - apply:
+            file: quota-enforcement-grant.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: edge-test-quota-enforcement-org-grant
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Test ResourceClaim boundary conditions and validation
+    # (Quota grant/deny functionality is covered by core-functionality test)
+
+    # Test resource claim boundary conditions
+    - name: test-boundary-conditions
+      try:
+        # Test zero amount resource claim
+        - apply:
+            file: test-data/zero-amount-claim.yaml
+            expect:
+              - check:
+                  ($error != null): true
+        # Test negative amount resource claim
+        - apply:
+            file: test-data/negative-amount-claim.yaml
+            expect:
+              - check:
+                  ($error != null): true
+
+    # Test claim creation policy validation
+    - name: test-policy-validation
+      try:
+        # Test policy with invalid resource type - should fail validation
+        - apply:
+            file: test-data/invalid-policy-missing-resource.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ClaimCreationPolicy
+            name: test-invalid-missing-resource-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'False'

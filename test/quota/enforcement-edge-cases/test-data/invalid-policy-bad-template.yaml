@@ -1,0 +1,23 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: test-invalid-template-policy
+  labels:
+    test.miloapis.com/quota: "true"
+    test.miloapis.com/scenario: "invalid-template"
+spec:
+  enabled: true
+  targetResource:
+    apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+    kind: "Project"
+  resourceClaimTemplate:
+    namespace: "milo-system"
+    nameTemplate: "test-project-{{.InvalidField}}-quota-claim"  # Invalid template field
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/test: "true"
+    annotations:
+      quota.miloapis.com/description: "Test quota claim with invalid template"
+    requests:
+      - resourceType: "test.miloapis.com/EdgeProject"
+        amount: 1

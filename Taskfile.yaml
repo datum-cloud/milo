@@ -46,7 +46,24 @@ tasks:
       - |
         set -e
         echo "Building Milo container image: {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}"
-        docker build -t "{{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}" .
+
+        # Get git information for version injection
+        GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+        VERSION="v0.0.0-master+${GIT_COMMIT:0:7}"
+        GIT_TREE_STATE="clean"
+        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+          GIT_TREE_STATE="dirty"
+        fi
+        BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "unknown")
+
+        echo "Version info: ${VERSION}, commit: ${GIT_COMMIT:0:7}, tree: ${GIT_TREE_STATE}"
+
+        docker build \
+          --build-arg VERSION="${VERSION}" \
+          --build-arg GIT_COMMIT="${GIT_COMMIT}" \
+          --build-arg GIT_TREE_STATE="${GIT_TREE_STATE}" \
+          --build-arg BUILD_DATE="${BUILD_DATE}" \
+          -t "{{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}" .
         echo "Successfully built {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}"
     sources:
       - "**/*.go"

@@ -1,8 +1,0 @@
-apiVersion: quota.miloapis.com/v1alpha1
-kind: ResourceRegistration
-metadata:
-  name: test-projects-per-org
-status:
-  conditions:
-    - type: Active
-      status: "True"

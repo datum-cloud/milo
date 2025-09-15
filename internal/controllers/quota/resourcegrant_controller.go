@@ -8,9 +8,12 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
@@ -132,10 +135,34 @@ func (r *ResourceGrantController) validateResourceRegistrationsForGrant(ctx cont
 }
 
 // SetupWithManager sets up the controller with the Manager.
-// Uses GenerationChangedPredicate to avoid reconciling on status-only updates.
+// Watches ResourceRegistrations to trigger reconciliation when new resource types are registered.
 func (r *ResourceGrantController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&quotav1alpha1.ResourceGrant{}).
+		Watches(
+			&quotav1alpha1.ResourceRegistration{},
+			// Trigger reconciliation of all ResourceGrants when ResourceRegistrations change
+			// This ensures ResourceGrants get re-validated when new resource types are registered
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
+				// List all ResourceGrants and enqueue them for reconciliation
+				var grants quotav1alpha1.ResourceGrantList
+				if err := r.List(ctx, &grants); err != nil {
+					// Log error but don't fail the watch setup
+					return nil
+				}
+
+				requests := make([]reconcile.Request, 0, len(grants.Items))
+				for _, grant := range grants.Items {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      grant.Name,
+							Namespace: grant.Namespace,
+						},
+					})
+				}
+				return requests
+			}),
+		).
 		Named("resource-grant").
 		Complete(r)
 }

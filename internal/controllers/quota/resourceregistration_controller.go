@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	quotavalidation "go.miloapis.com/milo/internal/validation/quota"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
@@ -93,6 +94,22 @@ func (r *ResourceRegistrationController) Reconcile(ctx context.Context, req ctrl
 	} else {
 		activeCondition = activeCondition.DeepCopy()
 		activeCondition.ObservedGeneration = registration.Generation
+	}
+
+	// Validate ClaimingResources configuration
+	if err := quotavalidation.ValidateClaimingResourcesConfiguration(&registration); err != nil {
+		activeCondition.Status = metav1.ConditionFalse
+		activeCondition.Reason = quotav1alpha1.ResourceRegistrationValidationFailedReason
+		activeCondition.Message = fmt.Sprintf("ClaimingResources validation failed: %v", err)
+		apimeta.SetStatusCondition(&registration.Status.Conditions, *activeCondition)
+
+		// Update the status with the validation failure
+		if !equality.Semantic.DeepEqual(originalStatus, &registration.Status) {
+			if err := r.Status().Update(ctx, &registration); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to update ResourceRegistration status: %w", err)
+			}
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// // If the registration is already active, skip the rest of the

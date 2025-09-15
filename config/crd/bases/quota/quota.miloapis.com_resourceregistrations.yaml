@@ -57,6 +57,41 @@ spec:
                   "millicores", "bytes")
                 maxLength: 50
                 type: string
+              claimingResources:
+                description: |-
+                  ClaimingResources defines which resource types are allowed to create
+                  ResourceClaims for this registered resource type. When a ResourceClaim is
+                  created with a ResourceRef, that ResourceRef's type must be in this list
+                  for the claim to be valid. If not specified, defaults to allowing the
+                  resource type itself (e.g., Projects can claim Project quota).
+
+                  This field also signals to the ownership controller which resource types
+                  should be watched for immediate owner reference creation.
+
+                  Uses unversioned references to allow API version upgrades without
+                  needing to update the ResourceRegistration.
+                items:
+                  description: |-
+                    ClaimingResource identifies a resource type that can create ResourceClaims
+                    for a registered resource type using an unversioned reference.
+                  properties:
+                    apiGroup:
+                      description: |-
+                        APIGroup is the group for the resource being referenced.
+                        If APIGroup is not specified, the specified Kind must be in the core API group.
+                        For any other third-party types, APIGroup is required.
+                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                      type: string
+                    kind:
+                      description: Kind of the referent.
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                  required:
+                  - kind
+                  type: object
+                maxItems: 20
+                type: array
               consumerTypeRef:
                 description: |-
                   Reference to the owning resource type that will create grant and claim objects

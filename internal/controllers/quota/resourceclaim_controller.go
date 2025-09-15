@@ -36,7 +36,8 @@ type ResourceClaimController struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=allowancebuckets,verbs=get;list;watch
 
-// Reconciles a ResourceClaim object by evaluating the requests against the available quota.
+// Reconciles a ResourceClaim object by evaluating the requests against the available quota
+// and updating the overall Granted condition based on individual request allocations.
 func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
 	logger := log.FromContext(ctx)
 
@@ -55,128 +56,27 @@ func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
-	// Create a deep copy of the original status to compare against later
-	originalStatus := claim.Status.DeepCopy()
-
-	// Check if the claim is already granted - if so, skip re-evaluation
-	// The AllowanceBucketController is responsible for granting claims
-	existingCondition := apimeta.FindStatusCondition(claim.Status.Conditions, quotav1alpha1.ResourceClaimGranted)
-	if existingCondition != nil && existingCondition.Status == metav1.ConditionTrue {
-		logger.V(1).Info("ResourceClaim already granted, skipping re-evaluation",
-			"name", claim.Name,
-			"namespace", claim.Namespace,
-			"reason", existingCondition.Reason)
-		// Just update observed generation if needed
-		if claim.Status.ObservedGeneration != claim.Generation {
-			claim.Status.ObservedGeneration = claim.Generation
-			if err := r.Status().Update(ctx, &claim); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to update ResourceClaim observed generation: %w", err)
-			}
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// Always update the observed generation in the status to match the current generation of the spec.
-	claim.Status.ObservedGeneration = claim.Generation
-
-	// Validate that all required registrations exist before evaluating the claim
-	if err := r.validateResourceRegistrationsForClaim(ctx, &claim); err != nil {
-		logger.Info("ResourceClaim validation failed", "error", err)
-
-		// Set the condition to indicate validation failed
-		validationFailedCondition := metav1.Condition{
-			Type:    quotav1alpha1.ResourceClaimGranted,
-			Status:  metav1.ConditionFalse,
-			Reason:  quotav1alpha1.ResourceClaimValidationFailedReason,
-			Message: fmt.Sprintf("Validation failed: %v", err),
-		}
-		apimeta.SetStatusCondition(&claim.Status.Conditions, validationFailedCondition)
-
-		// Update status and return
-		if err := r.Status().Update(ctx, &claim); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update ResourceClaim status: %w", err)
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// Evaluate each resource request within the claim's spec.
-	// Here "granted" means "eligible"; the AllowanceBucketController reserves
-	// capacity and ultimately marks the claim Granted.
-	allRequestsGranted := true
-	// Variable to store the outcome message for each request evaluation.
-	var evaluationMessages []string
-
-	// Iterate through the requests in the claim's spec and evaluate them
+	// Evaluate each resource request within the claim's spec for basic validation
+	// AllowanceBucketControllers are responsible for actual granting/denying individual requests
 	for i, request := range claim.Spec.Requests {
-		// Log the start of the evaluation for the current request
-		logger.Info("evaluating resource request",
+		logger.V(1).Info("evaluating resource request",
 			"requestIndex", i,
 			"resourceType", request.ResourceType,
 			"amount", request.Amount,
 			"dimensions", request.Dimensions)
 
-		// Evaluate the request to determine if there is enough quota available
-		granted, message, err := r.evaluateResourceRequest(ctx, &claim, request)
+		// Basic validation and eligibility check
+		_, message, err := r.evaluateResourceRequest(ctx, &claim, request)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to evaluate resource request %d: %w", i, err)
 		}
 
-		// If any single request is not granted, the entire claim is considered not granted.
-		if !granted {
-			allRequestsGranted = false
-		}
-		// Append the result message from the evaluation to the list of messages.
-		evaluationMessages = append(evaluationMessages, message)
+		_ = message // result used only for logging above
 	}
 
-	// Set the 'Granted' condition intent. The bucket controller performs the
-	// actual reservation and sets Granted=True upon success.
-	var grantedCondition metav1.Condition
-	if allRequestsGranted {
-		grantedCondition = metav1.Condition{
-			Type:    quotav1alpha1.ResourceClaimGranted,
-			Status:  metav1.ConditionFalse,
-			Reason:  quotav1alpha1.ResourceClaimPendingReason,
-			Message: "Awaiting capacity reservation",
-		}
-	} else {
-		grantedCondition = metav1.Condition{
-			Type:    quotav1alpha1.ResourceClaimGranted,
-			Status:  metav1.ConditionFalse,
-			Reason:  quotav1alpha1.ResourceClaimDeniedReason,
-			Message: "Claim denied as it would exceed the currently set quota limit.",
-		}
-	}
-
-	apimeta.SetStatusCondition(&claim.Status.Conditions, grantedCondition)
-
-	statusChanged := claim.Status.ObservedGeneration != originalStatus.ObservedGeneration
-
-	// Check if the 'Granted' condition has changed
-	currentGrantedCondition := apimeta.FindStatusCondition(claim.Status.Conditions, quotav1alpha1.ResourceClaimGranted)
-	originalGrantedCondition := apimeta.FindStatusCondition(originalStatus.Conditions, quotav1alpha1.ResourceClaimGranted)
-
-	conditionChanged := false
-	// Compare current and original conditions
-	if currentGrantedCondition != nil && originalGrantedCondition != nil {
-		conditionChanged = currentGrantedCondition.Status != originalGrantedCondition.Status ||
-			currentGrantedCondition.Reason != originalGrantedCondition.Reason ||
-			currentGrantedCondition.Message != originalGrantedCondition.Message
-	} else if currentGrantedCondition != originalGrantedCondition {
-		conditionChanged = true
-	}
-
-	// If the status has changed, update it
-	if statusChanged || conditionChanged {
-		if err := r.Status().Update(ctx, &claim); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update ResourceClaim status: %w", err)
-		}
-
-		logger.Info("updated ResourceClaim status",
-			"name", claim.Name,
-			"namespace", claim.Namespace,
-			"granted", allRequestsGranted,
-			"requestCount", len(claim.Spec.Requests))
+	// Update the overall claim condition based on individual request allocations
+	if err := r.updateOverallClaimConditionFromAllocations(ctx, &claim); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update overall claim condition: %w", err)
 	}
 
 	return ctrl.Result{}, nil
@@ -352,17 +252,129 @@ func (r *ResourceClaimController) generateAllowanceBucketName(namespace, resourc
 	return GenerateAllowanceBucketName(namespace, resourceType, ownerRef, dimensions)
 }
 
-// validateResourceRegistrations validates that all resource types in the claim
-// have corresponding registrations.
-func (r *ResourceClaimController) validateResourceRegistrationsForClaim(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
-	// Collect all unique resource type names from requests to be passed into
-	// the ValidateResourceRegistrations function.
-	var resourceTypes []string
-	for _, request := range claim.Spec.Requests {
-		resourceTypes = append(resourceTypes, request.ResourceType)
+// updateOverallClaimConditionFromAllocations updates the overall Granted condition
+// based on the status of individual request allocations
+func (r *ResourceClaimController) updateOverallClaimConditionFromAllocations(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
+	logger := log.FromContext(ctx)
+
+	// Initialize allocation map for tracking which requests have been processed
+	allocationMap := make(map[string]quotav1alpha1.RequestAllocation)
+	for _, allocation := range claim.Status.Allocations {
+		allocationMap[allocation.ResourceType] = allocation
 	}
 
-	return ValidateResourceRegistrations(ctx, r.Client, resourceTypes)
+	var grantedCount, deniedCount, pendingCount int
+	var totalRequests = len(claim.Spec.Requests)
+
+	// Check the status of each request by resource type
+	for _, request := range claim.Spec.Requests {
+		allocation, exists := allocationMap[request.ResourceType]
+		if !exists {
+			// No allocation status exists for this request - mark as pending
+			pendingCount++
+			continue
+		}
+
+		switch allocation.Status {
+		case quotav1alpha1.RequestAllocationGranted:
+			grantedCount++
+		case quotav1alpha1.RequestAllocationDenied:
+			deniedCount++
+		case quotav1alpha1.RequestAllocationPending:
+			pendingCount++
+		default:
+			// Unknown status - treat as pending
+			pendingCount++
+		}
+	}
+
+	logger.V(1).Info("Allocation summary",
+		"claimName", claim.Name,
+		"totalRequests", totalRequests,
+		"granted", grantedCount,
+		"denied", deniedCount,
+		"pending", pendingCount)
+
+	// Determine overall condition based on allocation results
+	var conditionStatus metav1.ConditionStatus
+	var reason, message string
+
+	if grantedCount == totalRequests {
+		// All requests granted
+		conditionStatus = metav1.ConditionTrue
+		reason = quotav1alpha1.ResourceClaimGrantedReason
+		message = fmt.Sprintf("All %d resource requests have been granted", totalRequests)
+	} else if deniedCount > 0 {
+		// At least one request denied
+		conditionStatus = metav1.ConditionFalse
+		reason = quotav1alpha1.ResourceClaimDeniedReason
+		message = fmt.Sprintf("Resource quota exceeded: %d granted, %d denied, %d pending", grantedCount, deniedCount, pendingCount)
+	} else {
+		// Some requests still pending
+		conditionStatus = metav1.ConditionFalse
+		reason = quotav1alpha1.ResourceClaimPendingReason
+		message = fmt.Sprintf("Awaiting capacity evaluation: %d granted, %d pending", grantedCount, pendingCount)
+	}
+
+	return r.updateOverallClaimCondition(ctx, claim, conditionStatus, reason, message)
+}
+
+// updateOverallClaimCondition updates the overall Granted condition using Server Side Apply
+func (r *ResourceClaimController) updateOverallClaimCondition(ctx context.Context, claim *quotav1alpha1.ResourceClaim,
+	status metav1.ConditionStatus, reason, message string) error {
+
+	logger := log.FromContext(ctx)
+
+	// Check if condition needs updating
+	existingCondition := apimeta.FindStatusCondition(claim.Status.Conditions, quotav1alpha1.ResourceClaimGranted)
+	if existingCondition != nil &&
+		existingCondition.Status == status &&
+		existingCondition.Reason == reason &&
+		existingCondition.Message == message {
+		// No change needed
+		logger.V(2).Info("Overall claim condition unchanged, skipping update",
+			"claimName", claim.Name, "status", status, "reason", reason)
+		return nil
+	}
+
+	// Create condition update
+	condition := metav1.Condition{
+		Type:               quotav1alpha1.ResourceClaimGranted,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: metav1.Now(),
+	}
+
+	// Create minimal claim object for Server Side Apply
+	patchClaim := &quotav1alpha1.ResourceClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "quota.miloapis.com/v1alpha1",
+			Kind:       "ResourceClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      claim.Name,
+			Namespace: claim.Namespace,
+		},
+		Status: quotav1alpha1.ResourceClaimStatus{
+			ObservedGeneration: claim.Generation,
+			Conditions:         []metav1.Condition{condition},
+		},
+	}
+
+	// Apply the patch using Server Side Apply with our field manager
+	fieldManagerName := "resource-claim-controller"
+	if err := r.Status().Patch(ctx, patchClaim, client.Apply, client.FieldOwner(fieldManagerName), client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to apply overall claim condition: %w", err)
+	}
+
+	logger.Info("Successfully updated overall claim condition",
+		"claimName", claim.Name,
+		"status", status,
+		"reason", reason,
+		"message", message)
+
+	return nil
 }
 
 // Create and register controller with controller manager

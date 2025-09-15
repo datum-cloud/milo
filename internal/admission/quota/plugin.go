@@ -23,6 +23,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+	quotavalidation "go.miloapis.com/milo/internal/validation/quota"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
@@ -160,7 +161,12 @@ func (p *ClaimCreationPlugin) handleAdmission(ctx context.Context, attrs admissi
 		"user", attrs.GetUserInfo().GetName(),
 		"dryRun", attrs.IsDryRun())
 
-	// Only handle CREATE and UPDATE operations
+	// Check if this is a direct ResourceClaim creation
+	if attrs.GetKind().Group == "quota.miloapis.com" && attrs.GetKind().Kind == "ResourceClaim" {
+		return p.validateResourceClaim(ctx, attrs)
+	}
+
+	// Only handle CREATE and UPDATE operations for other resources
 	if attrs.GetOperation() != admission.Create {
 		p.logger.V(3).Info("Skipping non-CREATE operation", "operation", attrs.GetOperation())
 		return nil
@@ -284,12 +290,6 @@ func (p *ClaimCreationPlugin) createResourceClaim(ctx context.Context, policy *q
 		namespace = policy.Spec.ResourceClaimTemplate.Namespace
 	}
 
-	// Check for existing denied ResourceClaims for this resource to fail fast
-	// This helps avoid creating new claims when quota is exhausted
-	if err := p.checkForExistingDeniedClaims(ctx, evalContext, namespace); err != nil {
-		return "", "", err
-	}
-
 	gvr := schema.GroupVersionResource{
 		Group:    "quota.miloapis.com",
 		Version:  "v1alpha1",
@@ -322,6 +322,14 @@ func (p *ClaimCreationPlugin) createResourceClaim(ctx context.Context, policy *q
 
 	// Note: UID removed from ConsumerRef for name/kind-only matching
 
+	// Populate the ResourceRef with the unversioned reference to the resource being created
+	spec.ResourceRef = quotav1alpha1.UnversionedObjectReference{
+		APIGroup:  evalContext.GVK.Group,
+		Kind:      evalContext.GVK.Kind,
+		Name:      evalContext.Object.GetName(),
+		Namespace: evalContext.Object.GetNamespace(), // Will be empty for cluster-scoped resources
+	}
+
 	// Create the ResourceClaim with GenerateName for automatic unique naming
 	claim := &quotav1alpha1.ResourceClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -338,7 +346,8 @@ func (p *ClaimCreationPlugin) createResourceClaim(ctx context.Context, policy *q
 		"claimName", claimNamePrefix,
 		"consumerRef", claim.Spec.ConsumerRef,
 		"consumerRefKind", claim.Spec.ConsumerRef.Kind,
-		"consumerRefName", claim.Spec.ConsumerRef.Name)
+		"consumerRefName", claim.Spec.ConsumerRef.Name,
+		"resourceRef", claim.Spec.ResourceRef)
 
 	// Convert ResourceClaim to unstructured using JSON marshaling to preserve types
 	claimBytes, err := json.Marshal(claim)
@@ -381,63 +390,6 @@ func (p *ClaimCreationPlugin) createResourceClaim(ctx context.Context, policy *q
 		"requestCount", len(spec.Requests))
 
 	return claimName, namespace, nil
-}
-
-// checkForExistingDeniedClaims checks if there are recently denied ResourceClaims
-// for the same resource type to fail fast when quota is exhausted.
-func (p *ClaimCreationPlugin) checkForExistingDeniedClaims(ctx context.Context, evalContext *EvaluationContext, namespace string) error {
-	// Check if fast failure is enabled
-	if !p.config.EnableDenialFastFail {
-		return nil
-	}
-	gvr := schema.GroupVersionResource{
-		Group:    "quota.miloapis.com",
-		Version:  "v1alpha1",
-		Resource: "resourceclaims",
-	}
-
-	// List ResourceClaims that match this resource
-	resourceName := evalContext.Object.GetName()
-	kind := strings.ToLower(evalContext.GVK.Kind)
-
-	// Look for ResourceClaims with names that start with our prefix
-	namePrefix := fmt.Sprintf("%s-%s-claim-", resourceName, kind)
-
-	claims, err := p.dynamicClient.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		// Don't fail resource creation if we can't check - log and continue
-		p.logger.V(1).Info("Could not list existing ResourceClaims, continuing", "error", err)
-		return nil
-	}
-
-	// Check if any recent ResourceClaims with our prefix have been denied
-	recentDenialCutoff := time.Now().Add(-p.config.DenialCheckWindow)
-
-	for _, item := range claims.Items {
-		claimName := item.GetName()
-
-		// Check if this claim matches our resource
-		if !strings.HasPrefix(claimName, namePrefix) {
-			continue
-		}
-
-		// Check if this claim was created recently
-		if item.GetCreationTimestamp().Time.Before(recentDenialCutoff) {
-			continue
-		}
-
-		// Check if this claim is denied
-		if isClaimDenied(&item) {
-			reason := getClaimDenialReason(&item)
-			p.logger.Info("Found recent denied ResourceClaim, failing fast",
-				"existingClaim", claimName,
-				"reason", reason,
-				"resourceName", resourceName)
-			return fmt.Errorf("ResourceClaim was denied: %s", reason)
-		}
-	}
-
-	return nil
 }
 
 // generateResourceClaimNamePrefix creates a name prefix for ResourceClaim GenerateName.
@@ -701,4 +653,117 @@ func getClaimDenialReason(claim *unstructured.Unstructured) string {
 		}
 	}
 	return "unknown reason"
+}
+
+// validateResourceClaim validates ResourceClaim objects when they are created directly
+func (p *ClaimCreationPlugin) validateResourceClaim(ctx context.Context, attrs admission.Attributes) error {
+	// Only validate CREATE operations for ResourceClaims
+	if attrs.GetOperation() != admission.Create {
+		p.logger.V(3).Info("Skipping non-CREATE operation for ResourceClaim", "operation", attrs.GetOperation())
+		return nil
+	}
+
+	// Get the ResourceClaim object
+	obj := attrs.GetObject()
+	if obj == nil {
+		return nil
+	}
+
+	claim, ok := obj.(*quotav1alpha1.ResourceClaim)
+	if !ok {
+		// Try to convert from unstructured
+		unstructuredObj, ok := obj.(*unstructured.Unstructured)
+		if !ok {
+			p.logger.V(2).Info("Could not convert object to ResourceClaim", "type", fmt.Sprintf("%T", obj))
+			return nil
+		}
+
+		// Convert unstructured to ResourceClaim
+		claimBytes, err := unstructuredObj.MarshalJSON()
+		if err != nil {
+			return fmt.Errorf("failed to marshal unstructured object: %w", err)
+		}
+
+		claim = &quotav1alpha1.ResourceClaim{}
+		if err := json.Unmarshal(claimBytes, claim); err != nil {
+			return fmt.Errorf("failed to unmarshal to ResourceClaim: %w", err)
+		}
+	}
+
+	p.logger.V(1).Info("Validating ResourceClaim",
+		"name", claim.Name,
+		"namespace", claim.Namespace,
+		"requestCount", len(claim.Spec.Requests))
+
+	// Validate the resource claim using field-based validation
+	if errs := p.validateResourceClaimFields(claim); len(errs) > 0 {
+		p.logger.Info("ResourceClaim validation failed",
+			"name", claim.Name,
+			"namespace", claim.Namespace,
+			"errors", errs)
+		return admission.NewForbidden(attrs, errors.NewInvalid(
+			quotav1alpha1.GroupVersion.WithKind("ResourceClaim").GroupKind(),
+			claim.Name,
+			errs))
+	}
+
+	p.logger.V(1).Info("ResourceClaim validation passed",
+		"name", claim.Name,
+		"namespace", claim.Namespace)
+
+	return nil
+}
+
+// validateResourceClaimFields performs comprehensive field-based validation of ResourceClaim
+func (p *ClaimCreationPlugin) validateResourceClaimFields(claim *quotav1alpha1.ResourceClaim) field.ErrorList {
+	var errs field.ErrorList
+	requestsPath := field.NewPath("spec", "requests")
+	resourceRefPath := field.NewPath("spec", "resourceRef")
+
+	// Track resource types to detect duplicates
+	seenResourceTypes := make(map[string]int)
+
+	// Validate each request
+	for i, request := range claim.Spec.Requests {
+		requestPath := requestsPath.Index(i)
+
+		// Validate resource type is not empty
+		if request.ResourceType == "" {
+			errs = append(errs, field.Required(requestPath.Child("resourceType"),
+				"resource type is required"))
+			continue
+		}
+
+		// Check for duplicate resource types
+		if firstIndex, exists := seenResourceTypes[request.ResourceType]; exists {
+			errs = append(errs, field.Duplicate(requestPath.Child("resourceType"),
+				fmt.Sprintf("resource type '%s' is already specified in request %d",
+					request.ResourceType, firstIndex)))
+		} else {
+			seenResourceTypes[request.ResourceType] = i
+		}
+
+		// Validate amount is positive
+		if request.Amount <= 0 {
+			errs = append(errs, field.Invalid(requestPath.Child("amount"), request.Amount,
+				"amount must be greater than 0"))
+		}
+	}
+
+	// Validate that the claiming resource (ResourceRef) is allowed to claim these resources
+	// This requires checking against ResourceRegistrations' ClaimingResources field
+	ctx := context.Background()
+	if err := p.validateClaimingResource(ctx, claim); err != nil {
+		errs = append(errs, field.Invalid(resourceRefPath,
+			fmt.Sprintf("%s/%s", claim.Spec.ResourceRef.APIGroup, claim.Spec.ResourceRef.Kind),
+			err.Error()))
+	}
+
+	return errs
+}
+
+// validateClaimingResource validates that the ResourceRef is allowed to claim the requested resources
+func (p *ClaimCreationPlugin) validateClaimingResource(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
+	// Use the shared validation logic from the validation package
+	return quotavalidation.ValidateResourceClaimAgainstRegistrations(ctx, p.dynamicClient, claim)
 }

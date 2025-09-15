@@ -18,9 +18,16 @@ spec:
     - jsonPath: .status.conditions[?(@.type=='Granted')].status
       name: Granted
       type: string
+    - jsonPath: .spec.requests[0].resourceType
+      name: Resource
+      priority: 1
+      type: string
     - jsonPath: .status.allocated
       name: Allocated
-      type: string
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -65,7 +72,9 @@ spec:
                 - name
                 type: object
               requests:
-                description: List of resource requests defined by this claim
+                description: |-
+                  List of resource requests defined by this claim
+                  Resource types must be unique within the requests array
                 items:
                   description: ResourceRequest defines a single resource request within
                     a claim
@@ -89,15 +98,102 @@ spec:
                   - amount
                   - resourceType
                   type: object
+                maxItems: 20
                 minItems: 1
                 type: array
+              resourceRef:
+                description: |-
+                  Reference to the resource that claimed this quota (automatically populated by admission plugin).
+                  This is an unversioned reference that persists across API version upgrades.
+                properties:
+                  apiGroup:
+                    description: |-
+                      APIGroup is the group for the resource being referenced.
+                      If APIGroup is not specified, the specified Kind must be in the core API group.
+                      For any other third-party types, APIGroup is required.
+                    type: string
+                  kind:
+                    description: Kind of the referent.
+                    type: string
+                  name:
+                    description: Name of the referent.
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
             required:
             - consumerRef
             - requests
+            - resourceRef
             type: object
           status:
+            default:
+              conditions:
+              - lastTransitionTime: "1970-01-01T00:00:00Z"
+                message: Awaiting capacity evaluation
+                reason: PendingEvaluation
+                status: "False"
+                type: Granted
             description: ResourceClaimStatus defines the observed state of ResourceClaim.
             properties:
+              allocated:
+                description: Total amount of resources allocated by this claim across
+                  all requests
+                format: int64
+                minimum: 0
+                type: integer
+              allocations:
+                description: Per-request allocation status tracking. Each entry corresponds
+                  to a resource type in spec.requests[]
+                items:
+                  description: RequestAllocation tracks the allocation status of a
+                    specific resource request within a claim.
+                  properties:
+                    allocatedAmount:
+                      description: Amount actually allocated for this request (may
+                        be less than requested in some scenarios)
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    lastTransitionTime:
+                      description: Timestamp of the last status transition for this
+                        allocation
+                      format: date-time
+                      type: string
+                    message:
+                      description: Human-readable message describing the allocation
+                        result
+                      type: string
+                    reason:
+                      description: Reason for the current allocation status
+                      type: string
+                    resourceType:
+                      description: Resource type that this allocation status refers
+                        to
+                      minLength: 1
+                      type: string
+                    status:
+                      description: Status of this specific request allocation
+                      enum:
+                      - Granted
+                      - Denied
+                      - Pending
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - resourceType
+                  - status
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - resourceType
+                x-kubernetes-list-type: map
               conditions:
                 description: 'Known condition types: "Granted"'
                 items:

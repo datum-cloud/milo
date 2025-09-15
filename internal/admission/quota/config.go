@@ -44,20 +44,12 @@ type AdmissionPluginConfig struct {
 
 	// DisableSharedWatch forces the plugin to use individual watches (for rollback)
 	DisableSharedWatch bool
-
-	// EnableDenialFastFail enables checking for recent denied claims before creating new ones
-	EnableDenialFastFail bool
-
-	// DenialCheckWindow is how far back to look for recent denied claims
-	DenialCheckWindow time.Duration
 }
 
 // DefaultAdmissionPluginConfig returns the default configuration for the admission plugin
 func DefaultAdmissionPluginConfig() *AdmissionPluginConfig {
 	return &AdmissionPluginConfig{
-		WatchManager:         DefaultWatchManagerConfig(),
-		DisableSharedWatch:   false,
-		EnableDenialFastFail: true,
-		DenialCheckWindow:    5 * time.Minute,
+		WatchManager:       DefaultWatchManagerConfig(),
+		DisableSharedWatch: false,
 	}
 }

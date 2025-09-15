@@ -81,9 +81,6 @@ func (r *AllowanceBucketController) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 	}
 
-	// Create a deep copy of the original status
-	originalStatus := bucket.Status.DeepCopy()
-
 	// Update observed generation
 	bucket.Status.ObservedGeneration = bucket.Generation
 
@@ -114,25 +111,23 @@ func (r *AllowanceBucketController) Reconcile(ctx context.Context, req ctrl.Requ
 	now := metav1.Now()
 	bucket.Status.LastReconciliation = &now
 
-	// Update status if it has changed
-	if !statusEqual(originalStatus, &bucket.Status) {
-		if err := r.Status().Update(ctx, &bucket); err != nil {
-			if apierrors.IsConflict(err) {
-				// Someone else updated the bucket; requeue shortly to reconcile again
-				return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
-			}
-			return ctrl.Result{}, fmt.Errorf("failed to update AllowanceBucket status: %w", err)
+	// Update status (Kubernetes API server efficiently handles no-op updates)
+	if err := r.Status().Update(ctx, &bucket); err != nil {
+		if apierrors.IsConflict(err) {
+			// Someone else updated the bucket; requeue shortly to reconcile again
+			return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
 		}
-
-		logger.Info("Updated AllowanceBucket status",
-			"name", bucket.Name,
-			"namespace", bucket.Namespace,
-			"limit", bucket.Status.Limit,
-			"allocated", bucket.Status.Allocated,
-			"available", bucket.Status.Available,
-			"claimCount", bucket.Status.ClaimCount,
-			"grantCount", bucket.Status.GrantCount)
+		return ctrl.Result{}, fmt.Errorf("failed to update AllowanceBucket status: %w", err)
 	}
+
+	logger.V(1).Info("Updated AllowanceBucket status",
+		"name", bucket.Name,
+		"namespace", bucket.Namespace,
+		"limit", bucket.Status.Limit,
+		"allocated", bucket.Status.Allocated,
+		"available", bucket.Status.Available,
+		"claimCount", bucket.Status.ClaimCount,
+		"grantCount", bucket.Status.GrantCount)
 
 	return ctrl.Result{}, nil
 }
@@ -194,6 +189,7 @@ func (r *AllowanceBucketController) updateLimitsFromGrants(ctx context.Context, 
 }
 
 // updateUsageFromClaims calculates the total allocated usage from ResourceClaims
+// based on individual request allocations that have been granted
 func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, bucket *quotav1alpha1.AllowanceBucket) error {
 	logger := log.FromContext(ctx)
 
@@ -207,11 +203,6 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 	var claimCount int32
 
 	for _, claim := range claims.Items {
-		// Only consider granted claims
-		if !r.isResourceClaimGranted(&claim) {
-			continue
-		}
-
 		// Owner must match
 		if claim.Spec.ConsumerRef.Kind != bucket.Spec.ConsumerRef.Kind ||
 			claim.Spec.ConsumerRef.Name != bucket.Spec.ConsumerRef.Name {
@@ -222,32 +213,54 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 			continue
 		}
 
-		logger.V(1).Info("Claim consumer matches bucket, evaluating requests",
+		logger.V(1).Info("Claim consumer matches bucket, evaluating allocations",
 			"claimName", claim.Name,
 			"consumer", claim.Spec.ConsumerRef.Kind+"/"+claim.Spec.ConsumerRef.Name)
 
-		// Claims must match owner and shape (pre-dimension removal)
-		for _, request := range claim.Spec.Requests {
-			if request.ResourceType != bucket.Spec.ResourceType {
+		// Check allocations for granted requests that match this bucket
+		for _, allocation := range claim.Status.Allocations {
+			if allocation.Status != quotav1alpha1.RequestAllocationGranted {
 				continue
 			}
 
-			// Check if dimensions match
-			if r.dimensionsMatch(bucket.Spec.Dimensions, request.Dimensions) {
-				totalAllocated += request.Amount
-				claimCount++
-
-				// Label the claim so we can find it later
-				if err := r.labelClaimForBucket(ctx, &claim, bucket.Name); err != nil {
-					logger.Error(err, "Failed to label claim", "claimName", claim.Name)
-					// Don't fail reconciliation for labeling errors
-				}
-
-				logger.V(1).Info("Claim contributes to bucket",
-					"claimName", claim.Name,
-					"amount", request.Amount,
-					"resourceType", request.ResourceType)
+			// Check if this allocation matches the bucket
+			if allocation.ResourceType != bucket.Spec.ResourceType {
+				continue
 			}
+
+			// Find the corresponding request from the spec to check dimensions
+			var matchingRequest *quotav1alpha1.ResourceRequest
+			for _, req := range claim.Spec.Requests {
+				if req.ResourceType == allocation.ResourceType {
+					matchingRequest = &req
+					break
+				}
+			}
+			if matchingRequest == nil {
+				logger.Error(nil, "No matching request found for allocation",
+					"claimName", claim.Name,
+					"resourceType", allocation.ResourceType)
+				continue
+			}
+
+			if !r.dimensionsMatch(bucket.Spec.Dimensions, matchingRequest.Dimensions) {
+				continue
+			}
+
+			// Use the allocated amount from the allocation status
+			totalAllocated += allocation.AllocatedAmount
+			claimCount++
+
+			// Label the claim so we can find it later
+			if err := r.labelClaimForBucket(ctx, &claim, bucket.Name); err != nil {
+				logger.Error(err, "Failed to label claim", "claimName", claim.Name)
+				// Don't fail reconciliation for labeling errors
+			}
+
+			logger.V(1).Info("Request allocation contributes to bucket",
+				"claimName", claim.Name,
+				"resourceType", allocation.ResourceType,
+				"allocatedAmount", allocation.AllocatedAmount)
 		}
 	}
 
@@ -328,16 +341,6 @@ func (r *AllowanceBucketController) isResourceGrantActive(grant *quotav1alpha1.R
 	return false
 }
 
-// isResourceClaimGranted checks if a ResourceClaim has a Granted condition with status True
-func (r *AllowanceBucketController) isResourceClaimGranted(claim *quotav1alpha1.ResourceClaim) bool {
-	for _, condition := range claim.Status.Conditions {
-		if condition.Type == quotav1alpha1.ResourceClaimGranted && condition.Status == metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
-}
-
 // dimensionSelectorMatches checks if a dimension selector matches the given dimensions
 func (r *AllowanceBucketController) dimensionSelectorMatches(selector metav1.LabelSelector, dimensions map[string]string) bool {
 	// Empty selector matches everything
@@ -369,19 +372,9 @@ func (r *AllowanceBucketController) dimensionsMatch(bucketDimensions, requestDim
 	return true
 }
 
-// statusEqual compares two AllowanceBucketStatus for equality
-func statusEqual(a, b *quotav1alpha1.AllowanceBucketStatus) bool {
-	return a.ObservedGeneration == b.ObservedGeneration &&
-		a.Limit == b.Limit &&
-		a.Allocated == b.Allocated &&
-		a.Available == b.Available &&
-		a.ClaimCount == b.ClaimCount &&
-		a.GrantCount == b.GrantCount
-}
-
-// processPendingGrants attempts to grant pending claims that reference this bucket.
-// For each eligible claim, it first reserves capacity via a CAS status update to the
-// bucket, then marks the claim Granted on success.
+// processPendingGrants attempts to grant pending requests that reference this bucket.
+// For each eligible claim, it evaluates individual requests that match this bucket,
+// reserves capacity via CAS update, then marks specific request allocations as Granted/Denied.
 func (r *AllowanceBucketController) processPendingGrants(ctx context.Context, bucket *quotav1alpha1.AllowanceBucket) error {
 	logger := log.FromContext(ctx)
 	var claims quotav1alpha1.ResourceClaimList
@@ -392,30 +385,13 @@ func (r *AllowanceBucketController) processPendingGrants(ctx context.Context, bu
 	// Current state for available calculation during this reconcile loop
 	limit := bucket.Status.Limit
 	allocated := bucket.Status.Allocated
+	fieldManagerName := fmt.Sprintf("allowance-bucket-%s", bucket.Name)
 
 	for _, claim := range claims.Items {
 		logger.V(1).Info("Processing claim in pending grants",
 			"claimName", claim.Name,
 			"claimConsumer", claim.Spec.ConsumerRef.Kind+"/"+claim.Spec.ConsumerRef.Name,
-			"claimAPIGroup", claim.Spec.ConsumerRef.APIGroup,
-			"bucketConsumer", bucket.Spec.ConsumerRef.Kind+"/"+bucket.Spec.ConsumerRef.Name,
-			"bucketAPIGroup", bucket.Spec.ConsumerRef.APIGroup)
-
-		if r.isResourceClaimGranted(&claim) {
-			logger.V(1).Info("Claim already granted, skipping", "claimName", claim.Name)
-			continue
-		}
-
-		// Skip claims explicitly denied
-		if cond := apimeta.FindStatusCondition(claim.Status.Conditions, quotav1alpha1.ResourceClaimGranted); cond != nil {
-			if cond.Status == metav1.ConditionFalse && cond.Reason == quotav1alpha1.ResourceClaimDeniedReason {
-				logger.V(1).Info("Claim explicitly denied, skipping",
-					"claimName", claim.Name,
-					"reason", cond.Reason,
-					"message", cond.Message)
-				continue
-			}
-		}
+			"bucketConsumer", bucket.Spec.ConsumerRef.Kind+"/"+bucket.Spec.ConsumerRef.Name)
 
 		// Owner must match
 		if claim.Spec.ConsumerRef.Kind != bucket.Spec.ConsumerRef.Kind ||
@@ -423,58 +399,58 @@ func (r *AllowanceBucketController) processPendingGrants(ctx context.Context, bu
 			continue
 		}
 
-		// Sum only requests that match this bucket's resourceType and dimensions
-		var reqTotal int64
-		for _, req := range claim.Spec.Requests {
-			if req.ResourceType != bucket.Spec.ResourceType {
-				logger.V(2).Info("Request resource type does not match bucket",
-					"claimName", claim.Name,
-					"requestType", req.ResourceType,
-					"bucketType", bucket.Spec.ResourceType)
+		// Process each request that matches this bucket
+		for _, request := range claim.Spec.Requests {
+			// Skip if request doesn't match this bucket
+			if request.ResourceType != bucket.Spec.ResourceType {
 				continue
 			}
-			if !r.dimensionsMatch(bucket.Spec.Dimensions, req.Dimensions) {
-				logger.V(2).Info("Request dimensions do not match bucket",
-					"claimName", claim.Name,
-					"requestDimensions", req.Dimensions,
-					"bucketDimensions", bucket.Spec.Dimensions)
+			if !r.dimensionsMatch(bucket.Spec.Dimensions, request.Dimensions) {
 				continue
 			}
-			reqTotal += req.Amount
-			logger.V(1).Info("Adding request to total",
-				"claimName", claim.Name,
-				"requestAmount", req.Amount,
-				"runningTotal", reqTotal)
-		}
-		if reqTotal == 0 {
-			logger.V(1).Info("No matching requests found for claim", "claimName", claim.Name)
-			continue
-		}
 
-		// Check availability using current local view
-		logger.V(1).Info("Evaluating quota availability",
-			"claimName", claim.Name,
-			"requestTotal", reqTotal,
-			"bucketLimit", limit,
-			"bucketAllocated", allocated,
-			"available", limit-allocated)
-		if limit-allocated < reqTotal {
-			logger.Info("Insufficient quota available for claim",
-				"claimName", claim.Name,
-				"requestTotal", reqTotal,
-				"available", limit-allocated)
-			continue
-		}
+			// Check if this request is already processed by looking at allocations
+			if r.isRequestAllocationProcessed(&claim, request.ResourceType) {
+				logger.V(2).Info("Request allocation already processed, skipping",
+					"claimName", claim.Name,
+					"resourceType", request.ResourceType)
+				continue
+			}
 
-		// Attempt to reserve capacity with a CAS update; retry a few times on conflict
-		logger.V(1).Info("Attempting to reserve quota capacity",
-			"claimName", claim.Name,
-			"requestTotal", reqTotal,
-			"currentAllocated", allocated,
-			"newAllocated", allocated+reqTotal)
-		for i := 0; i < 3; i++ {
+			logger.V(1).Info("Processing request allocation",
+				"claimName", claim.Name,
+				"resourceType", request.ResourceType,
+				"amount", request.Amount)
+
+			// Check availability using current local view
+			if limit-allocated < request.Amount {
+				logger.Info("Insufficient quota available for request",
+					"claimName", claim.Name,
+					"resourceType", request.ResourceType,
+					"requestAmount", request.Amount,
+					"available", limit-allocated)
+
+				// Mark this specific request as denied
+				if err := r.updateRequestAllocation(ctx, &claim, request.ResourceType, quotav1alpha1.RequestAllocationDenied,
+					quotav1alpha1.ResourceClaimDeniedReason,
+					fmt.Sprintf("Resource quota exceeded: requested %d, available %d", request.Amount, limit-allocated),
+					0, fieldManagerName); err != nil {
+					logger.Error(err, "failed to update request allocation for denial",
+						"claimName", claim.Name, "resourceType", request.ResourceType)
+				}
+				continue
+			}
+
+			// Reserve capacity with a single attempt
+			logger.V(1).Info("Attempting to reserve quota capacity for request",
+				"claimName", claim.Name,
+				"resourceType", request.ResourceType,
+				"requestAmount", request.Amount,
+				"currentAllocated", allocated,
+				"newAllocated", allocated+request.Amount)
+
 			// Reserve capacity and keep status fields self-consistent for validation
-			bucket.Status.Allocated = allocated + reqTotal
+			bucket.Status.Allocated = allocated + request.Amount
 			// Recompute Available with clamp to satisfy CRD validation (Minimum=0)
 			avail := bucket.Status.Limit - bucket.Status.Allocated
 			if avail < 0 {
@@ -482,60 +458,93 @@ func (r *AllowanceBucketController) processPendingGrants(ctx context.Context, bu
 			}
 			bucket.Status.Available = avail
 			bucket.Status.ObservedGeneration = bucket.Generation
+
 			if err := r.Status().Update(ctx, bucket); err != nil {
 				if apierrors.IsConflict(err) {
-					// Refresh local view and try again
-					var latest quotav1alpha1.AllowanceBucket
-					if gerr := r.Get(ctx, types.NamespacedName{Name: bucket.Name, Namespace: bucket.Namespace}, &latest); gerr != nil {
-						return fmt.Errorf("failed to refetch bucket after conflict: %w", gerr)
-					}
-					*bucket = latest
-					limit = bucket.Status.Limit
-					allocated = bucket.Status.Allocated
-					if limit-allocated < reqTotal {
-						// Capacity gone
-						break
-					}
-					continue
+					// Let controller-runtime handle the retry by requeuing
+					logger.V(1).Info("Bucket update conflict, requeuing reconciliation",
+						"claimName", claim.Name,
+						"resourceType", request.ResourceType)
+					return fmt.Errorf("bucket update conflict, will retry: %w", err)
 				}
 				return fmt.Errorf("failed to update bucket during reservation: %w", err)
 			}
-			// Reservation successful; update local allocated for subsequent claims
+
+			// Reservation successful; update local allocated for subsequent requests
 			allocated = bucket.Status.Allocated
 
-			// Mark claim Granted using Server-Side Apply to avoid conflicts
-			// Set the granted condition
-			apimeta.SetStatusCondition(&claim.Status.Conditions, metav1.Condition{
-				Type:    quotav1alpha1.ResourceClaimGranted,
-				Status:  metav1.ConditionTrue,
-				Reason:  quotav1alpha1.ResourceClaimGrantedReason,
-				Message: "Capacity reserved",
-			})
-
-			// Use Server-Side Apply to update the claim status
-			// This avoids conflicts by using field ownership
-			patch := client.MergeFrom(&quotav1alpha1.ResourceClaim{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      claim.Name,
-					Namespace: claim.Namespace,
-				},
-			})
-
-			// Apply the status update with field manager ownership
-			if err := r.Status().Patch(ctx, &claim, patch, client.FieldOwner("allowance-bucket-controller")); err != nil {
-				logger.Error(err, "failed to patch claim status after reservation",
-					"claim", claim.Name)
+			// Mark this specific request as granted
+			if err := r.updateRequestAllocation(ctx, &claim, request.ResourceType, quotav1alpha1.RequestAllocationGranted,
+				quotav1alpha1.ResourceClaimGrantedReason,
+				"Capacity reserved",
+				request.Amount, fieldManagerName); err != nil {
+				logger.Error(err, "failed to update request allocation after reservation",
+					"claimName", claim.Name, "resourceType", request.ResourceType)
 				// Don't revert the bucket allocation - the capacity has been reserved
-				// The claim will be reconciled again and matched with the allocation
-				return fmt.Errorf("failed to patch claim status: %w", err)
+				return fmt.Errorf("failed to update request allocation: %w", err)
 			}
 
-			// Successfully updated claim status
-			logger.V(1).Info("Successfully marked claim as granted using SSA",
-				"claim", claim.Name)
-			break
+			logger.V(1).Info("Successfully reserved capacity and marked request as granted",
+				"claimName", claim.Name,
+				"resourceType", request.ResourceType,
+				"amount", request.Amount)
 		}
 	}
+	return nil
+}
+
+// isRequestAllocationProcessed checks if a specific request allocation has already been processed
+func (r *AllowanceBucketController) isRequestAllocationProcessed(claim *quotav1alpha1.ResourceClaim, resourceType string) bool {
+	for _, allocation := range claim.Status.Allocations {
+		if allocation.ResourceType == resourceType &&
+			(allocation.Status == quotav1alpha1.RequestAllocationGranted || allocation.Status == quotav1alpha1.RequestAllocationDenied) {
+			return true
+		}
+	}
+	return false
+}
+
+// updateRequestAllocation updates or creates a request allocation status using Server Side Apply
+func (r *AllowanceBucketController) updateRequestAllocation(ctx context.Context, claim *quotav1alpha1.ResourceClaim,
+	resourceType string, status, reason, message string, allocatedAmount int64, fieldManagerName string) error {
+
+	logger := log.FromContext(ctx)
+
+	// Create a minimal claim object for Server Side Apply
+	patchClaim := &quotav1alpha1.ResourceClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "quota.miloapis.com/v1alpha1",
+			Kind:       "ResourceClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      claim.Name,
+			Namespace: claim.Namespace,
+		},
+		Status: quotav1alpha1.ResourceClaimStatus{
+			Allocations: []quotav1alpha1.RequestAllocation{
+				{
+					ResourceType:       resourceType,
+					Status:             status,
+					Reason:             reason,
+					Message:            message,
+					AllocatedAmount:    allocatedAmount,
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+		},
+	}
+
+	// Apply the patch using Server Side Apply with our field manager
+	if err := r.Status().Patch(ctx, patchClaim, client.Apply, client.FieldOwner(fieldManagerName), client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to apply request allocation status: %w", err)
+	}
+
+	logger.V(1).Info("Successfully updated request allocation",
+		"claimName", claim.Name,
+		"resourceType", resourceType,
+		"status", status,
+		"fieldManager", fieldManagerName)
+
 	return nil
 }
 
@@ -564,61 +573,61 @@ func GenerateAllowanceBucketName(namespace, resourceType string, ownerRef quotav
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *AllowanceBucketController) SetupWithManager(mgr ctrl.Manager) error {
-    // Watch buckets directly; react to grants/claims that change aggregates.
-    return ctrl.NewControllerManagedBy(mgr).
-        For(&quotav1alpha1.AllowanceBucket{}).
-        // Watch ResourceGrants that affect bucket limits
-        Watches(
-            &quotav1alpha1.ResourceGrant{},
-            handler.EnqueueRequestsFromMapFunc(r.enqueueAffectedBuckets),
-            builder.WithPredicates(predicate.Funcs{
-                CreateFunc: func(e event.CreateEvent) bool {
-                    // React on new grants so newly active grants can be picked up
-                    return true
-                },
-                UpdateFunc: func(e event.UpdateEvent) bool {
-                    // Trigger on spec (generation) changes or active status flips
-                    oldGrant := e.ObjectOld.(*quotav1alpha1.ResourceGrant)
-                    newGrant := e.ObjectNew.(*quotav1alpha1.ResourceGrant)
-                    if oldGrant.Generation != newGrant.Generation {
-                        return true
-                    }
-                    oldActive := apimeta.IsStatusConditionTrue(oldGrant.Status.Conditions, quotav1alpha1.ResourceGrantActive)
-                    newActive := apimeta.IsStatusConditionTrue(newGrant.Status.Conditions, quotav1alpha1.ResourceGrantActive)
-                    return oldActive != newActive
-                },
-            }),
-        ).
-        // Watch ResourceClaims that affect bucket usage
-        Watches(
-            &quotav1alpha1.ResourceClaim{},
-            handler.EnqueueRequestsFromMapFunc(r.enqueueAffectedBuckets),
-            builder.WithPredicates(predicate.Funcs{
-                CreateFunc: func(e event.CreateEvent) bool {
-                    // React immediately on new claims to create buckets on demand
-                    return true
-                },
-                UpdateFunc: func(e event.UpdateEvent) bool {
-                    // Trigger on spec changes or any Granted condition status/reason change
-                    oldClaim := e.ObjectOld.(*quotav1alpha1.ResourceClaim)
-                    newClaim := e.ObjectNew.(*quotav1alpha1.ResourceClaim)
-                    if oldClaim.Generation != newClaim.Generation {
-                        return true
-                    }
-                    oldCond := apimeta.FindStatusCondition(oldClaim.Status.Conditions, quotav1alpha1.ResourceClaimGranted)
-                    newCond := apimeta.FindStatusCondition(newClaim.Status.Conditions, quotav1alpha1.ResourceClaimGranted)
-                    if (oldCond == nil) != (newCond == nil) {
-                        return true
-                    }
-                    if oldCond != nil && newCond != nil {
-                        return oldCond.Status != newCond.Status || oldCond.Reason != newCond.Reason
-                    }
-                    return false
-                },
-            }),
-        ).
-        Named("allowance-bucket").
-        Complete(r)
+	// Watch buckets directly; react to grants/claims that change aggregates.
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&quotav1alpha1.AllowanceBucket{}).
+		// Watch ResourceGrants that affect bucket limits
+		Watches(
+			&quotav1alpha1.ResourceGrant{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueAffectedBuckets),
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					// React on new grants so newly active grants can be picked up
+					return true
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Trigger on spec (generation) changes or active status flips
+					oldGrant := e.ObjectOld.(*quotav1alpha1.ResourceGrant)
+					newGrant := e.ObjectNew.(*quotav1alpha1.ResourceGrant)
+					if oldGrant.Generation != newGrant.Generation {
+						return true
+					}
+					oldActive := apimeta.IsStatusConditionTrue(oldGrant.Status.Conditions, quotav1alpha1.ResourceGrantActive)
+					newActive := apimeta.IsStatusConditionTrue(newGrant.Status.Conditions, quotav1alpha1.ResourceGrantActive)
+					return oldActive != newActive
+				},
+			}),
+		).
+		// Watch ResourceClaims that affect bucket usage
+		Watches(
+			&quotav1alpha1.ResourceClaim{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueAffectedBuckets),
+			builder.WithPredicates(predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					// React immediately on new claims to create buckets on demand
+					return true
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					// Trigger on spec changes or any Granted condition status/reason change
+					oldClaim := e.ObjectOld.(*quotav1alpha1.ResourceClaim)
+					newClaim := e.ObjectNew.(*quotav1alpha1.ResourceClaim)
+					if oldClaim.Generation != newClaim.Generation {
+						return true
+					}
+					oldCond := apimeta.FindStatusCondition(oldClaim.Status.Conditions, quotav1alpha1.ResourceClaimGranted)
+					newCond := apimeta.FindStatusCondition(newClaim.Status.Conditions, quotav1alpha1.ResourceClaimGranted)
+					if (oldCond == nil) != (newCond == nil) {
+						return true
+					}
+					if oldCond != nil && newCond != nil {
+						return oldCond.Status != newCond.Status || oldCond.Reason != newCond.Reason
+					}
+					return false
+				},
+			}),
+		).
+		Named("allowance-bucket").
+		Complete(r)
 }
 
 // enqueueAffectedBuckets determines which AllowanceBuckets need to be reconciled
