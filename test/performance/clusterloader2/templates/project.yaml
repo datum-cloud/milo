@@ -1,0 +1,11 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  # CL2 injects .Name per replica: "<basename>-<index>"
+  name: {{ .Name }}
+  labels:
+    cl2-group: "projects"
+spec:
+  ownerRef:
+    kind: Organization
+    name: {{ .ownerName }}
