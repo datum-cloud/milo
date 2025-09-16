@@ -590,6 +590,8 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 		Spec:       iamv1alpha1.UserSpec{Email: "test@example.com"},
 	}
 
+	inviter := &iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "inviter", UID: types.UID("inviter-uid")}, Spec: iamv1alpha1.UserSpec{Email: "inviter@example.com"}}
+
 	ui := &iamv1alpha1.UserInvitation{
 		ObjectMeta: metav1.ObjectMeta{Name: "inv", Namespace: "default", UID: types.UID("ui-uid")},
 		Spec: iamv1alpha1.UserInvitationSpec{
@@ -597,6 +599,7 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "org"},
 			State:           iamv1alpha1.UserInvitationStatePending,
 			Roles:           []iamv1alpha1.RoleReference{{Name: "org-admin", Namespace: "milo-system"}},
+			InvitedBy:       iamv1alpha1.UserReference{Name: inviter.Name},
 		},
 	}
 
@@ -610,7 +613,7 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	// Build fake client with status subresource enabled for UserInvitation so status updates work.
 	builder := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&iamv1alpha1.UserInvitation{}).
-		WithObjects(user.DeepCopy(), ui.DeepCopy(), org.DeepCopy())
+		WithObjects(user.DeepCopy(), ui.DeepCopy(), org.DeepCopy(), inviter.DeepCopy())
 
 	// add indexes required by reconciler
 	builder = builder.WithIndex(&iamv1alpha1.User{}, userEmailIndexKey, func(obj client.Object) []string {
@@ -625,9 +628,10 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	c := builder.Build()
 
 	uic := &UserInvitationController{
-		Client:          c,
-		SystemNamespace: "milo-system",
-		uiRelatedRoles:  []iamv1alpha1.RoleReference{invitationRoleRef},
+		Client:                      c,
+		SystemNamespace:             "milo-system",
+		uiRelatedRoles:              []iamv1alpha1.RoleReference{invitationRoleRef},
+		userInvitationEmailTemplate: notificationv1alpha1.EmailTemplate{ObjectMeta: metav1.ObjectMeta{Name: "template"}},
 	}
 
 	// First reconcile (Pending)
@@ -690,6 +694,7 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 	scheme := getTestScheme()
 
 	// Initial objects: UserInvitation only
+	inviter := &iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "inviter", UID: types.UID("inviter-uid")}, Spec: iamv1alpha1.UserSpec{Email: "inviter@example.com"}}
 	ui := &iamv1alpha1.UserInvitation{
 		ObjectMeta: metav1.ObjectMeta{Name: "inv", Namespace: "default", UID: types.UID("ui-uid")},
 		Spec: iamv1alpha1.UserInvitationSpec{
@@ -697,6 +702,7 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "org"},
 			State:           iamv1alpha1.UserInvitationStatePending,
 			Roles:           []iamv1alpha1.RoleReference{{Name: "org-admin", Namespace: "milo-system"}},
+			InvitedBy:       iamv1alpha1.UserReference{Name: inviter.Name},
 		},
 	}
 
@@ -706,7 +712,7 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 
 	builder := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&iamv1alpha1.UserInvitation{}).
-		WithObjects(ui.DeepCopy(), org.DeepCopy())
+		WithObjects(ui.DeepCopy(), org.DeepCopy(), inviter.DeepCopy())
 
 	// indexes
 	builder = builder.WithIndex(&iamv1alpha1.User{}, userEmailIndexKey, func(obj client.Object) []string {
@@ -719,7 +725,7 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 	})
 	c := builder.Build()
 
-	uic := &UserInvitationController{Client: c, SystemNamespace: "milo-system", uiRelatedRoles: []iamv1alpha1.RoleReference{invitationRoleRef}}
+	uic := &UserInvitationController{Client: c, SystemNamespace: "milo-system", uiRelatedRoles: []iamv1alpha1.RoleReference{invitationRoleRef}, userInvitationEmailTemplate: notificationv1alpha1.EmailTemplate{ObjectMeta: metav1.ObjectMeta{Name: "template"}}}
 
 	// First reconcile: no User yet
 	if _, err := uic.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}}); err != nil {
