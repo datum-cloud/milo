@@ -74,6 +74,11 @@ spec:
                   type: string
                 maxItems: 10
                 type: array
+              emailAddress:
+                description: |-
+                  EmailAddress allows specifying a literal e-mail address for the recipient instead of referencing a User resource.
+                  It is mutually exclusive with UserRef: exactly one of them must be specified.
+                type: string
               priority:
                 default: normal
                 description: Priority influences the order in which pending e-mails
@@ -94,8 +99,9 @@ spec:
                 - name
                 type: object
               userRef:
-                description: UserRef references the User resource that will receive
-                  the message.
+                description: |-
+                  UserRef references the User resource that will receive the message.
+                  It is mutually exclusive with EmailAddress: exactly one of them must be specified.
                 properties:
                   name:
                     description: Name contain the name of the User resource that will
@@ -125,8 +131,10 @@ spec:
                 type: array
             required:
             - templateRef
-            - userRef
             type: object
+            x-kubernetes-validations:
+            - message: exactly one of emailAddress or userRef must be provided
+              rule: has(self.emailAddress) != has(self.userRef)
           status:
             description: |-
               EmailStatus captures the observed state of an Email.
