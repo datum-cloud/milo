@@ -7,6 +7,7 @@ import (
 	"time"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -29,12 +30,14 @@ const (
 )
 
 type UserInvitationController struct {
-	Client                   client.Client
-	finalizer                finalizer.Finalizers
-	SystemNamespace          string
-	GetInvitationRoleName    string
-	AcceptInvitationRoleName string
-	uiRelatedRoles           []iamv1alpha1.RoleReference
+	Client                      client.Client
+	finalizer                   finalizer.Finalizers
+	SystemNamespace             string
+	GetInvitationRoleName       string
+	AcceptInvitationRoleName    string
+	UserInvitationEmailTemplate string
+	uiRelatedRoles              []iamv1alpha1.RoleReference
+	userInvitationEmailTemplate notificationv1alpha1.EmailTemplate
 }
 
 type userInvitationFinalizer struct {
@@ -234,7 +237,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Send an email to the invitee user to accept the invitation
-	if err := r.sendInvitationEmail(ctx, user, ui); err != nil {
+	if err := r.createInvitationEmail(ctx, user.DeepCopy(), ui.DeepCopy()); err != nil {
 		log.Error(err, "Failed to send invitation email to user", "userInvitation", ui.GetName())
 		return ctrl.Result{}, fmt.Errorf("failed to send invitation email to user: %w", err)
 	}
@@ -289,6 +292,11 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 			return []string{strings.ToLower(ui.Spec.Email)}
 		}); err != nil {
 		return fmt.Errorf("failed to set field index on UserInvitation by .spec.email: %w", err)
+	}
+
+	// Get the UserInvitationEmailTemplate
+	if err := r.Client.Get(context.Background(), client.ObjectKey{Name: r.UserInvitationEmailTemplate}, &r.userInvitationEmailTemplate); err != nil {
+		return fmt.Errorf("failed to get UserInvitationEmailTemplate: %w", err)
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
@@ -454,23 +462,6 @@ func deletePolicyBinding(ctx context.Context, c client.Client, roleRef *iamv1alp
 	return nil
 }
 
-// sendInvitationEmail sends an email to the invitee user to accept the invitation.
-// This is an idempotent operation.
-func (r *UserInvitationController) sendInvitationEmail(ctx context.Context, user *iamv1alpha1.User, ui *iamv1alpha1.UserInvitation) error {
-	log := logf.FromContext(ctx).WithName("userinvitation-send-invitation-email")
-	log.Info("Sending invitation email to user", "userInvitation", ui.GetName(), "user", user.GetName())
-
-	emailName := fmt.Sprintf("user-invitation-%s", ui.GetName())
-
-	log.Info("Email name", "emailName", emailName)
-
-	// TODO: Get Email
-
-	// TODO: Send email if not already sent
-
-	return nil
-}
-
 // createOrganizationMembership creates an OrganizationMembership for the invitee user. This is an idempotent operation.
 func (r *UserInvitationController) createOrganizationMembership(ctx context.Context, user *iamv1alpha1.User, ui *iamv1alpha1.UserInvitation) error {
 	log := logf.FromContext(ctx).WithName("userinvitation-create-organization-membership")
@@ -564,4 +555,102 @@ var userCreateOnlyPredicate = predicate.Funcs{
 	UpdateFunc:  func(e event.UpdateEvent) bool { return false },
 	DeleteFunc:  func(e event.DeleteEvent) bool { return false },
 	GenericFunc: func(e event.GenericEvent) bool { return false },
+}
+
+// createInvitationEmail creates an email to the invitee user to accept the invitation.
+// This is an idempotent operation.
+func (r *UserInvitationController) createInvitationEmail(ctx context.Context, user *iamv1alpha1.User, ui *iamv1alpha1.UserInvitation) error {
+	log := logf.FromContext(ctx).WithName("userinvitation-create-invitation-email")
+	log.Info("Creating invitation email to user", "userInvitation", ui.GetName(), "user", user.GetName())
+
+	emailName := getDeterministicResourceName(ui.Spec.Email, *ui)
+	log.Info("Email name", "emailName", emailName)
+
+	// Check if the Email already exists (idempotency)
+	existingEmail := &notificationv1alpha1.Email{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: emailName, Namespace: ui.GetNamespace()}, existingEmail); err == nil {
+		log.Info("Email already exists, skipping creation", "email", emailName)
+		return nil
+	} else if !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to check existing Email: %w", err)
+	}
+
+	// Build variables required by the template
+	// InviterName: resolve the User resource referenced in ui.Spec.InvitedBy
+	inviterUser := &iamv1alpha1.User{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: ui.Spec.InvitedBy.Name}, inviterUser); err != nil {
+		log.Info("Failed to get Inviter user", "user", ui.Spec.InvitedBy.Name)
+		return fmt.Errorf("failed to get Inviter user: %w", err)
+	}
+	inviterDisplayName := strings.TrimSpace(inviterUser.Spec.GivenName + " " + inviterUser.Spec.FamilyName)
+	if inviterDisplayName == "" {
+		inviterDisplayName = inviterUser.Name
+	}
+
+	// OrganizationDisplayName: fetch Organization resource to get display name
+	org := &resourcemanagerv1alpha1.Organization{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: ui.Spec.OrganizationRef.Name}, org); err != nil {
+		log.Info("Failed to get Organization", "organization", ui.Spec.OrganizationRef.Name)
+		return fmt.Errorf("failed to get Organization: %w", err)
+	}
+	organizationDisplayName := org.Annotations["kubernetes.io/display-name"]
+	if organizationDisplayName == "" {
+		organizationDisplayName = org.Name
+	}
+
+	// Roles (comma separated list)
+	var roles []string
+	for _, role := range ui.Spec.Roles {
+		roles = append(roles, role.Name)
+	}
+	rolesStr := strings.Join(roles, ", ")
+
+	variables := []notificationv1alpha1.EmailVariable{
+		{
+			Name:  "InviterDisplayName",
+			Value: inviterDisplayName,
+		},
+		{
+			Name:  "OrganizationDisplayName",
+			Value: organizationDisplayName,
+		},
+		{
+			Name:  "Roles",
+			Value: rolesStr,
+		},
+		{
+			Name:  "UserInvitationName",
+			Value: ui.GetName(),
+		},
+	}
+
+	// Compose the Email resource
+	email := &notificationv1alpha1.Email{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "Email",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      emailName,
+			Namespace: ui.GetNamespace(),
+		},
+		Spec: notificationv1alpha1.EmailSpec{
+			TemplateRef: notificationv1alpha1.TemplateReference{
+				Name: r.userInvitationEmailTemplate.Name,
+			},
+			UserRef: notificationv1alpha1.EmailUserReference{
+				Name: user.GetName(),
+			},
+			Variables: variables,
+			Priority:  notificationv1alpha1.EmailPriorityNormal,
+		},
+	}
+
+	if err := r.Client.Create(ctx, email); err != nil {
+		log.Error(err, "failed to create Email resource")
+		return fmt.Errorf("failed to create Email resource: %w", err)
+	}
+
+	log.Info("Email resource created", "email", emailName)
+
+	return nil
 }
