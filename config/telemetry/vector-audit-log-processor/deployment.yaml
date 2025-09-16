@@ -24,6 +24,9 @@ spec:
           - --watch-config
           - --config-dir
           - /etc/vector/
+          env:
+            - name: LOKI_ENDPOINT
+              value: "http://telemetry-system-loki.telemetry-system.svc.cluster.local:3100"
           volumeMounts:
             - name: vector-config
               mountPath: /etc/vector/

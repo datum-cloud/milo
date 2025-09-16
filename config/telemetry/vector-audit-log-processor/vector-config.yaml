@@ -150,6 +150,14 @@ transforms:
     inputs:
       - audit_log_transformer
     source: |
+      # Use the audit log's timestamp instead of Vector's reception timestamp
+      # Prefer stageTimestamp (when the stage completed) over requestReceivedTimestamp
+      if exists(.stageTimestamp) {
+        .timestamp = parse_timestamp!(.stageTimestamp, "%+")
+      } else if exists(.requestReceivedTimestamp) {
+        .timestamp = parse_timestamp!(.requestReceivedTimestamp, "%+")
+      }
+
       # Filter internal cluster IPs from sourceIPs array
       if exists(.sourceIPs) && is_array(.sourceIPs) {
         filtered_source_ips = []
@@ -189,7 +197,7 @@ sinks:
     type: loki
     inputs:
       - audit_log_common_processor
-    endpoint: http://loki-single-binary.telemetry-system.svc.cluster.local:3100
+    endpoint: "${LOKI_ENDPOINT:-http://loki-single-binary.telemetry-system.svc.cluster.local:3100}"
     encoding:
       codec: json
     labels:
