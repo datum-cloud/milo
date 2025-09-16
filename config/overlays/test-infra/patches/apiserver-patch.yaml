@@ -44,6 +44,15 @@ spec:
           # Use SSL_CERT_DIR to include our custom CA
           - name: SSL_CERT_DIR
             value: /etc/certs/ssl
+          # Enable audit logging with Vector endpoint
+          - name: AUDIT_POLICY_FILE
+            value: "/etc/kubernetes/config/audit-policy-config.yaml"
+          - name: AUDIT_WEBHOOK_CONFIG_FILE
+            value: "/etc/kubernetes/config/audit-webhook-config.yaml"
+          - name: AUDIT_WEBHOOK_MODE
+            value: "batch"
+          - name: AUDIT_WEBHOOK_INITIAL_BACKOFF
+            value: "10s"
         # Add volume mount for token auth
         volumeMounts:
           - name: auth-tokens

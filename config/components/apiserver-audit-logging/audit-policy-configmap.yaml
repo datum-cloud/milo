@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audit-policy-config
+  namespace: milo-system
+data:
+  audit-policy-config.yaml: |
+    apiVersion: audit.k8s.io/v1
+    kind: Policy
+    rules:
+      # Don't log any requests from unauthenticated users (comprehensive rule)
+      - level: None
+        users: ["system:anonymous"]
+      - level: None
+        userGroups: ["system:unauthenticated"]
+
+      # Don't log watch requests by the "system:kube-proxy" on endpoints or services
+      - level: None
+        users: ["system:kube-proxy"]
+        verbs: ["watch"]
+        resources:
+          - group: "" # core API group
+            resources: ["endpoints", "services"]
+
+      # Don't log ANY coordination.k8s.io resources (leases for leadership election)
+      - level: None
+        resources:
+          - group: "coordination.k8s.io"
+
+      # Don't log events - they are extremely noisy
+      - level: None
+        resources:
+          - group: "" # core API group
+            resources: ["events"]
+          - group: "events.k8s.io"
+            resources: ["events"]
+
+      # Don't log EndpointSlice updates (service discovery noise)
+      - level: None
+        resources:
+          - group: "discovery.k8s.io"
+            resources: ["endpointslices"]
+
+      # Don't log service account token operations
+      - level: None
+        resources:
+          - group: "" # core API group
+            resources: ["serviceaccounts/token"]
+
+      # Don't log system component watch operations
+      - level: None
+        verbs: ["watch", "list"]
+        users:
+          - "system:kube-controller-manager"
+          - "system:kube-scheduler"
+          - "system:apiserver"
+          - "system:node-controller"
+          - "system:service-controller"
+          - "system:endpointslice-controller"
+          - "system:endpointslicemirroring-controller"
+          - "system:serviceaccount-controller"
+
+      # Don't log kubelet's constant pod/node status updates
+      - level: None
+        users:
+          - "system:node:*"  # All nodes
+        verbs: ["update", "patch"]
+        resources:
+          - group: "" # core API group
+            resources: ["nodes/status", "pods/status"]
+
+      # Don't log metrics-server reads
+      - level: None
+        users:
+          - "system:metrics-server"
+          - "system:kube-metrics-server"
+        verbs: ["get", "list"]
+
+      # Don't log Prometheus/monitoring scrapes
+      - level: None
+        userGroups:
+          - "system:monitoring"
+        verbs: ["get", "list", "watch"]
+
+      # Don't log FlowSchema and PriorityLevelConfiguration (API priority & fairness)
+      - level: None
+        resources:
+          - group: "flowcontrol.apiserver.k8s.io"
+            resources: ["flowschemas", "prioritylevelconfigurations"]
+
+      # Don't log Milo controller watch/list operations (reduce controller noise)
+      - level: None
+        verbs: ["watch", "list"]
+        users:
+          - "system:serviceaccount:milo-system:*"  # All Milo system service accounts
+
+      # Don't log ValidatingWebhookConfiguration and MutatingWebhookConfiguration reads
+      - level: None
+        verbs: ["get", "list", "watch"]
+        resources:
+          - group: "admissionregistration.k8s.io"
+            resources: ["validatingwebhookconfigurations", "mutatingwebhookconfigurations"]
+
+      # Don't log CRD discovery operations
+      - level: None
+        verbs: ["get", "list"]
+        resources:
+          - group: "apiextensions.k8s.io"
+            resources: ["customresourcedefinitions"]
+
+      # Don't log unauthenticated requests to non-resource URL paths (health checks, etc.)
+      - level: None
+        userGroups: ["system:unauthenticated"]
+        nonResourceURLs:
+        - "/livez"
+        - "/readyz"
+        - "/healthz"
+        - "/api*"
+        - "/version"
+        - "/metrics"
+
+      # Don't log authenticated requests to certain non-resource URL paths.
+      - level: None
+        userGroups: ["system:authenticated"]
+        nonResourceURLs:
+        - "/api*" # Wildcard matching.
+        - "/version"
+        - "/metrics"  # Prometheus scraping
+
+      # Log the request body of configmap changes in kube-system.
+      - level: Request
+        resources:
+        - group: "" # core API group
+          resources: ["configmaps"]
+        # This rule only applies to resources in the "kube-system" namespace.
+        # The empty string "" can be used to select non-namespaced resources.
+        namespaces: ["kube-system"]
+
+      # Log configmap and secret changes in all other namespaces at the Metadata level.
+      - level: Metadata
+        resources:
+        - group: "" # core API group
+          resources: ["secrets", "configmaps"]
+
+      # Log Milo API resources at RequestResponse level to capture full context
+      - level: RequestResponse
+        resources:
+        - group: "resourcemanager.miloapis.com"
+        - group: "iam.miloapis.com"
+        - group: "infrastructure.miloapis.com"
+        - group: "quota.miloapis.com"
+
+      # Log core Kubernetes API resources at RequestResponse level
+      - level: RequestResponse
+        resources:
+        - group: "" # core API group
+
+      # Log extensions at RequestResponse level
+      - level: RequestResponse
+        resources:
+        - group: "extensions"
+
+      # A catch-all rule to log all other requests at the Metadata level.
+      - level: Metadata
+        # Long-running requests like watches that fall under this rule will not
+        # generate an audit event in RequestReceived.
+        omitStages:
+          - RequestReceived
