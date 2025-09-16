@@ -8,7 +8,7 @@ vars:
   # renovate: datasource=go depName=fybrik.io/crdoc
   CRDOC_VERSION: v0.6.4
   # renovate: datasource=go depName=github.com/kyverno/chainsaw
-  CHAINSAW_VERSION: v0.2.12
+  CHAINSAW_VERSION: v0.2.13
   # Container image configuration
   MILO_IMAGE_NAME: "ghcr.io/datum-cloud/milo"
   MILO_IMAGE_TAG: "dev"
@@ -46,7 +46,24 @@ tasks:
       - |
         set -e
         echo "Building Milo container image: {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}"
-        docker build -t "{{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}" .
+
+        # Get git information for version injection
+        GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+        VERSION="v0.0.0-master+${GIT_COMMIT:0:7}"
+        GIT_TREE_STATE="clean"
+        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+          GIT_TREE_STATE="dirty"
+        fi
+        BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "unknown")
+
+        echo "Version info: ${VERSION}, commit: ${GIT_COMMIT:0:7}, tree: ${GIT_TREE_STATE}"
+
+        docker build \
+          --build-arg VERSION="${VERSION}" \
+          --build-arg GIT_COMMIT="${GIT_COMMIT}" \
+          --build-arg GIT_TREE_STATE="${GIT_TREE_STATE}" \
+          --build-arg BUILD_DATE="${BUILD_DATE}" \
+          -t "{{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}" .
         echo "Successfully built {{.MILO_IMAGE_NAME}}:{{.MILO_IMAGE_TAG}}"
     sources:
       - "**/*.go"
@@ -170,10 +187,21 @@ tasks:
   dev:redeploy:
     desc: Quick rebuild and redeploy for development iterations
     deps:
+      - dev:build
       - dev:load
+      - dev:deploy
     cmds:
       - |
         set -e
+        echo "Redeploying Milo's apiserver..."
+
+        # Restart the deployment to pick up new image
+        task test-infra:kubectl -- rollout restart deployment/milo-apiserver -n milo-system
+
+        # Wait for rollout to complete
+        echo "Waiting for rollout to complete..."
+        task test-infra:kubectl -- rollout status deployment/milo-apiserver -n milo-system --timeout=120s
+
         echo "Redeploying Milo controller manager..."
 
         # Restart the deployment to pick up new image
@@ -198,7 +226,10 @@ tasks:
         echo "📎 Applying Milo observability (ServiceMonitor + cert)…"
         task test-infra:kubectl -- apply -k config/components/prometheus-monitoring/
 
-        echo "✅ Observability overlay applied."
+        echo "🔍 Installing Milo telemetry components (Vector audit log processor)…"
+        task test-infra:kubectl -- apply -k config/telemetry/
+
+        echo "✅ Observability stack with telemetry components deployed."
 
   test:end-to-end:
     desc: Run end to end tests using Chainsaw against Milo API server. Pass directory names to run specific tests (e.g., 'task test:end-to-end -- quota' or 'task test:end-to-end -- quota group')
@@ -433,17 +464,17 @@ tasks:
         - |
           HAS_ERRORS=0
           TEST_FILES=$(find test/prometheus-rules -name "*-tests.yaml" 2>/dev/null)
-          
+
           if [ -z "$TEST_FILES" ]; then
             echo "⚠️  No Prometheus test files found in test/prometheus-rules/"
             exit 0
           fi
-          
+
           for test_file in $TEST_FILES; do
             test_dir=$(dirname "$test_file")
             test_name=$(basename "$test_file")
             echo "🔍 Testing: $test_file"
-            
+
             if ! OUTPUT=$(cd "$test_dir" && promtool test rules "$test_name" 2>&1); then
               echo ""
               echo "❌ Test failed for '$test_file':"
@@ -456,7 +487,7 @@ tasks:
               echo "✅ $test_file passed"
             fi
           done
-          
+
           if [ "$HAS_ERRORS" -eq 1 ]; then
             echo ""
             echo "🚨 One or more Prometheus rule tests failed."
