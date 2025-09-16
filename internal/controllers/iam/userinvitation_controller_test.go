@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 
 	apierr "k8s.io/apimachinery/pkg/api/errors"
@@ -23,6 +24,7 @@ func getTestScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	_ = iamv1alpha1.AddToScheme(scheme)
 	_ = resourcemanagerv1alpha1.AddToScheme(scheme)
+	_ = notificationv1alpha1.AddToScheme(scheme)
 	return scheme
 }
 
@@ -768,5 +770,93 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
 	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
 		t.Fatalf("Ready condition should be true after acceptance")
+	}
+}
+
+func TestUserInvitationController_createInvitationEmail(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	// Objects
+	invitee := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{Name: "invitee", UID: types.UID("u-invitee")},
+		Spec:       iamv1alpha1.UserSpec{Email: "invitee@example.com", GivenName: "Invite", FamilyName: "E"},
+	}
+
+	inviter := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{Name: "inviter", UID: types.UID("u-inviter")},
+		Spec:       iamv1alpha1.UserSpec{Email: "inviter@example.com", GivenName: "John", FamilyName: "Doe"},
+	}
+
+	org := &resourcemanagerv1alpha1.Organization{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-org", UID: types.UID("org-uid"), Annotations: map[string]string{"kubernetes.io/display-name": "Test Org"}},
+	}
+
+	ui := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{Name: "inv", Namespace: "default", UID: types.UID("ui-uid")},
+		Spec: iamv1alpha1.UserInvitationSpec{
+			Email:           invitee.Spec.Email,
+			InvitedBy:       iamv1alpha1.UserReference{Name: inviter.Name},
+			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: org.Name},
+			Roles:           []iamv1alpha1.RoleReference{{Name: "org-admin", Namespace: "milo-system"}},
+		},
+	}
+
+	template := &notificationv1alpha1.EmailTemplate{ObjectMeta: metav1.ObjectMeta{Name: "template"}}
+
+	// Build fake client with status subresource for Email so that create works.
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(invitee.DeepCopy(), inviter.DeepCopy(), org.DeepCopy()).Build()
+
+	uic := &UserInvitationController{
+		Client:                      c,
+		userInvitationEmailTemplate: *template,
+	}
+
+	// Act
+	if err := uic.createInvitationEmail(ctx, invitee, ui); err != nil {
+		t.Fatalf("createInvitationEmail error: %v", err)
+	}
+
+	// Assert Email exists
+	emailName := getDeterministicResourceName(ui.Spec.Email, *ui)
+	email := &notificationv1alpha1.Email{}
+	if err := c.Get(ctx, types.NamespacedName{Name: emailName, Namespace: ui.Namespace}, email); err != nil {
+		t.Fatalf("expected Email created: %v", err)
+	}
+
+	if email.Spec.TemplateRef.Name != template.Name {
+		t.Errorf("unexpected TemplateRef.Name, got %s", email.Spec.TemplateRef.Name)
+	}
+	if email.Spec.UserRef.Name != invitee.Name {
+		t.Errorf("unexpected UserRef.Name, got %s", email.Spec.UserRef.Name)
+	}
+
+	// Check variables map for a few key vars
+	vars := map[string]string{}
+	for _, v := range email.Spec.Variables {
+		vars[v.Name] = v.Value
+	}
+	if vars["InviterDisplayName"] != "John Doe" {
+		t.Errorf("InviterDisplayName variable mismatch, got %s", vars["InviterDisplayName"])
+	}
+	if vars["OrganizationDisplayName"] != "Test Org" {
+		t.Errorf("OrganizationDisplayName variable mismatch, got %s", vars["OrganizationDisplayName"])
+	}
+	if vars["Roles"] != "org-admin" {
+		t.Errorf("Roles variable mismatch, got %s", vars["Roles"])
+	}
+
+	// Idempotency: second call should not error and should not create duplicate Email (still one)
+	if err := uic.createInvitationEmail(ctx, invitee, ui); err != nil {
+		t.Fatalf("idempotent createInvitationEmail error: %v", err)
+	}
+
+	var emailList notificationv1alpha1.EmailList
+	if err := c.List(ctx, &emailList); err != nil {
+		t.Fatalf("list emails: %v", err)
+	}
+	if len(emailList.Items) != 1 {
+		t.Errorf("expected 1 Email after idempotent call, got %d", len(emailList.Items))
 	}
 }
