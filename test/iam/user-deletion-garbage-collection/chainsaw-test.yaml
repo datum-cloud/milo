@@ -1,0 +1,95 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: user-deletion-garbage-collection
+spec:
+  description: |
+    Validates that User resource deletion properly triggers garbage collection of associated
+    PolicyBinding and UserPreference resources. This test ensures the webhook creates resources
+    with correct owner references and the controller adds them post-creation, allowing
+    Kubernetes garbage collector to clean them up when the User is deleted.
+  steps:
+  - name: create-user
+    description: Create a User resource and verify webhook creates associated resources
+    try:
+    - apply:
+        file: test-user.yaml
+    - assert:
+        resource:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: User
+          metadata:
+            name: test-gc-user
+          status:
+            conditions:
+            - type: Ready
+              status: "True"
+        timeout: 30s
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: PolicyBinding
+        name: user-self-manage-test-gc-user
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.metadata.ownerReferences[0].name}'
+            value: test-gc-user
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: UserPreference
+        name: userpreference-test-gc-user
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.metadata.ownerReferences[0].name}'
+            value: test-gc-user
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: PolicyBinding
+        name: userpreference-self-manage-test-gc-user
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.metadata.ownerReferences[0].name}'
+            value: test-gc-user
+
+  - name: delete-user
+    description: Delete the User resource and verify associated resources are garbage collected
+    try:
+    - delete:
+        ref:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: User
+          name: test-gc-user
+    - error:
+        resource:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: User
+          metadata:
+            name: test-gc-user
+        timeout: 30s
+    - error:
+        resource:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: PolicyBinding
+          metadata:
+            name: user-self-manage-test-gc-user
+            namespace: milo-system
+        timeout: 30s
+    - error:
+        resource:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: UserPreference
+          metadata:
+            name: userpreference-test-gc-user
+        timeout: 30s
+    - error:
+        resource:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: PolicyBinding
+          metadata:
+            name: userpreference-self-manage-test-gc-user
+            namespace: milo-system
+        timeout: 30s

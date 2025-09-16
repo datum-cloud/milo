@@ -1,0 +1,8 @@
+name: Validate Kustomize Configurations
+
+on:
+  push:
+
+jobs:
+  validate-kustomize:
+    uses: datum-cloud/actions/.github/workflows/validate-kustomize.yaml@v1.6.1
