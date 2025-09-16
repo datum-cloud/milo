@@ -172,7 +172,7 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Target",type="string",JSONPath=".spec.targetResource.apiVersion/.spec.targetResource.kind"
+// +kubebuilder:printcolumn:name="Target",type="string",JSONPath=".spec.targetResource.kind"
 // +kubebuilder:printcolumn:name="Enabled",type="boolean",JSONPath=".spec.enabled"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Created Claims",type="integer",JSONPath=".status.resourceClaimsCreated"

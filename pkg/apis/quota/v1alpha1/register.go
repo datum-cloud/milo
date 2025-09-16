@@ -38,6 +38,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&AllowanceBucketList{},
 		&ClaimCreationPolicy{},
 		&ClaimCreationPolicyList{},
+		&GrantCreationPolicy{},
+		&GrantCreationPolicyList{},
 	)
 	metav1.AddToGroupVersion(scheme, GroupVersion)
 	return nil

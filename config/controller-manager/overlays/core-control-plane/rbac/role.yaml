@@ -125,6 +125,7 @@ rules:
   resources:
   - allowancebuckets
   - claimcreationpolicies
+  - grantcreationpolicies
   - resourceclaims
   - resourcegrants
   verbs:
@@ -140,6 +141,7 @@ rules:
   resources:
   - allowancebuckets/status
   - claimcreationpolicies/status
+  - grantcreationpolicies/status
   - resourceclaims/status
   - resourcegrants/status
   - resourceregistrations/status

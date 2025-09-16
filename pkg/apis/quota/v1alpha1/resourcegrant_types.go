@@ -74,8 +74,9 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Active",type="string",JSONPath=".status.conditions[?(@.type=='Active')].status"
-// +kubebuilder:printcolumn:name="Consumer",type="string",JSONPath=".spec.consumerRef.kind/.spec.consumerRef.name",priority=1
-// +kubebuilder:printcolumn:name="Allowances",type="integer",JSONPath=".spec.allowances[*]",priority=1
+// +kubebuilder:printcolumn:name="Consumer Group",type="string",JSONPath=".spec.consumerRef.apiGroup",priority=1
+// +kubebuilder:printcolumn:name="Consumer Type",type="string",JSONPath=".spec.consumerRef.kind",priority=1
+// +kubebuilder:printcolumn:name="Consumer",type="string",JSONPath=".spec.consumerRef.name",priority=1
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +k8s:openapi-gen=true
 type ResourceGrant struct {

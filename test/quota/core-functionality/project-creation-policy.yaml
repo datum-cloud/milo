@@ -15,8 +15,11 @@ spec:
     labels:
       quota.miloapis.com/auto-created: "true"
       quota.miloapis.com/test: "true"
+      quota.miloapis.com/test-scenario: "core-functionality"
+      quota.miloapis.com/test-suite: "quota-core"
     annotations:
       quota.miloapis.com/description: "Test quota claim for project creation"
+      quota.miloapis.com/test-scenario: "core-functionality"
     requests:
       - resourceType: "test.miloapis.com/CoreProject"
         amount: 1

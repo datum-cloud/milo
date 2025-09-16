@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ControllerSetup defines a function that sets up a controller with a manager.
@@ -80,6 +81,77 @@ func (r *QuotaControllerRegistry) registerControllers() {
 		return controller.SetupWithManager(mgr)
 	}
 
+	// GrantCreationPolicy validation controller
+	r.controllers["GrantCreationPolicyReconciler"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
+		// Create validation engines
+		celValidator, err := NewCELValidator()
+		if err != nil {
+			return fmt.Errorf("failed to create CEL validator: %w", err)
+		}
+
+		templateValidator := NewTemplateValidator()
+
+		controller := &GrantCreationPolicyReconciler{
+			Client:            mgr.GetClient(),
+			Scheme:            mgr.GetScheme(),
+			CELValidator:      celValidator,
+			TemplateValidator: templateValidator,
+		}
+		return controller.SetupWithManager(mgr)
+	}
+
+	// Grant Creation controller
+	r.controllers["GrantCreationController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
+		// Create validation engines
+		celValidator, err := NewCELValidator()
+		if err != nil {
+			return fmt.Errorf("failed to create CEL validator: %w", err)
+		}
+
+		// Create policy engine
+		policyEngine := NewPolicyEngine(mgr.GetClient())
+
+		// Create template engine
+		templateEngine := NewTemplateEngine(celValidator)
+
+		// Create parent context resolver
+		parentContextResolver := NewParentContextResolver(mgr.GetClient())
+
+		// Set up event recorder for policy engine
+		eventRecorder := mgr.GetEventRecorderFor("grant-creation-policy")
+		policyEngine.SetEventRecorder(func(obj client.Object, eventType, reason, message string) {
+			eventRecorder.Event(obj, eventType, reason, message)
+		})
+
+		// Get discovery client from the REST config
+		restConfig := mgr.GetConfig()
+
+		// Create discovery client
+		discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+		if err != nil {
+			// Log warning but continue without discovery client
+			r.logger.Info("Failed to create discovery client for GrantCreationController, will use default versions",
+				"error", err)
+		}
+
+		controller := NewGrantCreationController(
+			mgr.GetClient(),
+			mgr.GetScheme(),
+			policyEngine,
+			templateEngine,
+			parentContextResolver,
+			mgr.GetEventRecorderFor("grant-creation"),
+			dynamicClient,
+			discoveryClient,
+		)
+
+		// Start background cleanup for parent context resolver
+		ctx := ctrl.SetupSignalHandler()
+		go parentContextResolver.StartCleanupTask(ctx)
+
+		return controller.SetupWithManager(mgr)
+	}
+
 	// ResourceClaimOrphan controller (provides orphan detection and cleanup)
 	r.controllers["ResourceClaimOrphanController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
 		// Get discovery client from the REST config
@@ -119,6 +191,15 @@ func (r *QuotaControllerRegistry) registerControllers() {
 			mgr.GetClient(),
 			dynamicClient,
 			discoveryClient,
+			mgr.GetScheme(),
+		)
+		return controller.SetupWithManager(mgr)
+	}
+
+	// DeniedAutoClaimCleanup controller (automatically deletes denied auto-created ResourceClaims)
+	r.controllers["DeniedAutoClaimCleanupController"] = func(mgr ctrl.Manager, dynamicClient dynamic.Interface) error {
+		controller := NewDeniedAutoClaimCleanupController(
+			mgr.GetClient(),
 			mgr.GetScheme(),
 		)
 		return controller.SetupWithManager(mgr)

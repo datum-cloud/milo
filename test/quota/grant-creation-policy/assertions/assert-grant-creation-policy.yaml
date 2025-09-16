@@ -1,0 +1,23 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: GrantCreationPolicy
+metadata:
+  name: test-organization-grant-policy
+  labels:
+    test.miloapis.com/quota: "grant-creation-policy"
+spec:
+  enabled: true
+  trigger:
+    resource:
+      apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+      kind: "Organization"
+    conditions:
+      - expression: 'object.spec.type == "Standard"'
+  target:
+    resourceGrantTemplate:
+      metadata:
+        name: "auto-grant-{{.trigger.metadata.name}}"
+        namespace: "milo-system"
+status:
+  conditions:
+    - type: Ready
+      status: "True"

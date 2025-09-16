@@ -4,6 +4,7 @@ metadata:
   name: core-test-exceeds-project-1
   labels:
     test.miloapis.com/scenario: "core-functionality"
+    test.miloapis.com/exceeds-quota: "true"
 spec:
   ownerRef:
     kind: Organization

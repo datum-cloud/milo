@@ -4,7 +4,7 @@ This directory contains comprehensive end-to-end test suites for the Milo quota 
 
 ## Test Structure
 
-The quota tests are organized into three main test suites:
+The quota tests are organized into four main test suites:
 
 ### 1. Core Functionality (`core-functionality/`)
 **Focus**: Basic quota operations and fundamental workflows
@@ -64,6 +64,28 @@ Tests quota system edge cases and error handling:
 4. Test boundary conditions (zero/negative amounts)
 5. Test policy validation edge cases
 
+### 4. Grant Creation Policy (`grant-creation-policy/`)
+**Focus**: Automated ResourceGrant creation based on policy triggers
+**Execution Time**: ~3-4 minutes
+
+Tests the GrantCreationPolicy functionality for automated grant management:
+- GrantCreationPolicy validation and setup
+- Automatic ResourceGrant creation on trigger resource events
+- CEL expression evaluation for conditions and name generation
+- Go template rendering with different context values
+- Owner reference management and cleanup
+- Policy priority and event type filtering
+
+**Key Test Steps**:
+1. Setup ResourceRegistration for test resources
+2. Create and validate GrantCreationPolicy with conditions
+3. Create trigger Organizations with different attributes
+4. Verify automatic ResourceGrant creation with proper owner references
+5. Test condition evaluation with resource updates
+6. Test CEL-based dynamic name generation
+7. Verify grant cleanup when trigger resources are deleted
+8. Test policy validation and error handling
+
 ## Running Tests
 
 ### Run Individual Test Suites
@@ -77,6 +99,9 @@ task test:end-to-end -- quota/multi-resource-claims
 
 # Run enforcement edge cases tests only
 task test:end-to-end -- quota/enforcement-edge-cases
+
+# Run grant creation policy tests only
+task test:end-to-end -- quota/grant-creation-policy
 ```
 
 ### Run All Quota Tests
@@ -127,8 +152,21 @@ test/quota/
 │       └── assert-resource-claims.yaml
 ├── multi-resource-claims/
 │   └── [similar structure with multi-resource test data]
-└── enforcement-edge-cases/
-    └── [similar structure with edge case test data]
+├── enforcement-edge-cases/
+│   └── [similar structure with edge case test data]
+└── grant-creation-policy/
+    ├── chainsaw-test.yaml          # Main test definition
+    ├── 01-resource-registration.yaml
+    ├── grant-creation-policy.yaml
+    ├── cel-name-policy.yaml
+    ├── test-data/
+    │   ├── premium-organization.yaml
+    │   ├── cel-trigger-organization.yaml
+    │   └── invalid-policy.yaml
+    └── assertions/
+        ├── assert-automatic-grant.yaml
+        ├── assert-cel-named-grant.yaml
+        └── assert-grant-cleanup.yaml
 ```
 
 ## Troubleshooting

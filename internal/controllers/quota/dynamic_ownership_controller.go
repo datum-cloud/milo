@@ -196,10 +196,10 @@ func (r *DynamicOwnershipController) updateDynamicWatches(ctx context.Context) e
 
 // addDynamicWatch adds a new dynamic watch for the specified GVR
 func (r *DynamicOwnershipController) addDynamicWatch(gvr schema.GroupVersionResource, gvk schema.GroupVersionKind) error {
-	// Create informer for this GVR
+	// Create informer for this GVR from the shared factory
 	informer := r.informerFactory.ForResource(gvr).Informer()
 
-	// Add event handlers
+	// Add event handlers - this must be done before the factory starts
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			r.handleClaimingResourceEvent("ADD", obj, gvr, gvk)
@@ -215,29 +215,19 @@ func (r *DynamicOwnershipController) addDynamicWatch(gvr schema.GroupVersionReso
 		return fmt.Errorf("failed to add event handler: %w", err)
 	}
 
-	// Create stop channel for this specific watch
-	stopCh := make(chan struct{})
-
-	// Start the informer
-	go informer.Run(stopCh)
-
-	// Wait for initial sync
-	go func() {
-		if !cache.WaitForCacheSync(stopCh, informer.HasSynced) {
-			r.logger.Error(fmt.Errorf("failed to sync cache"), "Failed to sync cache for GVR", "gvr", gvr.String())
-		} else {
-			r.logger.V(1).Info("Cache synced for dynamic watch", "gvr", gvr.String())
-		}
-	}()
-
-	// Store watch info
+	// Store watch info (no individual stop channel needed - managed by factory)
 	r.activeWatches[gvr] = &watchInfo{
 		gvr:      gvr,
 		gvk:      gvk,
 		informer: informer,
-		stopFunc: func() { close(stopCh) },
+		stopFunc: func() {
+			// For shared informers, we don't stop individual informers
+			// They are managed by the factory lifecycle
+			r.logger.V(1).Info("Watch removal requested", "gvr", gvr.String())
+		},
 	}
 
+	r.logger.Info("Added dynamic watch", "gvr", gvr.String(), "gvk", gvk.String())
 	return nil
 }
 
@@ -485,14 +475,14 @@ func (m *DynamicWatchManager) kindToResource(kind string) string {
 func (r *DynamicOwnershipController) Start(ctx context.Context) error {
 	r.logger.Info("Starting dynamic ownership controller")
 
-	// Start the informer factory
-	r.informerFactory.Start(r.stopCh)
-
-	// Initial setup of dynamic watches
+	// Initial setup of dynamic watches BEFORE starting the factory
 	if err := r.updateDynamicWatches(ctx); err != nil {
 		r.logger.Error(err, "Failed to setup initial dynamic watches")
 		return err
 	}
+
+	// Start the informer factory AFTER setting up watches
+	r.informerFactory.Start(r.stopCh)
 
 	// Wait for context cancellation
 	<-ctx.Done()

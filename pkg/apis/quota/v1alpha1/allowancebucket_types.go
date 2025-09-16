@@ -91,12 +91,12 @@ type AllowanceBucketStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +k8s:openapi-gen=true
-// +kubebuilder:printcolumn:name="Resource Type",type=string,JSONPath=`.spec.resourceType`
-// +kubebuilder:printcolumn:name="Limit",type=integer,JSONPath=`.status.limit`
-// +kubebuilder:printcolumn:name="Allocated",type=integer,JSONPath=`.status.allocated`
-// +kubebuilder:printcolumn:name="Available",type=integer,JSONPath=`.status.available`
-// +kubebuilder:printcolumn:name="Claims",type=integer,JSONPath=`.status.claimCount`
-// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Resource Type",type="string",JSONPath=".spec.resourceType"
+// +kubebuilder:printcolumn:name="Limit",type="integer",JSONPath=".status.limit"
+// +kubebuilder:printcolumn:name="Allocated",type="integer",JSONPath=".status.allocated"
+// +kubebuilder:printcolumn:name="Available",type="integer",JSONPath=".status.available"
+// +kubebuilder:printcolumn:name="Claims",type="integer",JSONPath=".status.claimCount"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type AllowanceBucket struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
