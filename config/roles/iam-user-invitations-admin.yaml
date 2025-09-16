@@ -1,0 +1,8 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam-user-invitations-admin
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: iam-user-invitations-editor
