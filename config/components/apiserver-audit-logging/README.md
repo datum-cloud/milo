@@ -26,17 +26,14 @@ the [Kubernetes Auditing Documentation](https://kubernetes.io/docs/tasks/debug/d
 
 > [!IMPORTANT]
 >
-> This component does **not** mount the audit policy configuration file or the
-> audit webhook configuration file. These files must be mounted manually by the
-> user.
+> This component **automatically mounts** the audit policy configuration file
+> and the auditing webhook configuration file into the API server deployment at:
 >
-> The audit policy configuration file is mounted at
-> `/etc/kubernetes/config/audit-policy-config.yaml` and the audit webhook
-> configuration file is mounted at
-> `/etc/kubernetes/config/audit-webhook-config.yaml`.
+> `/etc/kubernetes/config/audit-policy-config.yaml` and
+> `/etc/kubernetes/config/audit-webhook-config.yaml` respectively.
 >
-> These can be adjusted by patching the deployment environment variables to
-> point to the correct files.
+> If you need to change these mount locations, update the environment variables
+> and volume mounts via deployment patches as appropriate.
 
 ## Audit Log Processing
 
