@@ -104,6 +104,9 @@ spec:
                     - name
                     type: object
                 type: object
+                x-kubernetes-validations:
+                - message: exactly one of emailAddress or userRef must be provided
+                  rule: has(self.emailAddress) != has(self.userRef)
               templateRef:
                 description: TemplateRef references the EmailTemplate that should
                   be rendered.
@@ -137,9 +140,6 @@ spec:
             - recipient
             - templateRef
             type: object
-            x-kubernetes-validations:
-            - message: exactly one of emailAddress or userRef must be provided
-              rule: has(self.emailAddress) != has(self.userRef)
           status:
             description: |-
               EmailStatus captures the observed state of an Email.
