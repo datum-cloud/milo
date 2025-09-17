@@ -47,6 +47,10 @@ spec:
           - --token-auth-file=$(TOKEN_AUTH_FILE)
           - --logging-format=$(LOGGING_FORMAT)
           - --v=$(LOG_LEVEL)
+          - --audit-policy-file=$(AUDIT_POLICY_FILE)
+          - --audit-webhook-config-file=$(AUDIT_WEBHOOK_CONFIG_FILE)
+          - --audit-webhook-mode=$(AUDIT_WEBHOOK_MODE)
+          - --audit-webhook-initial-backoff=$(AUDIT_WEBHOOK_INITIAL_BACKOFF)
         env:
           - name: LOG_LEVEL
             value: "4"
@@ -91,6 +95,14 @@ spec:
           - name: TRACING_CONFIG_FILE
             value: /etc/kubernetes/config/tracing-config.yaml
           - name: TOKEN_AUTH_FILE
+            value: ""
+          - name: AUDIT_POLICY_FILE
+            value: ""
+          - name: AUDIT_WEBHOOK_CONFIG_FILE
+            value: ""
+          - name: AUDIT_WEBHOOK_MODE
+            value: ""
+          - name: AUDIT_WEBHOOK_INITIAL_BACKOFF
             value: ""
         livenessProbe:
           failureThreshold: 3

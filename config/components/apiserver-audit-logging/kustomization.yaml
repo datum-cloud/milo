@@ -1,40 +1,38 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
+resources:
+  - audit-policy-configmap.yaml
+  - audit-webhook-configmap.yaml
+
 patches:
+  # Add audit logging volume mounts using strategic merge
   - patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --audit-policy-file=$(AUDIT_POLICY_FILE)
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --audit-webhook-initial-backoff=$(AUDIT_WEBHOOK_INITIAL_BACKOFF)
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --audit-webhook-config-file=$(AUDIT_WEBHOOK_CONFIG_FILE)
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --audit-webhook-mode=$(AUDIT_WEBHOOK_MODE)
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: AUDIT_POLICY_FILE
-          value: "/etc/kubernetes/config/audit-policy-config.yaml"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: AUDIT_WEBHOOK_INITIAL_BACKOFF
-          value: "10s"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: AUDIT_WEBHOOK_CONFIG_FILE
-          value: "/etc/kubernetes/config/audit-webhook-config.yaml"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: AUDIT_WEBHOOK_MODE
-          value: "batch"
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: milo-apiserver
+      spec:
+        template:
+          spec:
+            containers:
+            - name: milo-apiserver
+              volumeMounts:
+                - name: audit-policy-config
+                  mountPath: /etc/kubernetes/config/audit-policy-config.yaml
+                  subPath: audit-policy-config.yaml
+                  readOnly: true
+                - name: audit-webhook-config
+                  mountPath: /etc/kubernetes/config/audit-webhook-config.yaml
+                  subPath: audit-webhook-config.yaml
+                  readOnly: true
+            volumes:
+              - name: audit-policy-config
+                configMap:
+                  name: audit-policy-config
+              - name: audit-webhook-config
+                configMap:
+                  name: audit-webhook-config
     target:
       group: apps
       version: v1

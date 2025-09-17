@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audit-webhook-config
+  namespace: milo-system
+data:
+  audit-webhook-config.yaml: |
+    apiVersion: v1
+    kind: Config
+    clusters:
+    - name: vector-audit-log-processor
+      cluster:
+        server: http://vector-audit-log-processor:8081/
+    contexts:
+    - context:
+        cluster: vector-audit-log-processor
+      name: vector-webhook
+    current-context: vector-webhook
