@@ -24,10 +24,19 @@ This component configures API servers with:
 For detailed information on Kubernetes audit logging configuration options, see
 the [Kubernetes Auditing Documentation](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/).
 
+> [!IMPORTANT]
+>
+> This component **automatically mounts** the audit policy configuration file and the
+auditing webhook configuration file into the API server deployment at:
+> `/etc/kubernetes/config/audit-policy-config.yaml` and
+> `/etc/kubernetes/config/audit-webhook-config.yaml` respectively.
+>
+> If you need to change these mount locations, update the environment variables and volume mounts
+> via deployment patches as appropriate.
+
 ## Audit Log Processing
 
 Once enabled, audit logs are sent to the Milo telemetry system for processing
 and forwarding to observability platforms. For details on how audit logs are
 collected, enriched, and processed, see the
 [Telemetry System README](../../telemetry/README.md).
- 
