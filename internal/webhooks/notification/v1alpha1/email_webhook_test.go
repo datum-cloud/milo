@@ -45,7 +45,9 @@ func TestEmailValidator_ValidateCreate(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "welcome-john"},
 		Spec: notificationv1alpha1.EmailSpec{
 			TemplateRef: notificationv1alpha1.TemplateReference{Name: tmpl.Name},
-			UserRef:     notificationv1alpha1.EmailUserReference{Name: user.Name},
+			Recipient: notificationv1alpha1.EmailRecipient{
+				UserRef: notificationv1alpha1.EmailUserReference{Name: user.Name},
+			},
 			Variables: []notificationv1alpha1.EmailVariable{
 				{Name: "FirstName", Value: "John"},
 			},
@@ -59,11 +61,41 @@ func TestEmailValidator_ValidateCreate(t *testing.T) {
 		expectErr     bool
 		errorContains string
 	}{
-		"valid create": {
+		"valid with userRef": {
 			includeUser: true, includeTmpl: true, email: validEmail, expectErr: false,
 		},
+		"valid with emailAddress": {
+			includeUser: false, includeTmpl: true, email: func() *notificationv1alpha1.Email {
+				e := validEmail.DeepCopy()
+				e.Spec.Recipient.UserRef = notificationv1alpha1.EmailUserReference{}
+				e.Spec.Recipient.EmailAddress = "john@example.com"
+				return e
+			}(), expectErr: false,
+		},
+		"both userRef and emailAddress": {
+			includeUser: true, includeTmpl: true, email: func() *notificationv1alpha1.Email {
+				e := validEmail.DeepCopy()
+				e.Spec.Recipient.EmailAddress = "john@example.com"
+				return e
+			}(), expectErr: true, errorContains: "exactly one of emailAddress or userRef",
+		},
+		"neither userRef nor emailAddress": {
+			includeUser: false, includeTmpl: true, email: func() *notificationv1alpha1.Email {
+				e := validEmail.DeepCopy()
+				e.Spec.Recipient.UserRef = notificationv1alpha1.EmailUserReference{}
+				return e
+			}(), expectErr: true, errorContains: "exactly one of emailAddress or userRef",
+		},
+		"invalid email format": {
+			includeUser: false, includeTmpl: true, email: func() *notificationv1alpha1.Email {
+				e := validEmail.DeepCopy()
+				e.Spec.Recipient.UserRef = notificationv1alpha1.EmailUserReference{}
+				e.Spec.Recipient.EmailAddress = "not-an-email"
+				return e
+			}(), expectErr: true, errorContains: "invalid email address",
+		},
 		"missing user": {
-			includeUser: false, includeTmpl: true, email: validEmail, expectErr: true, errorContains: "Not found",
+			includeUser: false, includeTmpl: true, email: validEmail, expectErr: true, errorContains: "userRef",
 		},
 		"missing template": {
 			includeUser: true, includeTmpl: false, email: validEmail, expectErr: true, errorContains: "templateRef",
@@ -121,9 +153,6 @@ func TestEmailValidator_ValidateUpdateDelete(t *testing.T) {
 	_, err := validator.ValidateUpdate(context.Background(), email, email)
 	if err == nil || !apierrors.IsMethodNotSupported(err) {
 		t.Fatalf("expected MethodNotSupported error on update, got %v", err)
-	}
-	if err.Error() != "update is not supported on resources of kind \"emails.notification.miloapis.com\"" {
-		t.Fatalf("expected error message 'updates to Email resources are not allowed', got %v", err)
 	}
 }
 

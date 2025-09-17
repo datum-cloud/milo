@@ -6,9 +6,10 @@ metadata:
 spec:
   templateRef:
     name: user-invitation
-  # Reference one User custom resources that will receive the e-mail.
-  userRef:
-    name: "87898762149765435787"
+  # Recipient: reference one User custom resource that will receive the e-mail.
+  recipient:
+    userRef:
+      name: "87898762149765435787"
   # Optional: additional recipients.
   cc:
     - hr@example.com
