@@ -48,8 +48,8 @@ func (v *EmailValidator) ValidateCreate(ctx context.Context, obj runtime.Object)
 
 	var errs field.ErrorList
 
-	hasEmailAddress := email.Spec.EmailAddress != ""
-	hasUserRef := email.Spec.UserRef.Name != ""
+	hasEmailAddress := email.Spec.Recipient.EmailAddress != ""
+	hasUserRef := email.Spec.Recipient.UserRef.Name != ""
 
 	// Validate that exactly one of emailAddress or userRef is provided
 	if hasEmailAddress == hasUserRef {
@@ -60,13 +60,13 @@ func (v *EmailValidator) ValidateCreate(ctx context.Context, obj runtime.Object)
 	// Validate User reference
 	if hasUserRef {
 		user := &iamv1alpha1.User{}
-		err := v.Client.Get(ctx, client.ObjectKey{Name: email.Spec.UserRef.Name}, user)
+		err := v.Client.Get(ctx, client.ObjectKey{Name: email.Spec.Recipient.UserRef.Name}, user)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				emailLog.Info("user not found", "name", email.Spec.UserRef.Name)
-				errs = append(errs, field.NotFound(field.NewPath("spec", "userRef", "name"), email.Spec.UserRef.Name))
+				emailLog.Info("user not found", "name", email.Spec.Recipient.UserRef.Name)
+				errs = append(errs, field.NotFound(field.NewPath("spec", "userRef", "name"), email.Spec.Recipient.UserRef.Name))
 			} else {
-				emailLog.Error(err, "error getting user", "name", email.Spec.UserRef.Name)
+				emailLog.Error(err, "error getting user", "name", email.Spec.Recipient.UserRef.Name)
 				errs = append(errs, field.InternalError(field.NewPath("spec", "userRef", "name"), fmt.Errorf("getting user: %w", err)))
 			}
 		}
@@ -74,9 +74,9 @@ func (v *EmailValidator) ValidateCreate(ctx context.Context, obj runtime.Object)
 
 	// Validate EmailAddress format
 	if hasEmailAddress {
-		if _, err := mail.ParseAddress(email.Spec.EmailAddress); err != nil {
-			emailLog.Info("invalid email address", "email", email.Name, "emailAddress", email.Spec.EmailAddress)
-			errs = append(errs, field.Invalid(field.NewPath("spec", "emailAddress"), email.Spec.EmailAddress, fmt.Sprintf("invalid email address: %v", err)))
+		if _, err := mail.ParseAddress(email.Spec.Recipient.EmailAddress); err != nil {
+			emailLog.Info("invalid email address", "email", email.Name, "emailAddress", email.Spec.Recipient.EmailAddress)
+			errs = append(errs, field.Invalid(field.NewPath("spec", "emailAddress"), email.Spec.Recipient.EmailAddress, fmt.Sprintf("invalid email address: %v", err)))
 		}
 	}
 

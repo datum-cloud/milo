@@ -94,6 +94,13 @@ It references a template, recipients, and any variables required to render the f
         </tr>
     </thead>
     <tbody><tr>
+        <td><b><a href="#emailspecrecipient">recipient</a></b></td>
+        <td>object</td>
+        <td>
+          Recipient contain the recipient of the email.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
         <td><b><a href="#emailspectemplateref">templateRef</a></b></td>
         <td>object</td>
         <td>
@@ -117,14 +124,6 @@ Maximum 10 addresses.<br/>
         </td>
         <td>false</td>
       </tr><tr>
-        <td><b>emailAddress</b></td>
-        <td>string</td>
-        <td>
-          EmailAddress allows specifying a literal e-mail address for the recipient instead of referencing a User resource.
-It is mutually exclusive with UserRef: exactly one of them must be specified.<br/>
-        </td>
-        <td>false</td>
-      </tr><tr>
         <td><b>priority</b></td>
         <td>enum</td>
         <td>
@@ -135,20 +134,76 @@ It is mutually exclusive with UserRef: exactly one of them must be specified.<br
         </td>
         <td>false</td>
       </tr><tr>
-        <td><b><a href="#emailspecuserref">userRef</a></b></td>
-        <td>object</td>
-        <td>
-          UserRef references the User resource that will receive the message.
-It is mutually exclusive with EmailAddress: exactly one of them must be specified.<br/>
-        </td>
-        <td>false</td>
-      </tr><tr>
         <td><b><a href="#emailspecvariablesindex">variables</a></b></td>
         <td>[]object</td>
         <td>
           Variables supplies the values that will be substituted in the template.<br/>
         </td>
         <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### Email.spec.recipient
+<sup><sup>[↩ Parent](#emailspec)</sup></sup>
+
+
+
+Recipient contain the recipient of the email.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>emailAddress</b></td>
+        <td>string</td>
+        <td>
+          EmailAddress allows specifying a literal e-mail address for the recipient instead of referencing a User resource.
+It is mutually exclusive with UserRef: exactly one of them must be specified.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#emailspecrecipientuserref">userRef</a></b></td>
+        <td>object</td>
+        <td>
+          UserRef references the User resource that will receive the message.
+It is mutually exclusive with EmailAddress: exactly one of them must be specified.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### Email.spec.recipient.userRef
+<sup><sup>[↩ Parent](#emailspecrecipient)</sup></sup>
+
+
+
+UserRef references the User resource that will receive the message.
+It is mutually exclusive with EmailAddress: exactly one of them must be specified.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name contain the name of the User resource that will receive the email.<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 
@@ -174,34 +229,6 @@ TemplateRef references the EmailTemplate that should be rendered.
         <td>string</td>
         <td>
           Name is the name of the EmailTemplate being referenced.<br/>
-        </td>
-        <td>true</td>
-      </tr></tbody>
-</table>
-
-
-### Email.spec.userRef
-<sup><sup>[↩ Parent](#emailspec)</sup></sup>
-
-
-
-UserRef references the User resource that will receive the message.
-It is mutually exclusive with EmailAddress: exactly one of them must be specified.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>name</b></td>
-        <td>string</td>
-        <td>
-          Name contain the name of the User resource that will receive the email.<br/>
         </td>
         <td>true</td>
       </tr></tbody>

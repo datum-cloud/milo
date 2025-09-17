@@ -45,7 +45,9 @@ func TestEmailValidator_ValidateCreate(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "welcome-john"},
 		Spec: notificationv1alpha1.EmailSpec{
 			TemplateRef: notificationv1alpha1.TemplateReference{Name: tmpl.Name},
-			UserRef:     notificationv1alpha1.EmailUserReference{Name: user.Name},
+			Recipient: notificationv1alpha1.EmailRecipient{
+				UserRef: notificationv1alpha1.EmailUserReference{Name: user.Name},
+			},
 			Variables: []notificationv1alpha1.EmailVariable{
 				{Name: "FirstName", Value: "John"},
 			},
@@ -65,30 +67,30 @@ func TestEmailValidator_ValidateCreate(t *testing.T) {
 		"valid with emailAddress": {
 			includeUser: false, includeTmpl: true, email: func() *notificationv1alpha1.Email {
 				e := validEmail.DeepCopy()
-				e.Spec.UserRef = notificationv1alpha1.EmailUserReference{}
-				e.Spec.EmailAddress = "john@example.com"
+				e.Spec.Recipient.UserRef = notificationv1alpha1.EmailUserReference{}
+				e.Spec.Recipient.EmailAddress = "john@example.com"
 				return e
 			}(), expectErr: false,
 		},
 		"both userRef and emailAddress": {
 			includeUser: true, includeTmpl: true, email: func() *notificationv1alpha1.Email {
 				e := validEmail.DeepCopy()
-				e.Spec.EmailAddress = "john@example.com"
+				e.Spec.Recipient.EmailAddress = "john@example.com"
 				return e
 			}(), expectErr: true, errorContains: "exactly one of emailAddress or userRef",
 		},
 		"neither userRef nor emailAddress": {
 			includeUser: false, includeTmpl: true, email: func() *notificationv1alpha1.Email {
 				e := validEmail.DeepCopy()
-				e.Spec.UserRef = notificationv1alpha1.EmailUserReference{}
+				e.Spec.Recipient.UserRef = notificationv1alpha1.EmailUserReference{}
 				return e
 			}(), expectErr: true, errorContains: "exactly one of emailAddress or userRef",
 		},
 		"invalid email format": {
 			includeUser: false, includeTmpl: true, email: func() *notificationv1alpha1.Email {
 				e := validEmail.DeepCopy()
-				e.Spec.UserRef = notificationv1alpha1.EmailUserReference{}
-				e.Spec.EmailAddress = "not-an-email"
+				e.Spec.Recipient.UserRef = notificationv1alpha1.EmailUserReference{}
+				e.Spec.Recipient.EmailAddress = "not-an-email"
 				return e
 			}(), expectErr: true, errorContains: "invalid email address",
 		},
