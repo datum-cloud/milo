@@ -1,0 +1,274 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: resourceregistrations.quota.miloapis.com
+spec:
+  group: quota.miloapis.com
+  names:
+    kind: ResourceRegistration
+    listKind: ResourceRegistrationList
+    plural: resourceregistrations
+    singular: resourceregistration
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Active')].status
+      name: Active
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ResourceRegistration defines which resource types the quota system manages and how to measure them.
+          Registrations enable grants and claims for a specific resource type, using clear units and ownership rules.
+
+          ### How It Works
+          - Administrators create registrations to opt resource types into quota.
+          - After activation, ResourceGrants allocate capacity and ResourceClaims consume it for the type.
+
+          ### Works With
+          - [ResourceGrant](#resourcegrant) `allowances[].resourceType` must match `spec.resourceType`.
+          - [ResourceClaim](#resourceclaim) `spec.requests[].resourceType` must match `spec.resourceType`.
+          - The triggering kind must be listed in `spec.claimingResources` for claims to be valid.
+          - Consumers in grants/claims must match `spec.consumerTypeRef`.
+
+          ### Selectors and Filtering
+          - Field selectors (server-side): `spec.consumerTypeRef.kind`, `spec.consumerTypeRef.apiGroup`, `spec.resourceType`.
+          - Label selectors (add your own):
+            - `quota.miloapis.com/resource-kind`: `<Kind>`
+            - `quota.miloapis.com/resource-apigroup`: `<API group>`
+            - `quota.miloapis.com/consumer-kind`: `<Kind>`
+
+          - Common queries:
+            - All registrations for a resource kind: label selector `quota.miloapis.com/resource-kind` (+ `quota.miloapis.com/resource-apigroup` when needed).
+            - All registrations for a consumer kind: label selector `quota.miloapis.com/consumer-kind`.
+
+          ### Defaults and Limits
+          - `spec.type`: `Entity` (count objects) or `Allocation` (numeric capacity).
+          - `spec.claimingResources`: up to 20 entries; unversioned references (`apiGroup`, `kind`).
+          - `spec.resourceType`: must follow `group/resource` with optional subresource path.
+
+          ### Notes
+          - `claimingResources` are unversioned; kind matching is case-insensitive and apiGroup must align.
+          - Grants and claims use `baseUnit`; `displayUnit` and `unitConversionFactor` affect presentation only.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ResourceRegistrationSpec defines the desired state of ResourceRegistration.
+            properties:
+              baseUnit:
+                description: |-
+                  BaseUnit defines the internal measurement unit for quota calculations.
+                  Examples: "projects", "millicores", "bytes"
+                maxLength: 50
+                type: string
+              claimingResources:
+                description: |-
+                  ClaimingResources specifies which resource types can create ResourceClaims
+                  for this registered resource type. When a ResourceClaim includes a resourceRef,
+                  the referenced resource's type must be in this list for the claim to be valid.
+                  If empty, no resources can claim this quota - administrators must explicitly
+                  configure which resources can claim quota for security.
+
+                  This field also signals to the ownership controller which resource types
+                  to watch for automatic owner reference creation.
+
+                  Uses unversioned references to support API version upgrades without
+                  requiring ResourceRegistration updates.
+                items:
+                  description: |-
+                    ClaimingResource identifies a resource type that can create ResourceClaims
+                    for a registered resource type using an unversioned reference.
+                  properties:
+                    apiGroup:
+                      description: |-
+                        APIGroup is the group for the resource being referenced.
+                        If APIGroup is not specified, the specified Kind must be in the core API group.
+                        For any other third-party types, APIGroup is required.
+                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                      type: string
+                    kind:
+                      description: Kind of the referent.
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                  required:
+                  - kind
+                  type: object
+                maxItems: 20
+                type: array
+              consumerTypeRef:
+                description: |-
+                  ConsumerTypeRef identifies the resource type that receives grants and creates claims.
+                  For example, when registering "Projects per Organization", the ConsumerTypeRef
+                  would be Organization, which can then receive ResourceGrants allocating Project quota.
+                properties:
+                  apiGroup:
+                    description: API group of the quota consumer resource type
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                    type: string
+                  kind:
+                    description: Resource type that consumes quota from this registration
+                    type: string
+                required:
+                - apiGroup
+                - kind
+                type: object
+              description:
+                description: Description provides context about what this registration
+                  tracks
+                minLength: 1
+                type: string
+              displayUnit:
+                description: |-
+                  DisplayUnit defines the unit shown in user interfaces.
+                  Examples: "projects", "cores", "GiB"
+                maxLength: 50
+                type: string
+              resourceType:
+                description: |-
+                  ResourceType identifies the Kubernetes resource to track with quota.
+                  Must match an existing resource type accessible in the cluster.
+                  Format: apiGroup/resource (plural), with optional subresource path
+                  (for example, "resourcemanager.miloapis.com/projects" or
+                  "core/pods/cpu").
+                pattern: ^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$
+                type: string
+              type:
+                description: |-
+                  Type classifies how the system measures this registration.
+                  Entity: Tracks the count of object instances (for example, number of Projects).
+                  Allocation: Tracks numeric capacity (for example, bytes of storage, CPU millicores).
+                enum:
+                - Entity
+                - Allocation
+                type: string
+              unitConversionFactor:
+                description: |-
+                  UnitConversionFactor converts baseUnit to displayUnit.
+                  Formula: displayValue = baseValue / unitConversionFactor
+                  Examples: 1 (no conversion), 1073741824 (bytes to GiB), 1000 (millicores to cores)
+                format: int64
+                minimum: 1
+                type: integer
+            required:
+            - baseUnit
+            - consumerTypeRef
+            - displayUnit
+            - resourceType
+            - type
+            - unitConversionFactor
+            type: object
+          status:
+            description: |-
+              ResourceRegistrationStatus reports whether the registration is usable and the
+              latest spec generation processed. When Active, grants and claims may be created
+              for the registered type. See the schema for exact fields and condition reasons.
+              Related objects include [ResourceGrant](#resourcegrant) and
+              [ResourceClaim](#resourceclaim).
+            properties:
+              conditions:
+                description: |-
+                  Current status conditions. Known condition types: "Active" below marker
+                  ensures controllers set a correct and standardized status and an external
+                  client can't set the status to bypass validation.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-validations:
+                - message: Active condition reason must be valid
+                  rule: 'self.all(c, c.type == ''Active'' ? c.reason in [''RegistrationActive'',
+                    ''ValidationFailed'', ''RegistrationPending''] : true)'
+              observedGeneration:
+                description: Most recent generation observed by the controller.
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    selectableFields:
+    - jsonPath: .spec.consumerTypeRef.kind
+    - jsonPath: .spec.consumerTypeRef.apiGroup
+    - jsonPath: .spec.resourceType
+    served: true
+    storage: true
+    subresources:
+      status: {}
