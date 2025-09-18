@@ -497,3 +497,139 @@ tasks:
             echo "🎉 All Prometheus rule tests passed."
           fi
       silent: false
+
+  perf:run:
+    desc: Run Milo end-to-end performance scenario and download results
+    silent: true
+    cmds:
+      - |
+        set -euo pipefail
+        # Parse CLI key=value overrides passed after -- and export as env
+        for kv in {{.CLI_ARGS}}; do
+          case "$kv" in
+            *=*) key="${kv%%=*}"; val="${kv#*=}"; export "$key=$val" ;;
+            *) : ;; # ignore non key=value tokens
+          esac
+        done
+        NS="${NS:-milo-system}"
+        MILO_NS="${MILO_NAMESPACE:-milo-system}"
+        VM_NS="${VM_NAMESPACE:-telemetry-system}"
+        VM_SVC_NAME="${VM_SERVICE_NAME:-vmsingle-telemetry-system-vm-victoria-metrics-k8s-stack}"
+        VM_PORT="${VM_PORT:-8428}"
+        VM_BASE_URL="${VM_BASE_URL:-http://${VM_SVC_NAME}.${VM_NS}.svc.cluster.local:${VM_PORT}}"
+        APISERVER_REGEX="${APISERVER_POD_REGEX:-milo-apiserver.*}"
+        ETCD_REGEX="${ETCD_POD_REGEX:-etcd.*}"
+        MILO_KUBECONFIG_SECRET_NAME="${MILO_KUBECONFIG_SECRET_NAME:-milo-controller-manager-kubeconfig}"
+        MILO_KUBECONFIG_SECRET_KEY="${MILO_KUBECONFIG_SECRET_KEY:-kubeconfig}"
+        MILO_KUBECONFIG_PATH="${MILO_KUBECONFIG_PATH:-/work/milo-kubeconfig}"
+        NUM_PROJECTS="${NUM_PROJECTS:-{{default "100" .NUM_PROJECTS}}}"
+        NUM_SECRETS_PER_PROJECT="${NUM_SECRETS_PER_PROJECT:-{{default "100" .NUM_SECRETS_PER_PROJECT}}}"
+        NUM_CONFIGMAPS_PER_PROJECT="${NUM_CONFIGMAPS_PER_PROJECT:-{{default "100" .NUM_CONFIGMAPS_PER_PROJECT}}}"
+        PROJECT_CONCURRENCY="${PROJECT_CONCURRENCY:-{{default "4" .PROJECT_CONCURRENCY}}}"
+        OBJECT_CONCURRENCY="${OBJECT_CONCURRENCY:-{{default "8" .OBJECT_CONCURRENCY}}}"
+        RUN_OBJECTS_PHASE="${RUN_OBJECTS_PHASE:-{{default "true" .RUN_OBJECTS_PHASE}}}"
+        OUT_DIR="${OUT_DIR:-{{default "/work/out" .OUT_DIR}}}"
+        STABILIZE_SECONDS="${STABILIZE_SECONDS:-{{default "90" .STABILIZE_SECONDS}}}"
+        MEASURE_WINDOW="${MEASURE_WINDOW:-{{default "2m" .MEASURE_WINDOW}}}"
+        ORG_NAME="${ORG_NAME:-{{default "" .ORG_NAME}}}"
+
+        echo "🔎 Checking Milo kubeconfig …"
+        if [ ! -f ".milo/kubeconfig" ]; then
+          echo "Error: .milo/kubeconfig not found. Run 'task dev:setup' first." >&2
+          exit 1
+        fi
+
+        echo "🔐 Ensuring perf-runner RBAC is applied …"
+        sed "s/NAMESPACE_PLACEHOLDER/${NS}/g" test/performance/config/perf-runner-rbac.yaml | task test-infra:kubectl -- apply -f -
+
+        echo "🗂  Publishing perf script as ConfigMap …"
+        task test-infra:kubectl -- -n ${NS} create configmap perf-script \
+          --from-file=perf_run.py=test/performance/scripts/perf_run.py \
+          --dry-run=client -o yaml | task test-infra:kubectl -- apply -f -
+
+        echo "🚀 Launching perf runner Job …"
+        sed \
+          -e "s/MILO_NAMESPACE_PLACEHOLDER/${MILO_NS}/g" \
+          -e "s/NAMESPACE_PLACEHOLDER/${NS}/g" \
+          -e "s#VM_BASE_URL_PLACEHOLDER#${VM_BASE_URL}#g" \
+          -e "s/APISERVER_REGEX_PLACEHOLDER/${APISERVER_REGEX}/g" \
+          -e "s/ETCD_REGEX_PLACEHOLDER/${ETCD_REGEX}/g" \
+          -e "s/NUM_PROJECTS_PLACEHOLDER/${NUM_PROJECTS}/g" \
+          -e "s/NUM_SECRETS_PLACEHOLDER/${NUM_SECRETS_PER_PROJECT}/g" \
+          -e "s/NUM_CONFIGMAPS_PLACEHOLDER/${NUM_CONFIGMAPS_PER_PROJECT}/g" \
+          -e "s/STABILIZE_SECONDS_PLACEHOLDER/${STABILIZE_SECONDS}/g" \
+          -e "s/MEASURE_WINDOW_PLACEHOLDER/${MEASURE_WINDOW}/g" \
+          -e "s/ORG_NAME_PLACEHOLDER/${ORG_NAME}/g" \
+          -e "s/PROJECT_CONCURRENCY_PLACEHOLDER/${PROJECT_CONCURRENCY}/g" \
+          -e "s/OBJECT_CONCURRENCY_PLACEHOLDER/${OBJECT_CONCURRENCY}/g" \
+          -e "s/RUN_OBJECTS_PHASE_PLACEHOLDER/${RUN_OBJECTS_PHASE}/g" \
+          -e "s/MILO_KUBECONFIG_SECRET_PLACEHOLDER/${MILO_KUBECONFIG_SECRET_NAME}/g" \
+          -e "s/MILO_KUBECONFIG_KEY_PLACEHOLDER/${MILO_KUBECONFIG_SECRET_KEY}/g" \
+          test/performance/scripts/perf-runner-job.yaml | task test-infra:kubectl -- apply -f -
+
+        echo "⏳ Waiting for Job completion …"
+        task test-infra:kubectl -- -n ${NS} wait --for=condition=Complete job/perf-runner --timeout=45m
+
+        echo "⬇️  Downloading results …"
+        mkdir -p reports/perf
+        # Prefer ConfigMap (works even if pod already terminated)
+        TEST_ID=$(task test-infra:kubectl -- -n ${NS} get cm perf-results -o jsonpath='{.data.test_id}' 2>/dev/null || true)
+        OUT_DIR_LOCAL="reports/perf/${TEST_ID:-latest}"
+        mkdir -p "$OUT_DIR_LOCAL"
+        task test-infra:kubectl -- -n ${NS} get cm perf-results -o jsonpath='{.data.results\.json}' > "$OUT_DIR_LOCAL/results.json" || true
+        task test-infra:kubectl -- -n ${NS} get cm perf-results -o jsonpath='{.data.report\.html}' > "$OUT_DIR_LOCAL/report.html" || true
+        # Fallback to copying from the pod if ConfigMap wasn't available
+        if [ ! -s "$OUT_DIR_LOCAL/results.json" ] || [ ! -s "$OUT_DIR_LOCAL/report.html" ]; then
+          POD=$(task test-infra:kubectl -- -n ${NS} get pods -l job-name=perf-runner -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+          if [ -n "$POD" ]; then
+            task test-infra:kubectl -- -n ${NS} cp "$POD:/work/out/results.json" "$OUT_DIR_LOCAL/results.json" || true
+            task test-infra:kubectl -- -n ${NS} cp "$POD:/work/out/report.html" "$OUT_DIR_LOCAL/report.html" || true
+          fi
+        fi
+        echo "✅ Results saved to $OUT_DIR_LOCAL"
+
+  perf:cleanup:
+    desc: Cleanup resources created by the last perf run (org/projects/secrets/configmaps)
+    silent: true
+    cmds:
+      - |
+        set -euo pipefail
+        NS="${NS:-milo-system}"
+        MILO_KUBECONFIG_SECRET_NAME="${MILO_KUBECONFIG_SECRET_NAME:-milo-controller-manager-kubeconfig}"
+        MILO_KUBECONFIG_SECRET_KEY="${MILO_KUBECONFIG_SECRET_KEY:-kubeconfig}"
+        MILO_KUBECONFIG_PATH="${MILO_KUBECONFIG_PATH:-/work/milo-kubeconfig}"
+
+        if [ ! -f ".milo/kubeconfig" ]; then
+          echo "Error: .milo/kubeconfig not found. Run 'task dev:setup' first." >&2
+          exit 1
+        fi
+
+        echo "🔎 Discovering last test identifiers …"
+        # Allow override from CLI envs if ConfigMap isn't present
+        TEST_ID_CM=$(task test-infra:kubectl -- -n ${NS} get cm perf-results -o jsonpath='{.data.test_id}' 2>/dev/null || true)
+        ORG_NAME_CM=$(task test-infra:kubectl -- -n ${NS} get cm perf-results -o jsonpath='{.data.org_name}' 2>/dev/null || true)
+        TEST_ID="${TEST_ID:-$TEST_ID_CM}"
+        ORG_NAME="${ORG_NAME:-$ORG_NAME_CM}"
+        if [ -z "${TEST_ID}" ] || [ -z "${ORG_NAME}" ]; then
+          echo "No existing results found in namespace ${NS} (ConfigMap perf-results). Nothing to cleanup."
+          exit 0
+        fi
+
+        echo "🚮 Launching cleanup Job for test ${TEST_ID} …"
+        sed \
+          -e "s/NAMESPACE_PLACEHOLDER/${NS}/g" \
+          -e "s/TEST_ID_PLACEHOLDER/${TEST_ID}/g" \
+          -e "s/ORG_NAME_PLACEHOLDER/${ORG_NAME}/g" \
+          -e "s/MILO_KUBECONFIG_SECRET_PLACEHOLDER/${MILO_KUBECONFIG_SECRET_NAME}/g" \
+          -e "s/MILO_KUBECONFIG_KEY_PLACEHOLDER/${MILO_KUBECONFIG_SECRET_KEY}/g" \
+          test/performance/config/perf-cleanup-job.yaml | task test-infra:kubectl -- apply -f -
+
+        echo "⏳ Waiting for cleanup Job completion …"
+        task test-infra:kubectl -- -n ${NS} wait --for=condition=Complete job/perf-cleanup --timeout=30m
+
+        echo "🧹 Removing runner artifacts (keeping downloaded results) …"
+        task test-infra:kubectl -- -n ${NS} delete job/perf-runner --ignore-not-found
+        task test-infra:kubectl -- -n ${NS} delete job/perf-cleanup --ignore-not-found
+        task test-infra:kubectl -- -n ${NS} delete configmap perf-script --ignore-not-found
+        task test-infra:kubectl -- -n ${NS} delete configmap perf-results --ignore-not-found
+        echo "✅ Cleanup complete."
