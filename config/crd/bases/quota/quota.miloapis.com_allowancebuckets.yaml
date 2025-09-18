@@ -1,0 +1,224 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: allowancebuckets.quota.miloapis.com
+spec:
+  group: quota.miloapis.com
+  names:
+    kind: AllowanceBucket
+    listKind: AllowanceBucketList
+    plural: allowancebuckets
+    singular: allowancebucket
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.resourceType
+      name: Resource Type
+      type: string
+    - jsonPath: .status.limit
+      name: Limit
+      type: integer
+    - jsonPath: .status.allocated
+      name: Allocated
+      type: integer
+    - jsonPath: .status.available
+      name: Available
+      type: integer
+    - jsonPath: .status.claimCount
+      name: Claims
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          AllowanceBucket tracks the effective quota for a single consumer and resource type.
+          The system aggregates capacity from ResourceGrants and consumption from ResourceClaims
+          to support real-time admission decisions.
+
+          ### How It Works
+          - Scope: One bucket per (`consumerRef`, `resourceType`) pair.
+          - Inputs: Active `ResourceGrant`s increase `status.limit`; granted `ResourceClaim`s increase `status.allocated`.
+          - Decision: Admission grants a claim only when `status.available >= requested amount`.
+          - Scale: Status stores aggregates, not per-claim entries, to keep object size bounded.
+
+          ### Works With
+          - Aggregates active [ResourceGrant](#resourcegrant) amounts into `status.limit` for the matching (`spec.consumerRef`, `spec.resourceType`).
+          - Aggregates granted [ResourceClaim](#resourceclaim) amounts into `status.allocated`.
+          - Used by admission decisions: a claim is granted only if `status.available >= requested amount`.
+          - Labeled by the controller to simplify queries by consumer and resource kind.
+
+          ### Selectors and Filtering
+          - Field selectors (server-side): `spec.consumerRef.kind`, `spec.consumerRef.name`, `spec.resourceType`.
+          - Built-in labels (set by controller):
+            - `quota.miloapis.com/resource-kind`
+            - `quota.miloapis.com/resource-apigroup` (omitted for core kinds)
+            - `quota.miloapis.com/consumer-kind`
+            - `quota.miloapis.com/consumer-name`
+
+          - Common queries:
+            - All buckets for a consumer: label selector `quota.miloapis.com/consumer-kind` + `quota.miloapis.com/consumer-name`.
+            - All buckets for a resource kind: label selector `quota.miloapis.com/resource-kind` (and `quota.miloapis.com/resource-apigroup` if needed).
+            - Buckets for a resourceType: field selector `spec.resourceType`.
+
+          ### Notes
+          - A dedicated controller is the single writer for status to avoid races.
+          - Aggregates may lag briefly after grant/claim updates (eventual consistency).
+          - `status.available` never goes negative.
+
+          ### See Also
+          - [ResourceGrant](#resourcegrant): Supplies capacity that increases `status.limit`.
+          - [ResourceClaim](#resourceclaim): Consumes capacity that increases `status.allocated`.
+          - [ClaimCreationPolicy](#claimcreationpolicy): Drives creation of claims during admission.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AllowanceBucketSpec defines the desired state of AllowanceBucket.
+            properties:
+              consumerRef:
+                description: ConsumerRef identifies the quota consumer this bucket
+                  tracks
+                properties:
+                  apiGroup:
+                    description: |-
+                      APIGroup of the target resource (e.g., "resourcemanager.miloapis.com").
+                      Empty string for core API group.
+                    type: string
+                  kind:
+                    description: Kind of the consumer resource (for example, Organization,
+                      Project).
+                    type: string
+                  name:
+                    description: Name of the consumer resource object instance.
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+              resourceType:
+                description: |-
+                  ResourceType specifies which resource type this bucket tracks.
+                  Must match a registered resource type from ResourceRegistration.
+                pattern: ^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$
+                type: string
+            required:
+            - consumerRef
+            - resourceType
+            type: object
+          status:
+            description: |-
+              AllowanceBucketStatus is the controller‑computed snapshot for a single
+              (`spec.consumerRef`, `spec.resourceType`). The controller aggregates capacity
+              from Active [ResourceGrant](#resourcegrant)s and usage from Granted
+              [ResourceClaim](#resourceclaim)s, then derives availability as capacity minus
+              usage (never negative). It also records provenance for how capacity was
+              composed, simple cardinalities to aid troubleshooting at scale, and a
+              reconciliation timestamp. Values may lag briefly after underlying grants or
+              claims change. See the schema for exact field names and constraints.
+            properties:
+              allocated:
+                description: |-
+                  Amount of quota currently allocated/used in this bucket, measured in the
+                  BaseUnit defined by the ResourceRegistration.
+                format: int64
+                minimum: 0
+                type: integer
+              available:
+                description: |-
+                  Amount available to be claimed (limit - allocated), measured in the
+                  BaseUnit defined by the ResourceRegistration.
+                format: int64
+                minimum: 0
+                type: integer
+              claimCount:
+                description: Count of claims consuming quota from this bucket
+                format: int32
+                minimum: 0
+                type: integer
+              contributingGrantRefs:
+                description: |-
+                  A list of all the grants that contribute to the limit for this bucket.
+                  Grants are tracked individually as they are typically few in number.
+                items:
+                  description: |-
+                    ContributingGrantRef references a ResourceGrant that contributes to
+                    the total limit in the bucket's status.
+                  properties:
+                    amount:
+                      description: Amount granted
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    lastObservedGeneration:
+                      description: The generation of the ResourceGrant when this bucket
+                        last processed it
+                      format: int64
+                      type: integer
+                    name:
+                      description: Name of the ResourceGrant
+                      type: string
+                  required:
+                  - amount
+                  - lastObservedGeneration
+                  - name
+                  type: object
+                type: array
+              grantCount:
+                description: Count of grants contributing to this bucket's limit
+                format: int32
+                minimum: 0
+                type: integer
+              lastReconciliation:
+                description: Last time the bucket was reconciled
+                format: date-time
+                type: string
+              limit:
+                description: |-
+                  Total quota limit from all applicable ResourceGrants, measured in the
+                  BaseUnit defined by the ResourceRegistration for this resource type.
+                format: int64
+                minimum: 0
+                type: integer
+              observedGeneration:
+                description: The specific revision of the AllowanceBucket
+                format: int64
+                type: integer
+            required:
+            - allocated
+            - available
+            - claimCount
+            - grantCount
+            - limit
+            type: object
+        required:
+        - spec
+        type: object
+    selectableFields:
+    - jsonPath: .spec.consumerRef.kind
+    - jsonPath: .spec.consumerRef.name
+    - jsonPath: .spec.resourceType
+    served: true
+    storage: true
+    subresources:
+      status: {}

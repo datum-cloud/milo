@@ -1,0 +1,375 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: claimcreationpolicies.quota.miloapis.com
+spec:
+  group: quota.miloapis.com
+  names:
+    kind: ClaimCreationPolicy
+    listKind: ClaimCreationPolicyList
+    plural: claimcreationpolicies
+    singular: claimcreationpolicy
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.trigger.resource.kind
+      name: Target
+      type: string
+    - jsonPath: .spec.enabled
+      name: Enabled
+      type: boolean
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ClaimCreationPolicy creates ResourceClaims during admission when target resources are created.
+          Use it to enforce quota in real time at resource creation.
+
+          ### How It Works
+          - Admission matches incoming creates against `spec.trigger.resource`.
+          - It evaluates all CEL expressions in `spec.trigger.conditions[]`.
+          - When all conditions are true, it renders `resourceClaimTemplate` and creates a claim.
+          - The system evaluates the claim against [AllowanceBucket](#allowancebucket)s and grants or denies the request.
+
+          ### Works With
+          - Creates [ResourceClaim](#resourceclaim) objects; the triggering kind must be allowed by the target [ResourceRegistration](#resourceregistration) `spec.claimingResources`.
+          - Consumer resolution is automatic at admission; claims are evaluated against [AllowanceBucket](#allowancebucket) capacity.
+          - Policy readiness (`status.conditions[type=Ready]`) indicates the policy is valid and active.
+
+          ### Selectors and Filtering
+          - Field selectors (server-side): `spec.trigger.resource.kind`, `spec.trigger.resource.apiVersion`, `spec.enabled`.
+          - Label selectors (add your own):
+            - `quota.miloapis.com/target-kind`: `Project`
+            - `quota.miloapis.com/environment`: `prod`
+
+          - Common queries:
+            - All policies for a target kind: label selector `quota.miloapis.com/target-kind`.
+            - All enabled policies: field selector `spec.enabled=true`.
+
+          ### Defaults and Limits
+          - In `v1alpha1`, `spec.requests[]` amounts are static integers (no expression-based amounts).
+          - `metadata.labels` in the template are literal; annotation values support templating.
+          - `spec.consumerRef` is resolved automatically by admission (not templated in `v1alpha1`).
+
+          ### Notes
+          - Available template variables: `.trigger`, `.requestInfo`, `.user`.
+          - Template functions: `lower`, `upper`, `title`, `default`, `contains`, `join`, `split`, `replace`, `trim`, `toInt`, `toString`.
+          - If `Ready=False` with `ValidationFailed`, check expressions and templates for errors.
+          - Disabled policies (`spec.enabled=false`) do not create claims, even if conditions match.
+          - For task-oriented steps and examples, see future How-to guides.
+
+          ### See Also
+          - [ResourceClaim](#resourceclaim): The object created by this policy.
+          - [ResourceRegistration](#resourceregistration): Controls which resources can claim quota.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClaimCreationPolicySpec defines the desired state of ClaimCreationPolicy.
+            properties:
+              enabled:
+                default: true
+                description: |-
+                  Enabled determines if this policy is active.
+                  If false, no ResourceClaims will be created for matching resources.
+                type: boolean
+              target:
+                description: Target defines how and where ResourceClaims should be
+                  created.
+                properties:
+                  resourceClaimTemplate:
+                    description: |-
+                      ResourceClaimTemplate defines how to create ResourceClaims.
+                      String fields support Go template syntax for dynamic content.
+                    properties:
+                      metadata:
+                        description: |-
+                          Metadata for the created ResourceClaim.
+                          String fields support Go template syntax.
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations to set on the created object.
+                              Values support Go templates.
+                            type: object
+                          generateName:
+                            description: GenerateName prefix for the created object
+                              when Name is empty. Supports Go templates.
+                            type: string
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: Labels to set on the created object. Literal
+                              values only.
+                            type: object
+                          name:
+                            description: Name of the created object. Supports Go templates.
+                            type: string
+                          namespace:
+                            description: Namespace where the object will be created.
+                              Supports Go templates.
+                            type: string
+                        type: object
+                      spec:
+                        description: |-
+                          Spec for the created ResourceClaim.
+                          String fields support Go template syntax.
+                        properties:
+                          consumerRef:
+                            description: |-
+                              ConsumerRef identifies the quota consumer (the subject that receives
+                              limits and consumes capacity) making this claim. Examples include an
+                              Organization or a Project, depending on how the registration is defined.
+                            properties:
+                              apiGroup:
+                                description: |-
+                                  APIGroup of the target resource (e.g., "resourcemanager.miloapis.com").
+                                  Empty string for core API group.
+                                type: string
+                              kind:
+                                description: Kind of the consumer resource (for example,
+                                  Organization, Project).
+                                type: string
+                              name:
+                                description: Name of the consumer resource object
+                                  instance.
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                          requests:
+                            description: |-
+                              Requests specifies the resource types and amounts being claimed.
+                              Each resource type must be unique within the requests array.
+                            items:
+                              description: ResourceRequest defines a single resource
+                                request within a claim
+                              properties:
+                                amount:
+                                  description: |-
+                                    Amount of the resource being claimed, measured in the BaseUnit
+                                    defined by the corresponding ResourceRegistration.
+                                  format: int64
+                                  minimum: 0
+                                  type: integer
+                                resourceType:
+                                  description: |-
+                                    Fully qualified name of the resource type being claimed.
+                                    Must match a registered ResourceRegistration.spec.resourceType
+                                    (for example, "resourcemanager.miloapis.com/projects" or
+                                    "core/persistentvolumeclaims").
+                                  type: string
+                              required:
+                              - amount
+                              - resourceType
+                              type: object
+                            maxItems: 20
+                            minItems: 1
+                            type: array
+                          resourceRef:
+                            description: |-
+                              ResourceRef links to the actual resource that triggered this quota claim.
+                              Automatically populated by the admission plugin.
+                              Uses an unversioned reference to persist across API version upgrades.
+                            properties:
+                              apiGroup:
+                                description: |-
+                                  APIGroup is the group for the resource being referenced.
+                                  If APIGroup is not specified, the specified Kind must be in the core API group.
+                                  For any other third-party types, APIGroup is required.
+                                type: string
+                              kind:
+                                description: Kind of the referent.
+                                type: string
+                              name:
+                                description: Name of the referent.
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace of the referent.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                        required:
+                        - consumerRef
+                        - requests
+                        - resourceRef
+                        type: object
+                    required:
+                    - metadata
+                    - spec
+                    type: object
+                required:
+                - resourceClaimTemplate
+                type: object
+              trigger:
+                description: Trigger defines what resource changes should trigger
+                  claim creation.
+                properties:
+                  conditions:
+                    description: |-
+                      Conditions are CEL expressions that must evaluate to true for claim creation to occur.
+                      Evaluated in the admission context.
+                    items:
+                      description: ConditionExpression defines a CEL expression for
+                        condition evaluation.
+                      properties:
+                        expression:
+                          description: |-
+                            Expression is the CEL expression to evaluate against the trigger resource.
+                            The expression must return a boolean value.
+                            Available variables:
+                            - GrantCreationPolicy (controller): `object` is the trigger resource (map)
+                            - ClaimCreationPolicy (admission): `trigger` is the trigger resource (map);
+                              also `user.name`, `user.uid`, `user.groups`, `user.extra`, `requestInfo.*`,
+                              `namespace`, `gvk.group`, `gvk.version`, `gvk.kind`
+                          maxLength: 1024
+                          minLength: 1
+                          type: string
+                        message:
+                          description: Message provides a human-readable description
+                            of the condition requirement.
+                          maxLength: 256
+                          type: string
+                      required:
+                      - expression
+                      type: object
+                    maxItems: 10
+                    type: array
+                  resource:
+                    description: Resource specifies which resource type triggers this
+                      policy.
+                    properties:
+                      apiVersion:
+                        description: APIVersion of the target resource in the format
+                          "group/version".
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/v[0-9]+((alpha|beta)[0-9]*)?$
+                        type: string
+                      kind:
+                        description: Kind is the kind of the target resource.
+                        minLength: 1
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    type: object
+                required:
+                - resource
+                type: object
+            required:
+            - target
+            - trigger
+            type: object
+          status:
+            description: |-
+              ClaimCreationPolicyStatus defines the observed state of ClaimCreationPolicy.
+
+              Status fields
+              - conditions[type=Ready]: True when the policy is validated and active.
+
+              See also
+              - [ResourceClaim](#resourceclaim): The object created by this policy.
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the policy's current state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed.
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    selectableFields:
+    - jsonPath: .spec.trigger.resource.kind
+    - jsonPath: .spec.trigger.resource.apiVersion
+    - jsonPath: .spec.enabled
+    served: true
+    storage: true
+    subresources:
+      status: {}
