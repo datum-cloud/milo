@@ -565,7 +565,7 @@ tasks:
           -e "s/RUN_OBJECTS_PHASE_PLACEHOLDER/${RUN_OBJECTS_PHASE}/g" \
           -e "s/MILO_KUBECONFIG_SECRET_PLACEHOLDER/${MILO_KUBECONFIG_SECRET_NAME}/g" \
           -e "s/MILO_KUBECONFIG_KEY_PLACEHOLDER/${MILO_KUBECONFIG_SECRET_KEY}/g" \
-          test/performance/scripts/perf-runner-job.yaml | task test-infra:kubectl -- apply -f -
+          test/performance/config/perf-runner-job.yaml | task test-infra:kubectl -- apply -f -
 
         echo "⏳ Waiting for Job completion …"
         task test-infra:kubectl -- -n ${NS} wait --for=condition=Complete job/perf-runner --timeout=45m
