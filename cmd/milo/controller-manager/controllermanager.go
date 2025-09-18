@@ -30,6 +30,7 @@ import (
 	"k8s.io/apiserver/pkg/server/mux"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/metadata"
@@ -66,14 +67,18 @@ import (
 	kubectrlmgrconfig "k8s.io/kubernetes/pkg/controller/apis/config"
 	garbagecollector "k8s.io/kubernetes/pkg/controller/garbagecollector"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// Register JSON logging format
 	_ "k8s.io/component-base/logs/json/register"
 
-	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
+	quotacontroller "go.miloapis.com/milo/internal/controllers/quota"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
@@ -82,11 +87,8 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
+	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
-	controllerruntime "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 var (
@@ -116,6 +118,7 @@ func init() {
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(quotav1alpha1.AddToScheme(Scheme))
 }
 
 const (
@@ -267,6 +270,7 @@ func NewOptions() (*Options, error) {
 		},
 		ControlPlane: &controlplane.Options{},
 	}
+
 	return opts, nil
 }
 
@@ -338,6 +342,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error building infrastructure cluster client")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+
 			infraCluster, err := cluster.New(infraClient, func(o *cluster.Options) {
 				o.Scheme = Scheme
 			})
@@ -444,6 +449,24 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := groupCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up group controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Setup all quota controllers using the registry
+			// Create a dedicated config for dynamic client with even higher rate limits for quota operations
+			quotaDynamicConfig := *ctrlConfig
+			quotaDynamicConfig.QPS = 200   // Double the controller-runtime rate limits for quota operations
+			quotaDynamicConfig.Burst = 400 // Double the controller-runtime burst for quota operations
+
+			dynamicClient, err := dynamic.NewForConfig(&quotaDynamicConfig)
+			if err != nil {
+				logger.Error(err, "Error creating dynamic client for quota controllers")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			quotaRegistry := quotacontroller.NewQuotaControllerRegistry(logger.WithName("quota-registry"))
+			if err := quotaRegistry.SetupAllControllers(ctrl, dynamicClient); err != nil {
+				logger.Error(err, "Error setting up quota controllers")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

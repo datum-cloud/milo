@@ -1,0 +1,23 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceClaim
+metadata:
+  name: multi-test-multi-resource-claim
+  namespace: milo-system
+  labels:
+    test.miloapis.com/scenario: multi-resource-claims
+spec:
+  consumerRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: multi-test-multi-resource-org
+  requests:
+    - resourceType: "test.miloapis.com/MultiProject"
+      amount: 2
+    - resourceType: "resourcemanager.miloapis.com/User"
+      amount: 5
+    - resourceType: "infrastructure.miloapis.com/Cluster"
+      amount: 1
+  resourceRef:
+    apiGroup: test.miloapis.com
+    kind: MultiResourceTest
+    name: multi-test-multi-resource-claim

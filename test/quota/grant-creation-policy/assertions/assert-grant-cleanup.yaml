@@ -1,0 +1,28 @@
+# Verify that grants for remaining organizations still exist after cleanup
+# The auto-grant-grant-policy-test-org should be deleted via owner reference cleanup
+
+# Premium test organization grant should still exist
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: auto-grant-premium-test-org
+  namespace: milo-system
+  labels:
+    quota.miloapis.com/auto-created: "true"
+status:
+  conditions:
+    - type: Active
+      status: "True"
+---
+# CEL-triggered organization grant should still exist
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: premium-grant-cel-trigger-org-standard
+  namespace: milo-system
+  labels:
+    quota.miloapis.com/auto-created: "true"
+status:
+  conditions:
+    - type: Active
+      status: "True"

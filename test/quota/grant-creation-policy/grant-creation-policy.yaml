@@ -1,0 +1,34 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: GrantCreationPolicy
+metadata:
+  name: test-organization-grant-policy
+  labels:
+    test.miloapis.com/quota: "grant-creation-policy"
+spec:
+  enabled: true
+  trigger:
+    resource:
+      apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+      kind: "Organization"
+    conditions:
+      - expression: 'object.spec.type == "Standard"'
+  target:
+    resourceGrantTemplate:
+      metadata:
+        name: "auto-grant-{{.trigger.metadata.name}}"
+        namespace: "milo-system"
+        labels:
+          quota.miloapis.com/auto-created: "true"
+          quota.miloapis.com/policy: "test-organization-grant-policy"
+          test.miloapis.com/scenario: "grant-creation-policy"
+        annotations:
+          quota.miloapis.com/description: "Auto-generated grant for {{.trigger.metadata.name}}"
+      spec:
+        consumerRef:
+          apiGroup: "resourcemanager.miloapis.com"
+          kind: "Organization"
+          name: "{{.trigger.metadata.name}}"
+        allowances:
+          - resourceType: "test.grantpolicy.miloapis.com/projects"
+            buckets:
+              - amount: 5

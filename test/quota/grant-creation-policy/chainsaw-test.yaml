@@ -1,0 +1,232 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: quota-grant-creation-policy
+spec:
+  # Define clusters for organizational context testing
+  clusters:
+    main:
+      kubeconfig: kubeconfig-main
+    org:
+      kubeconfig: kubeconfig-org-template
+
+  steps:
+    # Setup base quota infrastructure - MUST be first
+    - name: setup-base-infrastructure
+      try:
+        - apply:
+            file: 01-resource-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: grant-policy-test-projects-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - assert:
+            file: assertions/assert-resource-registration.yaml
+
+    # Create and validate grant creation policy
+    - name: setup-grant-creation-policy
+      try:
+        - apply:
+            file: grant-creation-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: GrantCreationPolicy
+            name: test-organization-grant-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        - assert:
+            file: assertions/assert-grant-creation-policy.yaml
+
+    # Create basic organization that will trigger grant creation
+    - name: setup-test-organization
+      try:
+        - apply:
+            file: 02-test-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-grant-policy-test-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - apply:
+            file: 03-test-user.yaml
+        - apply:
+            file: 04-organization-membership.yaml
+        - assert:
+            file: assertions/assert-organization.yaml
+
+    # Verify automatic grant creation
+    - name: verify-automatic-grant-creation
+      try:
+        # Wait for ResourceGrant to be created by GrantCreationController
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: auto-grant-grant-policy-test-org
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - assert:
+            file: assertions/assert-automatic-grant.yaml
+
+    # Test policy condition evaluation with organization update
+    - name: test-condition-evaluation
+      try:
+        # Update organization to change condition
+        - apply:
+            file: test-data/organization-update-tier.yaml
+        # Wait for grant to be updated (check generation or observedGeneration)
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: auto-grant-grant-policy-test-org
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Verify grant was updated based on new condition
+        - assert:
+            file: assertions/assert-updated-grant.yaml
+
+    # Test template rendering with different context
+    - name: test-template-rendering
+      try:
+        # Create organization with different attributes
+        - apply:
+            file: test-data/premium-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-premium-test-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        # Wait for ResourceGrant to be created for premium organization
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: auto-grant-premium-test-org
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Verify grant created with premium template values
+        - assert:
+            file: assertions/assert-premium-grant.yaml
+
+    # Test policy with CEL name expression
+    - name: test-cel-name-expression
+      try:
+        - apply:
+            file: cel-name-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: GrantCreationPolicy
+            name: test-cel-name-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        # Create organization to trigger CEL-based grant
+        - apply:
+            file: test-data/cel-trigger-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-cel-trigger-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        # Wait for ResourceGrant to be created with template-generated name
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: premium-grant-cel-trigger-org-standard
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Verify grant created with template-generated name
+        - assert:
+            file: assertions/assert-cel-named-grant.yaml
+
+    # Test grant cleanup when trigger is deleted
+    - name: test-grant-cleanup
+      try:
+        # Delete one of the test organizations
+        - delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: Organization
+              name: grant-policy-test-org
+        # Wait for ResourceGrant to be deleted (owner reference cleanup)
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: auto-grant-grant-policy-test-org
+            namespace: milo-system
+            timeout: 30s
+            for:
+              deletion: {}
+        # Verify associated grants are cleaned up
+        - assert:
+            file: assertions/assert-grant-cleanup.yaml
+
+    # Test policy validation errors
+    - name: test-policy-validation
+      try:
+        # Try to create invalid policy
+        - apply:
+            file: test-data/invalid-policy.yaml
+            expect:
+              - check:
+                  ($error != null): true
+        # Verify original policy remains valid
+        - assert:
+            file: assertions/assert-grant-creation-policy.yaml
+
+    # Test production-style labels (the bug fix validation)
+    - name: test-production-style-labels
+      try:
+        # Apply policy with production-style prefixed labels that previously failed
+        - apply:
+            file: production-style-labels-policy.yaml
+        # Wait for the policy to become Ready - this proves label validation passed
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: GrantCreationPolicy
+            name: test-production-style-labels-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        # Assert the policy is Ready with the production-style labels
+        - assert:
+            file: assertions/assert-production-style-labels-ready.yaml
+

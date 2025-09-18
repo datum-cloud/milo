@@ -1,0 +1,23 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: quota.miloapis.com-resourcegrant
+spec:
+  serviceRef:
+    name: "quota.miloapis.com"
+  kind: ResourceGrant
+  plural: resourcegrants
+  singular: resourcegrant
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
+  parentResources:
+    - apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+    - apiGroup: resourcemanager.miloapis.com
+      kind: Project
