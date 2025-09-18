@@ -116,9 +116,3 @@ func (c ConsumerRef) MatchesConsumer(other ConsumerRef) bool {
 		c.Kind == other.Kind &&
 		c.APIGroup == other.APIGroup
 }
-
-const (
-	// MiloSystemNamespace is the namespace where the Milo system components are
-	// deployed in the project control-plane.
-	MiloSystemNamespace = "milo-system"
-)

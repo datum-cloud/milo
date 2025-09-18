@@ -1,0 +1,180 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: resource-registration-validation
+spec:
+  description: |
+    End-to-end tests for ResourceRegistration validation including:
+    - OpenAPI schema validation (required fields, patterns, constraints)
+    - CEL immutability validation
+    - Admission plugin duplicate detection in claimingResources
+    - Cross-resource duplicate detection via admission plugin
+
+  steps:
+    # Test 1: Valid ResourceRegistration creation
+    - name: create-valid-registration
+      try:
+        - create:
+            file: test-data/valid-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: test-valid-registration
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - assert:
+            file: assertions/assert-valid-registration.yaml
+
+    # Test 2: OpenAPI validation - missing required fields
+    - name: test-missing-required-fields
+      try:
+        - create:
+            file: test-data/missing-required-fields.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.resourceType')): true
+
+    # Test 3: OpenAPI validation - invalid resourceType pattern
+    - name: test-invalid-resource-type-pattern
+      try:
+        - create:
+            file: test-data/invalid-resource-type-pattern.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.resourceType')): true
+
+    # Test 4: OpenAPI validation - invalid enum value
+    - name: test-invalid-type-enum
+      try:
+        - create:
+            file: test-data/invalid-type-enum.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.type')): true
+
+    # Test 5: OpenAPI validation - unitConversionFactor minimum
+    - name: test-invalid-conversion-factor
+      try:
+        - create:
+            file: test-data/invalid-conversion-factor.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'unitConversionFactor')): true
+
+    # Test 6: Admission plugin validation - duplicate claimingResources
+    - name: test-duplicate-claiming-resources
+      try:
+        - create:
+            file: test-data/duplicate-claiming-resources.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'duplicate claiming resource')): true
+
+    # Test 7: Cross-resource duplicate detection
+    - name: test-cross-resource-duplicate
+      try:
+        # First registration should succeed
+        - create:
+            file: test-data/first-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: test-first-registration
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Second registration with same resourceType should fail
+        - create:
+            file: test-data/duplicate-resource-type.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'already registered')): true
+
+    # Test 8: CEL immutability - resourceType
+    - name: test-immutable-resource-type
+      try:
+        - create:
+            file: test-data/registration-to-update.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: test-immutable-registration
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - patch:
+            file: test-data/patch-resource-type.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.resourceType is immutable')): true
+
+    # Test 9: CEL immutability - consumerTypeRef
+    - name: test-immutable-consumer-type-ref
+      try:
+        - patch:
+            file: test-data/patch-consumer-type-ref.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.consumerTypeRef is immutable')): true
+
+    # Test 10: CEL immutability - type field
+    - name: test-immutable-type
+      try:
+        - patch:
+            file: test-data/patch-type.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.type is immutable')): true
+
+    # Test 11: Valid update - modifying mutable fields
+    - name: test-valid-update
+      try:
+        - patch:
+            file: test-data/patch-mutable-fields.yaml
+        - assert:
+            file: assertions/assert-updated-registration.yaml
+
+    # Test 12: Maximum claimingResources limit
+    - name: test-max-claiming-resources
+      try:
+        - create:
+            file: test-data/max-claiming-resources.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'claimingResources')): true
+
+    # Cleanup
+    - name: cleanup
+      try:
+        - delete:
+            ref:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: ResourceRegistration
+              name: test-valid-registration
+        - delete:
+            ref:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: ResourceRegistration
+              name: test-first-registration
+        - delete:
+            ref:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: ResourceRegistration
+              name: test-immutable-registration

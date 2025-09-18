@@ -1,0 +1,37 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-max-claiming
+spec:
+  consumerTypeRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  resourceType: "test.validation.miloapis.com/max_claims-test"
+  description: "Test maximum claimingResources limit"
+  baseUnit: "resource"
+  displayUnit: "resources"
+  unitConversionFactor: 1
+  # Maximum is 20 items, this has 21
+  claimingResources:
+    - {apiGroup: "test", kind: "Kind1"}
+    - {apiGroup: "test", kind: "Kind2"}
+    - {apiGroup: "test", kind: "Kind3"}
+    - {apiGroup: "test", kind: "Kind4"}
+    - {apiGroup: "test", kind: "Kind5"}
+    - {apiGroup: "test", kind: "Kind6"}
+    - {apiGroup: "test", kind: "Kind7"}
+    - {apiGroup: "test", kind: "Kind8"}
+    - {apiGroup: "test", kind: "Kind9"}
+    - {apiGroup: "test", kind: "Kind10"}
+    - {apiGroup: "test", kind: "Kind11"}
+    - {apiGroup: "test", kind: "Kind12"}
+    - {apiGroup: "test", kind: "Kind13"}
+    - {apiGroup: "test", kind: "Kind14"}
+    - {apiGroup: "test", kind: "Kind15"}
+    - {apiGroup: "test", kind: "Kind16"}
+    - {apiGroup: "test", kind: "Kind17"}
+    - {apiGroup: "test", kind: "Kind18"}
+    - {apiGroup: "test", kind: "Kind19"}
+    - {apiGroup: "test", kind: "Kind20"}
+    - {apiGroup: "test", kind: "Kind21"}

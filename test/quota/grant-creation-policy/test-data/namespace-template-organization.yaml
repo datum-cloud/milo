@@ -1,0 +1,8 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: namespace-template-test-org
+  labels:
+    test.miloapis.com/scenario: "namespace-template"
+spec:
+  type: "Standard"

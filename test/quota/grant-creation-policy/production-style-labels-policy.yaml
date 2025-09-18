@@ -1,0 +1,41 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: GrantCreationPolicy
+metadata:
+  name: test-production-style-labels-policy
+  labels:
+    test.miloapis.com/quota: "grant-creation-policy"
+spec:
+  enabled: true
+  trigger:
+    resource:
+      apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+      kind: "Organization"
+    conditions:
+      # Trigger for production-style-org with grant-creation-policy test scenario
+      - expression: 'trigger.metadata.name == "production-style-org" && has(trigger.metadata.labels) && "test.miloapis.com/scenario" in trigger.metadata.labels && trigger.metadata.labels["test.miloapis.com/scenario"] == "grant-creation-policy"'
+  target:
+    resourceGrantTemplate:
+      metadata:
+        name: "prod-style-grant-{{.trigger.metadata.name}}"
+        namespace: "milo-system"
+        # These are the exact labels that were failing in production
+        labels:
+          app.kubernetes.io/component: "quota-system"
+          app.kubernetes.io/name: "datum"
+          quota.miloapis.com/auto-created: "true"
+          quota.miloapis.com/organization-type: "standard"
+          quota.miloapis.com/policy: "standard-organization-project-quota-policy"
+          quota.miloapis.com/resource-type: "projects"
+        annotations:
+          quota.miloapis.com/created-by: "standard-organization-project-quota-policy"
+          quota.miloapis.com/description: "Project quota allocation for Standard organization"
+          quota.miloapis.com/organization: "{{ .trigger.metadata.name }}"
+      spec:
+        consumerRef:
+          apiGroup: "resourcemanager.miloapis.com"
+          kind: "Organization"
+          name: "{{.trigger.metadata.name}}"
+        allowances:
+          - resourceType: "test.grantpolicy.miloapis.com/projects"
+            buckets:
+              - amount: 10

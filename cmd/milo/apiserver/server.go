@@ -38,6 +38,8 @@ import (
 	_ "k8s.io/component-base/logs/json/register"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
 	"k8s.io/kubernetes/pkg/controlplane/apiserver/options"
+
+	admissionquota "go.miloapis.com/milo/internal/quota/admission"
 )
 
 func init() {
@@ -88,6 +90,8 @@ func NewCommand() *cobra.Command {
 			}
 
 			// utilfeature.DefaultMutableFeatureGate.Set("ExternalServiceAccountTokenSigner=true")
+			// Enable tracing to support trace continuation from incoming requests
+			utilfeature.DefaultMutableFeatureGate.Set("APIServerTracing=true")
 
 			if errs := completedOptions.Validate(); len(errs) != 0 {
 				return utilerrors.NewAggregate(errs)
@@ -149,11 +153,22 @@ func NewCommand() *cobra.Command {
 
 func NewOptions() *options.Options {
 	s := options.NewOptions()
-	s.Admission.GenericAdmission.DefaultOffPlugins = DefaultOffAdmissionPlugins()
 
 	if s.Admission.GenericAdmission.Plugins == nil {
 		s.Admission.GenericAdmission.Plugins = admission.NewPlugins()
 	}
+
+	// Register custom admission plugins BEFORE determining which plugins to disable
+	// This ensures our plugins are known when DefaultOffAdmissionPlugins() is called
+	admissionquota.Register(s.Admission.GenericAdmission.Plugins)
+
+	// Set custom plugin order that includes our ClaimCreationQuota plugin
+	// This dynamically extends Kubernetes' plugin order with our custom plugins
+	s.Admission.GenericAdmission.RecommendedPluginOrder = GetMiloOrderedPlugins()
+
+	// Configure which plugins should be disabled
+	s.Admission.GenericAdmission.DefaultOffPlugins = DefaultOffAdmissionPlugins()
+
 	lifecycle.Register(s.Admission.GenericAdmission.Plugins)
 
 	s.Admission.GenericAdmission.RecommendedPluginOrder =
