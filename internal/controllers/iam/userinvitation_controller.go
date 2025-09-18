@@ -136,6 +136,13 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	// Send an email to the invitee user to accept the invitation
+	// It is possible that the invitee User is not created yet, so we send the email anyway.
+	if err := r.createInvitationEmail(ctx, ui.DeepCopy()); err != nil {
+		log.Error(err, "Failed to send invitation email to user", "userInvitation", ui.GetName())
+		return ctrl.Result{}, fmt.Errorf("failed to send invitation email to user: %w", err)
+	}
+
 	// Get the User that was invited by the UserInvitation
 	var users iamv1alpha1.UserList
 	if err := r.Client.List(ctx, &users, client.MatchingFields{userEmailIndexKey: strings.ToLower(ui.Spec.Email)}); err != nil {
@@ -234,12 +241,6 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			log.Error(err, "Failed to create policy binding with %s role", role, "userInvitation", ui.GetName())
 			return ctrl.Result{}, fmt.Errorf("failed to create policy binding with %s role: %w", role, err)
 		}
-	}
-
-	// Send an email to the invitee user to accept the invitation
-	if err := r.createInvitationEmail(ctx, user.DeepCopy(), ui.DeepCopy()); err != nil {
-		log.Error(err, "Failed to send invitation email to user", "userInvitation", ui.GetName())
-		return ctrl.Result{}, fmt.Errorf("failed to send invitation email to user: %w", err)
 	}
 
 	// Update the UserInvitation status
@@ -559,9 +560,9 @@ var userCreateOnlyPredicate = predicate.Funcs{
 
 // createInvitationEmail creates an email to the invitee user to accept the invitation.
 // This is an idempotent operation.
-func (r *UserInvitationController) createInvitationEmail(ctx context.Context, user *iamv1alpha1.User, ui *iamv1alpha1.UserInvitation) error {
+func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui *iamv1alpha1.UserInvitation) error {
 	log := logf.FromContext(ctx).WithName("userinvitation-create-invitation-email")
-	log.Info("Creating invitation email to user", "userInvitation", ui.GetName(), "user", user.GetName())
+	log.Info("Creating invitation email to user", "userInvitation", ui.GetName())
 
 	emailName := getDeterministicResourceName(ui.Spec.Email, *ui)
 	log.Info("Email name", "emailName", emailName)
@@ -637,8 +638,8 @@ func (r *UserInvitationController) createInvitationEmail(ctx context.Context, us
 			TemplateRef: notificationv1alpha1.TemplateReference{
 				Name: r.userInvitationEmailTemplate.Name,
 			},
-			UserRef: notificationv1alpha1.EmailUserReference{
-				Name: user.GetName(),
+			Recipient: notificationv1alpha1.EmailRecipient{
+				EmailAddress: ui.Spec.Email,
 			},
 			Variables: variables,
 			Priority:  notificationv1alpha1.EmailPriorityNormal,

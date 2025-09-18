@@ -820,7 +820,7 @@ func TestUserInvitationController_createInvitationEmail(t *testing.T) {
 	}
 
 	// Act
-	if err := uic.createInvitationEmail(ctx, invitee, ui); err != nil {
+	if err := uic.createInvitationEmail(ctx, ui); err != nil {
 		t.Fatalf("createInvitationEmail error: %v", err)
 	}
 
@@ -834,8 +834,8 @@ func TestUserInvitationController_createInvitationEmail(t *testing.T) {
 	if email.Spec.TemplateRef.Name != template.Name {
 		t.Errorf("unexpected TemplateRef.Name, got %s", email.Spec.TemplateRef.Name)
 	}
-	if email.Spec.UserRef.Name != invitee.Name {
-		t.Errorf("unexpected UserRef.Name, got %s", email.Spec.UserRef.Name)
+	if email.Spec.Recipient.EmailAddress != invitee.Spec.Email {
+		t.Errorf("unexpected Recipient.EmailAddress, got %s", email.Spec.Recipient.EmailAddress)
 	}
 
 	// Check variables map for a few key vars
@@ -854,7 +854,7 @@ func TestUserInvitationController_createInvitationEmail(t *testing.T) {
 	}
 
 	// Idempotency: second call should not error and should not create duplicate Email (still one)
-	if err := uic.createInvitationEmail(ctx, invitee, ui); err != nil {
+	if err := uic.createInvitationEmail(ctx, ui); err != nil {
 		t.Fatalf("idempotent createInvitationEmail error: %v", err)
 	}
 
