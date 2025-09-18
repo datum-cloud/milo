@@ -2,3 +2,5 @@ resources:
 - resourcemanager.miloapis.com_organizations.yaml
 - resourcemanager.miloapis.com_projects.yaml
 - resourcemanager.miloapis.com_organizationmemberships.yaml
+- resourcemanager.miloapis.com_vendors.yaml
+- resourcemanager.miloapis.com_corporationtypeconfigs.yaml
