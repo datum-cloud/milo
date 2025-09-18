@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam-user-invitations-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: iam-user-invitations-reader
+  includedPermissions:
+    - iam.miloapis.com/userinvitations.create
+    - iam.miloapis.com/userinvitations.update
+    - iam.miloapis.com/userinvitations.patch
+    - iam.miloapis.com/userinvitations.delete

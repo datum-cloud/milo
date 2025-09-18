@@ -18,6 +18,9 @@ spec:
     - jsonPath: .spec.email
       name: Email
       type: string
+    - jsonPath: .spec.expirationDate
+      name: Expiration Date
+      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -52,12 +55,56 @@ spec:
               email:
                 description: The email of the user being invited.
                 type: string
+                x-kubernetes-validations:
+                - message: email type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
+              expirationDate:
+                description: |-
+                  ExpirationDate is the date and time when the UserInvitation will expire.
+                  If not specified, the UserInvitation will never expire.
+                format: date-time
+                type: string
+                x-kubernetes-validations:
+                - message: expirationDate type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
               familyName:
                 description: The last name of the user being invited.
                 type: string
+                x-kubernetes-validations:
+                - message: familyName type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
               givenName:
                 description: The first name of the user being invited.
                 type: string
+                x-kubernetes-validations:
+                - message: givenName type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
+              invitedBy:
+                description: InvitedBy is the user who invited the user. A mutation
+                  webhook will default this field to the user who made the request.
+                properties:
+                  name:
+                    description: Name is the name of the User being referenced.
+                    type: string
+                required:
+                - name
+                type: object
+                x-kubernetes-validations:
+                - message: invitedBy type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
+              organizationRef:
+                description: OrganizationRef is a reference to the Organization that
+                  the user is invoted to.
+                properties:
+                  name:
+                    description: Name is the name of resource being referenced
+                    type: string
+                required:
+                - name
+                type: object
+                x-kubernetes-validations:
+                - message: organizationRef type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
               roles:
                 description: The roles that will be assigned to the user when they
                   accept the invitation.
@@ -76,8 +123,27 @@ spec:
                   - name
                   type: object
                 type: array
+                x-kubernetes-validations:
+                - message: roles type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
+              state:
+                description: |-
+                  State is the state of the UserInvitation. In order to accept the invitation, the invited user
+                  must set the state to Accepted.
+                enum:
+                - Pending
+                - Accepted
+                - Declined
+                type: string
+                x-kubernetes-validations:
+                - message: state can only transition from Pending to another state
+                    and is immutable afterwards
+                  rule: type(oldSelf) == null_type || oldSelf == 'Pending' || self
+                    == oldSelf
             required:
             - email
+            - organizationRef
+            - state
             type: object
           status:
             description: UserInvitationStatus defines the observed state of UserInvitation
@@ -88,7 +154,7 @@ spec:
                   message: Waiting for control plane to reconcile
                   reason: Unknown
                   status: Unknown
-                  type: Ready
+                  type: Unknown
                 description: Conditions provide conditions that represent the current
                   status of the UserInvitation.
                 items:
