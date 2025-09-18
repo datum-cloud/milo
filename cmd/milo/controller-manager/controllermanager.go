@@ -472,11 +472,11 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 
 			userInvitationCtrl := iamcontroller.UserInvitationController{
-				Client:                      ctrl.GetClient(),
-				SystemNamespace:             SystemNamespace,
-				GetInvitationRoleName:       GetInvitationRoleName,
-				AcceptInvitationRoleName:    AcceptInvitationRoleName,
-				UserInvitationEmailTemplate: UserInvitationEmailTemplate,
+				Client:                          ctrl.GetClient(),
+				SystemNamespace:                 SystemNamespace,
+				GetInvitationRoleName:           GetInvitationRoleName,
+				AcceptInvitationRoleName:        AcceptInvitationRoleName,
+				UserInvitationEmailTemplateName: UserInvitationEmailTemplate,
 			}
 			if err := userInvitationCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user invitation controller")

@@ -628,10 +628,9 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	c := builder.Build()
 
 	uic := &UserInvitationController{
-		Client:                      c,
-		SystemNamespace:             "milo-system",
-		uiRelatedRoles:              []iamv1alpha1.RoleReference{invitationRoleRef},
-		userInvitationEmailTemplate: notificationv1alpha1.EmailTemplate{ObjectMeta: metav1.ObjectMeta{Name: "template"}},
+		Client:          c,
+		SystemNamespace: "milo-system",
+		uiRelatedRoles:  []iamv1alpha1.RoleReference{invitationRoleRef},
 	}
 
 	// First reconcile (Pending)
@@ -725,7 +724,7 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 	})
 	c := builder.Build()
 
-	uic := &UserInvitationController{Client: c, SystemNamespace: "milo-system", uiRelatedRoles: []iamv1alpha1.RoleReference{invitationRoleRef}, userInvitationEmailTemplate: notificationv1alpha1.EmailTemplate{ObjectMeta: metav1.ObjectMeta{Name: "template"}}}
+	uic := &UserInvitationController{Client: c, SystemNamespace: "milo-system", uiRelatedRoles: []iamv1alpha1.RoleReference{invitationRoleRef}}
 
 	// First reconcile: no User yet
 	if _, err := uic.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}}); err != nil {
@@ -812,11 +811,11 @@ func TestUserInvitationController_createInvitationEmail(t *testing.T) {
 
 	// Build fake client with status subresource for Email so that create works.
 	c := fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(invitee.DeepCopy(), inviter.DeepCopy(), org.DeepCopy()).Build()
+		WithObjects(invitee.DeepCopy(), inviter.DeepCopy(), org.DeepCopy(), template.DeepCopy()).Build()
 
 	uic := &UserInvitationController{
-		Client:                      c,
-		userInvitationEmailTemplate: *template,
+		Client:                          c,
+		UserInvitationEmailTemplateName: template.Name,
 	}
 
 	// Act

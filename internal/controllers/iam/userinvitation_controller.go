@@ -30,14 +30,13 @@ const (
 )
 
 type UserInvitationController struct {
-	Client                      client.Client
-	finalizer                   finalizer.Finalizers
-	SystemNamespace             string
-	GetInvitationRoleName       string
-	AcceptInvitationRoleName    string
-	UserInvitationEmailTemplate string
-	uiRelatedRoles              []iamv1alpha1.RoleReference
-	userInvitationEmailTemplate notificationv1alpha1.EmailTemplate
+	Client                          client.Client
+	finalizer                       finalizer.Finalizers
+	SystemNamespace                 string
+	GetInvitationRoleName           string
+	AcceptInvitationRoleName        string
+	UserInvitationEmailTemplateName string
+	uiRelatedRoles                  []iamv1alpha1.RoleReference
 }
 
 type userInvitationFinalizer struct {
@@ -300,11 +299,6 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 			return []string{strings.ToLower(ui.Spec.Email)}
 		}); err != nil {
 		return fmt.Errorf("failed to set field index on UserInvitation by .spec.email: %w", err)
-	}
-
-	// Get the UserInvitationEmailTemplate
-	if err := r.Client.Get(context.Background(), client.ObjectKey{Name: r.UserInvitationEmailTemplate}, &r.userInvitationEmailTemplate); err != nil {
-		log.Error(err, "Failed to get UserInvitationEmailTemplate")
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
@@ -643,7 +637,7 @@ func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui
 		},
 		Spec: notificationv1alpha1.EmailSpec{
 			TemplateRef: notificationv1alpha1.TemplateReference{
-				Name: r.userInvitationEmailTemplate.Name,
+				Name: r.UserInvitationEmailTemplateName,
 			},
 			Recipient: notificationv1alpha1.EmailRecipient{
 				EmailAddress: ui.Spec.Email,
