@@ -88,6 +88,8 @@ const (
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizationmemberships,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=notification.miloapis.com,resources=emails,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=notification.miloapis.com,resources=emailtemplates,verbs=get;list;watch
 
 func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx).WithName("userinvitation-reconciler")
@@ -259,6 +261,9 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
+	log := logf.FromContext(context.Background()).WithName("userinvitation-setup-with-manager")
+	log.Info("Setting up UserInvitationController with Manager")
+
 	r.uiRelatedRoles = append(r.uiRelatedRoles, iamv1alpha1.RoleReference{
 		Name:      r.GetInvitationRoleName,
 		Namespace: r.SystemNamespace,
@@ -272,6 +277,7 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 		client:         r.Client,
 		uiRelatedRoles: r.uiRelatedRoles,
 	}); err != nil {
+		log.Error(err, "Failed to register user invitation finalizer")
 		return fmt.Errorf("failed to register user invitation finalizer: %w", err)
 	}
 
@@ -282,6 +288,7 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 			user := obj.(*iamv1alpha1.User)
 			return []string{strings.ToLower(user.Spec.Email)}
 		}); err != nil {
+		log.Error(err, "Failed to set field index on User by .spec.email")
 		return fmt.Errorf("failed to set field index on User by .spec.email: %w", err)
 	}
 
@@ -297,7 +304,7 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Get the UserInvitationEmailTemplate
 	if err := r.Client.Get(context.Background(), client.ObjectKey{Name: r.UserInvitationEmailTemplate}, &r.userInvitationEmailTemplate); err != nil {
-		return fmt.Errorf("failed to get UserInvitationEmailTemplate: %w", err)
+		log.Error(err, "Failed to get UserInvitationEmailTemplate")
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
