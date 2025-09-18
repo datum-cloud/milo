@@ -3,6 +3,8 @@ kind: UserInvitation
 metadata:
   name: userinvitateion-sample-3
 spec:
+  organizationRef:
+    name: personal-org-e4451eee
   email: invitede.user@example.com
   givenName: Inveited
   familyName: Usqer
