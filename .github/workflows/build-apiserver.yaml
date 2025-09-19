@@ -12,7 +12,7 @@ jobs:
       contents: read
       packages: write
       attestations: write
-    uses: datum-cloud/actions/.github/workflows/publish-docker.yaml@v1.7.0
+    uses: datum-cloud/actions/.github/workflows/publish-docker.yaml@v1.7.1
     with:
       image-name: milo
     secrets: inherit
@@ -22,7 +22,7 @@ jobs:
       id-token: write
       contents: read
       packages: write
-    uses: datum-cloud/actions/.github/workflows/publish-kustomize-bundle.yaml@v1.7.0
+    uses: datum-cloud/actions/.github/workflows/publish-kustomize-bundle.yaml@v1.7.1
     with:
       bundle-name: ghcr.io/datum-cloud/milo-kustomize
       bundle-path: config
