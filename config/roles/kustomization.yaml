@@ -25,3 +25,6 @@ resources:
   - notification-contact-reader.yaml
   - notification-contact-editor.yaml
   - notification-contact-admin.yaml
+  - notification-contact-group-reader.yaml
+  - notification-contact-group-editor.yaml
+  - notification-contact-group-admin.yaml
