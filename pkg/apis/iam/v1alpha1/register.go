@@ -41,6 +41,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&UserPreferenceList{},
 		&UserDeactivation{},
 		&UserDeactivationList{},
+		&UserInvitation{},
+		&UserInvitationList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
