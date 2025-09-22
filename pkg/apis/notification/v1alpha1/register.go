@@ -29,6 +29,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ContactGroupList{},
 		&ContactGroupMembership{},
 		&ContactGroupMembershipList{},
+		&EmailBroadcast{},
+		&EmailBroadcastList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
