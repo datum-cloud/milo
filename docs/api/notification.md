@@ -96,8 +96,6 @@ It references a template, recipients, and any variables required to render the f
         <td>object</td>
         <td>
           Recipient contain the recipient of the email.<br/>
-          <br/>
-            <i>Validations</i>:<li>has(self.emailAddress) != has(self.userRef): exactly one of emailAddress or userRef must be provided</li>
         </td>
         <td>true</td>
       </tr><tr>

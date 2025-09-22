@@ -39,6 +39,7 @@ rules:
   - iam.miloapis.com
   resources:
   - groups
+  - policybindings
   verbs:
   - create
   - delete
@@ -51,6 +52,7 @@ rules:
   - iam.miloapis.com
   resources:
   - groups/finalizers
+  - userinvitations/status
   - users/status
   verbs:
   - update
@@ -65,21 +67,20 @@ rules:
 - apiGroups:
   - iam.miloapis.com
   resources:
-  - policybindings
-  verbs:
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - iam.miloapis.com
-  resources:
   - userdeactivations
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - userinvitations
+  - users
+  verbs:
+  - get
+  - list
+  - update
   - watch
 - apiGroups:
   - iam.miloapis.com
@@ -89,15 +90,6 @@ rules:
   - get
   - list
   - patch
-  - update
-  - watch
-- apiGroups:
-  - iam.miloapis.com
-  resources:
-  - users
-  verbs:
-  - get
-  - list
   - update
   - watch
 - apiGroups:
@@ -111,6 +103,23 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - notification.miloapis.com
+  resources:
+  - emails
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - notification.miloapis.com
+  resources:
+  - emailtemplates
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - resourcemanager.miloapis.com
