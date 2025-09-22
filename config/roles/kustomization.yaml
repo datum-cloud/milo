@@ -28,3 +28,6 @@ resources:
   - notification-contact-group-reader.yaml
   - notification-contact-group-editor.yaml
   - notification-contact-group-admin.yaml
+  - notification-contact-group-membership-reader.yaml
+  - notification-contact-group-membership-editor.yaml
+  - notification-contact-group-membership-admin.yaml
