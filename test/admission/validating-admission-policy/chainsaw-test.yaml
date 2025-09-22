@@ -63,16 +63,3 @@ spec:
             value: 'true'
     - assert:
         file: assertions/assert-project-b-owner.yaml
-
-  - name: cleanup
-    finally:
-    - delete:
-        file: resources/project-good-a.yaml
-    - delete:
-        file: resources/project-good-b.yaml
-    - delete:
-        file: resources/org-a.yaml
-    - delete:
-        file: resources/org-b.yaml
-    - delete:
-        file: resources/policy.yaml

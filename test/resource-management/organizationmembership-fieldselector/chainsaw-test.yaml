@@ -21,17 +21,13 @@ spec:
             path: '{.status.phase}'
             value: Active
     - apply:
-        file: resources/user-1001.yaml
+        file: resources/membership-user-admin.yaml
     - apply:
-        file: resources/user-1002.yaml
-    - apply:
-        file: resources/membership-1001.yaml
-    - apply:
-        file: resources/membership-1002.yaml
+        file: resources/membership-user-readonly.yaml
     - wait:
         apiVersion: resourcemanager.miloapis.com/v1alpha1
         kind: OrganizationMembership
-        name: m-1001
+        name: m-admin
         namespace: organization-fieldsel-org
         timeout: 60s
         for:
@@ -48,7 +44,7 @@ spec:
           set -euo pipefail
           # spec.userRef.name filter matches exactly one
           test "$(kubectl get organizationmemberships -n organization-fieldsel-org \
-            --field-selector spec.userRef.name=1001 -o json | jq '.items | length')" -eq 1
+            --field-selector spec.userRef.name=admin -o json | jq '.items | length')" -eq 1
           # non-matching user yields zero
           test "$(kubectl get organizationmemberships -n organization-fieldsel-org \
             --field-selector spec.userRef.name=does-not-exist -o json | jq '.items | length')" -eq 0
@@ -67,19 +63,7 @@ spec:
           test "$(kubectl get organizationmemberships -n organization-fieldsel-org -o json | jq '.items | length')" -eq 2
           # Field-select by user narrows the list
           test "$(kubectl get organizationmemberships -n organization-fieldsel-org \
-            --field-selector spec.userRef.name=1002 -o json | jq '.items | length')" -eq 1
+            --field-selector spec.userRef.name=test-user -o json | jq '.items | length')" -eq 1
 
-  - name: cleanup
-    finally:
-    - delete:
-        file: resources/membership-1001.yaml
-    - delete:
-        file: resources/membership-1002.yaml
-    - delete:
-        file: resources/user-1001.yaml
-    - delete:
-        file: resources/user-1002.yaml
-    - delete:
-        file: resources/org.yaml
 
 
