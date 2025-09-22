@@ -41,7 +41,7 @@ spec:
     - script:
         timeout: 60s
         content: |
-          set -euo pipefail
+          set -eu
           # spec.userRef.name filter matches exactly one
           test "$(kubectl get organizationmemberships -n organization-fieldsel-org \
             --field-selector spec.userRef.name=admin -o json | jq '.items | length')" -eq 1
@@ -58,7 +58,7 @@ spec:
     - script:
         timeout: 60s
         content: |
-          set -euo pipefail
+          set -eu
           # Plain list returns both memberships
           test "$(kubectl get organizationmemberships -n organization-fieldsel-org -o json | jq '.items | length')" -eq 2
           # Field-select by user narrows the list
