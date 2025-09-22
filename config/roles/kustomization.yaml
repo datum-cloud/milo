@@ -34,3 +34,6 @@ resources:
   - notification-contact-group-membership-reader.yaml
   - notification-contact-group-membership-editor.yaml
   - notification-contact-group-membership-admin.yaml
+  - iam-user-invitations-reader.yaml
+  - iam-user-invitations-editor.yaml
+  - iam-user-invitations-admin.yaml

@@ -102,6 +102,15 @@ var (
 
 	// ProjectOwnerRoleName is the name of the role that will be used to grant project owner permissions.
 	ProjectOwnerRoleName string
+
+	// GetInvitationRoleName is the name of the role that will be used to grant get invitation permissions.
+	GetInvitationRoleName string
+
+	// AcceptInvitationRoleName is the name of the role that will be used to grant accept invitation permissions.
+	AcceptInvitationRoleName string
+
+	// UserInvitationEmailTemplate is the template for the user invitation email.
+	UserInvitationEmailTemplate string
 )
 
 func init() {
@@ -213,6 +222,9 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
 	fs.StringVar(&OrganizationOwnerRoleName, "organization-owner-role-name", "resourcemanager.miloapis.com-organizationowner", "The name of the role that will be used to grant organization owner permissions.")
 	fs.StringVar(&ProjectOwnerRoleName, "project-owner-role-name", "resourcemanager.miloapis.com-projectowner", "The name of the role that will be used to grant project owner permissions.")
+	fs.StringVar(&GetInvitationRoleName, "get-invitation-role-name", "iam.miloapis.com-getinvitation", "The name of the role that will be used to grant get invitation permissions.")
+	fs.StringVar(&AcceptInvitationRoleName, "accept-invitation-role-name", "iam.miloapis.com-acceptinvitation", "The name of the role that will be used to grant accept invitation permissions.")
+	fs.StringVar(&UserInvitationEmailTemplate, "user-invitation-email-template", "emailtemplates.notification.miloapis.com-userinvitationemailtemplate", "The name of the template that will be used to send the user invitation email.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -413,6 +425,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "unable to setup email webhook", "error", err)
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupUserInvitationWebhooksWithManager(ctrl, SystemNamespace); err != nil {
+				logger.Error(err, "Error setting up user invitation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
@@ -452,6 +468,18 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			userInvitationCtrl := iamcontroller.UserInvitationController{
+				Client:                          ctrl.GetClient(),
+				SystemNamespace:                 SystemNamespace,
+				GetInvitationRoleName:           GetInvitationRoleName,
+				AcceptInvitationRoleName:        AcceptInvitationRoleName,
+				UserInvitationEmailTemplateName: UserInvitationEmailTemplate,
+			}
+			if err := userInvitationCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user invitation controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
