@@ -1,4 +1,5 @@
 resources:
 - notification.miloapis.com_emails.yaml
 - notification.miloapis.com_emailtemplates.yaml
+- notification.miloapis.com_contacts.yaml
 

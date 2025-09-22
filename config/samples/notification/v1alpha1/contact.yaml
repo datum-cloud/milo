@@ -1,0 +1,15 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Contact
+metadata:
+  name: alice-contact-sample
+  namespace: default
+spec:
+  # Subject: (mutually exclusive with userRef / organizationRef / projectRef)
+  subject:
+    organizationRef:
+      name: example
+  # Required personal details
+  familyName: Example
+  givenName: Alice
+  # Preferred e-mail for notifications (can match subject.email)
+  email: alice@example.com

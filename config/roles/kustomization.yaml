@@ -22,3 +22,6 @@ resources:
   - notification-email-reader.yaml
   - notification-email-creator.yaml
   - notification-email-admin.yaml
+  - notification-contact-reader.yaml
+  - notification-contact-editor.yaml
+  - notification-contact-admin.yaml

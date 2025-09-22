@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-contact-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: notification-contact-reader
+  includedPermissions:
+    - notification.miloapis.com/contacts.create
+    - notification.miloapis.com/contacts.update
+    - notification.miloapis.com/contacts.patch
+    - notification.miloapis.com/contacts.delete
