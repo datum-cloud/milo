@@ -6,19 +6,34 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Create conditions
 const (
 	// ContactReadyCondition is the condition Type that tracks contact creation status.
 	ContactReadyCondition = "Ready"
-	// ContactDeletedCondition is the condition Type that tracks contact deletion status.
-	ContactDeletedCondition = "Delete"
 	// ContactCreatePendingReason is used when contact creation is in progress.
 	ContactCreatePendingReason = "CreatePending"
 	// ContactCreatedReason is used when contact creation succeeds.
 	ContactCreatedReason = "CreateSuccessful"
+)
+
+// Delete conditions
+const (
+	// ContactDeletedCondition is the condition Type that tracks contact deletion status.
+	ContactDeletedCondition = "Delete"
 	// ContactDeletePendingReason is used when contact deletion is in progress.
 	ContactDeletePendingReason = "DeletePending"
 	// ContactDeletedReason is used when contact deletion succeeds.
 	ContactDeletedReason = "DeleteSuccessful"
+)
+
+// Update conditions
+const (
+	// ContactUpdatedCondition is the condition Type that tracks contact update status.
+	ContactUpdatedCondition = "Update"
+	// ContactUpdatePendingReason is used when contact update is in progress.
+	ContactUpdatePendingReason = "UpdatePending"
+	// ContactUpdatedReason is used when contact update succeeds.
+	ContactUpdatedReason = "UpdateSuccessful"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
