@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam-user-invitations-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - iam.miloapis.com/userinvitations.get
+    - iam.miloapis.com/userinvitations.list
+    - iam.miloapis.com/userinvitations.watch
