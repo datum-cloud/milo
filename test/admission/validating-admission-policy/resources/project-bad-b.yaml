@@ -2,3 +2,5 @@ apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: Project
 metadata:
   name: bad-vap-proj-b
+  labels:
+    test.miloapis.com/scenario: validating-admission-policy

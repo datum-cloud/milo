@@ -2,3 +2,5 @@ apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: Project
 metadata:
   name: vap-ok-good-a
+  labels:
+    test.miloapis.com/scenario: validating-admission-policy

@@ -21,5 +21,9 @@ metadata:
   name: project-name-requires-ok-prefix
 spec:
   policyName: project-name-requires-ok-prefix
+  matchResources:
+    objectSelector:
+      matchLabels:
+        test.miloapis.com/scenario: validating-admission-policy
   validationActions:
   - Deny
