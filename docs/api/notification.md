@@ -14,6 +14,8 @@ Resource Types:
 
 - [Contact](#contact)
 
+- [EmailBroadcast](#emailbroadcast)
+
 - [Email](#email)
 
 - [EmailTemplate](#emailtemplate)
@@ -798,6 +800,296 @@ used to track the contact creation status (e.g. provider webhooks).<br/>
 
 ### Contact.status.conditions[index]
 <sup><sup>[↩ Parent](#contactstatus)</sup></sup>
+
+
+
+Condition contains details for one aspect of the current state of this API Resource.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>lastTransitionTime</b></td>
+        <td>string</td>
+        <td>
+          lastTransitionTime is the last time the condition transitioned from one status to another.
+This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>message</b></td>
+        <td>string</td>
+        <td>
+          message is a human readable message indicating details about the transition.
+This may be an empty string.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>reason</b></td>
+        <td>string</td>
+        <td>
+          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+Producers of specific condition types may define expected values and meanings for this field,
+and whether the values are considered a guaranteed API.
+The value should be a CamelCase string.
+This field may not be empty.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>status</b></td>
+        <td>enum</td>
+        <td>
+          status of the condition, one of True, False, Unknown.<br/>
+          <br/>
+            <i>Enum</i>: True, False, Unknown<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>type</b></td>
+        <td>string</td>
+        <td>
+          type of condition in CamelCase or in foo.example.com/CamelCase.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>observedGeneration</b></td>
+        <td>integer</td>
+        <td>
+          observedGeneration represents the .metadata.generation that the condition was set based upon.
+For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+with respect to the current state of the instance.<br/>
+          <br/>
+            <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+## EmailBroadcast
+<sup><sup>[↩ Parent](#notificationmiloapiscomv1alpha1 )</sup></sup>
+
+
+
+
+
+
+EmailBroadcast is the Schema for the emailbroadcasts API.
+It represents a broadcast of an email to a set of contacts (ContactGroup).
+If the broadcast needs to be updated, delete and recreate the resource.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+      <td><b>apiVersion</b></td>
+      <td>string</td>
+      <td>notification.miloapis.com/v1alpha1</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b>kind</b></td>
+      <td>string</td>
+      <td>EmailBroadcast</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#objectmeta-v1-meta">metadata</a></b></td>
+      <td>object</td>
+      <td>Refer to the Kubernetes API documentation for the fields of the `metadata` field.</td>
+      <td>true</td>
+      </tr><tr>
+        <td><b><a href="#emailbroadcastspec">spec</a></b></td>
+        <td>object</td>
+        <td>
+          EmailBroadcastSpec defines the desired state of EmailBroadcast.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#emailbroadcaststatus">status</a></b></td>
+        <td>object</td>
+        <td>
+          <br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### EmailBroadcast.spec
+<sup><sup>[↩ Parent](#emailbroadcast)</sup></sup>
+
+
+
+EmailBroadcastSpec defines the desired state of EmailBroadcast.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#emailbroadcastspeccontactgroupref">contactGroupRef</a></b></td>
+        <td>object</td>
+        <td>
+          ContactGroupRef is a reference to the ContactGroup that the email broadcast is for.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b><a href="#emailbroadcastspectemplateref">templateRef</a></b></td>
+        <td>object</td>
+        <td>
+          TemplateRef references the EmailTemplate to render the broadcast message.
+When using the Resend provider you can include the following placeholders
+in HTMLBody or TextBody; they will be substituted by the provider at send time:
+  {{{FIRST_NAME}}} {{{LAST_NAME}}} {{{EMAIL}}}<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>displayName</b></td>
+        <td>string</td>
+        <td>
+          DisplayName is the display name of the email broadcast.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>scheduledAt</b></td>
+        <td>string</td>
+        <td>
+          ScheduledAt optionally specifies the time at which the broadcast should be executed.
+If omitted, the message is sent as soon as the controller reconciles the resource.
+Example: "2024-08-05T11:52:01.858Z"<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### EmailBroadcast.spec.contactGroupRef
+<sup><sup>[↩ Parent](#emailbroadcastspec)</sup></sup>
+
+
+
+ContactGroupRef is a reference to the ContactGroup that the email broadcast is for.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the ContactGroup being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>namespace</b></td>
+        <td>string</td>
+        <td>
+          Namespace is the namespace of the ContactGroup being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### EmailBroadcast.spec.templateRef
+<sup><sup>[↩ Parent](#emailbroadcastspec)</sup></sup>
+
+
+
+TemplateRef references the EmailTemplate to render the broadcast message.
+When using the Resend provider you can include the following placeholders
+in HTMLBody or TextBody; they will be substituted by the provider at send time:
+  {{{FIRST_NAME}}} {{{LAST_NAME}}} {{{EMAIL}}}
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the EmailTemplate being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### EmailBroadcast.status
+<sup><sup>[↩ Parent](#emailbroadcast)</sup></sup>
+
+
+
+
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#emailbroadcaststatusconditionsindex">conditions</a></b></td>
+        <td>[]object</td>
+        <td>
+          Conditions represent the latest available observations of an object's current state.
+Standard condition is "Ready" which tracks email broadcast status and sync to the email broadcast provider.<br/>
+          <br/>
+            <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for email broadcast to be created reason:CreatePending status:Unknown type:Ready]]<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>providerID</b></td>
+        <td>string</td>
+        <td>
+          ProviderID is the identifier returned by the underlying email broadcast provider
+(e.g. Resend) when the email broadcast is created. It is usually
+used to track the email broadcast creation status (e.g. provider webhooks).<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### EmailBroadcast.status.conditions[index]
+<sup><sup>[↩ Parent](#emailbroadcaststatus)</sup></sup>
 
 
 
