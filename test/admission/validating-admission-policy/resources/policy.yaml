@@ -1,0 +1,29 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: project-name-requires-ok-prefix
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["resourcemanager.miloapis.com"]
+      apiVersions: ["v1alpha1"]
+      operations: ["CREATE","UPDATE"]
+      resources: ["projects"]
+  validations:
+  - expression: object.metadata.name.startsWith("vap-ok-")
+    message: "Project name must start with 'vap-ok-'."
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: project-name-requires-ok-prefix
+spec:
+  policyName: project-name-requires-ok-prefix
+  matchResources:
+    objectSelector:
+      matchLabels:
+        test.miloapis.com/scenario: validating-admission-policy
+  validationActions:
+  - Deny
