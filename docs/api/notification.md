@@ -642,6 +642,17 @@ ContactGroupSpec defines the desired state of ContactGroup.
           DisplayName is the display name of the contact group.<br/>
         </td>
         <td>true</td>
+      </tr><tr>
+        <td><b>visibility</b></td>
+        <td>enum</td>
+        <td>
+          Visibility determines whether members are allowed opt-in or opt-out of the contactgroup.
+  • "public"  – members may leave via ContactGroupMembershipRemoval.
+  • "private" – membership is enforced; opt-out requests are rejected.<br/>
+          <br/>
+            <i>Enum</i>: public, private<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 

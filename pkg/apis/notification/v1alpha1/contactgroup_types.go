@@ -34,6 +34,14 @@ const (
 	ContactGroupUpdatedReason = "UpdateSuccessful"
 )
 
+// ContactGroupVisibility declares whether a group is open for opt-out.
+type ContactGroupVisibility string
+
+const (
+	ContactGroupVisibilityPublic  ContactGroupVisibility = "public"
+	ContactGroupVisibilityPrivate ContactGroupVisibility = "private"
+)
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
@@ -58,6 +66,13 @@ type ContactGroupSpec struct {
 	// DisplayName is the display name of the contact group.
 	// +kubebuilder:validation:Required
 	DisplayName string `json:"displayName,omitempty"`
+
+	// Visibility determines whether members are allowed opt-in or opt-out of the contactgroup.
+	//   • "public"  – members may leave via ContactGroupMembershipRemoval.
+	//   • "private" – membership is enforced; opt-out requests are rejected.
+	// +kubebuilder:validation:Enum=public;private
+	// +kubebuilder:validation:Required
+	Visibility ContactGroupVisibility `json:"visibility,omitempty"`
 }
 
 // +kubebuilder:object:root=true

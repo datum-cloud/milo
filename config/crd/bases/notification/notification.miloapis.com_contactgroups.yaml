@@ -54,8 +54,18 @@ spec:
               displayName:
                 description: DisplayName is the display name of the contact group.
                 type: string
+              visibility:
+                description: |-
+                  Visibility determines whether members are allowed opt-in or opt-out of the contactgroup.
+                    • "public"  – members may leave via ContactGroupMembershipRemoval.
+                    • "private" – membership is enforced; opt-out requests are rejected.
+                enum:
+                - public
+                - private
+                type: string
             required:
             - displayName
+            - visibility
             type: object
           status:
             properties:
