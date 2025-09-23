@@ -46,6 +46,7 @@ type EmailBroadcast struct {
 }
 
 // EmailBroadcastSpec defines the desired state of EmailBroadcast.
+// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec is immutable"
 // +kubebuilder:validation:Type=object
 type EmailBroadcastSpec struct {
 	// DisplayName is the display name of the email broadcast.

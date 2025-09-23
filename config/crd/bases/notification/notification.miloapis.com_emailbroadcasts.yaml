@@ -100,6 +100,9 @@ spec:
             - contactGroupRef
             - templateRef
             type: object
+            x-kubernetes-validations:
+            - message: spec is immutable
+              rule: self == oldSelf
           status:
             properties:
               conditions:

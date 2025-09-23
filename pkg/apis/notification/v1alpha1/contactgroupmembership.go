@@ -54,6 +54,7 @@ type ContactGroupMembership struct {
 }
 
 // ContactGroupMembershipSpec defines the desired state of ContactGroupMembership.
+// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec is immutable"
 // +kubebuilder:validation:Type=object
 type ContactGroupMembershipSpec struct {
 	// ContactRef is a reference to the Contact that is a member of the ContactGroup.

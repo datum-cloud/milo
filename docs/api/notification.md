@@ -332,6 +332,8 @@ It represents a membership of a Contact in a ContactGroup.
         <td>object</td>
         <td>
           ContactGroupMembershipSpec defines the desired state of ContactGroupMembership.<br/>
+          <br/>
+            <i>Validations</i>:<li>self == oldSelf: spec is immutable</li>
         </td>
         <td>false</td>
       </tr><tr>
@@ -1184,6 +1186,8 @@ If the broadcast needs to be updated, delete and recreate the resource.
         <td>object</td>
         <td>
           EmailBroadcastSpec defines the desired state of EmailBroadcast.<br/>
+          <br/>
+            <i>Validations</i>:<li>self == oldSelf: spec is immutable</li>
         </td>
         <td>false</td>
       </tr><tr>
