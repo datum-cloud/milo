@@ -37,3 +37,6 @@ resources:
   - iam-user-invitations-reader.yaml
   - iam-user-invitations-editor.yaml
   - iam-user-invitations-admin.yaml
+  - notification-contact-group-membership-removal-reader.yaml
+  - notification-contact-group-membership-removal-editor.yaml
+  - notification-contact-group-membership-removal-admin.yaml
