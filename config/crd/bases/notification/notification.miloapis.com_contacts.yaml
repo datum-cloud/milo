@@ -15,14 +15,11 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.subject.userRef.name
-      name: UserRef
+    - jsonPath: .spec.subjectRef.name
+      name: SubjectRef
       type: string
-    - jsonPath: .spec.subject.organizationRef.name
-      name: OrganizationRef
-      type: string
-    - jsonPath: .spec.subject.projectRef.name
-      name: ProjectRef
+    - jsonPath: .spec.subjectRef.kind
+      name: SubjectRef
       type: string
     - jsonPath: .spec.subject.email
       name: EmailRef
@@ -69,51 +66,36 @@ spec:
               subject:
                 description: Subject is a reference to the subject of the contact.
                 properties:
-                  organizationRef:
+                  apiGroup:
+                    description: APIGroup is the group for the resource being referenced.
+                    enum:
+                    - iam.miloapis.com
+                    - resourcemanager.miloapis.com
+                    type: string
+                  kind:
+                    description: Kind is the type of resource being referenced.
+                    enum:
+                    - User
+                    - Organization
+                    - Project
+                    type: string
+                  name:
+                    description: Name is the name of resource being referenced.
+                    type: string
+                  namespace:
                     description: |-
-                      OrganizationRef is a reference to the Organization that the contact is for.
-                      It is mutually exclusive with UserRef and ProjectRef.
-                    properties:
-                      name:
-                        description: Name is the name of resource being referenced
-                        type: string
-                    required:
-                    - name
-                    type: object
-                  projectRef:
-                    description: |-
-                      ProjectRef is a reference to the Project that the contact is for.
-                      It is mutually exclusive with UserRef and OrganizationRef.
-                    properties:
-                      name:
-                        description: Name is the name of the Project that the contact
-                          is for.
-                        type: string
-                      organizationRef:
-                        description: OrganizationRef is a reference to the Organization
-                          that the Project is in.
-                        properties:
-                          name:
-                            description: Name is the name of resource being referenced
-                            type: string
-                        required:
-                        - name
-                        type: object
-                    required:
-                    - name
-                    - organizationRef
-                    type: object
-                  userRef:
-                    description: |-
-                      UserRef is a reference to the User that the contact is for.
-                      It is mutually exclusive with OrganizationRef and ProjectRef.
-                    properties:
-                      name:
-                        description: Name is the name of the User being referenced.
-                        type: string
-                    required:
-                    - name
-                    type: object
+                      Namespace is the namespace of resource being referenced.
+                      Required for namespace-scoped resources. Omitted for cluster-scoped resources.
+                    type: string
+                  uid:
+                    description: UID is the unique identifier of the resource being
+                      referenced.
+                    type: string
+                required:
+                - apiGroup
+                - kind
+                - name
+                - uid
                 type: object
                 x-kubernetes-validations:
                 - message: exactly one of userRef, organizationRef projectRef must

@@ -894,147 +894,45 @@ Subject is a reference to the subject of the contact.
         </tr>
     </thead>
     <tbody><tr>
-        <td><b><a href="#contactspecsubjectorganizationref">organizationRef</a></b></td>
-        <td>object</td>
+        <td><b>apiGroup</b></td>
+        <td>enum</td>
         <td>
-          OrganizationRef is a reference to the Organization that the contact is for.
-It is mutually exclusive with UserRef and ProjectRef.<br/>
-        </td>
-        <td>false</td>
-      </tr><tr>
-        <td><b><a href="#contactspecsubjectprojectref">projectRef</a></b></td>
-        <td>object</td>
-        <td>
-          ProjectRef is a reference to the Project that the contact is for.
-It is mutually exclusive with UserRef and OrganizationRef.<br/>
-        </td>
-        <td>false</td>
-      </tr><tr>
-        <td><b><a href="#contactspecsubjectuserref">userRef</a></b></td>
-        <td>object</td>
-        <td>
-          UserRef is a reference to the User that the contact is for.
-It is mutually exclusive with OrganizationRef and ProjectRef.<br/>
-        </td>
-        <td>false</td>
-      </tr></tbody>
-</table>
-
-
-### Contact.spec.subject.organizationRef
-<sup><sup>[↩ Parent](#contactspecsubject)</sup></sup>
-
-
-
-OrganizationRef is a reference to the Organization that the contact is for.
-It is mutually exclusive with UserRef and ProjectRef.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>name</b></td>
-        <td>string</td>
-        <td>
-          Name is the name of resource being referenced<br/>
-        </td>
-        <td>true</td>
-      </tr></tbody>
-</table>
-
-
-### Contact.spec.subject.projectRef
-<sup><sup>[↩ Parent](#contactspecsubject)</sup></sup>
-
-
-
-ProjectRef is a reference to the Project that the contact is for.
-It is mutually exclusive with UserRef and OrganizationRef.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>name</b></td>
-        <td>string</td>
-        <td>
-          Name is the name of the Project that the contact is for.<br/>
+          APIGroup is the group for the resource being referenced.<br/>
+          <br/>
+            <i>Enum</i>: iam.miloapis.com, resourcemanager.miloapis.com<br/>
         </td>
         <td>true</td>
       </tr><tr>
-        <td><b><a href="#contactspecsubjectprojectreforganizationref">organizationRef</a></b></td>
-        <td>object</td>
+        <td><b>kind</b></td>
+        <td>enum</td>
         <td>
-          OrganizationRef is a reference to the Organization that the Project is in.<br/>
+          Kind is the type of resource being referenced.<br/>
+          <br/>
+            <i>Enum</i>: User, Organization, Project<br/>
         </td>
         <td>true</td>
-      </tr></tbody>
-</table>
-
-
-### Contact.spec.subject.projectRef.organizationRef
-<sup><sup>[↩ Parent](#contactspecsubjectprojectref)</sup></sup>
-
-
-
-OrganizationRef is a reference to the Organization that the Project is in.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
+      </tr><tr>
         <td><b>name</b></td>
         <td>string</td>
         <td>
-          Name is the name of resource being referenced<br/>
+          Name is the name of resource being referenced.<br/>
         </td>
         <td>true</td>
-      </tr></tbody>
-</table>
-
-
-### Contact.spec.subject.userRef
-<sup><sup>[↩ Parent](#contactspecsubject)</sup></sup>
-
-
-
-UserRef is a reference to the User that the contact is for.
-It is mutually exclusive with OrganizationRef and ProjectRef.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>name</b></td>
+      </tr><tr>
+        <td><b>uid</b></td>
         <td>string</td>
         <td>
-          Name is the name of the User being referenced.<br/>
+          UID is the unique identifier of the resource being referenced.<br/>
         </td>
         <td>true</td>
+      </tr><tr>
+        <td><b>namespace</b></td>
+        <td>string</td>
+        <td>
+          Namespace is the namespace of resource being referenced.
+Required for namespace-scoped resources. Omitted for cluster-scoped resources.<br/>
+        </td>
+        <td>false</td>
       </tr></tbody>
 </table>
 

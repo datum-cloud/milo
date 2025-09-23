@@ -1,8 +1,6 @@
 package v1alpha1
 
 import (
-	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
-	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -42,9 +40,8 @@ const (
 
 // Contact is the Schema for the contacts API.
 // It represents a contact for a user.
-// +kubebuilder:printcolumn:name="UserRef",type="string",JSONPath=".spec.subject.userRef.name"
-// +kubebuilder:printcolumn:name="OrganizationRef",type="string",JSONPath=".spec.subject.organizationRef.name"
-// +kubebuilder:printcolumn:name="ProjectRef",type="string",JSONPath=".spec.subject.projectRef.name"
+// +kubebuilder:printcolumn:name="SubjectRef",type="string",JSONPath=".spec.subjectRef.name"
+// +kubebuilder:printcolumn:name="SubjectRef",type="string",JSONPath=".spec.subjectRef.kind"
 // +kubebuilder:printcolumn:name="EmailRef",type="string",JSONPath=".spec.subject.email"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
@@ -62,7 +59,7 @@ type Contact struct {
 type ContactSpec struct {
 	// Subject is a reference to the subject of the contact.
 	// +kubebuilder:validation:Optional
-	Subject *SubjectReference `json:"subject,omitempty"`
+	SubjectRef *SubjectReference `json:"subject,omitempty"`
 
 	// +kubebuilder:validation:Required
 	FamilyName string `json:"familyName,omitempty"`
@@ -78,32 +75,24 @@ type ContactSpec struct {
 // +kubebuilder:validation:XValidation:rule="has(self.userRef) != has(self.organizationRef) != has(self.projectRef)",message="exactly one of userRef, organizationRef projectRef must be provided"
 // +kubebuilder:validation:Type=object
 type SubjectReference struct {
-	// UserRef is a reference to the User that the contact is for.
-	// It is mutually exclusive with OrganizationRef and ProjectRef.
-	// +kubebuilder:validation:Optional
-	UserRef *iamv1alpha1.UserReference `json:"userRef,omitempty"`
-
-	// OrganizationRef is a reference to the Organization that the contact is for.
-	// It is mutually exclusive with UserRef and ProjectRef.
-	// +kubebuilder:validation:Optional
-	OrganizationRef *resourcemanagerv1alpha1.OrganizationReference `json:"organizationRef,omitempty"`
-
-	// ProjectRef is a reference to the Project that the contact is for.
-	// It is mutually exclusive with UserRef and OrganizationRef.
-	// +kubebuilder:validation:Optional
-	ProjectRef *ProjectReference `json:"projectRef,omitempty"`
-}
-
-// ProjectReference is a reference to the Project that the contact is for.
-// +kubebuilder:validation:Type=object
-type ProjectReference struct {
-	// Name is the name of the Project that the contact is for.
+	// APIGroup is the group for the resource being referenced.
+	// +kubebuilder:validation:Enum=iam.miloapis.com;resourcemanager.miloapis.com
+	// +kubebuilder:validation:Required
+	APIGroup string `json:"apiGroup,omitempty"`
+	// Kind is the type of resource being referenced.
+	// +kubebuilder:validation:Enum=User;Organization;Project
+	// +kubebuilder:validation:Required
+	Kind string `json:"kind"`
+	// Name is the name of resource being referenced.
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
-
-	// OrganizationRef is a reference to the Organization that the Project is in.
+	// UID is the unique identifier of the resource being referenced.
 	// +kubebuilder:validation:Required
-	OrganizationRef *resourcemanagerv1alpha1.OrganizationReference `json:"organizationRef,omitempty"`
+	UID string `json:"uid"`
+	// Namespace is the namespace of resource being referenced.
+	// Required for namespace-scoped resources. Omitted for cluster-scoped resources.
+	// +kubebuilder:validation:Optional
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // +kubebuilder:object:root=true
