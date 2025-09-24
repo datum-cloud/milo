@@ -4,24 +4,33 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: corporationtypeconfigs.resourcemanager.miloapis.com
+  name: vendortypedefinitions.vendors.miloapis.com
 spec:
-  group: resourcemanager.miloapis.com
+  group: vendors.miloapis.com
   names:
     categories:
     - datum
-    kind: CorporationTypeConfig
-    listKind: CorporationTypeConfigList
-    plural: corporationtypeconfigs
-    singular: corporationtypeconfig
+    kind: VendorTypeDefinition
+    listKind: VendorTypeDefinitionList
+    plural: vendortypedefinitions
+    singular: vendortypedefinition
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.active
-      name: Active
+    - jsonPath: .spec.code
+      name: Code
+      type: string
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .spec.enabled
+      name: Enabled
       type: boolean
-    - jsonPath: .status.activeTypeCount
-      name: Type Count
+    - jsonPath: .spec.category
+      name: Category
+      type: string
+    - jsonPath: .status.vendorCount
+      name: Vendor Count
       type: integer
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -32,7 +41,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: CorporationTypeConfig is the Schema for the CorporationTypeConfigs
+        description: VendorTypeDefinition is the Schema for the VendorTypeDefinitions
           API
         properties:
           apiVersion:
@@ -53,60 +62,58 @@ spec:
           metadata:
             type: object
           spec:
-            description: CorporationTypeConfigSpec defines the desired state of CorporationTypeConfig
+            description: VendorTypeDefinitionSpec defines the desired state of VendorTypeDefinition
             properties:
-              active:
+              category:
+                description: Category of vendor type (e.g., "business", "nonprofit",
+                  "international")
+                type: string
+              code:
+                description: The unique identifier for this vendor type (e.g., "llc",
+                  "s-corp", "partnership")
+                pattern: ^[a-z0-9-]+$
+                type: string
+              description:
+                description: Optional description of this vendor type
+                type: string
+              displayName:
+                description: Human-readable display name
+                type: string
+              enabled:
                 default: true
-                description: Whether this configuration is active
+                description: Whether this vendor type is currently available for selection
                 type: boolean
-              corporationTypes:
-                description: Available corporation types that can be selected for
-                  vendors
+              requiredTaxDocuments:
+                description: Required tax document types for this vendor type
                 items:
-                  description: CorporationTypeDefinition defines a single corporation
-                    type option
-                  properties:
-                    code:
-                      description: The unique identifier for this corporation type
-                      pattern: ^[a-z0-9-]+$
-                      type: string
-                    description:
-                      description: Optional description of this corporation type
-                      type: string
-                    displayName:
-                      description: Human-readable display name
-                      type: string
-                    enabled:
-                      default: true
-                      description: Whether this corporation type is currently available
-                        for selection
-                      type: boolean
-                    sortOrder:
-                      default: 100
-                      description: Sort order for display purposes (lower numbers
-                        appear first)
-                      format: int32
-                      type: integer
-                  required:
-                  - code
-                  - displayName
-                  - enabled
-                  - sortOrder
-                  type: object
-                minItems: 1
+                  type: string
+                type: array
+              requiresBusinessFields:
+                default: false
+                description: Whether this type requires additional business-specific
+                  fields
+                type: boolean
+              requiresTaxVerification:
+                default: true
+                description: Whether this type requires tax verification
+                type: boolean
+              validCountries:
+                description: Countries where this vendor type is valid (empty means
+                  all countries)
+                items:
+                  type: string
                 type: array
             required:
-            - active
-            - corporationTypes
+            - code
+            - displayName
+            - enabled
+            - requiresBusinessFields
+            - requiresTaxVerification
             type: object
           status:
-            description: CorporationTypeConfigStatus defines the observed state of
-              CorporationTypeConfig
+            description: VendorTypeDefinitionStatus defines the observed state of
+              VendorTypeDefinition
             properties:
-              activeTypeCount:
-                description: Number of active corporation types
-                format: int32
-                type: integer
               conditions:
                 default:
                 - lastTransitionTime: "1970-01-01T00:00:00Z"
@@ -115,8 +122,8 @@ spec:
                   status: Unknown
                   type: Ready
                 description: |-
-                  Conditions represents the observations of a corporation type config's current state.
-                  Known condition types are: "Ready"
+                  Conditions represents the observations of a vendor type definition's current state.
+                  Known condition types are: "Ready", "Valid"
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -172,10 +179,18 @@ spec:
                   - type
                   type: object
                 type: array
+              lastUsed:
+                description: Last time this type was used in a vendor
+                format: date-time
+                type: string
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
-                  for this CorporationTypeConfig by the controller.
+                  for this VendorTypeDefinition by the controller.
                 format: int64
+                type: integer
+              vendorCount:
+                description: Number of vendors currently using this type
+                format: int32
                 type: integer
             type: object
         required:

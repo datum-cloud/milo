@@ -25,10 +25,10 @@ const (
 	VendorStatusArchived VendorStatusValue = "archived"
 )
 
-// CorporationType defines the type of corporation
-// This should reference a valid corporation type from CorporationTypeConfig
+// VendorType defines the type of vendor
+// This should reference a valid vendor type from VendorTypeDefinition
 // +kubebuilder:validation:Pattern=^[a-z0-9-]+$
-type CorporationType string
+type VendorType string
 
 // TaxIdType defines the type of tax identification
 // +kubebuilder:validation:Enum=SSN;EIN;ITIN;UNSPECIFIED
@@ -68,15 +68,30 @@ type Address struct {
 	Country string `json:"country"`
 }
 
+// TaxIdReference references a tax ID stored in a Kubernetes Secret
+type TaxIdReference struct {
+	// Name of the Secret containing the tax ID
+	// +kubebuilder:validation:Required
+	SecretName string `json:"secretName"`
+
+	// Key within the Secret that contains the tax ID
+	// +kubebuilder:validation:Required
+	SecretKey string `json:"secretKey"`
+
+	// Namespace of the Secret (if empty, uses the same namespace as the Vendor)
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+}
+
 // TaxInfo represents tax-related information
 type TaxInfo struct {
 	// Type of tax identification
 	// +kubebuilder:validation:Required
 	TaxIdType TaxIdType `json:"taxIdType"`
 
-	// Tax identification number
+	// Reference to the tax identification number stored in a Secret
 	// +kubebuilder:validation:Required
-	TaxId string `json:"taxId"`
+	TaxIdRef TaxIdReference `json:"taxIdRef"`
 
 	// Country for tax purposes
 	// +kubebuilder:validation:Required
@@ -85,14 +100,6 @@ type TaxInfo struct {
 	// Tax document reference (e.g., W-9, W-8BEN)
 	// +kubebuilder:validation:Required
 	TaxDocument string `json:"taxDocument"`
-
-	// Whether tax information has been verified
-	// +kubebuilder:default=false
-	TaxVerified bool `json:"taxVerified"`
-
-	// Timestamp of tax verification
-	// +optional
-	VerificationTimestamp *metav1.Time `json:"verificationTimestamp,omitempty"`
 }
 
 // VendorSpec defines the desired state of Vendor
@@ -126,14 +133,9 @@ type VendorSpec struct {
 	// +optional
 	Website string `json:"website,omitempty"`
 
-	// Current status of the vendor
-	// +kubebuilder:validation:Required
-	// +kubebuilder:default=pending
-	Status VendorStatusValue `json:"status"`
-
 	// Business-specific fields (only applicable when profileType is business)
 	// +optional
-	CorporationType CorporationType `json:"corporationType,omitempty"`
+	VendorType VendorType `json:"vendorType,omitempty"`
 
 	// Doing business as name
 	// +optional
@@ -160,12 +162,56 @@ type VendorStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
 	// Conditions represents the observations of a vendor's current state.
-	// Known condition types are: "Ready"
+	// Known condition types are: "Ready", "Validated", "Verified", "Active"
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +optional
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// Current status of the vendor
+	// +optional
+	Status VendorStatusValue `json:"status,omitempty"`
+
+	// Overall verification status
+	// +optional
+	VerificationStatus VerificationStatus `json:"verificationStatus,omitempty"`
+
+	// Number of required verifications
+	// +optional
+	RequiredVerifications int32 `json:"requiredVerifications,omitempty"`
+
+	// Number of completed verifications
+	// +optional
+	CompletedVerifications int32 `json:"completedVerifications,omitempty"`
+
+	// Number of pending verifications
+	// +optional
+	PendingVerifications int32 `json:"pendingVerifications,omitempty"`
+
+	// Number of rejected verifications
+	// +optional
+	RejectedVerifications int32 `json:"rejectedVerifications,omitempty"`
+
+	// Number of expired verifications
+	// +optional
+	ExpiredVerifications int32 `json:"expiredVerifications,omitempty"`
+
+	// Timestamp when vendor was last verified
+	// +optional
+	LastVerifiedAt *metav1.Time `json:"lastVerifiedAt,omitempty"`
+
+	// Timestamp when vendor was activated
+	// +optional
+	ActivatedAt *metav1.Time `json:"activatedAt,omitempty"`
+
+	// Timestamp when vendor was rejected
+	// +optional
+	RejectedAt *metav1.Time `json:"rejectedAt,omitempty"`
+
+	// Reason for rejection (if applicable)
+	// +optional
+	RejectionReason string `json:"rejectionReason,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -175,7 +221,8 @@ type VendorStatus struct {
 // +kubebuilder:resource:path=vendors,scope=Cluster,categories=datum,singular=vendor
 // +kubebuilder:printcolumn:name="Legal Name",type="string",JSONPath=".spec.legalName"
 // +kubebuilder:printcolumn:name="Profile Type",type="string",JSONPath=".spec.profileType"
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".spec.status"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Verification",type="string",JSONPath=".status.verificationStatus"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 // Vendor is the Schema for the Vendors API

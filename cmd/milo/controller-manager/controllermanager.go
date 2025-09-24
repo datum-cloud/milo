@@ -83,6 +83,7 @@ import (
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	vendorsv1alpha1 "go.miloapis.com/milo/pkg/apis/vendors/v1alpha1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -116,6 +117,7 @@ func init() {
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(vendorsv1alpha1.AddToScheme(Scheme))
 }
 
 const (

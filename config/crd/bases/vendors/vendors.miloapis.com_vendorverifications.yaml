@@ -4,28 +4,34 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: vendors.resourcemanager.miloapis.com
+  name: vendorverifications.vendors.miloapis.com
 spec:
-  group: resourcemanager.miloapis.com
+  group: vendors.miloapis.com
   names:
     categories:
     - datum
-    kind: Vendor
-    listKind: VendorList
-    plural: vendors
-    singular: vendor
+    kind: VendorVerification
+    listKind: VendorVerificationList
+    plural: vendorverifications
+    singular: vendorverification
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.legalName
-      name: Legal Name
+    - jsonPath: .spec.vendorRef.name
+      name: Vendor
       type: string
-    - jsonPath: .spec.profileType
-      name: Profile Type
+    - jsonPath: .spec.verificationType
+      name: Type
       type: string
     - jsonPath: .spec.status
       name: Status
       type: string
+    - jsonPath: .spec.verifierRef.name
+      name: Verifier
+      type: string
+    - jsonPath: .spec.required
+      name: Required
+      type: boolean
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -35,7 +41,8 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Vendor is the Schema for the Vendors API
+        description: VendorVerification is the Schema for the VendorVerifications
+          API
         properties:
           apiVersion:
             description: |-
@@ -55,150 +62,138 @@ spec:
           metadata:
             type: object
           spec:
-            description: VendorSpec defines the desired state of Vendor
+            description: VendorVerificationSpec defines the desired state of VendorVerification
             properties:
-              billingAddress:
-                description: Billing address
-                properties:
-                  city:
-                    description: City
-                    type: string
-                  country:
-                    description: Country
-                    type: string
-                  postalCode:
-                    description: Postal or ZIP code
-                    type: string
-                  state:
-                    description: State or province
-                    type: string
-                  street:
-                    description: Street address line 1
-                    type: string
-                  street2:
-                    description: Street address line 2 (optional)
-                    type: string
-                required:
-                - city
-                - country
-                - postalCode
-                - state
-                - street
-                type: object
-              corporationDBA:
-                description: Doing business as name
-                type: string
-              corporationType:
-                description: Business-specific fields (only applicable when profileType
-                  is business)
-                pattern: ^[a-z0-9-]+$
-                type: string
               description:
-                description: Description of the vendor
+                description: Description of what is being verified
                 type: string
-              legalName:
-                description: Legal name of the vendor (required)
+              documents:
+                description: Documents used in this verification
+                items:
+                  description: VerificationDocument represents a document used in
+                    verification
+                  properties:
+                    expirationDate:
+                      description: Document expiration date
+                      format: date-time
+                      type: string
+                    reference:
+                      description: Reference to the document (secret name, file path,
+                        etc.)
+                      type: string
+                    type:
+                      description: Type of document (W-9, W-8BEN, business-license,
+                        etc.)
+                      type: string
+                    valid:
+                      default: true
+                      description: Whether the document is valid
+                      type: boolean
+                    version:
+                      description: Document version or identifier
+                      type: string
+                  required:
+                  - reference
+                  - type
+                  - valid
+                  type: object
+                type: array
+              expirationDate:
+                description: Expiration date for this verification
+                format: date-time
                 type: string
-              mailingAddress:
-                description: Mailing address (if different from billing)
-                properties:
-                  city:
-                    description: City
-                    type: string
-                  country:
-                    description: Country
-                    type: string
-                  postalCode:
-                    description: Postal or ZIP code
-                    type: string
-                  state:
-                    description: State or province
-                    type: string
-                  street:
-                    description: Street address line 1
-                    type: string
-                  street2:
-                    description: Street address line 2 (optional)
-                    type: string
-                required:
-                - city
-                - country
-                - postalCode
-                - state
-                - street
-                type: object
-              nickname:
-                description: Nickname or display name
+              externalReference:
+                description: External system reference (if verification is done by
+                  external service)
                 type: string
-              profileType:
-                description: Profile type - person or business
-                enum:
-                - person
-                - business
+              notes:
+                description: Additional notes or comments about the verification
                 type: string
-              registrationNumber:
-                description: Registration number (optional)
-                type: string
-              stateOfIncorporation:
-                description: State of incorporation
-                type: string
+              priority:
+                default: 5
+                description: Priority of this verification (1-10, higher is more urgent)
+                format: int32
+                maximum: 10
+                minimum: 1
+                type: integer
+              required:
+                default: true
+                description: Whether this verification is required for vendor activation
+                type: boolean
               status:
                 default: pending
-                description: Current status of the vendor
+                description: Current status of the verification
                 enum:
                 - pending
-                - active
+                - in-progress
+                - approved
                 - rejected
-                - archived
+                - expired
                 type: string
-              taxInfo:
-                description: Tax information
+              vendorRef:
+                description: Reference to the vendor being verified
                 properties:
-                  country:
-                    description: Country for tax purposes
+                  name:
+                    description: Name of the Vendor resource
                     type: string
-                  taxDocument:
-                    description: Tax document reference (e.g., W-9, W-8BEN)
-                    type: string
-                  taxId:
-                    description: Tax identification number
-                    type: string
-                  taxIdType:
-                    description: Type of tax identification
-                    enum:
-                    - SSN
-                    - EIN
-                    - ITIN
-                    - UNSPECIFIED
-                    type: string
-                  taxVerified:
-                    default: false
-                    description: Whether tax information has been verified
-                    type: boolean
-                  verificationTimestamp:
-                    description: Timestamp of tax verification
-                    format: date-time
+                  namespace:
+                    description: Namespace of the Vendor resource (if empty, uses
+                      the same namespace as the VendorVerification)
                     type: string
                 required:
-                - country
-                - taxDocument
-                - taxId
-                - taxIdType
-                - taxVerified
+                - name
                 type: object
-              website:
-                description: Website URL
+              verificationType:
+                description: Type of verification being performed
+                enum:
+                - tax
+                - business
+                - identity
+                - compliance
+                - other
                 type: string
+              verifierRef:
+                description: Reference to who is performing the verification
+                properties:
+                  metadata:
+                    additionalProperties:
+                      type: string
+                    description: Additional metadata about the verifier
+                    type: object
+                  name:
+                    description: Name of the verifier (username, service name, etc.)
+                    type: string
+                  type:
+                    description: Type of verifier (user, system, external-service,
+                      etc.)
+                    enum:
+                    - user
+                    - system
+                    - external-service
+                    - admin
+                    type: string
+                required:
+                - name
+                - type
+                type: object
             required:
-            - billingAddress
-            - legalName
-            - profileType
+            - priority
+            - required
             - status
-            - taxInfo
+            - vendorRef
+            - verificationType
             type: object
           status:
-            description: VendorStatus defines the observed state of Vendor
+            description: VendorVerificationStatus defines the observed state of VendorVerification
             properties:
+              attemptCount:
+                description: Number of verification attempts
+                format: int32
+                type: integer
+              completedAt:
+                description: Timestamp when verification was completed
+                format: date-time
+                type: string
               conditions:
                 default:
                 - lastTransitionTime: "1970-01-01T00:00:00Z"
@@ -207,8 +202,8 @@ spec:
                   status: Unknown
                   type: Ready
                 description: |-
-                  Conditions represents the observations of a vendor's current state.
-                  Known condition types are: "Ready"
+                  Conditions represents the observations of a vendor verification's current state.
+                  Known condition types are: "Ready", "Valid", "Expired"
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -264,9 +259,16 @@ spec:
                   - type
                   type: object
                 type: array
+              lastError:
+                description: Last error message if verification failed
+                type: string
+              lastUpdatedAt:
+                description: Timestamp when verification was last updated
+                format: date-time
+                type: string
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
-                  for this Vendor by the controller.
+                  for this VendorVerification by the controller.
                 format: int64
                 type: integer
             type: object
