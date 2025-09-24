@@ -83,11 +83,6 @@ spec:
                     description: Name is the name of resource being referenced.
                     type: string
                   namespace:
-                    description: |-
-                      Namespace is the namespace of resource being referenced.
-                      Required for namespace-scoped resources. Omitted for cluster-scoped resources.
-                    type: string
-                  uid:
                     description: UID is the unique identifier of the resource being
                       referenced.
                     type: string
@@ -95,12 +90,8 @@ spec:
                 - apiGroup
                 - kind
                 - name
-                - uid
+                - namespace
                 type: object
-                x-kubernetes-validations:
-                - message: exactly one of userRef, organizationRef projectRef must
-                    be provided
-                  rule: has(self.userRef) != has(self.organizationRef) != has(self.projectRef)
             required:
             - email
             - familyName
