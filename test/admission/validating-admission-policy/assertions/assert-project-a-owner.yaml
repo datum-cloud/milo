@@ -1,0 +1,16 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: vap-ok-good-a
+  labels:
+    resourcemanager.miloapis.com/organization-name: test-vap-org-a
+  ownerReferences:
+  - apiVersion: resourcemanager.miloapis.com/v1alpha1
+    kind: Organization
+    name: test-vap-org-a
+spec:
+  ownerRef:
+    kind: Organization
+    name: test-vap-org-a
+
+
