@@ -9,7 +9,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	vendorscontrollers "go.miloapis.com/milo/internal/controllers/vendors"
+	vendorsv1alpha1 "go.miloapis.com/milo/pkg/apis/vendors/v1alpha1"
 )
 
 // VendorValidationReconciler reconciles Vendor objects to validate corporation types
@@ -18,62 +19,56 @@ type VendorValidationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=vendors,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=vendors/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=corporationtypeconfigs,verbs=get;list;watch
+//+kubebuilder:rbac:groups=vendors.miloapis.com,resources=vendors,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=vendors.miloapis.com,resources=vendors/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=vendors.miloapis.com,resources=vendortypedefinitions,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
-// Reconcile validates vendor corporation types against active CorporationTypeConfig
+// Reconcile validates vendor types against VendorTypeDefinition
 func (r *VendorValidationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// Fetch the Vendor
-	var vendor resourcemanagerv1alpha1.Vendor
+	var vendor vendorsv1alpha1.Vendor
 	if err := r.Get(ctx, req.NamespacedName, &vendor); err != nil {
 		logger.Error(err, "unable to fetch Vendor")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Skip validation if corporationType is not set
-	if vendor.Spec.CorporationType == "" {
+	// Skip validation if vendorType is not set
+	if vendor.Spec.VendorType == "" {
 		return ctrl.Result{}, nil
 	}
 
-	// Find the active CorporationTypeConfig
-	var configList resourcemanagerv1alpha1.CorporationTypeConfigList
-	if err := r.List(ctx, &configList); err != nil {
-		logger.Error(err, "unable to list CorporationTypeConfigs")
+	// Get all VendorTypeDefinitions
+	var definitionList vendorsv1alpha1.VendorTypeDefinitionList
+	if err := r.List(ctx, &definitionList); err != nil {
+		logger.Error(err, "unable to list VendorTypeDefinitions")
 		return ctrl.Result{}, err
 	}
 
-	var activeConfig *resourcemanagerv1alpha1.CorporationTypeConfig
-	for _, config := range configList.Items {
-		if config.Spec.Active {
-			activeConfig = &config
-			break
-		}
-	}
-
-	if activeConfig == nil {
-		logger.Info("no active CorporationTypeConfig found, skipping validation")
-		return ctrl.Result{}, nil
-	}
-
-	// Validate the corporation type
-	if err := resourcemanagerv1alpha1.ValidateCorporationType(vendor.Spec.CorporationType, activeConfig); err != nil {
-		logger.Error(err, "invalid corporation type", "corporationType", vendor.Spec.CorporationType)
+	// Validate the vendor type
+	if err := vendorsv1alpha1.ValidateVendorTypeFromList(vendor.Spec.VendorType, definitionList.Items); err != nil {
+		logger.Error(err, "invalid vendor type", "vendorType", vendor.Spec.VendorType)
 
 		// Update vendor status with validation error
 		// This is a simplified example - in practice you'd want more sophisticated status management
-		return ctrl.Result{}, fmt.Errorf("invalid corporation type %q: %w", vendor.Spec.CorporationType, err)
+		return ctrl.Result{}, fmt.Errorf("invalid vendor type %q: %w", vendor.Spec.VendorType, err)
 	}
 
-	logger.Info("vendor corporation type validated successfully", "corporationType", vendor.Spec.CorporationType)
+	// Validate tax ID secret reference
+	if err := vendorscontrollers.ValidateTaxIdSecret(ctx, r.Client, &vendor, vendor.Spec.TaxInfo.TaxIdRef); err != nil {
+		logger.Error(err, "invalid tax ID secret reference", "secretName", vendor.Spec.TaxInfo.TaxIdRef.SecretName)
+		return ctrl.Result{}, fmt.Errorf("invalid tax ID secret reference: %w", err)
+	}
+
+	logger.Info("vendor validated successfully", "vendorType", vendor.Spec.VendorType)
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *VendorValidationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&resourcemanagerv1alpha1.Vendor{}).
+		For(&vendorsv1alpha1.Vendor{}).
 		Complete(r)
 }
