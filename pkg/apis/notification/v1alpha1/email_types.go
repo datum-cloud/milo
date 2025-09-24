@@ -58,7 +58,6 @@ type EmailVariable struct {
 }
 
 // EmailRecipient contains information about the recipient of the email.
-// +kubebuilder:validation:XValidation:rule="has(self.emailAddress) != has(self.userRef)",message="exactly one of emailAddress or userRef must be provided"
 // +kubebuilder:validation:Type=object
 type EmailRecipient struct {
 	// UserRef references the User resource that will receive the message.

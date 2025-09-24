@@ -1,0 +1,12 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: m-test-user
+  namespace: organization-fieldsel-org
+spec:
+  organizationRef:
+    name: fieldsel-org
+  userRef:
+    name: test-user
+
+

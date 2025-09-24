@@ -22,3 +22,6 @@ resources:
   - notification-email-reader.yaml
   - notification-email-creator.yaml
   - notification-email-admin.yaml
+  - iam-user-invitations-reader.yaml
+  - iam-user-invitations-editor.yaml
+  - iam-user-invitations-admin.yaml
