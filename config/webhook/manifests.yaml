@@ -229,6 +229,28 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
+      path: /validate-notification-miloapis-com-v1alpha1-contactgroupmembershipremoval
+      port: 9443
+  failurePolicy: Fail
+  name: vcontactgroupmembershipremoval.notification.miloapis.com
+  rules:
+  - apiGroups:
+    - notification.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - contactgroupmembershipremovals
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
       path: /validate-notification-miloapis-com-v1alpha1-email
       port: 9443
   failurePolicy: Fail
