@@ -429,6 +429,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up user invitation webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := notificationv1alpha1webhook.SetupContactWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up contact webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
