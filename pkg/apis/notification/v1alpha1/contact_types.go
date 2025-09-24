@@ -72,6 +72,7 @@ type ContactSpec struct {
 }
 
 // SubjectReference is a reference to the subject of the contact.
+// +kubebuilder:validation:XValidation:rule="has(self.userRef) != has(self.organizationRef) != has(self.projectRef)",message="exactly one of userRef, organizationRef projectRef must be provided"
 // +kubebuilder:validation:Type=object
 type SubjectReference struct {
 	// APIGroup is the group for the resource being referenced.
@@ -87,6 +88,10 @@ type SubjectReference struct {
 	Name string `json:"name"`
 	// UID is the unique identifier of the resource being referenced.
 	// +kubebuilder:validation:Required
+	UID string `json:"uid"`
+	// Namespace is the namespace of resource being referenced.
+	// Required for namespace-scoped resources. Omitted for cluster-scoped resources.
+	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
 }
 
