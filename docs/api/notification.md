@@ -869,8 +869,6 @@ ContactSpec defines the desired state of Contact.
         <td>object</td>
         <td>
           Subject is a reference to the subject of the contact.<br/>
-          <br/>
-            <i>Validations</i>:<li>has(self.userRef) != has(self.organizationRef) != has(self.projectRef): exactly one of userRef, organizationRef projectRef must be provided</li>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -916,13 +914,6 @@ Subject is a reference to the subject of the contact.
         <td>string</td>
         <td>
           Name is the name of resource being referenced.<br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
-        <td><b>uid</b></td>
-        <td>string</td>
-        <td>
-          UID is the unique identifier of the resource being referenced.<br/>
         </td>
         <td>true</td>
       </tr><tr>
