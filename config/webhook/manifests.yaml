@@ -53,6 +53,27 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
+      path: /mutate-notification-miloapis-com-v1alpha1-contact
+      port: 9443
+  failurePolicy: Fail
+  name: mcontact.notification.miloapis.com
+  rules:
+  - apiGroups:
+    - notification.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - contacts
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
       path: /mutate-resourcemanager-miloapis-com-v1alpha1-project
       port: 9443
   failurePolicy: Fail
@@ -135,6 +156,93 @@ webhooks:
     - CREATE
     resources:
     - userinvitations
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-notification-miloapis-com-v1alpha1-contact
+      port: 9443
+  failurePolicy: Fail
+  name: vcontact.notification.miloapis.com
+  rules:
+  - apiGroups:
+    - notification.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - contacts
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-notification-miloapis-com-v1alpha1-contactgroup
+      port: 9443
+  failurePolicy: Fail
+  name: vcontactgroup.notification.miloapis.com
+  rules:
+  - apiGroups:
+    - notification.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - contactgroups
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-notification-miloapis-com-v1alpha1-contactgroupmembership
+      port: 9443
+  failurePolicy: Fail
+  name: vcontactgroupmembership.notification.miloapis.com
+  rules:
+  - apiGroups:
+    - notification.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - contactgroupmemberships
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-notification-miloapis-com-v1alpha1-contactgroupmembershipremoval
+      port: 9443
+  failurePolicy: Fail
+  name: vcontactgroupmembershipremoval.notification.miloapis.com
+  rules:
+  - apiGroups:
+    - notification.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - contactgroupmembershipremovals
   sideEffects: None
 - admissionReviewVersions:
   - v1
