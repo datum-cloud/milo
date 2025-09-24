@@ -1,0 +1,8 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-contact-group-admin
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: notification-contact-group-editor
