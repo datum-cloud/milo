@@ -1,8 +1,6 @@
 package v1alpha1
 
 import (
-	"strings"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -309,38 +307,4 @@ type ResourceRegistrationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ResourceRegistration `json:"items"`
-}
-
-// IsClaimingResourceAllowed checks if the given resource type is allowed to claim
-// quota for this registered resource type. Since ClaimingResource uses unversioned
-// references, the version parameter is ignored.
-func (r *ResourceRegistration) IsClaimingResourceAllowed(apiGroup, kind string) bool {
-	// If no claiming resources are specified, no default is assumed
-	// The ClaimingResources field must be explicitly configured
-	if len(r.Spec.ClaimingResources) == 0 {
-		// When not specified, deny by default for security
-		// Administrators must explicitly configure which resources can claim quota
-		return false
-	}
-	// Check against the explicit list
-	for _, allowedResource := range r.Spec.ClaimingResources {
-		// Check APIGroup match (empty string matches core API group)
-		if allowedResource.APIGroup != apiGroup {
-			continue
-		}
-		// Check Kind match (case-insensitive)
-		if !strings.EqualFold(allowedResource.Kind, kind) {
-			continue
-		}
-		// Match found (version agnostic)
-		return true
-	}
-
-	return false
-}
-
-// MatchesReference checks if this ClaimingResource matches the given
-// unversioned object reference.
-func (c *ClaimingResource) MatchesReference(ref UnversionedObjectReference) bool {
-	return c.APIGroup == ref.APIGroup && strings.EqualFold(c.Kind, ref.Kind)
 }
