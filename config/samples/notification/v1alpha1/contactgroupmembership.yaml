@@ -1,0 +1,14 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: ContactGroupMembership
+metadata:
+  name: alice-to-engineering-team
+  namespace: milo-system
+spec:
+  # Reference to the contact that becomes a member of the group
+  contactRef:
+    name: alice-contact-sample
+    namespace: default
+  # Reference to the contact group that the contact is joining
+  contactGroupRef:
+    name: engineering-team
+    namespace: milo-system

@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-contact-group-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - notification.miloapis.com/contactgroups.get
+    - notification.miloapis.com/contactgroups.list
+    - notification.miloapis.com/contactgroups.watch
