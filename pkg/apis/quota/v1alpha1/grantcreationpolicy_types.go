@@ -16,7 +16,7 @@ type GrantCreationPolicySpec struct {
 	// +kubebuilder:validation:Required
 	Target TargetSpec `json:"target"`
 	// Enabled determines if this policy is active.
-	// If false, no ResourceGrants will be created for matching resources.
+	// If false, no **ResourceGrants** will be created for matching resources.
 	//
 	// +kubebuilder:default=true
 	// +optional
@@ -55,21 +55,36 @@ type TriggerResource struct {
 	Kind string `json:"kind"`
 }
 
-// ConditionExpression defines a CEL expression for condition evaluation.
+// ConditionExpression defines a CEL expression that determines when the policy should trigger.
+// All expressions in a policy's trigger conditions must evaluate to true for the policy to activate.
 type ConditionExpression struct {
-	// Expression is the CEL expression to evaluate against the trigger resource.
-	// The expression must return a boolean value.
-	// Available variables:
-	// - GrantCreationPolicy (controller): `object` is the trigger resource (map)
-	// - ClaimCreationPolicy (admission): `trigger` is the trigger resource (map);
-	//   also `user.name`, `user.uid`, `user.groups`, `user.extra`, `requestInfo.*`,
-	//   `namespace`, `gvk.group`, `gvk.version`, `gvk.kind`
+	// Expression specifies the CEL expression to evaluate against the trigger resource.
+	// Must return a boolean value (true to match, false to skip).
+	// Maximum 1024 characters.
+	//
+	// Available variables in GrantCreationPolicy context:
+	// - object: The complete resource being watched (map[string]any)
+	//   - object.metadata.name, object.spec.*, object.status.*, etc.
+	//
+	// Common expression patterns:
+	// - object.spec.tier == "premium" (check resource field)
+	// - object.metadata.labels["environment"] == "prod" (check labels)
+	// - object.status.phase == "Active" (check status)
+	// - object.metadata.namespace == "production" (check namespace)
+	// - has(object.spec.quotaProfile) (check field existence)
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=1024
 	Expression string `json:"expression"`
-	// Message provides a human-readable description of the condition requirement.
+
+	// Message provides a human-readable description explaining when this condition applies.
+	// Used for documentation and debugging. Maximum 256 characters.
+	//
+	// Examples:
+	// - "Applies only to premium tier organizations"
+	// - "Matches organizations in production environment"
+	// - "Triggers when quota profile is specified"
 	//
 	// +optional
 	// +kubebuilder:validation:MaxLength=256
@@ -84,32 +99,57 @@ type TargetSpec struct {
 	//
 	// +optional
 	ParentContext *ParentContextSpec `json:"parentContext,omitempty"`
-	// ResourceGrantTemplate defines how to create ResourceGrants.
+	// ResourceGrantTemplate defines how to create **ResourceGrants**.
 	// String fields support Go template syntax for dynamic content.
 	//
 	// +kubebuilder:validation:Required
 	ResourceGrantTemplate ResourceGrantTemplate `json:"resourceGrantTemplate"`
 }
 
-// ParentContextSpec defines parent context resolution for cross-cluster operations.
+// ParentContextSpec enables cross-cluster grant creation by targeting a parent control plane.
+// Used to create grants in infrastructure clusters when policies run in child clusters.
 type ParentContextSpec struct {
-	// APIGroup of the parent context resource.
+	// APIGroup specifies the API group of the parent context resource.
+	// Must follow DNS subdomain format. Maximum 253 characters.
+	//
+	// Examples:
+	// - "resourcemanager.miloapis.com" (for Organization parent context)
+	// - "infrastructure.miloapis.com" (for Cluster parent context)
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MaxLength=253
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	APIGroup string `json:"apiGroup"`
-	// Kind of the parent context resource.
+
+	// Kind specifies the resource type that represents the parent context.
+	// Must be a valid Kubernetes resource Kind. Maximum 63 characters.
+	//
+	// Examples:
+	// - "Organization" (create grants in organization's parent control plane)
+	// - "Cluster" (create grants in cluster's parent infrastructure)
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:Pattern=`^[A-Z][a-zA-Z0-9]*$`
 	Kind string `json:"kind"`
-	// NameExpression is a CEL expression to resolve the parent context name.
-	// The expression must return a string value.
+
+	// NameExpression is a CEL expression that resolves the name of the parent context resource.
+	// Must return a string value that identifies the specific parent context instance.
+	// Maximum 512 characters.
+	//
 	// Available variables:
-	// - object: The trigger resource being evaluated (same as .trigger in Go templates)
+	// - object: The trigger resource being evaluated (complete object)
+	//
+	// Common expression patterns:
+	// - object.spec.organization (direct field reference)
+	// - object.metadata.labels["parent-org"] (label-based resolution)
+	// - object.metadata.namespace.split("-")[0] (derived from namespace naming)
+	//
+	// Examples:
+	// - "acme-corp" (literal parent name)
+	// - object.spec.parentOrganization (field from trigger resource)
+	// - object.metadata.labels["quota.miloapis.com/organization"] (label value)
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
@@ -140,7 +180,7 @@ type ResourceGrantTemplate struct {
 // Status fields
 // - conditions[type=Ready]: True when the policy is validated and active.
 // - conditions[type=ParentContextReady]: True when cross‑cluster targeting is resolvable.
-// - observedGeneration: Latest spec generation processed by the controller.
+// - observedGeneration: Latest spec generation processed by the quota system.
 //
 // See also
 // - [ResourceGrant](#resourcegrant): The object created by this policy.

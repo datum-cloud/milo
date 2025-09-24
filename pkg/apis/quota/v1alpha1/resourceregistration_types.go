@@ -7,14 +7,31 @@ import (
 )
 
 // ConsumerTypeRef identifies the resource type that consumes quota.
-// This type receives grants and creates claims against registered resources.
+// The consumer receives **ResourceGrants** and creates **ResourceClaims** for the registered resource.
+// For example, when registering "Projects per Organization", **Organization** is the consumer type.
 type ConsumerTypeRef struct {
-	// API group of the quota consumer resource type
+	// APIGroup specifies the API group of the quota consumer resource type.
+	// Use empty string for Kubernetes core resources (**Pod**, **Service**, etc.).
+	// Use full group name for custom resources (for example, `resourcemanager.miloapis.com`).
+	// Must follow DNS subdomain format with lowercase letters, numbers, and hyphens.
+	//
+	// Examples:
+	// - `resourcemanager.miloapis.com` (**Organizations**, **Projects**)
+	// - `iam.miloapis.com` (**Users**, **Groups**)
+	// - `infrastructure.miloapis.com` (custom infrastructure resources)
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	APIGroup string `json:"apiGroup"`
-	// Resource type that consumes quota from this registration
+
+	// Kind specifies the resource type that receives quota grants and creates quota claims.
+	// Must match an existing Kubernetes resource type (core or custom).
+	// Use the exact Kind name as defined in the resource's schema.
+	//
+	// Examples:
+	// - **Organization** (receives **Project** quotas)
+	// - **Project** (receives **User** quotas)
+	// - **User** (receives resource quotas within projects)
 	//
 	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
@@ -22,80 +39,145 @@ type ConsumerTypeRef struct {
 
 // ResourceRegistrationSpec defines the desired state of ResourceRegistration.
 type ResourceRegistrationSpec struct {
-	// ConsumerTypeRef identifies the resource type that receives grants and creates claims.
-	// For example, when registering "Projects per Organization", the ConsumerTypeRef
-	// would be Organization, which can then receive ResourceGrants allocating Project quota.
+	// ConsumerTypeRef specifies which resource type receives grants and creates claims for this registration.
+	// The consumer type must exist in the cluster before creating the registration.
+	//
+	// Example: When registering "Projects per Organization", set `ConsumerTypeRef` to **Organization**
+	// (apiGroup: `resourcemanager.miloapis.com`, kind: `Organization`). **Organizations** then
+	// receive **ResourceGrants** allocating **Project** quota and create **ResourceClaims** when **Projects** are created.
 	//
 	// +kubebuilder:validation:Required
 	ConsumerTypeRef ConsumerTypeRef `json:"consumerTypeRef"`
-	// Type classifies how the system measures this registration.
-	// Entity: Tracks the count of object instances (for example, number of Projects).
-	// Allocation: Tracks numeric capacity (for example, bytes of storage, CPU millicores).
+
+	// Type specifies the measurement method for quota tracking.
+	// This field is immutable after creation.
+	//
+	// Valid values:
+	// - `Entity`: Counts discrete resource instances. Use for resources where each instance
+	//   consumes exactly 1 quota unit (for example, **Projects**, **Users**, **Databases**).
+	//   Claims always request integer quantities.
+	// - `Allocation`: Measures numeric capacity or resource amounts. Use for resources
+	//   with variable consumption (for example, CPU millicores, memory bytes, storage capacity).
+	//   Claims can request fractional amounts based on resource specifications.
 	//
 	// +kubebuilder:validation:Enum=Entity;Allocation
 	// +kubebuilder:validation:Required
 	Type string `json:"type"`
-	// ResourceType identifies the Kubernetes resource to track with quota.
-	// Must match an existing resource type accessible in the cluster.
-	// Format: apiGroup/resource (plural), with optional subresource path
-	// (for example, "resourcemanager.miloapis.com/projects" or
-	// "core/pods/cpu").
+
+	// ResourceType identifies the resource to track with quota.
+	// Platform administrators define resource type identifiers that make sense for their
+	// quota system usage. This field is immutable after creation.
+	//
+	// The identifier format is flexible to accommodate various naming conventions
+	// and organizational needs. Service providers can use any meaningful identifier.
+	//
+	// Examples:
+	// - "resourcemanager.miloapis.com/projects"
+	// - "iam.miloapis.com/users"
+	// - "compute_cpu"
+	// - "storage.volumes"
+	// - "custom-service-quota"
 	//
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Pattern=`^[a-z]([-a-z]*[a-z])?(\.[a-z]([-a-z]*[a-z])?)*\/[a-zA-Z][a-zA-Z]*(\/*[a-zA-Z][a-zA-Z]*)*$`
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
 	ResourceType string `json:"resourceType"`
-	// Description provides context about what this registration tracks
+
+	// Description provides human-readable context about what this registration tracks.
+	// Use clear, specific language that explains the resource type and measurement approach.
+	// Maximum 500 characters.
+	//
+	// Examples:
+	// - "Projects created within Organizations"
+	// - "CPU millicores allocated to Pods"
+	// - "Storage bytes claimed by PersistentVolumeClaims"
 	//
 	// +kubebuilder:validation:Optional +kubebuilder:validation:MaxLength=500
 	// +kubebuilder:validation:MinLength=1
 	Description string `json:"description,omitempty"`
-	// BaseUnit defines the internal measurement unit for quota calculations.
-	// Examples: "projects", "millicores", "bytes"
+
+	// BaseUnit defines the internal measurement unit for all quota calculations.
+	// The system stores and processes all quota amounts using this unit.
+	// Use singular form with lowercase letters. Maximum 50 characters.
+	//
+	// Examples:
+	// - "project" (for Entity type tracking Projects)
+	// - "millicore" (for CPU allocation)
+	// - "byte" (for storage or memory)
+	// - "user" (for Entity type tracking Users)
 	//
 	// +kubebuilder:validation:Required +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=50
 	BaseUnit string `json:"baseUnit"`
-	// DisplayUnit defines the unit shown in user interfaces.
-	// Examples: "projects", "cores", "GiB"
+
+	// DisplayUnit defines the unit shown in user interfaces and API responses.
+	// Should be more human-readable than BaseUnit. Use singular form. Maximum 50 characters.
+	//
+	// Examples:
+	// - "project" (same as BaseUnit when no conversion needed)
+	// - "core" (for displaying CPU instead of millicores)
+	// - "GiB" (for displaying memory/storage instead of bytes)
+	// - "TB" (for large storage volumes)
 	//
 	// +kubebuilder:validation:Required +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=50
 	DisplayUnit string `json:"displayUnit"`
-	// UnitConversionFactor converts baseUnit to displayUnit.
+
+	// UnitConversionFactor converts BaseUnit values to DisplayUnit values for presentation.
+	// Must be a positive integer. Minimum value is 1 (no conversion).
+	//
 	// Formula: displayValue = baseValue / unitConversionFactor
-	// Examples: 1 (no conversion), 1073741824 (bytes to GiB), 1000 (millicores to cores)
+	//
+	// Examples:
+	// - 1 (no conversion: "project" to "project")
+	// - 1000 (millicores to cores: 2000 millicores displays as 2 cores)
+	// - 1073741824 (bytes to GiB: 2147483648 bytes displays as 2 GiB)
+	// - 1000000000000 (bytes to TB: 2000000000000 bytes displays as 2 TB)
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=1
 	UnitConversionFactor int64 `json:"unitConversionFactor"`
-	// ClaimingResources specifies which resource types can create ResourceClaims
-	// for this registered resource type. When a ResourceClaim includes a resourceRef,
-	// the referenced resource's type must be in this list for the claim to be valid.
-	// If empty, no resources can claim this quota - administrators must explicitly
-	// configure which resources can claim quota for security.
+
+	// ClaimingResources specifies which resource types can create ResourceClaims for this registration.
+	// Only resources listed here can trigger quota consumption for this resource type.
+	// Empty list means no resources can claim quota (administrators must create claims manually).
+	// Maximum 20 entries.
 	//
-	// This field also signals to the ownership controller which resource types
-	// to watch for automatic owner reference creation.
+	// The quota system monitors these resource types for automatic owner reference creation.
+	// Uses unversioned references (APIGroup + Kind) to survive API version changes.
 	//
-	// Uses unversioned references to support API version upgrades without
-	// requiring ResourceRegistration updates.
+	// Security consideration: Only include resource types that should consume this quota.
+	// For example, when registering **Projects**, only include **Project** as a claiming resource
+	// to prevent other resource types from consuming **Project** quota.
 	//
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:MaxItems=20
 	ClaimingResources []ClaimingResource `json:"claimingResources,omitempty"`
 }
 
-// ClaimingResource identifies a resource type that can create ResourceClaims
-// for a registered resource type using an unversioned reference.
+// ClaimingResource identifies a resource type that can create **ResourceClaims**
+// for this registration. Uses unversioned references to remain valid across API version changes.
 type ClaimingResource struct {
-	// APIGroup is the group for the resource being referenced.
-	// If APIGroup is not specified, the specified Kind must be in the core API group.
-	// For any other third-party types, APIGroup is required.
+	// APIGroup specifies the API group of the resource that can create claims.
+	// Use empty string for Kubernetes core resources (**Pod**, **Service**, etc.).
+	// Use full group name for custom resources.
+	//
+	// Examples:
+	// - `""` (core resources like **Pod**, **Namespace**)
+	// - `apps` (Kubernetes apps group)
+	// - `resourcemanager.miloapis.com` (custom resource group)
 	//
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=`^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	APIGroup string `json:"apiGroup,omitempty"`
-	// Kind of the referent.
+
+	// Kind specifies the resource type that can create **ResourceClaims** for this registration.
+	// Must match an existing resource type. Maximum 63 characters.
+	//
+	// Examples:
+	// - `Project` (**Project** resource creating claims for **Project** quota)
+	// - `User` (**User** resource creating claims for **User** quota)
+	// - `Organization` (**Organization** resource creating claims for **Organization** quota)
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
@@ -103,19 +185,28 @@ type ClaimingResource struct {
 	Kind string `json:"kind"`
 }
 
-// ResourceRegistrationStatus reports whether the registration is usable and the
-// latest spec generation processed. When Active, grants and claims may be created
-// for the registered type. See the schema for exact fields and condition reasons.
-// Related objects include [ResourceGrant](#resourcegrant) and
-// [ResourceClaim](#resourceclaim).
+// ResourceRegistrationStatus reports the registration's operational state and processing status.
+// The system updates status conditions to indicate whether the registration is active and
+// usable for quota operations.
 type ResourceRegistrationStatus struct {
-	// Most recent generation observed by the controller.
+	// ObservedGeneration indicates the most recent spec generation that the system has processed.
+	// When ObservedGeneration matches metadata.generation, the status reflects the current spec.
+	// When ObservedGeneration is lower, the system is still processing recent changes.
 	//
 	// +kubebuilder:validation:Optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-	// Current status conditions. Known condition types: "Active" below marker
-	// ensures controllers set a correct and standardized status and an external
-	// client can't set the status to bypass validation.
+
+	// Conditions represents the latest available observations of the registration's state.
+	// The system sets these conditions to communicate operational status.
+	//
+	// Standard condition types:
+	// - "Active": Indicates whether the registration is operational. When True, ResourceGrants
+	//   and ResourceClaims can reference this registration. When False, quota operations are blocked.
+	//
+	// Standard condition reasons for "Active":
+	// - "RegistrationActive": Registration is validated and operational
+	// - "ValidationFailed": Specification contains errors (see message for details)
+	// - "RegistrationPending": Registration is being processed
 	//
 	// +kubebuilder:validation:XValidation:rule="self.all(c, c.type == 'Active' ? c.reason in ['RegistrationActive', 'ValidationFailed', 'RegistrationPending'] : true)",message="Active condition reason must be valid"
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
@@ -140,38 +231,56 @@ const (
 	ResourceRegistrationPendingReason = "RegistrationPending"
 )
 
-// ResourceRegistration defines which resource types the quota system manages and how to measure them.
-// Registrations enable grants and claims for a specific resource type, using clear units and ownership rules.
+// ResourceRegistration enables quota tracking for a specific resource type.
+// Administrators create registrations to define measurement units, consumer relationships,
+// and claiming permissions.
 //
 // ### How It Works
-// - Administrators create registrations to opt resource types into quota.
-// - After activation, ResourceGrants allocate capacity and ResourceClaims consume it for the type.
+// - Administrators create registrations to enable quota tracking for specific resource types
+// - The system validates the registration and sets the "Active" condition when ready
+// - ResourceGrants can then allocate capacity for the registered resource type
+// - ResourceClaims can consume capacity when allowed resources are created
 //
-// ### Works With
-// - [ResourceGrant](#resourcegrant) `allowances[].resourceType` must match `spec.resourceType`.
-// - [ResourceClaim](#resourceclaim) `spec.requests[].resourceType` must match `spec.resourceType`.
-// - The triggering kind must be listed in `spec.claimingResources` for claims to be valid.
-// - Consumers in grants/claims must match `spec.consumerTypeRef`.
+// ### Core Relationships
+// - **ResourceGrant.spec.allowances[].resourceType** must match this registration's **spec.resourceType**
+// - **ResourceClaim.spec.requests[].resourceType** must match this registration's **spec.resourceType**
+// - **ResourceClaim.spec.consumerRef** must match this registration's **spec.consumerTypeRef** type
+// - **ResourceClaim.spec.resourceRef** kind must be listed in this registration's **spec.claimingResources**
+//
+// ### Registration Lifecycle
+// 1. **Creation**: Administrator creates **ResourceRegistration** with resource type and consumer type
+// 2. **Validation**: System validates that referenced resource types exist and are accessible
+// 3. **Activation**: System sets `Active=True` condition when validation passes
+// 4. **Operation**: **ResourceGrants** and **ResourceClaims** can reference the active registration
+// 5. **Updates**: Only mutable fields (`description`, `claimingResources`) can be changed
+//
+// ### Status Conditions
+// - **Active=True**: Registration is validated and operational; grants and claims can use it
+// - **Active=False, reason=ValidationFailed**: Configuration errors prevent activation (check message)
+// - **Active=False, reason=RegistrationPending**: Quota system is processing the registration
+//
+// ### Measurement Types
+// - **Entity registrations** (`spec.type=Entity`): Count discrete resource instances (**Projects**, **Users**)
+// - **Allocation registrations** (`spec.type=Allocation`): Measure capacity amounts (CPU, memory, storage)
+//
+// ### Field Constraints and Limits
+// - Maximum 20 entries in **spec.claimingResources**
+// - **spec.resourceType**, **spec.consumerTypeRef**, and **spec.type** are immutable after creation
+// - **spec.description** maximum 500 characters
+// - **spec.baseUnit** and **spec.displayUnit** maximum 50 characters each
+// - **spec.unitConversionFactor** minimum value is 1
 //
 // ### Selectors and Filtering
-// - Field selectors (server-side): `spec.consumerTypeRef.kind`, `spec.consumerTypeRef.apiGroup`, `spec.resourceType`.
-// - Label selectors (add your own):
-//   - `quota.miloapis.com/resource-kind`: `<Kind>`
-//   - `quota.miloapis.com/resource-apigroup`: `<API group>`
-//   - `quota.miloapis.com/consumer-kind`: `<Kind>`
+// - **Field selectors**: spec.consumerTypeRef.kind, spec.consumerTypeRef.apiGroup, spec.resourceType
+// - **Recommended labels** (add manually):
+//   - quota.miloapis.com/resource-kind: Project
+//   - quota.miloapis.com/resource-apigroup: resourcemanager.miloapis.com
+//   - quota.miloapis.com/consumer-kind: Organization
 //
-// - Common queries:
-//   - All registrations for a resource kind: label selector `quota.miloapis.com/resource-kind` (+ `quota.miloapis.com/resource-apigroup` when needed).
-//   - All registrations for a consumer kind: label selector `quota.miloapis.com/consumer-kind`.
-//
-// ### Defaults and Limits
-// - `spec.type`: `Entity` (count objects) or `Allocation` (numeric capacity).
-// - `spec.claimingResources`: up to 20 entries; unversioned references (`apiGroup`, `kind`).
-// - `spec.resourceType`: must follow `group/resource` with optional subresource path.
-//
-// ### Notes
-// - `claimingResources` are unversioned; kind matching is case-insensitive and apiGroup must align.
-// - Grants and claims use `baseUnit`; `displayUnit` and `unitConversionFactor` affect presentation only.
+// ### Security Considerations
+// - Only include trusted resource types in **spec.claimingResources**
+// - Registrations are cluster-scoped and affect quota system-wide
+// - Consumer types must have appropriate RBAC permissions to create claims
 //
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true

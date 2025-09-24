@@ -11,12 +11,12 @@ type ClaimCreationPolicySpec struct {
 	//
 	// +kubebuilder:validation:Required
 	Trigger ClaimTriggerSpec `json:"trigger"`
-	// Target defines how and where ResourceClaims should be created.
+	// Target defines how and where **ResourceClaims** should be created.
 	//
 	// +kubebuilder:validation:Required
 	Target ClaimTargetSpec `json:"target"`
 	// Enabled determines if this policy is active.
-	// If false, no ResourceClaims will be created for matching resources.
+	// If false, no **ResourceClaims** will be created for matching resources.
 	//
 	// +kubebuilder:default=true
 	// +optional
@@ -51,18 +51,18 @@ type ClaimTriggerSpec struct {
 	Conditions []ConditionExpression `json:"conditions,omitempty"`
 }
 
-// ClaimTargetSpec defines how ResourceClaims are created for a matched trigger.
+// ClaimTargetSpec defines how **ResourceClaims** are created for a matched trigger.
 type ClaimTargetSpec struct {
-	// ResourceClaimTemplate defines how to create ResourceClaims.
+	// ResourceClaimTemplate defines how to create **ResourceClaims**.
 	// String fields support Go template syntax for dynamic content.
 	//
 	// +kubebuilder:validation:Required
 	ResourceClaimTemplate ResourceClaimTemplate `json:"resourceClaimTemplate"`
 }
 
-// ResourceClaimTemplate defines how to create ResourceClaims using actual ResourceClaim structure.
+// ResourceClaimTemplate defines how to create **ResourceClaims** using actual **ResourceClaim** structure.
 type ResourceClaimTemplate struct {
-	// Metadata for the created ResourceClaim.
+	// Metadata for the created **ResourceClaim**.
 	// String fields support Go template syntax.
 	//
 	// +kubebuilder:validation:Required
@@ -74,22 +74,70 @@ type ResourceClaimTemplate struct {
 	Spec ResourceClaimSpec `json:"spec"`
 }
 
-// ObjectMetaTemplate defines a minimal, templatable subset of ObjectMeta for use in templates.
-// Only safe, user-controlled fields are exposed.
+// ObjectMetaTemplate defines metadata fields that support Go template rendering for created objects.
+// Templates can access trigger resource data to generate dynamic names, namespaces, and annotations.
 type ObjectMetaTemplate struct {
-	// Name of the created object. Supports Go templates.
+	// Name specifies the exact name for the created ResourceClaim.
+	// Supports Go template syntax with access to template variables.
+	// Leave empty to use GenerateName for auto-generated names.
+	//
+	// Template variables available:
+	// - .trigger: The resource triggering claim creation
+	// - .requestInfo: Request details (verb, resource, name, etc.)
+	// - .user: User information (name, uid, groups, extra)
+	//
+	// Example: "{{.trigger.metadata.name}}-quota-claim"
+	//
 	// +optional
 	Name string `json:"name,omitempty"`
-	// GenerateName prefix for the created object when Name is empty. Supports Go templates.
+
+	// GenerateName specifies a prefix for auto-generated names when Name is empty.
+	// Kubernetes appends random characters to create unique names.
+	// Supports Go template syntax.
+	//
+	// Example: "{{.trigger.spec.type}}-claim-"
+	//
 	// +optional
 	GenerateName string `json:"generateName,omitempty"`
-	// Namespace where the object will be created. Supports Go templates.
+
+	// Namespace specifies where the ResourceClaim will be created.
+	// Supports Go template syntax to derive namespace from trigger resource.
+	// Leave empty to create in the same namespace as the trigger resource.
+	//
+	// Examples:
+	// - "{{.trigger.metadata.namespace}}" (same namespace as trigger)
+	// - "milo-system" (fixed system namespace)
+	// - "{{.trigger.spec.organization}}-claims" (derived namespace)
+	//
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
-	// Labels to set on the created object. Literal values only.
+
+	// Labels specifies static labels to apply to the created ResourceClaim.
+	// Values are literal strings (no template processing).
+	// The system automatically adds standard labels for policy tracking.
+	//
+	// Useful for:
+	// - Organizing claims by policy or resource type
+	// - Adding environment or tier indicators
+	// - Enabling label-based queries and monitoring
+	//
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
-	// Annotations to set on the created object. Values support Go templates.
+
+	// Annotations specifies annotations to apply to the created ResourceClaim.
+	// Values support Go template syntax for dynamic content.
+	// The system automatically adds standard annotations for tracking.
+	//
+	// Template variables available:
+	// - .trigger: The resource triggering claim creation
+	// - .requestInfo: Request details
+	// - .user: User information
+	//
+	// Examples:
+	// - created-for: "{{.trigger.metadata.name}}"
+	// - requested-by: "{{.user.name}}"
+	// - trigger-kind: "{{.trigger.kind}}"
+	//
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
@@ -140,45 +188,150 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 	}
 }
 
-// ClaimCreationPolicy creates ResourceClaims during admission when target resources are created.
-// Use it to enforce quota in real time at resource creation.
+// ClaimCreationPolicy automatically creates ResourceClaims during admission to enforce quota in real-time.
+// Policies intercept resource creation requests, evaluate trigger conditions, and generate
+// quota claims that prevent resource creation when quota limits are exceeded.
 //
 // ### How It Works
-// - Admission matches incoming creates against `spec.trigger.resource`.
-// - It evaluates all CEL expressions in `spec.trigger.conditions[]`.
-// - When all conditions are true, it renders `resourceClaimTemplate` and creates a claim.
-// - The system evaluates the claim against [AllowanceBucket](#allowancebucket)s and grants or denies the request.
+// 1. **Trigger Matching**: Admission webhook matches incoming resource creates against spec.trigger.resource
+// 2. **Condition Evaluation**: All CEL expressions in spec.trigger.conditions must evaluate to true
+// 3. **Template Rendering**: Policy renders spec.target.resourceClaimTemplate using available template variables
+// 4. **Claim Creation**: System creates the rendered ResourceClaim in the specified namespace
+// 5. **Quota Evaluation**: Claim is immediately evaluated against AllowanceBucket capacity
+// 6. **Admission Decision**: Original resource creation succeeds or fails based on claim result
 //
-// ### Works With
-// - Creates [ResourceClaim](#resourceclaim) objects; the triggering kind must be allowed by the target [ResourceRegistration](#resourceregistration) `spec.claimingResources`.
-// - Consumer resolution is automatic at admission; claims are evaluated against [AllowanceBucket](#allowancebucket) capacity.
-// - Policy readiness (`status.conditions[type=Ready]`) indicates the policy is valid and active.
+// ### Policy Processing Flow
+// **Enabled Policies** (spec.enabled=true):
+// 1. Admission webhook receives resource creation request
+// 2. Finds all ClaimCreationPolicies matching the resource type
+// 3. Evaluates trigger conditions for each matching policy
+// 4. Creates ResourceClaim for each policy where all conditions are true
+// 5. Evaluates all created claims against quota buckets
+// 6. Allows resource creation only if all claims are granted
+//
+// **Disabled Policies** (spec.enabled=false):
+// - Completely ignored during admission processing
+// - No conditions evaluated, no claims created
+// - Useful for temporarily disabling quota enforcement
+//
+// ### Template System
+// The template system transforms static ResourceClaim specifications into dynamic claims that reflect
+// the context of each admission request. When a policy triggers, the template engine receives rich
+// contextual information about the resource being created, the user making the request, and details
+// about the admission operation itself.
+//
+// The most important template variable is `.trigger`, which contains the complete structure of the
+// resource that triggered the policy. This includes all metadata like labels and annotations, the
+// entire spec section, and any status information if the resource already exists. You can navigate
+// this structure using standard template dot notation: `.trigger.metadata.name` gives you the
+// resource's name, while `.trigger.spec.replicas` might tell you how many instances are requested.
+//
+// Authentication context comes through the `.user` variable, providing access to the requester's
+// name, unique identifier, group memberships, and any additional attributes. This enables policies
+// to create claims that track who requested resources and potentially apply different quota rules
+// based on user attributes. The `.requestInfo` variable adds operational context like the specific
+// API verb being performed and which resource type is being manipulated.
+//
+// Template functions help transform and manipulate these values. The `default` function proves
+// particularly useful for providing fallback values when template variables might be empty.
+// String manipulation functions like `lower`, `upper`, and `trim` help normalize names and values,
+// while `replace` enables pattern substitution for complex naming schemes. For example, you might
+// use `{{default "milo-system" .trigger.metadata.namespace}}` to place claims in a system namespace
+// when the triggering resource doesn't specify one.
+//
+// ### CEL Expression System
+// CEL expressions act as the gatekeepers that determine whether a policy should create a quota claim
+// for a particular resource. These expressions have access to the same rich contextual information
+// as templates but focus on making boolean decisions rather than generating content. Each expression
+// must evaluate to either true (activate the policy) or false (skip this resource), and all expressions
+// in a policy's condition list must return true for the policy to trigger.
+//
+// The expression environment includes the triggering resource under the `trigger` variable, letting
+// you examine any field in the resource's structure. This enables sophisticated filtering based on
+// resource specifications, labels, annotations, or even status conditions. You might write
+// `trigger.spec.tier == "premium"` to only apply quota policies to premium resources, or use
+// `trigger.metadata.labels["environment"] == "prod"` to restrict enforcement to production workloads.
+//
+// User context through the `user` variable enables authorization-based policies. The expression
+// `user.groups.exists(g, g == "admin")` would limit quota enforcement to resources created by
+// administrators, while `user.name.startsWith("service-")` might target service accounts.
+// Combined with resource filtering, you can create nuanced policies that apply different quota
+// rules based on who is creating what types of resources in which contexts.
+//
+// ### Consumer Resolution
+// The system automatically resolves spec.consumerRef for created claims:
+// - Uses parent context resolution to find the appropriate consumer
+// - Typically resolves to Organization for Project resources, Project for User resources, etc.
+// - Consumer must match the ResourceRegistration.spec.consumerTypeRef for the requested resource type
+//
+// ### Validation and Dependencies
+// **Policy Validation:**
+// - Target resource type must exist and be accessible
+// - All resource types in claim template must have active ResourceRegistrations
+// - Consumer resolution must be resolvable for target resources
+// - CEL expressions and Go templates must be syntactically valid
+//
+// **Runtime Dependencies:**
+// - ResourceRegistration must be Active for each requested resource type
+// - Triggering resource kind must be listed in ResourceRegistration.spec.claimingResources
+// - AllowanceBucket must exist (created automatically when ResourceGrants are active)
+//
+// ### Policy Lifecycle
+// 1. **Creation**: Administrator creates ClaimCreationPolicy
+// 2. **Validation**: Controller validates target resource, expressions, and templates
+// 3. **Activation**: Controller sets Ready=True when validation passes
+// 4. **Operation**: Admission webhook uses active policies to create claims
+// 5. **Updates**: Changes trigger re-validation; only Ready policies are used
+//
+// ### Status Conditions
+// - **Ready=True**: Policy is validated and actively creating claims
+// - **Ready=False, reason=ValidationFailed**: Configuration errors prevent activation (check message)
+// - **Ready=False, reason=PolicyDisabled**: Policy is disabled (spec.enabled=false)
+//
+// ### Automatic Claim Features
+// Claims created by ClaimCreationPolicy include:
+// - **Standard Labels**: quota.miloapis.com/auto-created=true, quota.miloapis.com/policy=<policy-name>
+// - **Standard Annotations**: quota.miloapis.com/created-by=claim-creation-plugin, timestamps
+// - **Owner References**: Set to triggering resource when possible for lifecycle management
+// - **Cleanup**: Automatically cleaned up when denied to prevent accumulation
+//
+// ### Field Constraints and Limits
+// - Maximum 10 conditions per trigger (spec.trigger.conditions)
+// - Static amounts only in v1alpha1 (no expression-based quota amounts)
+// - Template metadata labels are literal strings (no template processing)
+// - Template annotation values support templating
 //
 // ### Selectors and Filtering
-// - Field selectors (server-side): `spec.trigger.resource.kind`, `spec.trigger.resource.apiVersion`, `spec.enabled`.
-// - Label selectors (add your own):
-//   - `quota.miloapis.com/target-kind`: `Project`
-//   - `quota.miloapis.com/environment`: `prod`
+// - **Field selectors**: spec.trigger.resource.kind, spec.trigger.resource.apiVersion, spec.enabled
+// - **Recommended labels** (add manually):
+//   - quota.miloapis.com/target-kind: Project
+//   - quota.miloapis.com/environment: production
+//   - quota.miloapis.com/tier: premium
 //
-// - Common queries:
-//   - All policies for a target kind: label selector `quota.miloapis.com/target-kind`.
-//   - All enabled policies: field selector `spec.enabled=true`.
+// ### Common Queries
+// - All policies for a resource kind: label selector quota.miloapis.com/target-kind=<kind>
+// - Enabled policies only: field selector spec.enabled=true
+// - Environment-specific policies: label selector quota.miloapis.com/environment=<env>
+// - Failed policies: filter by status.conditions[type=Ready].status=False
 //
-// ### Defaults and Limits
-// - In `v1alpha1`, `spec.requests[]` amounts are static integers (no expression-based amounts).
-// - `metadata.labels` in the template are literal; annotation values support templating.
-// - `spec.consumerRef` is resolved automatically by admission (not templated in `v1alpha1`).
+// ### Troubleshooting
+// - **Policy not triggering**: Check spec.enabled=true and status.conditions[type=Ready]=True
+// - **Template errors**: Review status condition message for template syntax issues
+// - **CEL expression failures**: Validate expression syntax and available variables
+// - **Claims not created**: Verify trigger conditions match the incoming resource
+// - **Consumer resolution errors**: Check parent context resolution and ResourceRegistration setup
 //
-// ### Notes
-// - Available template variables: `.trigger`, `.requestInfo`, `.user`.
-// - Template functions: `lower`, `upper`, `title`, `default`, `contains`, `join`, `split`, `replace`, `trim`, `toInt`, `toString`.
-// - If `Ready=False` with `ValidationFailed`, check expressions and templates for errors.
-// - Disabled policies (`spec.enabled=false`) do not create claims, even if conditions match.
-// - For task-oriented steps and examples, see future How-to guides.
+// ### Performance Considerations
+// - Policies are evaluated synchronously during admission (affects API latency)
+// - Complex CEL expressions can impact admission performance
+// - Template rendering occurs for every matching admission request
+// - Consider using specific trigger conditions to limit policy evaluation scope
 //
-// ### See Also
-// - [ResourceClaim](#resourceclaim): The object created by this policy.
-// - [ResourceRegistration](#resourceregistration): Controls which resources can claim quota.
+// ### Security Considerations
+// - Templates can access complete trigger resource data (sensitive field exposure)
+// - CEL expressions have access to user information and request details
+// - Only trusted administrators should create or modify policies
+// - Review template output to ensure no sensitive data leakage in claim metadata
 //
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true

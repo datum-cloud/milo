@@ -98,7 +98,7 @@ spec:
                 default: true
                 description: |-
                   Enabled determines if this policy is active.
-                  If false, no ResourceGrants will be created for matching resources.
+                  If false, no **ResourceGrants** will be created for matching resources.
                 type: boolean
               target:
                 description: Target defines where and how grants should be created.
@@ -110,22 +110,46 @@ spec:
                       instead of the current control plane.
                     properties:
                       apiGroup:
-                        description: APIGroup of the parent context resource.
+                        description: |-
+                          APIGroup specifies the API group of the parent context resource.
+                          Must follow DNS subdomain format. Maximum 253 characters.
+
+                          Examples:
+                          - "resourcemanager.miloapis.com" (for Organization parent context)
+                          - "infrastructure.miloapis.com" (for Cluster parent context)
                         maxLength: 253
                         pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                         type: string
                       kind:
-                        description: Kind of the parent context resource.
+                        description: |-
+                          Kind specifies the resource type that represents the parent context.
+                          Must be a valid Kubernetes resource Kind. Maximum 63 characters.
+
+                          Examples:
+                          - "Organization" (create grants in organization's parent control plane)
+                          - "Cluster" (create grants in cluster's parent infrastructure)
                         maxLength: 63
                         minLength: 1
                         pattern: ^[A-Z][a-zA-Z0-9]*$
                         type: string
                       nameExpression:
                         description: |-
-                          NameExpression is a CEL expression to resolve the parent context name.
-                          The expression must return a string value.
+                          NameExpression is a CEL expression that resolves the name of the parent context resource.
+                          Must return a string value that identifies the specific parent context instance.
+                          Maximum 512 characters.
+
                           Available variables:
-                          - object: The trigger resource being evaluated (same as .trigger in Go templates)
+                          - object: The trigger resource being evaluated (complete object)
+
+                          Common expression patterns:
+                          - object.spec.organization (direct field reference)
+                          - object.metadata.labels["parent-org"] (label-based resolution)
+                          - object.metadata.namespace.split("-")[0] (derived from namespace naming)
+
+                          Examples:
+                          - "acme-corp" (literal parent name)
+                          - object.spec.parentOrganization (field from trigger resource)
+                          - object.metadata.labels["quota.miloapis.com/organization"] (label value)
                         maxLength: 512
                         minLength: 1
                         type: string
@@ -136,7 +160,7 @@ spec:
                     type: object
                   resourceGrantTemplate:
                     description: |-
-                      ResourceGrantTemplate defines how to create ResourceGrants.
+                      ResourceGrantTemplate defines how to create **ResourceGrants**.
                       String fields support Go template syntax for dynamic content.
                     properties:
                       metadata:
@@ -147,25 +171,65 @@ spec:
                           annotations:
                             additionalProperties:
                               type: string
-                            description: Annotations to set on the created object.
-                              Values support Go templates.
+                            description: |-
+                              Annotations specifies annotations to apply to the created ResourceClaim.
+                              Values support Go template syntax for dynamic content.
+                              The system automatically adds standard annotations for tracking.
+
+                              Template variables available:
+                              - .trigger: The resource triggering claim creation
+                              - .requestInfo: Request details
+                              - .user: User information
+
+                              Examples:
+                              - created-for: "{{.trigger.metadata.name}}"
+                              - requested-by: "{{.user.name}}"
+                              - trigger-kind: "{{.trigger.kind}}"
                             type: object
                           generateName:
-                            description: GenerateName prefix for the created object
-                              when Name is empty. Supports Go templates.
+                            description: |-
+                              GenerateName specifies a prefix for auto-generated names when Name is empty.
+                              Kubernetes appends random characters to create unique names.
+                              Supports Go template syntax.
+
+                              Example: "{{.trigger.spec.type}}-claim-"
                             type: string
                           labels:
                             additionalProperties:
                               type: string
-                            description: Labels to set on the created object. Literal
-                              values only.
+                            description: |-
+                              Labels specifies static labels to apply to the created ResourceClaim.
+                              Values are literal strings (no template processing).
+                              The system automatically adds standard labels for policy tracking.
+
+                              Useful for:
+                              - Organizing claims by policy or resource type
+                              - Adding environment or tier indicators
+                              - Enabling label-based queries and monitoring
                             type: object
                           name:
-                            description: Name of the created object. Supports Go templates.
+                            description: |-
+                              Name specifies the exact name for the created ResourceClaim.
+                              Supports Go template syntax with access to template variables.
+                              Leave empty to use GenerateName for auto-generated names.
+
+                              Template variables available:
+                              - .trigger: The resource triggering claim creation
+                              - .requestInfo: Request details (verb, resource, name, etc.)
+                              - .user: User information (name, uid, groups, extra)
+
+                              Example: "{{.trigger.metadata.name}}-quota-claim"
                             type: string
                           namespace:
-                            description: Namespace where the object will be created.
-                              Supports Go templates.
+                            description: |-
+                              Namespace specifies where the ResourceClaim will be created.
+                              Supports Go template syntax to derive namespace from trigger resource.
+                              Leave empty to create in the same namespace as the trigger resource.
+
+                              Examples:
+                              - "{{.trigger.metadata.namespace}}" (same namespace as trigger)
+                              - "milo-system" (fixed system namespace)
+                              - "{{.trigger.spec.organization}}-claims" (derived namespace)
                             type: string
                         type: object
                       spec:
@@ -174,19 +238,45 @@ spec:
                           String fields support Go template syntax.
                         properties:
                           allowances:
-                            description: List of allowances this grant contains
+                            description: |-
+                              Allowances specifies the quota allocations provided by this grant.
+                              Each allowance grants capacity for a specific resource type.
+                              Minimum 1 allowance required, maximum 20 allowances per grant.
+
+                              All allowances in a single grant:
+                              - Apply to the same consumer (spec.consumerRef)
+                              - Contribute to the same AllowanceBucket for each resource type
+                              - Activate and deactivate together based on the grant's status
                             items:
-                              description: Allowance defines a single resource allowance
-                                within a grant
+                              description: |-
+                                Allowance defines quota allocation for a specific resource type within a ResourceGrant.
+                                Each allowance can contain multiple buckets that sum to provide total capacity.
                               properties:
                                 buckets:
-                                  description: List of buckets this allowance contains
+                                  description: |-
+                                    Buckets contains the quota allocations for this resource type.
+                                    All bucket amounts are summed to determine the total allowance.
+                                    Minimum 1 bucket required per allowance.
+
+                                    Multiple buckets can be used for:
+                                    - Separating quota from different sources or tiers
+                                    - Managing incremental quota increases over time
+                                    - Tracking quota attribution for billing or reporting
                                   items:
+                                    description: |-
+                                      Bucket represents a single allocation of quota capacity within an allowance.
+                                      Each bucket contributes its amount to the total allowance for a resource type.
                                     properties:
                                       amount:
                                         description: |-
-                                          Amount of the resource type being granted, measured in the BaseUnit
-                                          defined by the corresponding ResourceRegistration for this resource type.
+                                          Amount specifies the quota capacity provided by this bucket.
+                                          Must be measured in the BaseUnit defined by the corresponding ResourceRegistration.
+                                          Must be a non-negative integer (0 is valid but provides no quota).
+
+                                          Examples:
+                                          - 100 (providing 100 projects)
+                                          - 2048000 (providing 2048000 bytes = 2GB)
+                                          - 5000 (providing 5000 CPU millicores = 5 cores)
                                         format: int64
                                         minimum: 0
                                         type: integer
@@ -197,9 +287,18 @@ spec:
                                   type: array
                                 resourceType:
                                   description: |-
-                                    Fully qualified name of the resource type being granted.
-                                    Must match a registered ResourceRegistration.spec.resourceType
-                                    (for example, "resourcemanager.miloapis.com/projects").
+                                    ResourceType identifies the specific resource type receiving quota allocation.
+                                    Must exactly match a ResourceRegistration.spec.resourceType that is currently active.
+                                    The quota system validates this reference when processing the grant.
+
+                                    The identifier format is flexible, as defined by platform administrators
+                                    in their ResourceRegistrations.
+
+                                    Examples:
+                                    - "resourcemanager.miloapis.com/projects"
+                                    - "compute_cpu"
+                                    - "storage.volumes"
+                                    - "custom-service-quota"
                                   type: string
                               required:
                               - buckets
@@ -209,21 +308,55 @@ spec:
                             type: array
                           consumerRef:
                             description: |-
-                              ConsumerRef identifies the quota consumer (recipient) that receives
-                              these allowances (for example, an Organization).
+                              ConsumerRef identifies the quota consumer that receives these allowances.
+                              The consumer type must match the ConsumerTypeRef defined in the ResourceRegistration
+                              for each allowance resource type. The system validates this relationship.
+
+                              Examples:
+                              - Organization receiving Project quota allowances
+                              - Project receiving User quota allowances
+                              - Organization receiving storage quota allowances
                             properties:
                               apiGroup:
                                 description: |-
-                                  APIGroup of the target resource (e.g., "resourcemanager.miloapis.com").
-                                  Empty string for core API group.
+                                  APIGroup specifies the API group of the consumer resource.
+                                  Use full group name for Milo resources.
+
+                                  Examples:
+                                  - "resourcemanager.miloapis.com" (Organization/Project resources)
+                                  - "iam.miloapis.com" (User/Group resources)
+                                  - "infrastructure.miloapis.com" (infrastructure resources)
                                 type: string
                               kind:
-                                description: Kind of the consumer resource (for example,
-                                  Organization, Project).
+                                description: |-
+                                  Kind specifies the type of consumer resource.
+                                  Must match an existing Kubernetes resource type that can receive quota grants.
+
+                                  Common consumer types:
+                                  - "Organization" (top-level quota consumer)
+                                  - "Project" (project-level quota consumer)
+                                  - "User" (user-level quota consumer)
                                 type: string
                               name:
-                                description: Name of the consumer resource object
-                                  instance.
+                                description: |-
+                                  Name identifies the specific consumer resource instance.
+                                  Must match the name of an existing consumer resource in the cluster.
+
+                                  Examples:
+                                  - "acme-corp" (Organization name)
+                                  - "web-application" (Project name)
+                                  - "john.doe" (User name)
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace identifies the namespace of the consumer resource.
+                                  Required for namespaced consumer resources (e.g., Projects).
+                                  Leave empty for cluster-scoped consumer resources (e.g., Organizations).
+
+                                  Examples:
+                                  - "" (empty for cluster-scoped Organizations)
+                                  - "organization-acme-corp" (namespace for Projects within an organization)
+                                  - "project-web-app" (namespace for resources within a project)
                                 type: string
                             required:
                             - kind
@@ -250,24 +383,38 @@ spec:
                       All conditions must pass for the policy to trigger.
                       The 'object' variable contains the trigger resource being evaluated.
                     items:
-                      description: ConditionExpression defines a CEL expression for
-                        condition evaluation.
+                      description: |-
+                        ConditionExpression defines a CEL expression that determines when the policy should trigger.
+                        All expressions in a policy's trigger conditions must evaluate to true for the policy to activate.
                       properties:
                         expression:
                           description: |-
-                            Expression is the CEL expression to evaluate against the trigger resource.
-                            The expression must return a boolean value.
-                            Available variables:
-                            - GrantCreationPolicy (controller): `object` is the trigger resource (map)
-                            - ClaimCreationPolicy (admission): `trigger` is the trigger resource (map);
-                              also `user.name`, `user.uid`, `user.groups`, `user.extra`, `requestInfo.*`,
-                              `namespace`, `gvk.group`, `gvk.version`, `gvk.kind`
+                            Expression specifies the CEL expression to evaluate against the trigger resource.
+                            Must return a boolean value (true to match, false to skip).
+                            Maximum 1024 characters.
+
+                            Available variables in GrantCreationPolicy context:
+                            - object: The complete resource being watched (map[string]any)
+                              - object.metadata.name, object.spec.*, object.status.*, etc.
+
+                            Common expression patterns:
+                            - object.spec.tier == "premium" (check resource field)
+                            - object.metadata.labels["environment"] == "prod" (check labels)
+                            - object.status.phase == "Active" (check status)
+                            - object.metadata.namespace == "production" (check namespace)
+                            - has(object.spec.quotaProfile) (check field existence)
                           maxLength: 1024
                           minLength: 1
                           type: string
                         message:
-                          description: Message provides a human-readable description
-                            of the condition requirement.
+                          description: |-
+                            Message provides a human-readable description explaining when this condition applies.
+                            Used for documentation and debugging. Maximum 256 characters.
+
+                            Examples:
+                            - "Applies only to premium tier organizations"
+                            - "Matches organizations in production environment"
+                            - "Triggers when quota profile is specified"
                           maxLength: 256
                           type: string
                       required:
@@ -309,7 +456,7 @@ spec:
               Status fields
               - conditions[type=Ready]: True when the policy is validated and active.
               - conditions[type=ParentContextReady]: True when cross‑cluster targeting is resolvable.
-              - observedGeneration: Latest spec generation processed by the controller.
+              - observedGeneration: Latest spec generation processed by the quota system.
 
               See also
               - [ResourceGrant](#resourcegrant): The object created by this policy.
