@@ -1,0 +1,124 @@
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: Vendor
+metadata:
+  name: acme-corp
+  annotations:
+    kubernetes.io/display-name: "ACME Corporation"
+spec:
+  profileType: business
+  legalName: "ACME Corporation LLC"
+  nickname: "ACME Corp"
+  description: "A leading provider of innovative solutions"
+  website: "https://acme-corp.example.com"
+  vendorType: llc
+  corporationDBA: "ACME"
+  registrationNumber: "123456789"
+  stateOfIncorporation: "Delaware"
+  billingAddress:
+    street: "123 Business Ave"
+    street2: "Suite 100"
+    city: "New York"
+    state: "NY"
+    postalCode: "10001"
+    country: "United States"
+  mailingAddress:
+    street: "456 Mail St"
+    city: "New York"
+    state: "NY"
+    postalCode: "10002"
+    country: "United States"
+  taxInfo:
+    taxIdType: EIN
+    taxIdRef:
+      secretName: "acme-corp-tax-id"
+      secretKey: "tax-id"
+      namespace: "default"
+    country: "United States"
+    taxDocument: "W-9"
+status:
+  status: active
+  verificationStatus: approved
+  requiredVerifications: 2
+  completedVerifications: 2
+  pendingVerifications: 0
+  rejectedVerifications: 0
+  expiredVerifications: 0
+  lastVerifiedAt: "2024-01-15T14:30:00Z"
+  activatedAt: "2024-01-15T15:00:00Z"
+  conditions:
+  - type: "Ready"
+    status: "True"
+    reason: "VendorActive"
+    message: "Vendor is active and verified"
+    lastTransitionTime: "2024-01-15T15:00:00Z"
+  - type: "Validated"
+    status: "True"
+    reason: "ValidationPassed"
+    message: "All required fields validated"
+    lastTransitionTime: "2024-01-15T10:00:00Z"
+  - type: "Verified"
+    status: "True"
+    reason: "VerificationComplete"
+    message: "All required verifications completed"
+    lastTransitionTime: "2024-01-15T14:30:00Z"
+  - type: "Active"
+    status: "True"
+    reason: "Activated"
+    message: "Vendor is active and ready for business"
+    lastTransitionTime: "2024-01-15T15:00:00Z"
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: Vendor
+metadata:
+  name: john-doe-consulting
+  annotations:
+    kubernetes.io/display-name: "John Doe Consulting"
+spec:
+  profileType: person
+  legalName: "John Doe"
+  nickname: "John"
+  description: "Independent consultant specializing in cloud architecture"
+  website: "https://johndoe.example.com"
+  billingAddress:
+    street: "789 Home St"
+    city: "San Francisco"
+    state: "CA"
+    postalCode: "94102"
+    country: "United States"
+  taxInfo:
+    taxIdType: SSN
+    taxIdRef:
+      secretName: "john-doe-tax-id"
+      secretKey: "ssn"
+      namespace: "default"
+    country: "United States"
+    taxDocument: "W-9"
+status:
+  status: pending
+  verificationStatus: in-progress
+  requiredVerifications: 2
+  completedVerifications: 0
+  pendingVerifications: 2
+  rejectedVerifications: 0
+  expiredVerifications: 0
+  conditions:
+  - type: "Ready"
+    status: "False"
+    reason: "VerificationPending"
+    message: "Vendor pending verification completion"
+    lastTransitionTime: "2024-01-17T11:20:00Z"
+  - type: "Validated"
+    status: "True"
+    reason: "ValidationPassed"
+    message: "All required fields validated"
+    lastTransitionTime: "2024-01-17T10:00:00Z"
+  - type: "Verified"
+    status: "False"
+    reason: "VerificationInProgress"
+    message: "Verification process in progress"
+    lastTransitionTime: "2024-01-17T11:20:00Z"
+  - type: "Active"
+    status: "False"
+    reason: "NotActivated"
+    message: "Vendor not yet activated"
+    lastTransitionTime: "2024-01-17T11:20:00Z"
