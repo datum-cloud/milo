@@ -83,23 +83,33 @@ spec:
                 - normal
                 - high
                 type: string
+              recipient:
+                description: Recipient contain the recipient of the email.
+                properties:
+                  emailAddress:
+                    description: |-
+                      EmailAddress allows specifying a literal e-mail address for the recipient instead of referencing a User resource.
+                      It is mutually exclusive with UserRef: exactly one of them must be specified.
+                    type: string
+                  userRef:
+                    description: |-
+                      UserRef references the User resource that will receive the message.
+                      It is mutually exclusive with EmailAddress: exactly one of them must be specified.
+                    properties:
+                      name:
+                        description: Name contain the name of the User resource that
+                          will receive the email.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
               templateRef:
                 description: TemplateRef references the EmailTemplate that should
                   be rendered.
                 properties:
                   name:
                     description: Name is the name of the EmailTemplate being referenced.
-                    type: string
-                required:
-                - name
-                type: object
-              userRef:
-                description: UserRef references the User resource that will receive
-                  the message.
-                properties:
-                  name:
-                    description: Name contain the name of the User resource that will
-                      receive the email.
                     type: string
                 required:
                 - name
@@ -124,8 +134,8 @@ spec:
                   type: object
                 type: array
             required:
+            - recipient
             - templateRef
-            - userRef
             type: object
           status:
             description: |-

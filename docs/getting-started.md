@@ -50,6 +50,47 @@ This command orchestrates the entire setup process:
 
 The process typically takes 3-5 minutes depending on your system.
 
+## Verifying Installation
+
+### Check Milo Version
+
+You can verify your Milo installation and get detailed version information:
+
+```bash
+# From a running container (if you built one)
+docker run --rm ghcr.io/datum-cloud/milo:dev version
+
+# Multiple output formats available
+milo version                    # Default detailed output
+milo version --output json      # JSON format for scripting
+milo version --output yaml      # YAML format
+milo version --output short     # Short version only
+```
+
+The version command displays:
+- **Git version**: Semantic version with commit hash (e.g., `v0.0.0-master+0133af2`)
+- **Git commit**: Full commit hash and tree state (clean/dirty)
+- **Build date**: When the binary was compiled (ISO 8601 format)
+- **Go version**: Go compiler version used
+- **Platform**: Target architecture (e.g., `linux/amd64`, `darwin/arm64`)
+
+This information is useful for:
+- Troubleshooting issues (include in bug reports)
+- Verifying you're running the expected version
+- Confirming successful builds and deployments
+
+### Check API Server Status
+
+Verify the Milo API server is responding:
+
+```bash
+# Check API server health
+task kubectl -- get --raw /healthz
+
+# List available API resources (should show Milo custom resources)
+task kubectl -- api-resources | grep miloapis
+```
+
 ## Optional: Enable Observability Stack
 
 The test infrastructure includes an optional observability stack with metrics, logs, and tracing:
@@ -254,6 +295,18 @@ task test:end-to-end
 ## Troubleshooting
 
 ### Common Issues
+
+#### Version mismatch or build issues
+```bash
+# Check if you're running the expected version
+docker run --rm ghcr.io/datum-cloud/milo:dev version
+
+# Rebuild with fresh version information
+task dev:build
+
+# Check version after rebuild
+docker run --rm ghcr.io/datum-cloud/milo:dev version --output short
+```
 
 #### Cluster won't start
 ```bash

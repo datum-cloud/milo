@@ -125,6 +125,21 @@ transforms:
           }
         }
 
+        # Fallback: derive organization from responseObject metadata.labels when present (RequestResponse level)
+        if organization_name == null && exists(log.responseObject) {
+          if exists(log.responseObject.metadata) && exists(log.responseObject.metadata.labels) {
+            labels_map = object!(log.responseObject.metadata.labels)
+            if exists(labels_map."resourcemanager.miloapis.com/organization-name") {
+              organization_name = to_string!(labels_map."resourcemanager.miloapis.com/organization-name")
+            }
+          }
+        }
+
+        # Ensure organization annotation is present if resolved via any path
+        if organization_name != null {
+          annotations = set!(value: annotations, path: ["resourcemanager.miloapis.com/organization-name"], data: organization_name)
+        }
+
         # Set control plane metadata. If a project was identified via user extra,
         # classify as project control-plane for downstream filtering; else core.
         if project_name != null {
@@ -150,6 +165,14 @@ transforms:
     inputs:
       - audit_log_transformer
     source: |
+      # Use the audit log's timestamp instead of Vector's reception timestamp
+      # Prefer stageTimestamp (when the stage completed) over requestReceivedTimestamp
+      if exists(.stageTimestamp) {
+        .timestamp = parse_timestamp!(.stageTimestamp, "%+")
+      } else if exists(.requestReceivedTimestamp) {
+        .timestamp = parse_timestamp!(.requestReceivedTimestamp, "%+")
+      }
+
       # Filter internal cluster IPs from sourceIPs array
       if exists(.sourceIPs) && is_array(.sourceIPs) {
         filtered_source_ips = []
@@ -189,7 +212,7 @@ sinks:
     type: loki
     inputs:
       - audit_log_common_processor
-    endpoint: http://loki-single-binary.telemetry-system.svc.cluster.local:3100
+    endpoint: "${LOKI_ENDPOINT:-http://loki-single-binary.telemetry-system.svc.cluster.local:3100}"
     encoding:
       codec: json
     labels:
@@ -199,3 +222,5 @@ sinks:
       resource_kind: "{{ objectRef.resource }}"
       user_name: "{{ user.username }}"
       control_plane_type: '{{ annotations."telemetry.miloapis.com/control-plane-type" }}'
+      organization_name: '{{ annotations."resourcemanager.miloapis.com/organization-name" }}'
+      project_name: '{{ annotations."resourcemanager.miloapis.com/project-name" }}'

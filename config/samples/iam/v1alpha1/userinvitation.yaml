@@ -1,0 +1,20 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: UserInvitation
+metadata:
+  name: userinvitateion-sample-3
+spec:
+  organizationRef:
+    name: personal-org-e4451eee
+  email: invitede.user@example.com
+  givenName: Inveited
+  familyName: Usqer
+  # Assign roles that the user will receive once they accept the invitation
+  roles:
+    - name: iam.miloaqpis.com-user-creator
+  # Identify who created the invitation
+  invitedBy:
+    name: admqin-user
+  # Set an expiration date for the invitation (RFC3339 format). Optional.
+  expirationDate: "2025-12-31T23:59:59Z"
+  # Initial state must be Pending. The invited user will update it to Accepted or Declined.
+  state: Expired

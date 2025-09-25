@@ -12,11 +12,16 @@ RUN go mod download
 # Copy the rest of the application source code
 COPY . .
 
-# Build the application with optimizations
+# Build the application with optimizations and version information
 # -ldflags="-w -s" strips debug info, reducing binary size by ~30%
 # -trimpath removes file system paths from the binary for reproducible builds
+# Version information is injected via ldflags into k8s.io/component-base/version
+ARG VERSION=v0.0.0-master+dev
+ARG GIT_COMMIT=unknown
+ARG GIT_TREE_STATE=dirty
+ARG BUILD_DATE=unknown
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-w -s" -trimpath -o milo ./cmd/milo
+    go build -trimpath -o milo ./cmd/milo
 
 # Final stage: minimal runtime image
 FROM gcr.io/distroless/static

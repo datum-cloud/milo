@@ -57,6 +57,20 @@ type EmailVariable struct {
 	Value string `json:"value"`
 }
 
+// EmailRecipient contains information about the recipient of the email.
+// +kubebuilder:validation:Type=object
+type EmailRecipient struct {
+	// UserRef references the User resource that will receive the message.
+	// It is mutually exclusive with EmailAddress: exactly one of them must be specified.
+	// +kubebuilder:validation:Optional
+	UserRef EmailUserReference `json:"userRef,omitempty"`
+
+	// EmailAddress allows specifying a literal e-mail address for the recipient instead of referencing a User resource.
+	// It is mutually exclusive with UserRef: exactly one of them must be specified.
+	// +kubebuilder:validation:Optional
+	EmailAddress string `json:"emailAddress,omitempty"`
+}
+
 // EmailSpec defines the desired state of Email.
 // It references a template, recipients, and any variables required to render the final message.
 // +kubebuilder:validation:Type=object
@@ -65,9 +79,9 @@ type EmailSpec struct {
 	// +kubebuilder:validation:Required
 	TemplateRef TemplateReference `json:"templateRef"`
 
-	// UserRef references the User resource that will receive the message.
+	// Recipient contain the recipient of the email.
 	// +kubebuilder:validation:Required
-	UserRef EmailUserReference `json:"userRef"`
+	Recipient EmailRecipient `json:"recipient"`
 
 	// CC contains additional e-mail addresses that will receive a carbon copy of the message.
 	// Maximum 10 addresses.

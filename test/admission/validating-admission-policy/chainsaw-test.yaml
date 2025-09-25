@@ -1,0 +1,65 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: validating-admission-policy-project
+spec:
+  clusters:
+    orgA:
+      kubeconfig: kubeconfig-org-a
+    orgB:
+      kubeconfig: kubeconfig-org-b
+  steps:
+  - name: apply-policy-and-orgs
+    try:
+    - apply:
+        file: resources/policy.yaml
+    - sleep:
+        duration: 2s
+    - apply:
+        file: resources/org-a.yaml
+    - apply:
+        file: resources/org-b.yaml
+
+  - name: deny-projects-with-bad-names-orgA
+    cluster: orgA
+    try:
+    - error:
+        file: resources/project-bad-a.yaml
+  - name: deny-projects-with-bad-names-orgB
+    cluster: orgB
+    try:
+    - error:
+        file: resources/project-bad-b.yaml
+
+  - name: allow-projects-with-ok-prefix-orgA
+    cluster: orgA
+    try:
+    - apply:
+        file: resources/project-good-a.yaml
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Project
+        name: vap-ok-good-a
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+    - assert:
+        file: assertions/assert-project-a-owner.yaml
+  - name: allow-projects-with-ok-prefix-orgB
+    cluster: orgB
+    try:
+    - apply:
+        file: resources/project-good-b.yaml
+    - wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: Project
+        name: vap-ok-good-b
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'true'
+    - assert:
+        file: assertions/assert-project-b-owner.yaml

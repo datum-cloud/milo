@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"net/mail"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
@@ -47,22 +48,41 @@ func (v *EmailValidator) ValidateCreate(ctx context.Context, obj runtime.Object)
 
 	var errs field.ErrorList
 
+	hasEmailAddress := email.Spec.Recipient.EmailAddress != ""
+	hasUserRef := email.Spec.Recipient.UserRef.Name != ""
+
+	// Validate that exactly one of emailAddress or userRef is provided
+	if hasEmailAddress == hasUserRef {
+		emailLog.Info("exactly one of emailAddress or userRef must be provided", "email", email.Name)
+		errs = append(errs, field.Invalid(field.NewPath("spec"), "", "exactly one of emailAddress or userRef must be provided"))
+	}
+
 	// Validate User reference
-	user := &iamv1alpha1.User{}
-	err := v.Client.Get(ctx, client.ObjectKey{Name: email.Spec.UserRef.Name}, user)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			emailLog.Info("user not found", "name", email.Spec.UserRef.Name)
-			errs = append(errs, field.NotFound(field.NewPath("spec", "userRef", "name"), email.Spec.UserRef.Name))
-		} else {
-			emailLog.Error(err, "error getting user", "name", email.Spec.UserRef.Name)
-			errs = append(errs, field.InternalError(field.NewPath("spec", "userRef", "name"), fmt.Errorf("getting user: %w", err)))
+	if hasUserRef {
+		user := &iamv1alpha1.User{}
+		err := v.Client.Get(ctx, client.ObjectKey{Name: email.Spec.Recipient.UserRef.Name}, user)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				emailLog.Info("user not found", "name", email.Spec.Recipient.UserRef.Name)
+				errs = append(errs, field.NotFound(field.NewPath("spec", "userRef", "name"), email.Spec.Recipient.UserRef.Name))
+			} else {
+				emailLog.Error(err, "error getting user", "name", email.Spec.Recipient.UserRef.Name)
+				errs = append(errs, field.InternalError(field.NewPath("spec", "userRef", "name"), fmt.Errorf("getting user: %w", err)))
+			}
+		}
+	}
+
+	// Validate EmailAddress format
+	if hasEmailAddress {
+		if _, err := mail.ParseAddress(email.Spec.Recipient.EmailAddress); err != nil {
+			emailLog.Info("invalid email address", "email", email.Name, "emailAddress", email.Spec.Recipient.EmailAddress)
+			errs = append(errs, field.Invalid(field.NewPath("spec", "emailAddress"), email.Spec.Recipient.EmailAddress, fmt.Sprintf("invalid email address: %v", err)))
 		}
 	}
 
 	// Validate EmailTemplate reference
 	template := &notificationv1alpha1.EmailTemplate{}
-	err = v.Client.Get(ctx, client.ObjectKey{Name: email.Spec.TemplateRef.Name}, template)
+	err := v.Client.Get(ctx, client.ObjectKey{Name: email.Spec.TemplateRef.Name}, template)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			emailLog.Info("email template not found", "name", email.Spec.TemplateRef.Name)
