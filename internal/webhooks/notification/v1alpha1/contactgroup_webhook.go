@@ -15,18 +15,21 @@ import (
 )
 
 var contactGroupLog = logf.Log.WithName("contactgroup-resource")
+const contactGroupSpecKey = "contactGroupSpecKey"
+
+// buildDisplayNameKey returns the composite key used for indexing contact group display names.
+func buildContactGroupSpecKey(contactGroup notificationv1alpha1.ContactGroup) string {
+	return fmt.Sprintf("%s|%s|%s", contactGroup.Spec.DisplayName, contactGroup.Spec.Visibility, contactGroup.Namespace)
+}
 
 // SetupContactGroupWebhooksWithManager sets up the webhooks for the ContactGroup resource.
 func SetupContactGroupWebhooksWithManager(mgr ctrl.Manager) error {
 	contactGroupLog.Info("Setting up notification.miloapis.com contactgroup webhooks")
 
-	// Index spec.displayName for efficient lookups in validator
+	// Composite index for contact group spec (display name + visibility + namespace)
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroup{}, "spec.displayName", func(rawObj client.Object) []string {
 		cg := rawObj.(*notificationv1alpha1.ContactGroup)
-		if cg.Spec.DisplayName == "" {
-			return nil
-		}
-		return []string{cg.Spec.DisplayName}
+		return []string{buildContactGroupSpecKey(*cg)}
 	}); err != nil {
 		return fmt.Errorf("failed to set contactgroup field index: %w", err)
 	}
@@ -56,20 +59,14 @@ func (v *ContactGroupValidator) ValidateCreate(ctx context.Context, obj runtime.
 
 	var errs field.ErrorList
 
-	// Ensure no other ContactGroup exists in the same display name and visibility.
+	// Ensure no other ContactGroup exists in the same display name and visibility in the same namespace.
 	var existing notificationv1alpha1.ContactGroupList
 	if err := v.Client.List(ctx, &existing,
-		client.MatchingFields{"spec.displayName": cg.Spec.DisplayName}); err != nil {
+		client.MatchingFields{contactGroupSpecKey: buildContactGroupSpecKey(*cg)}); err != nil {
 		return nil, errors.NewInternalError(fmt.Errorf("failed to list contactgroups: %w", err))
 	}
-	for _, item := range existing.Items {
-		if item.Name == cg.Name {
-			continue // same object during update
-		}
-		if item.Spec.DisplayName == cg.Spec.DisplayName && item.Spec.Visibility == cg.Spec.Visibility {
-			errs = append(errs, field.Invalid(field.NewPath("spec", "displayName"), cg.Spec.DisplayName, fmt.Sprintf("a ContactGroup named %s already has this displayName and visibility", item.Name)))
-			break
-		}
+	if len(existing.Items) > 0 {
+		errs = append(errs, field.Invalid(field.NewPath("spec"), cg.Spec, fmt.Sprintf("a ContactGroup named %s already has this display name and visibility in the same namespace", existing.Items[0].Name)))
 	}
 
 	if len(errs) > 0 {

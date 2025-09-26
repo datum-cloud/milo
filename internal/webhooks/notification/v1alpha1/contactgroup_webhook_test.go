@@ -55,7 +55,7 @@ func TestContactGroupValidator_ValidateCreate(t *testing.T) {
 				},
 			},
 			expectError:   true,
-			errorContains: "already has this displayname",
+			errorContains: "has this display name and visibility in the same namespace",
 		},
 		"same name diff visibility allowed": {
 			newCG: &notificationv1alpha1.ContactGroup{
@@ -81,12 +81,9 @@ func TestContactGroupValidator_ValidateCreate(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			builder := fake.NewClientBuilder().WithScheme(cgScheme).
-				WithIndex(&notificationv1alpha1.ContactGroup{}, "spec.displayName", func(o client.Object) []string {
+				WithIndex(&notificationv1alpha1.ContactGroup{}, contactGroupSpecKey, func(o client.Object) []string {
 					cg := o.(*notificationv1alpha1.ContactGroup)
-					if cg.Spec.DisplayName == "" {
-						return nil
-					}
-					return []string{cg.Spec.DisplayName}
+					return []string{buildContactGroupSpecKey(*cg)}
 				})
 			if len(tt.seedObjects) > 0 {
 				builder = builder.WithObjects(tt.seedObjects...)
