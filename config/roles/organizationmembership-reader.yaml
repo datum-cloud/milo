@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: organizationmembership-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - resourcemanager.miloapis.com/organizationmemberships.get
+    - resourcemanager.miloapis.com/organizationmemberships.list
+    - resourcemanager.miloapis.com/organizationmemberships.watch
