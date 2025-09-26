@@ -15,19 +15,15 @@ import (
 )
 
 var cgrLog = logf.Log.WithName("contactgroupmembershipremoval-resource")
-var removalContactIndexKey = "spec.contactRef.name"
 
 // SetupContactGroupMembershipRemovalWebhooksWithManager registers webhooks for ContactGroupMembershipRemoval.
 func SetupContactGroupMembershipRemovalWebhooksWithManager(mgr ctrl.Manager) error {
 	cgrLog.Info("Setting up notification.miloapis.com contactgroupmembershipremoval webhooks")
 
 	// Field index on contact name for quick lookups
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroupMembershipRemoval{}, removalContactIndexKey, func(raw client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroupMembershipRemoval{}, contactMembershipRemovalCompositeKey, func(raw client.Object) []string {
 		obj := raw.(*notificationv1alpha1.ContactGroupMembershipRemoval)
-		if obj.Spec.ContactRef.Name == "" {
-			return nil
-		}
-		return []string{obj.Spec.ContactRef.Name}
+		return []string{buildContactGroupTupleKey(obj.Spec.ContactRef, obj.Spec.ContactGroupRef)}
 	}); err != nil {
 		return fmt.Errorf("failed to index contactgroupmembershipremoval by contact name: %w", err)
 	}
@@ -70,20 +66,13 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 
 	// Prevent duplicate removals
 	var existing notificationv1alpha1.ContactGroupMembershipRemovalList
-	if err := v.Client.List(ctx, &existing, client.InNamespace(removal.Namespace), client.MatchingFields{removalContactIndexKey: removal.Spec.ContactRef.Name}); err != nil {
+	if err := v.Client.List(ctx, &existing, client.InNamespace(removal.Namespace), client.MatchingFields{contactMembershipRemovalCompositeKey: buildContactGroupTupleKey(removal.Spec.ContactRef, removal.Spec.ContactGroupRef)}); err != nil {
 		return nil, errors.NewInternalError(fmt.Errorf("failed to list removals: %w", err))
 	}
-	for _, item := range existing.Items {
-		if item.Name == removal.Name {
-			continue
-		}
-		if item.Spec.ContactGroupRef.Name == removal.Spec.ContactGroupRef.Name &&
-			item.Spec.ContactGroupRef.Namespace == removal.Spec.ContactGroupRef.Namespace &&
-			item.Spec.ContactRef.Namespace == removal.Spec.ContactRef.Namespace {
-			errs = append(errs, field.Duplicate(field.NewPath("spec"), fmt.Sprintf("membership removal already exists in %s", item.Name)))
-			break
-		}
+	if len(existing.Items) > 0 {
+		errs = append(errs, field.Duplicate(field.NewPath("spec"), fmt.Sprintf("membership removal already exists in ContactGroupMembershipRemoval %s", existing.Items[0].Name)))
 	}
+
 
 	if len(errs) > 0 {
 		return nil, errors.NewInvalid(notificationv1alpha1.SchemeGroupVersion.WithKind("ContactGroupMembershipRemoval").GroupKind(), removal.Name, errs)
