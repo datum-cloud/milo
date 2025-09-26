@@ -16,22 +16,33 @@ import (
 
 var cgmLog = logf.Log.WithName("contactgroupmembership-resource")
 
-// Index by contact name for efficient membership lookup within namespace
-var contactNameIndexKey = "spec.contactRef.name"
+var contactMembershipCompositeKey = "contactMembershipKey"
+var contactMembershipRemovalCompositeKey = "contactGroupMembershipRemovalKey"
+
+// buildContactGroupTupleKey returns "<contact-ns>|<contact-name>|<group-ns>|<group-name>"
+func buildContactGroupTupleKey(contactRef notificationv1alpha1.ContactReference,groupRef   notificationv1alpha1.ContactGroupReference,
+) string {
+    return fmt.Sprintf("%s|%s|%s|%s",contactRef.Namespace, contactRef.Name,groupRef.Namespace,   groupRef.Name)
+}
 
 // SetupContactGroupMembershipWebhooksWithManager sets up the webhooks for the ContactGroupMembership resource.
 func SetupContactGroupMembershipWebhooksWithManager(mgr ctrl.Manager) error {
 	cgmLog.Info("Setting up notification.miloapis.com contactgroupmembership webhooks")
 
-	// Index by contact name for efficient membership lookup within namespace
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroupMembership{}, contactNameIndexKey, func(rawObj client.Object) []string {
+	// Composite index for exact membership tuple (contact ns/name + group ns/name)
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroupMembership{}, contactMembershipCompositeKey, func(rawObj client.Object) []string {
 		cgm := rawObj.(*notificationv1alpha1.ContactGroupMembership)
-		if cgm.Spec.ContactRef.Name == "" {
-			return nil
-		}
-		return []string{cgm.Spec.ContactRef.Name}
+		return []string{buildContactGroupTupleKey(cgm.Spec.ContactRef, cgm.Spec.ContactGroupRef)}
 	}); err != nil {
-		return fmt.Errorf("failed to index contactgroupmembership by contact name: %w", err)
+		return fmt.Errorf("failed to index contactgroupmembership composite key: %w", err)
+	}
+
+	// Composite index for membership removal tuple (contact ns/name + group ns/name)
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroupMembershipRemoval{}, contactMembershipRemovalCompositeKey, func(rawObj client.Object) []string {
+		rm := rawObj.(*notificationv1alpha1.ContactGroupMembershipRemoval)
+		return []string{buildContactGroupTupleKey(rm.Spec.ContactRef, rm.Spec.ContactGroupRef)}
+	}); err != nil {
+		return fmt.Errorf("failed to index contactgroupmembershipremoval composite key: %w", err)
 	}
 
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -80,20 +91,22 @@ func (v *ContactGroupMembershipValidator) ValidateCreate(ctx context.Context, ob
 	var existing notificationv1alpha1.ContactGroupMembershipList
 	if err := v.Client.List(ctx, &existing,
 		client.InNamespace(cgm.Namespace),
-		client.MatchingFields{contactNameIndexKey: cgm.Spec.ContactRef.Name}); err != nil {
+		client.MatchingFields{contactMembershipCompositeKey: buildContactGroupTupleKey(cgm.Spec.ContactRef, cgm.Spec.ContactGroupRef)}); err != nil {
 		return nil, errors.NewInternalError(fmt.Errorf("failed to list memberships: %w", err))
 	}
-	for _, item := range existing.Items {
-		if item.Name == cgm.Name {
-			continue // same object
-		}
-		// ContactRef is already guaranteed to match due to field selector; check only ContactGroupRef.
-		if item.Spec.ContactGroupRef.Name == cgm.Spec.ContactGroupRef.Name &&
-			item.Spec.ContactGroupRef.Namespace == cgm.Spec.ContactGroupRef.Namespace &&
-			item.Spec.ContactRef.Namespace == cgm.Spec.ContactRef.Namespace {
-			errs = append(errs, field.Duplicate(field.NewPath("spec"), fmt.Sprintf("membership already exists in ContactGroupMembership %s", item.Name)))
-			break
-		}
+	if len(existing.Items) > 0 {
+		errs = append(errs, field.Duplicate(field.NewPath("spec"), fmt.Sprintf("membership already exists in ContactGroupMembership %s", existing.Items[0].Name)))
+	}
+
+	// Check for existing membership removal for the same contact and group
+	var existingRemovals notificationv1alpha1.ContactGroupMembershipRemovalList
+	if err := v.Client.List(ctx, &existingRemovals,
+		client.InNamespace(cgm.Namespace),
+		client.MatchingFields{contactMembershipRemovalCompositeKey: buildContactGroupTupleKey(cgm.Spec.ContactRef, cgm.Spec.ContactGroupRef)}); err != nil {
+		return nil, errors.NewInternalError(fmt.Errorf("failed to list membership removals: %w", err))
+	}
+	if len(existingRemovals.Items) > 0 {
+		errs = append(errs, field.Invalid(field.NewPath("spec"), cgm.Spec, fmt.Sprintf("cannot create membership as a ContactGroupMembershipRemoval %s already exists", existingRemovals.Items[0].Name)))
 	}
 
 	if len(errs) > 0 {

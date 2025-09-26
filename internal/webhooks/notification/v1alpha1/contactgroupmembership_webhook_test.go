@@ -64,7 +64,23 @@ func TestContactGroupMembershipValidator(t *testing.T) {
 				makeMembership("existing", "c1", "g1"),
 			},
 			expectError:   true,
-			errorContains: "already exists",
+			errorContains: "membership already exists",
+		},
+		"removal already exists": {
+			newObj: makeMembership("m7", "c1", "g1"),
+			seedObjects: []client.Object{
+				makeContact("c1"),
+				makeGroup("g1"),
+				&notificationv1alpha1.ContactGroupMembershipRemoval{
+					ObjectMeta: metav1.ObjectMeta{Name: "rm1", Namespace: "default"},
+					Spec: notificationv1alpha1.ContactGroupMembershipRemovalSpec{
+						ContactRef:      notificationv1alpha1.ContactReference{Name: "c1", Namespace: "default"},
+						ContactGroupRef: notificationv1alpha1.ContactGroupReference{Name: "g1", Namespace: "default"},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: "cannot create membership",
 		},
 		"different group ok": {
 			newObj: makeMembership("m3", "c1", "g2"),
@@ -93,9 +109,13 @@ func TestContactGroupMembershipValidator(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			builder := fake.NewClientBuilder().WithScheme(cgmTestScheme).
-				WithIndex(&notificationv1alpha1.ContactGroupMembership{}, contactNameIndexKey, func(o client.Object) []string {
+				WithIndex(&notificationv1alpha1.ContactGroupMembership{}, contactMembershipCompositeKey, func(o client.Object) []string {
 					c := o.(*notificationv1alpha1.ContactGroupMembership)
-					return []string{c.Spec.ContactRef.Name}
+					return []string{buildContactGroupTupleKey(c.Spec.ContactRef, c.Spec.ContactGroupRef)}
+				}).
+				WithIndex(&notificationv1alpha1.ContactGroupMembershipRemoval{}, contactMembershipRemovalCompositeKey, func(o client.Object) []string {
+					r := o.(*notificationv1alpha1.ContactGroupMembershipRemoval)
+					return []string{buildContactGroupTupleKey(r.Spec.ContactRef, r.Spec.ContactGroupRef)}
 				})
 			if len(tt.seedObjects) > 0 {
 				builder = builder.WithObjects(tt.seedObjects...)
