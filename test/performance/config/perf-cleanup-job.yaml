@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: perf-cleanup
+  namespace: NAMESPACE_PLACEHOLDER
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: perf-runner
+      restartPolicy: Never
+      containers:
+      - name: cleanup
+        image: python:3.11
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TARGET_NAMESPACE
+          value: NAMESPACE_PLACEHOLDER
+        - name: RUN_MODE
+          value: cleanup
+        - name: TEST_ID
+          value: "TEST_ID_PLACEHOLDER"
+        - name: ORG_NAME
+          value: "ORG_NAME_PLACEHOLDER"
+        - name: MILO_KUBECONFIG_PATH
+          value: "/work/milo-kubeconfig"
+        volumeMounts:
+        - name: script
+          mountPath: /work/perf_run.py
+          subPath: perf_run.py
+          readOnly: true
+        - name: milo-kubeconfig
+          mountPath: /work/milo-kubeconfig
+          subPath: MILO_KUBECONFIG_KEY_PLACEHOLDER
+          readOnly: true
+        command: ["bash","-lc"]
+        args:
+        - >-
+          python -m pip install --no-cache-dir kubernetes requests pyyaml &&
+          python -u /work/perf_run.py
+      volumes:
+      - name: script
+        configMap:
+          name: perf-script
+          defaultMode: 0444
+      - name: milo-kubeconfig
+        secret:
+          secretName: MILO_KUBECONFIG_SECRET_PLACEHOLDER
+          defaultMode: 0400
+
+
