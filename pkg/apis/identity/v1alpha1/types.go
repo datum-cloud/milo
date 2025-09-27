@@ -26,5 +26,3 @@ type SessionList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Session `json:"items"`
 }
-
-

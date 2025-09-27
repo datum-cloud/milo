@@ -10,5 +10,3 @@ import (
 func Install(scheme *runtime.Scheme) {
 	v1alpha1.AddToScheme(scheme)
 }
-
-
