@@ -50,6 +50,14 @@ var (
 	// Configure the namespace that is used for system components and resources
 	// automatically bootstrapped by the control plane.
 	SystemNamespace string
+	// Sessions feature/config flags
+	featureSessions          bool
+	sessionsProviderGroup    string
+	sessionsProviderVersion  string
+	sessionsProviderResource string
+	providerTimeoutSeconds   int
+	providerRetries          int
+	impersonateForwardExtras []string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters
@@ -140,6 +148,13 @@ func NewCommand() *cobra.Command {
 		"Path to socket where a external JWT signer is listening. This flag is mutually exclusive with --service-account-signing-key-file and --service-account-key-file. Requires enabling feature gate (ExternalServiceAccountTokenSigner)")
 
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
+	fs.BoolVar(&featureSessions, "feature-sessions", false, "Enable identity sessions virtual API")
+	fs.StringVar(&sessionsProviderGroup, "sessions-provider-group", "zitadel.identity.miloapis.com", "Provider group for sessions")
+	fs.StringVar(&sessionsProviderVersion, "sessions-provider-version", "v1alpha1", "Provider version for sessions")
+	fs.StringVar(&sessionsProviderResource, "sessions-provider-resource", "sessions", "Provider resource for sessions")
+	fs.IntVar(&providerTimeoutSeconds, "provider-timeout", 3, "Provider request timeout in seconds")
+	fs.IntVar(&providerRetries, "provider-retries", 2, "Provider request retries")
+	fs.StringSliceVar(&impersonateForwardExtras, "impersonate-forward-extras", []string{"org", "tenant"}, "User extras keys to forward during impersonation")
 
 	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cliflag.SetUsageAndHelpFunc(cmd, namedFlagSets, cols)
@@ -181,6 +196,15 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 	if err != nil {
 		return err
 	}
+
+	// inject flag-derived extra config
+	config.ExtraConfig.FeatureSessions = featureSessions
+	config.ExtraConfig.SessionsProvider.Group = sessionsProviderGroup
+	config.ExtraConfig.SessionsProvider.Version = sessionsProviderVersion
+	config.ExtraConfig.SessionsProvider.Resource = sessionsProviderResource
+	config.ExtraConfig.SessionsProvider.TimeoutSeconds = providerTimeoutSeconds
+	config.ExtraConfig.SessionsProvider.Retries = providerRetries
+	config.ExtraConfig.SessionsProvider.ImpersonateForwardExtras = impersonateForwardExtras
 
 	completed, err := config.Complete()
 	if err != nil {
