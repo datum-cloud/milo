@@ -73,7 +73,6 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 		errs = append(errs, field.Duplicate(field.NewPath("spec"), fmt.Sprintf("membership removal already exists in ContactGroupMembershipRemoval %s", existing.Items[0].Name)))
 	}
 
-
 	if len(errs) > 0 {
 		return nil, errors.NewInvalid(notificationv1alpha1.SchemeGroupVersion.WithKind("ContactGroupMembershipRemoval").GroupKind(), removal.Name, errs)
 	}

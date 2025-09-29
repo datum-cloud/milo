@@ -20,9 +20,9 @@ var contactMembershipCompositeKey = "contactMembershipKey"
 var contactMembershipRemovalCompositeKey = "contactGroupMembershipRemovalKey"
 
 // buildContactGroupTupleKey returns "<contact-ns>|<contact-name>|<group-ns>|<group-name>"
-func buildContactGroupTupleKey(contactRef notificationv1alpha1.ContactReference,groupRef   notificationv1alpha1.ContactGroupReference,
+func buildContactGroupTupleKey(contactRef notificationv1alpha1.ContactReference, groupRef notificationv1alpha1.ContactGroupReference,
 ) string {
-    return fmt.Sprintf("%s|%s|%s|%s",contactRef.Namespace, contactRef.Name,groupRef.Namespace,   groupRef.Name)
+	return fmt.Sprintf("%s|%s|%s|%s", contactRef.Namespace, contactRef.Name, groupRef.Namespace, groupRef.Name)
 }
 
 // SetupContactGroupMembershipWebhooksWithManager sets up the webhooks for the ContactGroupMembership resource.

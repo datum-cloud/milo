@@ -15,6 +15,7 @@ import (
 )
 
 var contactGroupLog = logf.Log.WithName("contactgroup-resource")
+
 const contactGroupSpecKey = "contactGroupSpecKey"
 
 // buildDisplayNameKey returns the composite key used for indexing contact group display names.
