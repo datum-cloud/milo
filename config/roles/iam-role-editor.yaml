@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: role-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: role-reader
+  includedPermissions:
+    - iam.miloapis.com/roles.create
+    - iam.miloapis.com/roles.update
+    - iam.miloapis.com/roles.patch
+    - iam.miloapis.com/roles.delete

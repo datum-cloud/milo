@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: role-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - iam.miloapis.com/roles.get
+    - iam.miloapis.com/roles.list
+    - iam.miloapis.com/roles.watch
