@@ -25,3 +25,6 @@ resources:
   - iam-user-invitations-reader.yaml
   - iam-user-invitations-editor.yaml
   - iam-user-invitations-admin.yaml
+  - organizationmembership-reader.yaml
+  - organizationmembership-editor.yaml
+  - organizationmembership-admin.yaml
