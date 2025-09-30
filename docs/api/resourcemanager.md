@@ -1,5 +1,13 @@
 # API Reference
 
+**Important:**
+
+> As of this release, all vendor-related resources—including Vendor, VendorTypeDefinition, VendorVerification, and CorporationTypeConfig—have been moved from the `resourcemanager.miloapis.com/v1alpha1` API group to the new `vendors.miloapis.com/v1alpha1` API group.
+>
+> This document *only* covers resource types that remain in the `resourcemanager.miloapis.com/v1alpha1` API group (such as Organization, OrganizationMembership, and Project).
+>
+> For vendor management and vendor type APIs, see the [vendors.miloapis.com API documentation](./vendors-api-group.md).
+
 Packages:
 
 - [resourcemanager.miloapis.com/v1alpha1](#resourcemanagermiloapiscomv1alpha1)
@@ -9,21 +17,11 @@ Packages:
 Resource Types:
 
 - [OrganizationMembership](#organizationmembership)
-
 - [Organization](#organization)
-
 - [Project](#project)
-
-
-
 
 ## OrganizationMembership
 <sup><sup>[↩ Parent](#resourcemanagermiloapiscomv1alpha1 )</sup></sup>
-
-
-
-
-
 
 OrganizationMembership is the Schema for the organizationmemberships API
 
@@ -70,11 +68,8 @@ OrganizationMembership is the Schema for the organizationmemberships API
       </tr></tbody>
 </table>
 
-
 ### OrganizationMembership.spec
 <sup><sup>[↩ Parent](#organizationmembership)</sup></sup>
-
-
 
 OrganizationMembershipSpec defines the desired state of OrganizationMembership
 
@@ -104,11 +99,8 @@ OrganizationMembershipSpec defines the desired state of OrganizationMembership
       </tr></tbody>
 </table>
 
-
 ### OrganizationMembership.spec.organizationRef
 <sup><sup>[↩ Parent](#organizationmembershipspec)</sup></sup>
-
-
 
 OrganizationRef is a reference to the Organization that the user is a member of.
 
@@ -131,11 +123,8 @@ OrganizationRef is a reference to the Organization that the user is a member of.
       </tr></tbody>
 </table>
 
-
 ### OrganizationMembership.spec.userRef
 <sup><sup>[↩ Parent](#organizationmembershipspec)</sup></sup>
-
-
 
 UserRef is a reference to the User that is a member of the Organization.
 
@@ -158,11 +147,8 @@ UserRef is a reference to the User that is a member of the Organization.
       </tr></tbody>
 </table>
 
-
 ### OrganizationMembership.status
 <sup><sup>[↩ Parent](#organizationmembership)</sup></sup>
-
-
 
 OrganizationMembershipStatus defines the observed state of OrganizationMembership
 
@@ -210,11 +196,8 @@ OrganizationMembershipStatus defines the observed state of OrganizationMembershi
       </tr></tbody>
 </table>
 
-
 ### OrganizationMembership.status.conditions[index]
 <sup><sup>[↩ Parent](#organizationmembershipstatus)</sup></sup>
-
-
 
 Condition contains details for one aspect of the current state of this API Resource.
 
@@ -287,11 +270,8 @@ with respect to the current state of the instance.<br/>
       </tr></tbody>
 </table>
 
-
 ### OrganizationMembership.status.organization
 <sup><sup>[↩ Parent](#organizationmembershipstatus)</sup></sup>
-
-
 
 Organization contains information about the organization in the membership.
 
@@ -321,11 +301,8 @@ Organization contains information about the organization in the membership.
       </tr></tbody>
 </table>
 
-
 ### OrganizationMembership.status.user
 <sup><sup>[↩ Parent](#organizationmembershipstatus)</sup></sup>
-
-
 
 User contains information about the user in the membership.
 
@@ -364,11 +341,6 @@ User contains information about the user in the membership.
 
 ## Organization
 <sup><sup>[↩ Parent](#resourcemanagermiloapiscomv1alpha1 )</sup></sup>
-
-
-
-
-
 
 Use lowercase for path, which influences plural name. Ensure kind is Organization.
 Organization is the Schema for the Organizations API
@@ -416,11 +388,8 @@ Organization is the Schema for the Organizations API
       </tr></tbody>
 </table>
 
-
 ### Organization.spec
 <sup><sup>[↩ Parent](#organization)</sup></sup>
-
-
 
 OrganizationSpec defines the desired state of Organization
 
@@ -446,11 +415,8 @@ OrganizationSpec defines the desired state of Organization
       </tr></tbody>
 </table>
 
-
 ### Organization.status
 <sup><sup>[↩ Parent](#organization)</sup></sup>
-
-
 
 OrganizationStatus defines the observed state of Organization
 
@@ -485,11 +451,8 @@ Known condition types are: "Ready"<br/>
       </tr></tbody>
 </table>
 
-
 ### Organization.status.conditions[index]
 <sup><sup>[↩ Parent](#organizationstatus)</sup></sup>
-
-
 
 Condition contains details for one aspect of the current state of this API Resource.
 
@@ -565,11 +528,6 @@ with respect to the current state of the instance.<br/>
 ## Project
 <sup><sup>[↩ Parent](#resourcemanagermiloapiscomv1alpha1 )</sup></sup>
 
-
-
-
-
-
 Project is the Schema for the projects API.
 
 <table>
@@ -615,11 +573,8 @@ Project is the Schema for the projects API.
       </tr></tbody>
 </table>
 
-
 ### Project.spec
 <sup><sup>[↩ Parent](#project)</sup></sup>
-
-
 
 ProjectSpec defines the desired state of Project.
 
@@ -643,11 +598,8 @@ resource.<br/>
       </tr></tbody>
 </table>
 
-
 ### Project.spec.ownerRef
 <sup><sup>[↩ Parent](#projectspec)</sup></sup>
-
-
 
 OwnerRef is a reference to the owner of the project. Must be a valid
 resource.
@@ -680,11 +632,8 @@ resource.
       </tr></tbody>
 </table>
 
-
 ### Project.status
 <sup><sup>[↩ Parent](#project)</sup></sup>
-
-
 
 ProjectStatus defines the observed state of Project.
 
@@ -710,11 +659,8 @@ Known condition types are: "Ready"<br/>
       </tr></tbody>
 </table>
 
-
 ### Project.status.conditions[index]
 <sup><sup>[↩ Parent](#projectstatus)</sup></sup>
-
-
 
 Condition contains details for one aspect of the current state of this API Resource.
 
@@ -786,3 +732,4 @@ with respect to the current state of the instance.<br/>
         <td>false</td>
       </tr></tbody>
 </table>
+ 
