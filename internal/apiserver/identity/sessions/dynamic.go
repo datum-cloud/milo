@@ -82,19 +82,7 @@ func (b *DynamicProvider) dynForUser(ctx context.Context) (dynamic.Interface, er
 		Groups:   u.GetGroups(),
 		Extra:    extras,
 	}
-	// TODO: remove this once we have a proper UID in the user info
-	// Ensure UID is present on impersonated requests. If the authenticator did not
-	// set a UID, but this is a user-scoped virtual path request, derive the UID
-	// from the parent user extra (which carries the user id in our model).
-	if cfg.Impersonate.UID == "" {
-		if first(u.GetExtra()[iamv1alpha1.ParentAPIGroupExtraKey]) == iamv1alpha1.SchemeGroupVersion.Group {
-			if strings.EqualFold(first(u.GetExtra()[iamv1alpha1.ParentKindExtraKey]), "User") {
-				if pn := first(u.GetExtra()[iamv1alpha1.ParentNameExtraKey]); pn != "" {
-					cfg.Impersonate.UID = pn
-				}
-			}
-		}
-	}
+
 	return dynamic.NewForConfig(cfg)
 }
 
