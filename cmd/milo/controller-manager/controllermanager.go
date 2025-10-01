@@ -74,7 +74,7 @@ import (
 	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
-	"go.miloapis.com/milo/internal/controllers/remoteapiservice"
+	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
@@ -484,7 +484,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			reconciler := &remoteapiservice.RemoteAPIServiceAvailabilityReconciler{
+			reconciler := &remoteapiservicecontroller.RemoteAPIServiceAvailabilityReconciler{
 				Client:      ctrl.GetClient(),
 				Reason:      "Remote",
 				Message:     "Availability managed by custom controller",
