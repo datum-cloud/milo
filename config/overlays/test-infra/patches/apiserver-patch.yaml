@@ -31,9 +31,6 @@ spec:
           # Use token auth for test environment
           - name: TOKEN_AUTH_FILE
             value: "/etc/kubernetes/auth/tokens.csv"
-          # Disable tracing for test environment
-          - name: TRACING_CONFIG_FILE
-            value: ""
           # Enable anonymous auth for test environment
           - name: ANONYMOUS_AUTH
             value: "true"

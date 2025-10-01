@@ -90,6 +90,8 @@ func NewCommand() *cobra.Command {
 			}
 
 			// utilfeature.DefaultMutableFeatureGate.Set("ExternalServiceAccountTokenSigner=true")
+			// Enable tracing to support trace continuation from incoming requests
+			utilfeature.DefaultMutableFeatureGate.Set("APIServerTracing=true")
 
 			if errs := completedOptions.Validate(); len(errs) != 0 {
 				return utilerrors.NewAggregate(errs)
