@@ -72,6 +72,7 @@ type ContactGroupSpec struct {
 	//   • "private" – membership is enforced; opt-out requests are rejected.
 	// +kubebuilder:validation:Enum=public;private
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="visibility type is immutable"
 	Visibility ContactGroupVisibility `json:"visibility,omitempty"`
 }
 

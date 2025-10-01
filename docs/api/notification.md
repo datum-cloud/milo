@@ -650,6 +650,7 @@ ContactGroupSpec defines the desired state of ContactGroup.
   • "public"  – members may leave via ContactGroupMembershipRemoval.
   • "private" – membership is enforced; opt-out requests are rejected.<br/>
           <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: visibility type is immutable</li>
             <i>Enum</i>: public, private<br/>
         </td>
         <td>true</td>

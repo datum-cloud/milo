@@ -63,6 +63,9 @@ spec:
                 - public
                 - private
                 type: string
+                x-kubernetes-validations:
+                - message: visibility type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
             required:
             - displayName
             - visibility

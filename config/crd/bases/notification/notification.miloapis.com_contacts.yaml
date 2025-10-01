@@ -15,13 +15,13 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.subjectRef.name
+    - jsonPath: .spec.subject.name
       name: SubjectRef
       type: string
-    - jsonPath: .spec.subjectRef.kind
+    - jsonPath: .spec.subject.kind
       name: SubjectRef
       type: string
-    - jsonPath: .spec.subject.email
+    - jsonPath: .spec.email
       name: EmailRef
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status

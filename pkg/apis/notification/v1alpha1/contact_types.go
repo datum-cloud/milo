@@ -40,9 +40,9 @@ const (
 
 // Contact is the Schema for the contacts API.
 // It represents a contact for a user.
-// +kubebuilder:printcolumn:name="SubjectRef",type="string",JSONPath=".spec.subjectRef.name"
-// +kubebuilder:printcolumn:name="SubjectRef",type="string",JSONPath=".spec.subjectRef.kind"
-// +kubebuilder:printcolumn:name="EmailRef",type="string",JSONPath=".spec.subject.email"
+// +kubebuilder:printcolumn:name="SubjectRef",type="string",JSONPath=".spec.subject.name"
+// +kubebuilder:printcolumn:name="SubjectRef",type="string",JSONPath=".spec.subject.kind"
+// +kubebuilder:printcolumn:name="EmailRef",type="string",JSONPath=".spec.email"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Namespaced
