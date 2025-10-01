@@ -15,7 +15,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/admission"
-	_ "k8s.io/apiserver/pkg/admission"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -50,6 +49,14 @@ var (
 	// Configure the namespace that is used for system components and resources
 	// automatically bootstrapped by the control plane.
 	SystemNamespace string
+	// Sessions feature/config flags
+	featureSessions          bool
+	sessionsProviderGroup    string
+	sessionsProviderVersion  string
+	sessionsProviderResource string
+	providerTimeoutSeconds   int
+	providerRetries          int
+	impersonateForwardExtras []string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters
@@ -68,6 +75,10 @@ func NewCommand() *cobra.Command {
 			// silence client-go warnings.
 			// kube-apiserver loopback clients should not log self-issued warnings.
 			rest.SetDefaultWarningHandler(rest.NoWarnings{})
+			// Ensure feature gates are finalized before use
+			if err := s.GenericServerRunOptions.ComponentGlobalsRegistry.Set(); err != nil {
+				return err
+			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -112,6 +123,10 @@ func NewCommand() *cobra.Command {
 	// Override the ComponentGlobalsRegistry to avoid k8s feature flags from being added.
 	// Add our own feature gates or expose native k8s ones if necessary
 	s.GenericServerRunOptions.ComponentGlobalsRegistry = featuregate.NewComponentGlobalsRegistry()
+	// Register the default kube component so Set() can succeed and feature gates can be used
+	_, _ = s.GenericServerRunOptions.ComponentGlobalsRegistry.ComponentGlobalsOrRegister(
+		featuregate.DefaultKubeComponent, version.DefaultBuildEffectiveVersion(), utilfeature.DefaultMutableFeatureGate,
+	)
 	s.GenericServerRunOptions.AddUniversalFlags(namedFlagSets.FlagSet("generic"))
 	s.Etcd.AddFlags(namedFlagSets.FlagSet("etcd"))
 	s.SecureServing.AddFlags(namedFlagSets.FlagSet("secure serving"))
@@ -139,7 +154,27 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&s.ServiceAccountSigningEndpoint, "service-account-signing-endpoint", s.ServiceAccountSigningEndpoint, ""+
 		"Path to socket where a external JWT signer is listening. This flag is mutually exclusive with --service-account-signing-key-file and --service-account-key-file. Requires enabling feature gate (ExternalServiceAccountTokenSigner)")
 
+	fs.StringVar(&s.ProxyClientCertFile, "proxy-client-cert-file", s.ProxyClientCertFile, ""+
+		"Client certificate used to prove the identity of the aggregator or kube-apiserver "+
+		"when it must call out during a request. This includes proxying requests to a user "+
+		"api-server and calling out to webhook admission plugins. It is expected that this "+
+		"cert includes a signature from the CA in the --requestheader-client-ca-file flag. "+
+		"That CA is published in the 'extension-apiserver-authentication' configmap in "+
+		"the kube-system namespace. Components receiving calls from kube-aggregator should "+
+		"use that CA to perform their half of the mutual TLS verification.")
+	fs.StringVar(&s.ProxyClientKeyFile, "proxy-client-key-file", s.ProxyClientKeyFile, ""+
+		"Private key for the client certificate used to prove the identity of the aggregator or kube-apiserver "+
+		"when it must call out during a request. This includes proxying requests to a user "+
+		"api-server and calling out to webhook admission plugins.")
+
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
+	fs.BoolVar(&featureSessions, "feature-sessions", false, "Enable identity sessions virtual API")
+	fs.StringVar(&sessionsProviderGroup, "sessions-provider-group", "zitadel.identity.miloapis.com", "Provider group for sessions")
+	fs.StringVar(&sessionsProviderVersion, "sessions-provider-version", "v1alpha1", "Provider version for sessions")
+	fs.StringVar(&sessionsProviderResource, "sessions-provider-resource", "sessions", "Provider resource for sessions")
+	fs.IntVar(&providerTimeoutSeconds, "provider-timeout", 3, "Provider request timeout in seconds")
+	fs.IntVar(&providerRetries, "provider-retries", 2, "Provider request retries")
+	fs.StringSliceVar(&impersonateForwardExtras, "impersonate-forward-extras", []string{"iam.miloapis.com/parent-api-group", "iam.miloapis.com/parent-type", "iam.miloapis.com/parent-name"}, "User extras keys to forward during impersonation")
 
 	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cliflag.SetUsageAndHelpFunc(cmd, namedFlagSets, cols)
@@ -181,6 +216,15 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 	if err != nil {
 		return err
 	}
+
+	// inject flag-derived extra config
+	config.ExtraConfig.FeatureSessions = featureSessions
+	config.ExtraConfig.SessionsProvider.Group = sessionsProviderGroup
+	config.ExtraConfig.SessionsProvider.Version = sessionsProviderVersion
+	config.ExtraConfig.SessionsProvider.Resource = sessionsProviderResource
+	config.ExtraConfig.SessionsProvider.TimeoutSeconds = providerTimeoutSeconds
+	config.ExtraConfig.SessionsProvider.Retries = providerRetries
+	config.ExtraConfig.SessionsProvider.ImpersonateForwardExtras = impersonateForwardExtras
 
 	completed, err := config.Complete()
 	if err != nil {

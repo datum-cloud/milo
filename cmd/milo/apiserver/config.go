@@ -2,10 +2,12 @@ package app
 
 import (
 	"net/http"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/endpoints/filterlatency"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
@@ -37,7 +39,12 @@ import (
 	svmrest "k8s.io/kubernetes/pkg/registry/storagemigration/rest"
 
 	"go.miloapis.com/milo/internal/apiserver/admission/initializer"
+	sessionsbackend "go.miloapis.com/milo/internal/apiserver/identity/sessions"
+	identitystorage "go.miloapis.com/milo/internal/apiserver/storage/identity"
+	identityapi "go.miloapis.com/milo/pkg/apis/identity"
+	identityopenapi "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
+	openapicommon "k8s.io/kube-openapi/pkg/common"
 )
 
 type Config struct {
@@ -51,6 +58,20 @@ type Config struct {
 }
 
 type ExtraConfig struct {
+	FeatureSessions  bool
+	SessionsProvider SessionsProviderConfig
+}
+
+// SessionsProviderConfig groups configuration for the sessions backend provider.
+type SessionsProviderConfig struct {
+	Group                    string
+	Version                  string
+	Resource                 string
+	TimeoutSeconds           int
+	Retries                  int
+	ImpersonateForwardExtras []string
+	// Computed
+	ProviderGVR schema.GroupVersionResource
 }
 
 type completedConfig struct {
@@ -69,7 +90,7 @@ type CompletedConfig struct {
 }
 
 func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryInterface) ([]controlplaneapiserver.RESTStorageProvider, error) {
-	return []controlplaneapiserver.RESTStorageProvider{
+	providers := []controlplaneapiserver.RESTStorageProvider{
 		c.ControlPlane.NewCoreGenericConfig(),
 		apiserverinternalrest.StorageProvider{},
 		authenticationrest.RESTStorageProvider{Authenticator: c.ControlPlane.Generic.Authentication.Authenticator, APIAudiences: c.ControlPlane.Generic.Authentication.APIAudiences},
@@ -81,7 +102,38 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 		admissionregistrationrest.RESTStorageProvider{Authorizer: c.ControlPlane.Generic.Authorization.Authorizer, DiscoveryClient: discovery},
 		eventsrest.RESTStorageProvider{TTL: c.ControlPlane.EventTTL},
 		discoveryrest.StorageProvider{},
-	}, nil
+	}
+
+	if c.ExtraConfig.FeatureSessions {
+		// Validate and compute ProviderGVR once
+		if c.ExtraConfig.SessionsProvider.ProviderGVR.Empty() {
+			c.ExtraConfig.SessionsProvider.ProviderGVR = schema.GroupVersionResource{
+				Group:    c.ExtraConfig.SessionsProvider.Group,
+				Version:  c.ExtraConfig.SessionsProvider.Version,
+				Resource: c.ExtraConfig.SessionsProvider.Resource,
+			}
+		}
+		// Build identity sessions storage provider
+		providers = append(providers, newIdentitySessionsProvider(c))
+	}
+
+	return providers, nil
+}
+
+func newIdentitySessionsProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
+	gvr := c.ExtraConfig.SessionsProvider.ProviderGVR
+	allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ImpersonateForwardExtras))
+	for _, k := range c.ExtraConfig.SessionsProvider.ImpersonateForwardExtras {
+		allow[k] = struct{}{}
+	}
+	backend, _ := sessionsbackend.NewDynamicProvider(sessionsbackend.Config{
+		BaseConfig:             c.ControlPlane.Generic.LoopbackClientConfig,
+		ProviderGVR:            gvr,
+		Timeout:                time.Duration(c.ExtraConfig.SessionsProvider.TimeoutSeconds) * time.Second,
+		Retries:                c.ExtraConfig.SessionsProvider.Retries,
+		ImpersonateExtrasAllow: allow,
+	})
+	return identitystorage.StorageProvider{Sessions: backend}
 }
 
 func (c *Config) Complete() (CompletedConfig, error) {
@@ -101,14 +153,28 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		Options: opts,
 	}
 
+	// Initialize Milo scheme with identity APIs and install into legacy scheme
+	miloScheme := runtime.NewScheme()
+	identityapi.Install(miloScheme)
+	identityapi.Install(legacyscheme.Scheme)
+
 	apiResourceConfigSource := controlplane.DefaultAPIResourceConfigSource()
 	apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("serviceaccounts"))
+	// Enable identity group/version served by virtual storage
+	apiResourceConfigSource.EnableVersions(identityopenapi.GroupVersion)
 
 	genericConfig, versionedInformers, storageFactory, err := controlplaneapiserver.BuildGenericConfig(
 		opts,
-		[]*runtime.Scheme{legacyscheme.Scheme, apiextensionsapiserver.Scheme, aggregatorscheme.Scheme},
+		[]*runtime.Scheme{legacyscheme.Scheme, apiextensionsapiserver.Scheme, aggregatorscheme.Scheme, miloScheme},
 		apiResourceConfigSource,
-		generatedopenapi.GetOpenAPIDefinitions,
+		func(ref openapicommon.ReferenceCallback) map[string]openapicommon.OpenAPIDefinition {
+			base := generatedopenapi.GetOpenAPIDefinitions(ref)
+			id := identityopenapi.GetOpenAPIDefinitions(ref)
+			for k, v := range id {
+				base[k] = v
+			}
+			return base
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -203,10 +269,6 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	}
 
 	handler = filterlatency.TrackCompleted(handler)
-	handler = genericapifilters.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
-	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "impersonation")
-
-	handler = filterlatency.TrackCompleted(handler)
 	handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator, c.LongRunningFunc)
 	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "audit")
 
@@ -219,6 +281,10 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 
 	failedHandler := genericapifilters.Unauthorized(c.Serializer)
 	failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyRuleEvaluator)
+
+	handler = filterlatency.TrackCompleted(handler)
+	handler = genericapifilters.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
+	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "impersonation")
 
 	failedHandler = filterlatency.TrackCompleted(failedHandler)
 	handler = filterlatency.TrackCompleted(handler)

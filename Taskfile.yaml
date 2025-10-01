@@ -325,15 +325,41 @@ tasks:
         set -e
         for package_dir in pkg/apis/*/; do
           package_name=$(basename "$package_dir")
+          # Skip identity: sessions are virtual (no CRD)
+          if [ "$package_name" = "identity" ]; then
+            echo "Skipping CRD generation for package: $package_name (virtual resources)"
+            continue
+          fi
           echo "Generating CRDs for package: $package_name"
           mkdir -p "config/crd/bases/$package_name"
           "{{.TOOL_DIR}}/controller-gen" crd paths="./$package_dir..." output:dir="./config/crd/bases/$package_name"
         done
+      - echo "Skipping external OpenAPI gen; using manual identity definitions merged at runtime"
       - echo "Generating webhook files..."
       - "\"{{.TOOL_DIR}}/controller-gen\" webhook paths=\"./internal/webhooks/...\" output:dir=\"./config/webhook\""
       # Generate RBAC rules for the controllers.
       - echo "Generating RBAC rules for the controllers..."
       - "\"{{.TOOL_DIR}}/controller-gen\" rbac:roleName=milo-controller-manager paths=\"./internal/controllers/...\" output:dir=\"./config/controller-manager/overlays/core-control-plane/rbac\""
+    silent: true
+
+  generate:openapi:identity:
+    desc: Generate OpenAPI definitions for identity API types
+    deps:
+      - task: install-go-tool
+        vars:
+          NAME: openapi-gen
+          PACKAGE: k8s.io/code-generator/cmd/openapi-gen
+          VERSION: v0.23.0
+    cmds:
+      - echo "Generating OpenAPI definitions for identity types..."
+      - |
+        set -e
+        "{{.TOOL_DIR}}/openapi-gen" \
+          --input-dirs=go.miloapis.com/milo/pkg/apis/identity/v1alpha1 \
+          --output-package=pkg/apis/identity/v1alpha1 \
+          --output-base=. \
+          --output-file-base=zz_generated.openapi \
+          --go-header-file=/dev/null
     silent: true
 
   generate:docs:

@@ -1,0 +1,10 @@
+apiVersion: identity.miloapis.com/v1alpha1
+kind: Session
+metadata:
+  name: sess-abc123
+---
+apiVersion: identity.miloapis.com/v1alpha1
+kind: Session
+metadata:
+  name: sess-def456
+

@@ -1,0 +1,55 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: identity-sessions
+spec:
+  steps:
+    - name: install-provider-crd
+      try:
+        - apply:
+            file: resources/provider-crd.yaml
+        - wait:
+            apiVersion: apiextensions.k8s.io/v1
+            kind: CustomResourceDefinition
+            name: sessions.zitadel.identity.miloapis.com
+            timeout: 2m
+            for:
+              condition:
+                name: Established
+                value: 'true'
+
+    - name: create-provider-sessions
+      try:
+        - apply:
+            file: resources/provider-sessions.yaml
+        - assert:
+            file: resources/provider-sessions.yaml
+
+    - name: verify-public-api
+      try:
+        - assert:
+            file: assert/identity-sess-abc123.yaml
+        - assert:
+            file: assert/identity-sess-def456.yaml
+
+    - name: delete-via-public-api
+      try:
+        - delete:
+            file: assert/identity-sess-abc123.yaml
+        - delete:
+            file: assert/identity-sess-def456.yaml
+        - wait:
+            apiVersion: zitadel.identity.miloapis.com/v1alpha1
+            kind: Session
+            name: sess-abc123
+            timeout: 30s
+            for:
+              deletion: {}
+        - wait:
+            apiVersion: zitadel.identity.miloapis.com/v1alpha1
+            kind: Session
+            name: sess-def456
+            timeout: 30s
+            for:
+              deletion: {}
+
