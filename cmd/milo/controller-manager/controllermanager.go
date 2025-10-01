@@ -74,6 +74,7 @@ import (
 	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
+	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
@@ -480,6 +481,17 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userInvitationCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user invitation controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			reconciler := &remoteapiservicecontroller.RemoteAPIServiceAvailabilityReconciler{
+				Client:      ctrl.GetClient(),
+				Reason:      "Remote",
+				Message:     "Availability managed by custom controller",
+				ResyncEvery: 0, // or time.Hour if you want periodic reaffirmation
+			}
+			if err := reconciler.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up remote API service availability reconciler")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
