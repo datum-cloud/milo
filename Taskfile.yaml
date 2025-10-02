@@ -314,6 +314,7 @@ tasks:
     cmds:
       - task: generate:code
       - task: generate:docs
+      - task: generate:test-docs
 
   generate:code:
     desc: Generate code including deepcopy, objects, CRDs, and potentially protobuf marshallers
@@ -359,6 +360,47 @@ tasks:
           filename="${filename#apiextensions.k8s.io_v1_customresourcedefinition_}" ;
           bin/crdoc --resources $crdmanifest --output docs/api/$filename.md ;
         done;
+    silent: true
+
+  generate:test-docs:
+    desc: Generate test documentation using Chainsaw build docs
+    deps:
+      - task: install-go-tool
+        vars:
+          NAME: chainsaw
+          PACKAGE: github.com/kyverno/chainsaw
+          VERSION: "{{.CHAINSAW_VERSION}}"
+    cmds:
+      - |
+        set -e
+        echo "Generating test documentation..."
+
+        # Find all test directories containing chainsaw-test.yaml files
+        TEST_DIRS=$(find test -name "chainsaw-test.yaml" -exec dirname {} \; | sort -u)
+
+        if [ -z "$TEST_DIRS" ]; then
+          echo "No chainsaw test files found"
+          exit 0
+        fi
+
+        # Store the absolute path to chainsaw
+        CHAINSAW_BIN="{{.TOOL_DIR}}/chainsaw"
+
+        # Generate documentation for each test directory
+        for test_dir in $TEST_DIRS; do
+          echo "Generating README.md for $test_dir..."
+
+          # Generate README.md in the test directory
+          (cd "$test_dir" && "$CHAINSAW_BIN" build docs --test-dir .)
+
+          if [ -f "$test_dir/README.md" ]; then
+            echo "  ✓ $test_dir/README.md"
+          else
+            echo "  ⚠️  No README.md generated for $test_dir"
+          fi
+        done
+
+        echo "✅ Test documentation generated in test directories"
     silent: true
 
   install-go-tool:
