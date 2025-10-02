@@ -421,6 +421,9 @@ spec:
                   - status
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - resourceType
+                x-kubernetes-list-type: map
               conditions:
                 description: |-
                   Conditions represents the overall status of the claim evaluation.
