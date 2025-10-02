@@ -13,7 +13,6 @@ spec:
         trigger_api_version: [spec, trigger, resource, apiVersion]
         trigger_kind: [spec, trigger, resource, kind]
         enabled: [spec, enabled]
-        has_parent_context: [spec, target, parentContext]
       metrics:
         - name: "info"
           help: "Information about quota grant creation policies"
