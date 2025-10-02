@@ -366,6 +366,14 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: spec.resourceType is immutable
+          rule: '!has(oldSelf.spec.resourceType) || self.spec.resourceType == oldSelf.spec.resourceType'
+        - message: spec.consumerTypeRef is immutable
+          rule: '!has(oldSelf.spec.consumerTypeRef) || self.spec.consumerTypeRef ==
+            oldSelf.spec.consumerTypeRef'
+        - message: spec.type is immutable
+          rule: '!has(oldSelf.spec.type) || self.spec.type == oldSelf.spec.type'
     selectableFields:
     - jsonPath: .spec.consumerTypeRef.kind
     - jsonPath: .spec.consumerTypeRef.apiGroup
