@@ -124,14 +124,12 @@ changes within seconds under normal conditions.
 ### Selectors and Filtering
 - **Field selectors**: spec.consumerRef.kind, spec.consumerRef.name, spec.resourceType
 - **System labels** (set automatically by quota system):
-  - quota.miloapis.com/resource-kind: Project
-  - quota.miloapis.com/resource-apigroup: resourcemanager.miloapis.com (omitted for core kinds)
   - quota.miloapis.com/consumer-kind: Organization
   - quota.miloapis.com/consumer-name: acme-corp
 
 ### Common Queries
 - All buckets for a consumer: label selector quota.miloapis.com/consumer-kind + quota.miloapis.com/consumer-name
-- All buckets for a resource type: label selector quota.miloapis.com/resource-kind (+ quota.miloapis.com/resource-apigroup if needed)
+- All buckets for a resource type: field selector spec.resourceType=<value>
 - Specific bucket: field selector spec.consumerRef.name + spec.resourceType
 - Overutilized buckets: filter by status.available < threshold
 - Empty buckets: filter by status.limit = 0
