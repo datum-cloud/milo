@@ -179,7 +179,9 @@ type ResourceClaimStatus struct {
 	//
 	// List is indexed by ResourceType for efficient lookups.
 	//
-	// +kubebuilder:validation:Optional +listType=map +listMapKey=resourceType
+	// +kubebuilder:validation:Optional
+	// +listType=map
+	// +listMapKey=resourceType
 	Allocations []RequestAllocation `json:"allocations,omitempty"`
 
 	// Conditions represents the overall status of the claim evaluation.
