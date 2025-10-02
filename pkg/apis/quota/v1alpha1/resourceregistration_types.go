@@ -291,6 +291,9 @@ const (
 // +kubebuilder:selectablefield:JSONPath=".spec.consumerTypeRef.kind"
 // +kubebuilder:selectablefield:JSONPath=".spec.consumerTypeRef.apiGroup"
 // +kubebuilder:selectablefield:JSONPath=".spec.resourceType"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.resourceType) || self.spec.resourceType == oldSelf.spec.resourceType",message="spec.resourceType is immutable"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.consumerTypeRef) || self.spec.consumerTypeRef == oldSelf.spec.consumerTypeRef",message="spec.consumerTypeRef is immutable"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.type) || self.spec.type == oldSelf.spec.type",message="spec.type is immutable"
 type ResourceRegistration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
