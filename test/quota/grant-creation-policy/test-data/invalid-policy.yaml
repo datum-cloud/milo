@@ -1,0 +1,27 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: GrantCreationPolicy
+metadata:
+  name: invalid-test-policy
+spec:
+  enabled: true
+  trigger:
+    resource:
+      apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+      kind: "Organization"
+    conditions:
+      # Invalid CEL expression - should cause validation failure
+      - expression: 'trigger.spec.invalid_field == "test" && invalid_function()'
+  target:
+    resourceGrantTemplate:
+      metadata:
+        # Missing required name field to cause validation failure
+        namespace: "milo-system"
+      spec:
+        consumerRef:
+          apiGroup: "resourcemanager.miloapis.com"
+          kind: "Organization"
+          name: "{{.trigger.metadata.name}}"
+        allowances:
+          - resourceType: "test.miloapis.com/projects"  # lowercase would have triggered the old bug
+            buckets:
+              - amount: -1  # Invalid negative amount

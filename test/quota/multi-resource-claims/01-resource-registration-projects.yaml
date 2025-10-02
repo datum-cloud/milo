@@ -1,0 +1,21 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: multi-test-projects-per-org
+  labels:
+    test.miloapis.com/quota: "true"
+spec:
+  consumerTypeRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  resourceType: "test.miloapis.com/projects/subresource"
+  description: "Multi-resource test quota for maximum multi projects per organization"
+  baseUnit: "subresource"
+  displayUnit: "Multi Projects"
+  unitConversionFactor: 1
+  claimingResources:
+    - apiGroup: test.miloapis.com
+      kind: MultiResourceTest
+    - apiGroup: test.miloapis.com
+      kind: DuplicateTest

@@ -1,0 +1,15 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-invalid-pattern
+spec:
+  consumerTypeRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  # Invalid resourceType - contains invalid characters (@)
+  resourceType: "test@invalid/resource"
+  description: "Invalid pattern test"
+  baseUnit: "unit"
+  displayUnit: "units"
+  unitConversionFactor: 1

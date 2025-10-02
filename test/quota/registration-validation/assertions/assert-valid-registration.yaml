@@ -1,0 +1,23 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-valid-registration
+spec:
+  consumerTypeRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  resourceType: "test.validation.miloapis.com/projects"
+  description: "Valid test registration for validation tests"
+  baseUnit: "project"
+  displayUnit: "projects"
+  unitConversionFactor: 1
+  claimingResources:
+    - apiGroup: resourcemanager.miloapis.com
+      kind: Project
+status:
+  conditions:
+    - type: Active
+      status: 'True'
+      reason: RegistrationActive
+      message: "The registration is active and resource grants and claims can now be created for this resource type."

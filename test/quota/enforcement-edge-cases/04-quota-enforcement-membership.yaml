@@ -1,0 +1,13 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: user-1001-enforcement-membership
+  namespace: organization-edge-test-quota-enforcement-org
+  labels:
+    test.miloapis.com/quota: "enforcement"
+    test.miloapis.com/scenario: "quota-enforcement"
+spec:
+  organizationRef:
+    name: edge-test-quota-enforcement-org
+  userRef:
+    name: "1001"

@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceRegistration
+  metadata:
+    name: multi-test-users-per-org
+    labels:
+      test.miloapis.com/scenario: multi-resource-claim
+  spec:
+    consumerTypeRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+    type: "Entity"
+    resourceType: "resourcemanager.miloapis.com/users"
+    description: "Test quota for maximum users per organization"
+    baseUnit: "User"
+    displayUnit: "Users"
+    unitConversionFactor: 1
+    claimingResources:
+      - apiGroup: test.miloapis.com
+        kind: MultiResourceTest
+      - apiGroup: test.miloapis.com
+        kind: DuplicateTest
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceRegistration
+  metadata:
+    name: multi-test-clusters-per-org
+    labels:
+      test.miloapis.com/scenario: multi-resource-claim
+  spec:
+    consumerTypeRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+    type: "Entity"
+    resourceType: "infrastructure.miloapis.com/clusters"
+    description: "Test quota for maximum clusters per organization"
+    baseUnit: "Cluster"
+    displayUnit: "Clusters"
+    unitConversionFactor: 1
+    claimingResources:
+      - apiGroup: test.miloapis.com
+        kind: MultiResourceTest
+      - apiGroup: test.miloapis.com
+        kind: DuplicateTest

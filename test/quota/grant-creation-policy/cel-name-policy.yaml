@@ -1,0 +1,33 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: GrantCreationPolicy
+metadata:
+  name: test-cel-name-policy
+  labels:
+    test.miloapis.com/quota: "grant-creation-policy"
+spec:
+  enabled: true
+  trigger:
+    resource:
+      apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+      kind: "Organization"
+    conditions:
+      # Trigger for orgs with specific names AND the grant-creation-policy test scenario
+      - expression: '(trigger.metadata.name.contains("cel-trigger") || trigger.metadata.name.contains("premium")) && has(trigger.metadata.labels) && "test.miloapis.com/scenario" in trigger.metadata.labels && trigger.metadata.labels["test.miloapis.com/scenario"] == "grant-creation-policy"'
+  target:
+    resourceGrantTemplate:
+      metadata:
+        name: "premium-grant-{{.trigger.metadata.name}}-standard"
+        namespace: "milo-system"
+        labels:
+          quota.miloapis.com/auto-created: "true"
+          quota.miloapis.com/policy: "test-cel-name-policy"
+          quota.miloapis.com/tier: "standard"
+      spec:
+        consumerRef:
+          apiGroup: "resourcemanager.miloapis.com"
+          kind: "Organization"
+          name: "{{.trigger.metadata.name}}"
+        allowances:
+          - resourceType: "test.grantpolicy.miloapis.com/projects"
+            buckets:
+              - amount: 20
