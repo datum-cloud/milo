@@ -15,7 +15,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -181,6 +180,9 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 			continue
 		}
 
+		// Track whether this claim has any granted allocations for this bucket
+		hasGrantedAllocation := false
+
 		// Check allocations for granted requests that match this bucket
 		for _, allocation := range claim.Status.Allocations {
 			if allocation.Status != quotav1alpha1.RequestAllocationGranted {
@@ -209,8 +211,12 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 
 			// Use the allocated amount from the allocation status
 			totalAllocated += allocation.AllocatedAmount
-			claimCount++
+			hasGrantedAllocation = true
+		}
 
+		// Increment claim count once per claim if it has any granted allocations for this bucket
+		if hasGrantedAllocation {
+			claimCount++
 		}
 	}
 
@@ -236,18 +242,10 @@ func (r *AllowanceBucketController) ensureBucketFromClaims(ctx context.Context, 
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      req.Name,
 						Namespace: req.Namespace,
-						Labels: func() map[string]string {
-							apiGroup, kind := parseResourceType(request.ResourceType)
-							labels := map[string]string{
-								"quota.miloapis.com/resource-kind": kind,
-								"quota.miloapis.com/consumer-kind": claim.Spec.ConsumerRef.Kind,
-								"quota.miloapis.com/consumer-name": claim.Spec.ConsumerRef.Name,
-							}
-							if apiGroup != "" {
-								labels["quota.miloapis.com/resource-apigroup"] = apiGroup
-							}
-							return labels
-						}(),
+						Labels: map[string]string{
+							"quota.miloapis.com/consumer-kind": claim.Spec.ConsumerRef.Kind,
+							"quota.miloapis.com/consumer-name": claim.Spec.ConsumerRef.Name,
+						},
 					},
 					Spec: quotav1alpha1.AllowanceBucketSpec{
 						ConsumerRef:  claim.Spec.ConsumerRef,
@@ -404,22 +402,12 @@ func (r *AllowanceBucketController) updateRequestAllocation(ctx context.Context,
 	}
 
 	// Apply the patch using Server Side Apply with our field manager
-	if err := r.Status().Patch(ctx, patchClaim, client.Apply, client.FieldOwner(fieldManagerName), client.ForceOwnership); err != nil {
+	// The allocations list is a map-list keyed by resourceType, so SSA will merge entries correctly
+	if err := r.Status().Patch(ctx, patchClaim, client.Apply, client.FieldOwner(fieldManagerName)); err != nil {
 		return fmt.Errorf("failed to apply request allocation status: %w", err)
 	}
 
 	return nil
-}
-
-// parseResourceType splits a resourceType like "resourcemanager.miloapis.com/Project"
-// into apiGroup and kind components.
-func parseResourceType(resourceType string) (apiGroup, kind string) {
-	parts := strings.Split(resourceType, "/")
-	if len(parts) == 2 {
-		return parts[0], parts[1]
-	}
-	// Handle core resources (no API group)
-	return "", resourceType
 }
 
 // GenerateAllowanceBucketName creates a deterministic name for an AllowanceBucket.
