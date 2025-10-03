@@ -148,6 +148,12 @@ tasks:
         WEBHOOK_COUNT=$(task kubectl -- get mutatingwebhookconfigurations,validatingwebhookconfigurations --no-headers | grep resourcemanager.miloapis.com | wc -l || echo "0")
         echo "Installed $WEBHOOK_COUNT webhook configurations in Milo API server"
 
+        # Step 9: Install service configurations to Milo API server
+        # Service configurations include IAM roles, protected resources, and telemetry configs
+        echo "⚙️  Installing service configurations to Milo API server..."
+        task kubectl -- apply -k config/services/
+        echo "✅ Service configurations installed successfully"
+
         # Update kubeconfig for easy developer access
         echo "📝 Updating kubeconfig for developer access..."
 
