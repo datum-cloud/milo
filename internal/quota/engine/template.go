@@ -32,7 +32,7 @@ type TemplateEngine interface {
 	RenderGrantMetadata(metadata quotav1alpha1.ObjectMetaTemplate, evalContext *GrantEvaluationContext) (string, string, string, map[string]string, map[string]string, error)
 
 	// RenderGrant renders a complete ResourceGrant from a GrantCreationPolicy.
-	RenderGrant(policy *quotav1alpha1.GrantCreationPolicy, triggerObj *unstructured.Unstructured, targetNamespace string) (*quotav1alpha1.ResourceGrant, error)
+	RenderGrant(policy *quotav1alpha1.GrantCreationPolicy, triggerObj *unstructured.Unstructured) (*quotav1alpha1.ResourceGrant, error)
 
 	// EvaluateConditions evaluates trigger conditions against a resource object.
 	EvaluateConditions(conditions []quotav1alpha1.ConditionExpression, obj *unstructured.Unstructured) (bool, error)
@@ -457,7 +457,7 @@ func (e *templateEngine) GenerateGrantName(policy *quotav1alpha1.GrantCreationPo
 }
 
 // RenderGrant renders a complete ResourceGrant from a GrantCreationPolicy.
-func (e *templateEngine) RenderGrant(policy *quotav1alpha1.GrantCreationPolicy, triggerObj *unstructured.Unstructured, targetNamespace string) (*quotav1alpha1.ResourceGrant, error) {
+func (e *templateEngine) RenderGrant(policy *quotav1alpha1.GrantCreationPolicy, triggerObj *unstructured.Unstructured) (*quotav1alpha1.ResourceGrant, error) {
 	// Create evaluation context for grant rendering
 	evalContext := &GrantEvaluationContext{
 		Object:       triggerObj,
@@ -470,15 +470,10 @@ func (e *templateEngine) RenderGrant(policy *quotav1alpha1.GrantCreationPolicy, 
 		return nil, fmt.Errorf("failed to render grant spec: %w", err)
 	}
 
-	// Render metadata
+	// Render metadata including namespace from template
 	name, generateName, namespace, labels, annotations, err := e.RenderGrantMetadata(policy.Spec.Target.ResourceGrantTemplate.Metadata, evalContext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render grant metadata: %w", err)
-	}
-
-	// Use target namespace if specified (for parent context scenarios)
-	if targetNamespace != "" {
-		namespace = targetNamespace
 	}
 
 	// Create the ResourceGrant object
