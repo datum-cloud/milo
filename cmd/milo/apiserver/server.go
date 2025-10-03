@@ -151,19 +151,6 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&s.ServiceAccountSigningEndpoint, "service-account-signing-endpoint", s.ServiceAccountSigningEndpoint, ""+
 		"Path to socket where a external JWT signer is listening. This flag is mutually exclusive with --service-account-signing-key-file and --service-account-key-file. Requires enabling feature gate (ExternalServiceAccountTokenSigner)")
 
-	fs.StringVar(&s.ProxyClientCertFile, "proxy-client-cert-file", s.ProxyClientCertFile, ""+
-		"Client certificate used to prove the identity of the aggregator or kube-apiserver "+
-		"when it must call out during a request. This includes proxying requests to a user "+
-		"api-server and calling out to webhook admission plugins. It is expected that this "+
-		"cert includes a signature from the CA in the --requestheader-client-ca-file flag. "+
-		"That CA is published in the 'extension-apiserver-authentication' configmap in "+
-		"the kube-system namespace. Components receiving calls from kube-aggregator should "+
-		"use that CA to perform their half of the mutual TLS verification.")
-	fs.StringVar(&s.ProxyClientKeyFile, "proxy-client-key-file", s.ProxyClientKeyFile, ""+
-		"Private key for the client certificate used to prove the identity of the aggregator or kube-apiserver "+
-		"when it must call out during a request. This includes proxying requests to a user "+
-		"api-server and calling out to webhook admission plugins.")
-
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
 	fs.BoolVar(&featureSessions, "feature-sessions", false, "Enable identity sessions virtual API")
 	fs.StringVar(&sessionsProviderGroup, "sessions-provider-group", "identity.miloapis.com", "Provider group for sessions")
