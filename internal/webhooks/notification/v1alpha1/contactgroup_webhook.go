@@ -28,7 +28,7 @@ func SetupContactGroupWebhooksWithManager(mgr ctrl.Manager) error {
 	contactGroupLog.Info("Setting up notification.miloapis.com contactgroup webhooks")
 
 	// Composite index for contact group spec (display name + visibility + namespace)
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroup{}, "spec.displayName", func(rawObj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroup{}, contactGroupSpecKey, func(rawObj client.Object) []string {
 		cg := rawObj.(*notificationv1alpha1.ContactGroup)
 		return []string{buildContactGroupSpecKey(*cg)}
 	}); err != nil {
