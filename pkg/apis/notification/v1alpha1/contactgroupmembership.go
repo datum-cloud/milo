@@ -28,8 +28,12 @@ const (
 const (
 	// ContactGroupMembershipUpdatedCondition is the condition Type that tracks contact update status.
 	ContactGroupMembershipUpdatedCondition = "Update"
-	// ContactGroupMembershipUpdatePendingReason is used when contact update is in progress.
+	// ContactGroupMembershipUpdatePendingReason is used when contact update is in progress against
+	// the external provider.
 	ContactGroupMembershipUpdatePendingReason = "UpdatePending"
+	// ContactGroupMembershipUpdatePendingReason is used when contact update has been
+	// requested internally (e.g. when a contact group is updated, an the contact group membership is updated accordingly).
+	ContactGroupMembershipUpdateRequestedReason = "UpdateRequested"
 	// ContactGroupMembershipUpdatedReason is used when contact update succeeds.
 	ContactGroupMembershipUpdatedReason = "UpdateSuccessful"
 )
