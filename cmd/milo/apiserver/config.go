@@ -7,7 +7,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/endpoints/filterlatency"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
@@ -64,9 +63,6 @@ type ExtraConfig struct {
 
 // SessionsProviderConfig groups configuration for the sessions backend provider.
 type SessionsProviderConfig struct {
-	Group    string
-	Version  string
-	Resource string
 	// Direct provider connection (standalone upstream serving Milo public GVK)
 	URL            string
 	CAFile         string
@@ -75,8 +71,6 @@ type SessionsProviderConfig struct {
 	TimeoutSeconds int
 	Retries        int
 	ForwardExtras  []string
-	// Computed
-	ProviderGVR schema.GroupVersionResource
 }
 
 type completedConfig struct {
@@ -110,14 +104,6 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 	}
 
 	if c.ExtraConfig.FeatureSessions {
-		// Validate and compute ProviderGVR once
-		if c.ExtraConfig.SessionsProvider.ProviderGVR.Empty() {
-			c.ExtraConfig.SessionsProvider.ProviderGVR = schema.GroupVersionResource{
-				Group:    c.ExtraConfig.SessionsProvider.Group,
-				Version:  c.ExtraConfig.SessionsProvider.Version,
-				Resource: c.ExtraConfig.SessionsProvider.Resource,
-			}
-		}
 		// Build identity sessions storage provider
 		providers = append(providers, newIdentitySessionsProvider(c))
 	}
@@ -126,14 +112,12 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 }
 
 func newIdentitySessionsProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
-	gvr := c.ExtraConfig.SessionsProvider.ProviderGVR
 	allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ForwardExtras))
 	for _, k := range c.ExtraConfig.SessionsProvider.ForwardExtras {
 		allow[k] = struct{}{}
 	}
 	cfg := sessionsbackend.Config{
 		BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
-		ProviderGVR:    gvr,
 		ProviderURL:    c.ExtraConfig.SessionsProvider.URL,
 		CAFile:         c.ExtraConfig.SessionsProvider.CAFile,
 		ClientCertFile: c.ExtraConfig.SessionsProvider.ClientCertFile,
@@ -171,7 +155,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	apiResourceConfigSource := controlplane.DefaultAPIResourceConfigSource()
 	apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("serviceaccounts"))
 	// Enable identity group/version served by virtual storage
-	apiResourceConfigSource.EnableVersions(identityopenapi.GroupVersion)
+	apiResourceConfigSource.EnableVersions(identityopenapi.SchemeGroupVersion)
 
 	genericConfig, versionedInformers, storageFactory, err := controlplaneapiserver.BuildGenericConfig(
 		opts,

@@ -21,7 +21,6 @@ import (
 	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	authuser "k8s.io/apiserver/pkg/authentication/user"
 	apirequest "k8s.io/apiserver/pkg/endpoints/request"
 )
@@ -142,7 +141,6 @@ func TestNewDynamicProvider_TLSConfig(t *testing.T) {
 
 	dp, err := NewDynamicProvider(Config{
 		ProviderURL:    providerURL,
-		ProviderGVR:    schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"},
 		CAFile:         caFile,
 		ClientCertFile: certFile,
 		ClientKeyFile:  keyFile,
@@ -174,18 +172,16 @@ func TestNewDynamicProvider_TLSConfig(t *testing.T) {
 }
 
 func TestDynForUser_SendsAuthProxyHeadersAndTLS(t *testing.T) {
-	// Choose a GVR we’ll serve
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+	gvr := identityv1alpha1.SchemeGroupVersion.WithResource("sessions")
 
 	// Capture request headers
 	var gotUser string
 	var gotGroups []string
 	var gotExtra map[string][]string
 
-	// Minimal fake API implementing:
-	//  GET /apis/example.com/v1/widgets
 	mux := http.NewServeMux()
-	mux.HandleFunc("/apis/"+gvr.Group+"/"+gvr.Version+"/"+gvr.Resource, func(w http.ResponseWriter, r *http.Request) {
+	path := "/apis/" + gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		gotUser = r.Header.Get("X-Remote-User")
 		gotGroups = r.Header.Values("X-Remote-Group")
 
@@ -215,7 +211,6 @@ func TestDynForUser_SendsAuthProxyHeadersAndTLS(t *testing.T) {
 	// Create provider that talks to our TLS server
 	dp, err := NewDynamicProvider(Config{
 		ProviderURL: url,
-		ProviderGVR: gvr,
 		CAFile:      caFile,
 		// client cert optional for this test; server doesn't require it
 		Timeout: 5 * time.Second,
@@ -288,11 +283,12 @@ func TestDynForUser_SendsAuthProxyHeadersAndTLS(t *testing.T) {
 
 // Sanity check that retry loop doesn’t blow up: server errors once, then succeeds.
 func TestListSessions_Retries(t *testing.T) {
-	gvr := schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}
+	gvr := identityv1alpha1.SchemeGroupVersion.WithResource("sessions")
 
 	var hits int
 	mux := http.NewServeMux()
-	mux.HandleFunc("/apis/"+gvr.Group+"/"+gvr.Version+"/"+gvr.Resource, func(w http.ResponseWriter, r *http.Request) {
+	path := "/apis/" + gvr.Group + "/" + gvr.Version + "/" + gvr.Resource
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		hits++
 		if hits == 1 {
 			http.Error(w, "try again", http.StatusInternalServerError)
@@ -316,7 +312,6 @@ func TestListSessions_Retries(t *testing.T) {
 
 	dp, err := NewDynamicProvider(Config{
 		ProviderURL: ts.URL,
-		ProviderGVR: gvr,
 		CAFile:      caFile,
 		Retries:     1,
 	})

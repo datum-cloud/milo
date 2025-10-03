@@ -50,10 +50,7 @@ var (
 	// automatically bootstrapped by the control plane.
 	SystemNamespace string
 	// Sessions feature/config flags
-	featureSessions          bool
-	sessionsProviderGroup    string
-	sessionsProviderVersion  string
-	sessionsProviderResource string
+	featureSessions bool
 	// Standalone provider connection (direct URL + mTLS)
 	sessionsProviderURL        string
 	sessionsProviderCAFile     string
@@ -153,9 +150,6 @@ func NewCommand() *cobra.Command {
 
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
 	fs.BoolVar(&featureSessions, "feature-sessions", false, "Enable identity sessions virtual API")
-	fs.StringVar(&sessionsProviderGroup, "sessions-provider-group", "identity.miloapis.com", "Provider group for sessions")
-	fs.StringVar(&sessionsProviderVersion, "sessions-provider-version", "v1alpha1", "Provider version for sessions")
-	fs.StringVar(&sessionsProviderResource, "sessions-provider-resource", "sessions", "Provider resource for sessions")
 	fs.StringVar(&sessionsProviderURL, "sessions-provider-url", "", "Direct provider base URL (e.g., https://zitadel-apiserver:8443)")
 	fs.StringVar(&sessionsProviderCAFile, "sessions-provider-ca-file", "", "Path to CA file to validate provider TLS")
 	fs.StringVar(&sessionsProviderClientCert, "sessions-provider-client-cert", "", "Client certificate for mTLS to provider")
@@ -207,9 +201,6 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 
 	// inject flag-derived extra config
 	config.ExtraConfig.FeatureSessions = featureSessions
-	config.ExtraConfig.SessionsProvider.Group = sessionsProviderGroup
-	config.ExtraConfig.SessionsProvider.Version = sessionsProviderVersion
-	config.ExtraConfig.SessionsProvider.Resource = sessionsProviderResource
 	config.ExtraConfig.SessionsProvider.URL = sessionsProviderURL
 	config.ExtraConfig.SessionsProvider.CAFile = sessionsProviderCAFile
 	config.ExtraConfig.SessionsProvider.ClientCertFile = sessionsProviderClientCert

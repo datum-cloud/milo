@@ -33,8 +33,7 @@ import (
 //
 
 type Config struct {
-	BaseConfig  *rest.Config
-	ProviderGVR schema.GroupVersionResource
+	BaseConfig *rest.Config
 
 	ProviderURL string
 
@@ -84,9 +83,11 @@ func NewDynamicProvider(cfg Config) (*DynamicProvider, error) {
 		base.Timeout = cfg.Timeout
 	}
 
+	gvr := identityv1alpha1.SchemeGroupVersion.WithResource("sessions")
+
 	return &DynamicProvider{
 		base:        base,
-		gvr:         cfg.ProviderGVR,
+		gvr:         gvr,
 		to:          cfg.Timeout,
 		retries:     max(0, cfg.Retries),
 		allowExtras: cfg.ExtrasAllow,

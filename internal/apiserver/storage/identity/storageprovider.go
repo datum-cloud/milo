@@ -17,14 +17,14 @@ type StorageProvider struct {
 	Sessions identregistry.Backend
 }
 
-func (p StorageProvider) GroupName() string { return identityv1alpha1.GroupVersion.Group }
+func (p StorageProvider) GroupName() string { return identityv1alpha1.SchemeGroupVersion.Group }
 
 func (p StorageProvider) NewRESTStorage(
 	_ serverstorage.APIResourceConfigSource,
 	_ generic.RESTOptionsGetter,
 ) (genericapiserver.APIGroupInfo, error) {
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(
-		identityv1alpha1.GroupVersion.Group,
+		identityv1alpha1.SchemeGroupVersion.Group,
 		legacyscheme.Scheme,
 		metav1.ParameterCodec,
 		legacyscheme.Codecs,
@@ -35,7 +35,7 @@ func (p StorageProvider) NewRESTStorage(
 	}
 
 	apiGroupInfo.VersionedResourcesStorageMap = map[string]map[string]rest.Storage{
-		identityv1alpha1.GroupVersion.Version: storage,
+		identityv1alpha1.SchemeGroupVersion.Version: storage,
 	}
 
 	return apiGroupInfo, nil
