@@ -26,6 +26,7 @@ This test verifies:
 | 8 | [test-grant-cleanup](#step-test-grant-cleanup) | 0 | 3 | 0 | 0 | 0 |
 | 9 | [test-policy-validation](#step-test-policy-validation) | 0 | 2 | 0 | 0 | 0 |
 | 10 | [test-production-style-labels](#step-test-production-style-labels) | 0 | 3 | 0 | 0 | 0 |
+| 11 | [test-namespace-template-grant](#step-test-namespace-template-grant) | 0 | 6 | 0 | 0 | 0 |
 
 ### Step: `setup-base-infrastructure`
 
@@ -167,6 +168,24 @@ This validates a bug fix for label validation in CEL expressions.
 | 1 | `apply` | 0 | 0 | *No description* |
 | 2 | `wait` | 0 | 0 | *No description* |
 | 3 | `assert` | 0 | 0 | *No description* |
+
+### Step: `test-namespace-template-grant`
+
+Test that GrantCreationPolicy can create grants in organization-specific namespaces
+using namespace templates like 'organization-{{.trigger.metadata.name}}'.
+This validates the fix for namespace template rendering in grant creation.
+
+
+#### Try
+
+| # | Operation | Bindings | Outputs | Description |
+|:-:|---|:-:|:-:|---|
+| 1 | `apply` | 0 | 0 | *No description* |
+| 2 | `wait` | 0 | 0 | *No description* |
+| 3 | `apply` | 0 | 0 | *No description* |
+| 4 | `wait` | 0 | 0 | *No description* |
+| 5 | `wait` | 0 | 0 | *No description* |
+| 6 | `assert` | 0 | 0 | *No description* |
 
 ---
 

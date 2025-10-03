@@ -269,3 +269,49 @@ spec:
         - assert:
             file: assertions/assert-production-style-labels-ready.yaml
 
+    # Test namespace template grant creation
+    - name: test-namespace-template-grant
+      description: |
+        Test that GrantCreationPolicy can create grants in organization-specific namespaces
+        using namespace templates like 'organization-{{.trigger.metadata.name}}'.
+        This validates the fix for namespace template rendering in grant creation.
+      try:
+        # Apply policy that creates grants in organization namespace
+        - apply:
+            file: namespace-template-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: GrantCreationPolicy
+            name: test-namespace-template-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        # Create organization that triggers namespace-template grant
+        - apply:
+            file: test-data/namespace-template-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-namespace-template-test-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        # Wait for ResourceGrant to be created in organization namespace
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: grant-namespace-template-test-org-default-org
+            namespace: organization-namespace-template-test-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Assert grant was created in correct namespace with correct spec
+        - assert:
+            file: assertions/assert-namespace-template-grant.yaml
+
