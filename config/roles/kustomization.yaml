@@ -40,3 +40,6 @@ resources:
   - notification-contact-group-membership-removal-reader.yaml
   - notification-contact-group-membership-removal-editor.yaml
   - notification-contact-group-membership-removal-admin.yaml
+  - organizationmembership-reader.yaml
+  - organizationmembership-editor.yaml
+  - organizationmembership-admin.yaml
