@@ -1,0 +1,40 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: test-invalid-template-policy
+  labels:
+    test.miloapis.com/quota: "true"
+    test.miloapis.com/scenario: "invalid-template"
+spec:
+  enabled: true
+  trigger:
+    resource:
+      apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+      kind: "Project"
+    conditions:
+      # Only trigger for projects with a specific test label
+      - expression: 'has(trigger.metadata.labels) && "test.miloapis.com/invalid-template" in trigger.metadata.labels'
+  target:
+    resourceClaimTemplate:
+      metadata:
+        namespace: "milo-system"
+        # Invalid template remains to test validation
+        generateName: "test-project-{{ .invalidField }}-quota-claim-"  # Invalid template field
+        labels:
+          quota.miloapis.com/auto-created: "true"
+          quota.miloapis.com/test: "true"
+        annotations:
+          quota.miloapis.com/description: "Test quota claim with invalid template"
+      spec:
+        consumerRef:
+          apiGroup: "resourcemanager.miloapis.com"
+          kind: "Organization"
+          name: "{{ .trigger.spec.organizationName }}"
+        requests:
+          - resourceType: "test.miloapis.com/edgeprojects"
+            amount: 1
+        resourceRef:
+          apiGroup: "resourcemanager.miloapis.com"
+          kind: "Project"
+          name: "{{ .trigger.metadata.name }}"
+          namespace: "{{ .trigger.metadata.namespace }}"

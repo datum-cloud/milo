@@ -3,11 +3,21 @@ kind: Test
 metadata:
   name: organizationmembership-fieldselector
 spec:
+  description: |
+    Tests field selector functionality for OrganizationMemberships.
+
+    This test verifies:
+    - Field selectors work on spec.userRef.name
+    - Field selectors work on spec.organizationRef.name
+    - Field selectors correctly filter memberships within organization namespaces
+    - Non-matching field selectors return zero results
+
   clusters:
     org:
       kubeconfig: kubeconfig-org-template
   steps:
   - name: setup
+    description: Create Organization and OrganizationMemberships for field selector testing
     try:
     - apply:
         file: resources/org.yaml
@@ -36,6 +46,7 @@ spec:
             value: 'True'
 
   - name: direct-field-selector-on-org-cluster
+    description: Test field selector filtering on userRef.name and organizationRef.name
     cluster: org
     try:
     - script:
@@ -53,6 +64,7 @@ spec:
             --field-selector spec.organizationRef.name=fieldsel-org -o json | jq '.items | length')" -eq 2
 
   - name: org-scoped-fieldselector-behavior
+    description: Verify field selector correctly narrows results within organization namespace
     cluster: org
     try:
     - script:

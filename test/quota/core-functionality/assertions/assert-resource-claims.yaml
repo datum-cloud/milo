@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceClaim
+  metadata:
+    namespace: organization-core-test-basic-quota-org
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/test: "true"
+    ownerReferences:
+    - apiVersion: resourcemanager.miloapis.com/v1alpha1
+      kind: Project
+      name: core-test-basic-project-1
+      controller: false
+      blockOwnerDeletion: false
+  spec:
+    consumerRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: core-test-basic-quota-org
+    requests:
+      - resourceType: "test.corefunction.miloapis.com/projects"
+        amount: 1
+    resourceRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Project
+      name: core-test-basic-project-1
+  status:
+    conditions:
+    - type: Granted
+      status: "True"
+      reason: QuotaAvailable
+      message: "All 1 resource requests have been granted"
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceClaim
+  metadata:
+    namespace: organization-core-test-basic-quota-org
+    labels:
+      quota.miloapis.com/auto-created: "true"
+      quota.miloapis.com/test: "true"
+    ownerReferences:
+    - apiVersion: resourcemanager.miloapis.com/v1alpha1
+      kind: Project
+      name: core-test-basic-project-2
+      controller: false
+      blockOwnerDeletion: false
+  spec:
+    consumerRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: core-test-basic-quota-org
+    requests:
+      - resourceType: "test.corefunction.miloapis.com/projects"
+        amount: 1
+    resourceRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Project
+      name: core-test-basic-project-2
+  status:
+    conditions:
+    - type: Granted
+      status: "True"
+      reason: QuotaAvailable
+      message: "All 1 resource requests have been granted"

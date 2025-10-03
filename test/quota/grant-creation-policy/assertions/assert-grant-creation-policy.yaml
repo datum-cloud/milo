@@ -1,0 +1,25 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: GrantCreationPolicy
+metadata:
+  name: test-organization-grant-policy
+  labels:
+    test.miloapis.com/quota: "grant-creation-policy"
+spec:
+  enabled: true
+  trigger:
+    resource:
+      apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+      kind: "Organization"
+    conditions:
+      # Trigger for Standard type organizations in the grant-creation-policy test suite
+      # This may overlap with cel-name-policy for premium-test-org (intentional for testing)
+      - expression: 'trigger.spec.type == "Standard" && has(trigger.metadata.labels) && "test.miloapis.com/scenario" in trigger.metadata.labels && trigger.metadata.labels["test.miloapis.com/scenario"] == "grant-creation-policy"'
+  target:
+    resourceGrantTemplate:
+      metadata:
+        name: "auto-grant-{{.trigger.metadata.name}}"
+        namespace: "milo-system"
+status:
+  conditions:
+    - type: Ready
+      status: "True"

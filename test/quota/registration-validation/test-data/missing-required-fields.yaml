@@ -1,0 +1,14 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-missing-fields
+spec:
+  consumerTypeRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  # Missing resourceType (required)
+  description: "Missing required fields test"
+  # Missing baseUnit (required)
+  # Missing displayUnit (required)
+  # Missing unitConversionFactor (required)

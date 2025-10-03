@@ -1,0 +1,151 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: resource-registration-validation
+spec:
+  description: |
+    End-to-end tests for ResourceRegistration validation including:
+    - OpenAPI schema validation (required fields, patterns, constraints)
+    - CEL immutability validation
+    - Admission plugin duplicate detection in claimingResources
+    - Cross-resource duplicate detection via admission plugin
+
+  steps:
+    - name: create-valid-registration
+      description: Create a valid ResourceRegistration and verify it becomes Active
+      try:
+        - create:
+            file: test-data/valid-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: test-valid-registration
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - assert:
+            file: assertions/assert-valid-registration.yaml
+
+    - name: test-missing-required-fields
+      description: Verify that ResourceRegistrations without required fields are rejected
+      try:
+        - create:
+            file: test-data/missing-required-fields.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.resourceType')): true
+
+    - name: test-invalid-type-enum
+      description: Verify that invalid enum values for type field are rejected
+      try:
+        - create:
+            file: test-data/invalid-type-enum.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.type')): true
+
+    - name: test-invalid-conversion-factor
+      description: Verify that unitConversionFactor below minimum value is rejected
+      try:
+        - create:
+            file: test-data/invalid-conversion-factor.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'unitConversionFactor')): true
+
+    - name: test-duplicate-claiming-resources
+      description: Verify that duplicate entries in claimingResources array are rejected
+      try:
+        - create:
+            file: test-data/duplicate-claiming-resources.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'duplicate claiming resource')): true
+
+    - name: test-cross-resource-duplicate
+      description: Verify that registering the same resourceType twice across different objects is rejected
+      try:
+        # First registration should succeed
+        - create:
+            file: test-data/first-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: test-first-registration
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Second registration with same resourceType should fail
+        - create:
+            file: test-data/duplicate-resource-type.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'already registered')): true
+
+    - name: test-immutable-resource-type
+      description: Verify that resourceType field cannot be modified after creation (CEL validation)
+      try:
+        - create:
+            file: test-data/registration-to-update.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: test-immutable-registration
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - patch:
+            file: test-data/patch-resource-type.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.resourceType is immutable')): true
+
+    - name: test-immutable-consumer-type-ref
+      description: Verify that consumerTypeRef field cannot be modified after creation (CEL validation)
+      try:
+        - patch:
+            file: test-data/patch-consumer-type-ref.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.consumerTypeRef is immutable')): true
+
+    - name: test-immutable-type
+      description: Verify that type field cannot be modified after creation (CEL validation)
+      try:
+        - patch:
+            file: test-data/patch-type.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'spec.type is immutable')): true
+
+    - name: test-valid-update
+      description: Verify that mutable fields can be successfully updated
+      try:
+        - patch:
+            file: test-data/patch-mutable-fields.yaml
+        - assert:
+            file: assertions/assert-updated-registration.yaml
+
+    - name: test-max-claiming-resources
+      description: Verify that exceeding maximum claimingResources array size is rejected
+      try:
+        - create:
+            file: test-data/max-claiming-resources.yaml
+            expect:
+              - check:
+                  ($error != null): true
+                  (contains($error, 'claimingResources')): true

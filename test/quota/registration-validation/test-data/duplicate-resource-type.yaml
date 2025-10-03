@@ -1,0 +1,18 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-duplicate-registration
+spec:
+  consumerTypeRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  # Same resourceType as test-first-registration - should fail
+  resourceType: "test.validation.miloapis.com/unique-resource"
+  description: "Duplicate resourceType test"
+  baseUnit: "resource"
+  displayUnit: "resources"
+  unitConversionFactor: 1
+  claimingResources:
+    - apiGroup: test.miloapis.com
+      kind: AnotherResource
