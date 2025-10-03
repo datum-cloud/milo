@@ -259,13 +259,13 @@ func (r *GrantCreationController) processPolicy(
 	logger.Info("Trigger conditions met, creating/updating grant")
 
 	// Determine target client (same cluster or cross-cluster)
-	targetClient, targetNamespace, err := r.resolveTargetClient(ctx, policy, triggerObj)
+	targetClient, err := r.resolveTargetClient(ctx, policy, triggerObj)
 	if err != nil {
 		return fmt.Errorf("failed to resolve target client: %w", err)
 	}
 
-	// Render the grant
-	grant, err := r.TemplateEngine.RenderGrant(policy, triggerObj, targetNamespace)
+	// Render the grant (namespace is rendered by template engine)
+	grant, err := r.TemplateEngine.RenderGrant(policy, triggerObj)
 	if err != nil {
 		return fmt.Errorf("failed to render grant: %w", err)
 	}
@@ -279,15 +279,16 @@ func (r *GrantCreationController) processPolicy(
 	return nil
 }
 
-// resolveTargetClient determines the target client and namespace for grant creation.
+// resolveTargetClient determines the target client for grant creation.
+// The namespace is always rendered by the template engine, so only the client is returned.
 func (r *GrantCreationController) resolveTargetClient(
 	ctx context.Context,
 	policy *quotav1alpha1.GrantCreationPolicy,
 	triggerObj *unstructured.Unstructured,
-) (client.Client, string, error) {
+) (client.Client, error) {
 	// If no parent context is specified, use the current client
 	if policy.Spec.Target.ParentContext == nil {
-		return r.Client, policy.Spec.Target.ResourceGrantTemplate.Metadata.Namespace, nil
+		return r.Client, nil
 	}
 
 	// Resolve parent context name
@@ -296,7 +297,7 @@ func (r *GrantCreationController) resolveTargetClient(
 		triggerObj,
 	)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to evaluate parent context name: %w", err)
+		return nil, fmt.Errorf("failed to evaluate parent context name: %w", err)
 	}
 
 	// Get client for parent context
@@ -307,10 +308,10 @@ func (r *GrantCreationController) resolveTargetClient(
 		Name:     parentContextName, // Use resolved name directly
 	}, triggerObj)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to resolve parent context client: %w", err)
+		return nil, fmt.Errorf("failed to resolve parent context client: %w", err)
 	}
 
-	return targetClient, policy.Spec.Target.ResourceGrantTemplate.Metadata.Namespace, nil
+	return targetClient, nil
 }
 
 // createOrUpdateGrant creates or updates a ResourceGrant.
@@ -375,24 +376,24 @@ func (r *GrantCreationController) cleanupGrant(
 ) error {
 	logger := log.FromContext(ctx).WithValues("policy", policy.Name)
 
-	// Generate the grant name to check for cleanup
-	grantName, err := r.TemplateEngine.GenerateGrantName(policy, triggerObj)
-	if err != nil {
-		return fmt.Errorf("failed to generate grant name: %w", err)
-	}
-
 	// Determine target client
-	targetClient, targetNamespace, err := r.resolveTargetClient(ctx, policy, triggerObj)
+	targetClient, err := r.resolveTargetClient(ctx, policy, triggerObj)
 	if err != nil {
 		return fmt.Errorf("failed to resolve target client: %w", err)
 	}
 
+	// Render the grant to get its name and namespace
+	grant, err := r.TemplateEngine.RenderGrant(policy, triggerObj)
+	if err != nil {
+		return fmt.Errorf("failed to render grant for cleanup: %w", err)
+	}
+
 	// Check if grant exists
-	grant := &quotav1alpha1.ResourceGrant{}
+	existingGrant := &quotav1alpha1.ResourceGrant{}
 	err = targetClient.Get(ctx, client.ObjectKey{
-		Name:      grantName,
-		Namespace: targetNamespace,
-	}, grant)
+		Name:      grant.Name,
+		Namespace: grant.Namespace,
+	}, existingGrant)
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -403,15 +404,15 @@ func (r *GrantCreationController) cleanupGrant(
 	}
 
 	// Check if this grant was created by our policy
-	if grant.Labels["quota.miloapis.com/policy"] == policy.Name {
-		logger.Info("Cleaning up grant due to unmet conditions", "grantName", grantName)
+	if existingGrant.Labels["quota.miloapis.com/policy"] == policy.Name {
+		logger.Info("Cleaning up grant due to unmet conditions", "grantName", existingGrant.Name)
 
-		if err := targetClient.Delete(ctx, grant); err != nil {
+		if err := targetClient.Delete(ctx, existingGrant); err != nil {
 			return fmt.Errorf("failed to delete grant: %w", err)
 		}
 
 		r.EventRecorder.Eventf(triggerObj, "Normal", "GrantDeleted",
-			"Deleted ResourceGrant %s/%s due to unmet conditions", grant.Namespace, grant.Name)
+			"Deleted ResourceGrant %s/%s due to unmet conditions", existingGrant.Namespace, existingGrant.Name)
 	}
 
 	return nil
