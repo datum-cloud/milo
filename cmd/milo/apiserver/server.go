@@ -61,7 +61,7 @@ var (
 	sessionsProviderClientKey  string
 	providerTimeoutSeconds     int
 	providerRetries            int
-	forwardExtras   []string
+	forwardExtras              []string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters

@@ -325,16 +325,10 @@ tasks:
         set -e
         for package_dir in pkg/apis/*/; do
           package_name=$(basename "$package_dir")
-          # Skip identity: sessions are virtual (no CRD)
-          if [ "$package_name" = "identity" ]; then
-            echo "Skipping CRD generation for package: $package_name (virtual resources)"
-            continue
-          fi
           echo "Generating CRDs for package: $package_name"
           mkdir -p "config/crd/bases/$package_name"
           "{{.TOOL_DIR}}/controller-gen" crd paths="./$package_dir..." output:dir="./config/crd/bases/$package_name"
         done
-      - echo "Skipping external OpenAPI gen; using manual identity definitions merged at runtime"
       - echo "Generating webhook files..."
       - "\"{{.TOOL_DIR}}/controller-gen\" webhook paths=\"./internal/webhooks/...\" output:dir=\"./config/webhook\""
       # Generate RBAC rules for the controllers.
