@@ -52,21 +52,16 @@ spec:
           - --audit-webhook-mode=$(AUDIT_WEBHOOK_MODE)
           - --audit-webhook-initial-backoff=$(AUDIT_WEBHOOK_INITIAL_BACKOFF)
           - --feature-sessions=true
-          - --sessions-provider-group=zitadel.identity.miloapis.com
+          - --sessions-provider-group=identity.miloapis.com
           - --sessions-provider-version=v1alpha1
           - --sessions-provider-resource=sessions
+          - --sessions-provider-url=$(SESSIONS_PROVIDER_URL)
+          - --sessions-provider-ca-file=$(SESSIONS_PROVIDER_CA_FILE)
+          - --sessions-provider-client-cert=$(SESSIONS_PROVIDER_CLIENT_CERT_FILE)
+          - --sessions-provider-client-key=$(SESSIONS_PROVIDER_CLIENT_KEY_FILE)
           - --provider-timeout=3
           - --provider-retries=2
-          - --impersonate-forward-extras=iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name
-          - --requestheader-client-ca-file=$(REQUESTHEADER_CLIENT_CA_FILE)
-          - --requestheader-allowed-names=$(REQUESTHEADER_ALLOWED_NAMES)
-          - --requestheader-extra-headers-prefix=$(REQUESTHEADER_EXTRA_HEADERS_PREFIX)
-          - --requestheader-group-headers=$(REQUESTHEADER_GROUP_HEADERS)
-          - --requestheader-username-headers=$(REQUESTHEADER_USERNAME_HEADERS)
-          - --requestheader-uid-headers=$(REQUESTHEADER_UID_HEADERS)
-          - --feature-gates=$(FEATURE_GATES)
-          - --proxy-client-cert-file=$(PROXY_CLIENT_CERT_FILE)
-          - --proxy-client-key-file=$(PROXY_CLIENT_KEY_FILE)
+          - --forward-extras=iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name
         env:
           - name: LOG_LEVEL
             value: "4"
@@ -120,23 +115,13 @@ spec:
             value: ""
           - name: AUDIT_WEBHOOK_INITIAL_BACKOFF
             value: ""
-          - name: REQUESTHEADER_CLIENT_CA_FILE
+          - name: SESSIONS_PROVIDER_URL
             value: ""
-          - name: REQUESTHEADER_ALLOWED_NAMES
+          - name: SESSIONS_PROVIDER_CA_FILE
             value: ""
-          - name: REQUESTHEADER_EXTRA_HEADERS_PREFIX
+          - name: SESSIONS_PROVIDER_CLIENT_CERT_FILE
             value: ""
-          - name: REQUESTHEADER_USERNAME_HEADERS
-            value: ""
-          - name: REQUESTHEADER_GROUP_HEADERS
-            value: ""
-          - name: REQUESTHEADER_UID_HEADERS
-            value: ""
-          - name: FEATURE_GATES
-            value: ""
-          - name: PROXY_CLIENT_CERT_FILE
-            value: ""
-          - name: PROXY_CLIENT_KEY_FILE
+          - name: SESSIONS_PROVIDER_CLIENT_KEY_FILE
             value: ""
         livenessProbe:
           failureThreshold: 3

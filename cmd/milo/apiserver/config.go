@@ -64,12 +64,17 @@ type ExtraConfig struct {
 
 // SessionsProviderConfig groups configuration for the sessions backend provider.
 type SessionsProviderConfig struct {
-	Group                    string
-	Version                  string
-	Resource                 string
-	TimeoutSeconds           int
-	Retries                  int
-	ImpersonateForwardExtras []string
+	Group    string
+	Version  string
+	Resource string
+	// Direct provider connection (standalone upstream serving Milo public GVK)
+	URL            string
+	CAFile         string
+	ClientCertFile string
+	ClientKeyFile  string
+	TimeoutSeconds int
+	Retries        int
+	ForwardExtras  []string
 	// Computed
 	ProviderGVR schema.GroupVersionResource
 }
@@ -122,17 +127,22 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 
 func newIdentitySessionsProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
 	gvr := c.ExtraConfig.SessionsProvider.ProviderGVR
-	allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ImpersonateForwardExtras))
-	for _, k := range c.ExtraConfig.SessionsProvider.ImpersonateForwardExtras {
+	allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ForwardExtras))
+	for _, k := range c.ExtraConfig.SessionsProvider.ForwardExtras {
 		allow[k] = struct{}{}
 	}
-	backend, _ := sessionsbackend.NewDynamicProvider(sessionsbackend.Config{
-		BaseConfig:             c.ControlPlane.Generic.LoopbackClientConfig,
-		ProviderGVR:            gvr,
-		Timeout:                time.Duration(c.ExtraConfig.SessionsProvider.TimeoutSeconds) * time.Second,
-		Retries:                c.ExtraConfig.SessionsProvider.Retries,
-		ImpersonateExtrasAllow: allow,
-	})
+	cfg := sessionsbackend.Config{
+		BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
+		ProviderGVR:    gvr,
+		ProviderURL:    c.ExtraConfig.SessionsProvider.URL,
+		CAFile:         c.ExtraConfig.SessionsProvider.CAFile,
+		ClientCertFile: c.ExtraConfig.SessionsProvider.ClientCertFile,
+		ClientKeyFile:  c.ExtraConfig.SessionsProvider.ClientKeyFile,
+		Timeout:        time.Duration(c.ExtraConfig.SessionsProvider.TimeoutSeconds) * time.Second,
+		Retries:        c.ExtraConfig.SessionsProvider.Retries,
+		ExtrasAllow:    allow,
+	}
+	backend, _ := sessionsbackend.NewDynamicProvider(cfg)
 	return identitystorage.StorageProvider{Sessions: backend}
 }
 

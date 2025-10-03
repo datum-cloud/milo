@@ -54,9 +54,14 @@ var (
 	sessionsProviderGroup    string
 	sessionsProviderVersion  string
 	sessionsProviderResource string
-	providerTimeoutSeconds   int
-	providerRetries          int
-	impersonateForwardExtras []string
+	// Standalone provider connection (direct URL + mTLS)
+	sessionsProviderURL        string
+	sessionsProviderCAFile     string
+	sessionsProviderClientCert string
+	sessionsProviderClientKey  string
+	providerTimeoutSeconds     int
+	providerRetries            int
+	forwardExtras   []string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters
@@ -75,10 +80,6 @@ func NewCommand() *cobra.Command {
 			// silence client-go warnings.
 			// kube-apiserver loopback clients should not log self-issued warnings.
 			rest.SetDefaultWarningHandler(rest.NoWarnings{})
-			// Ensure feature gates are finalized before use
-			if err := s.GenericServerRunOptions.ComponentGlobalsRegistry.Set(); err != nil {
-				return err
-			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -123,10 +124,6 @@ func NewCommand() *cobra.Command {
 	// Override the ComponentGlobalsRegistry to avoid k8s feature flags from being added.
 	// Add our own feature gates or expose native k8s ones if necessary
 	s.GenericServerRunOptions.ComponentGlobalsRegistry = featuregate.NewComponentGlobalsRegistry()
-	// Register the default kube component so Set() can succeed and feature gates can be used
-	_, _ = s.GenericServerRunOptions.ComponentGlobalsRegistry.ComponentGlobalsOrRegister(
-		featuregate.DefaultKubeComponent, version.DefaultBuildEffectiveVersion(), utilfeature.DefaultMutableFeatureGate,
-	)
 	s.GenericServerRunOptions.AddUniversalFlags(namedFlagSets.FlagSet("generic"))
 	s.Etcd.AddFlags(namedFlagSets.FlagSet("etcd"))
 	s.SecureServing.AddFlags(namedFlagSets.FlagSet("secure serving"))
@@ -169,12 +166,16 @@ func NewCommand() *cobra.Command {
 
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
 	fs.BoolVar(&featureSessions, "feature-sessions", false, "Enable identity sessions virtual API")
-	fs.StringVar(&sessionsProviderGroup, "sessions-provider-group", "zitadel.identity.miloapis.com", "Provider group for sessions")
+	fs.StringVar(&sessionsProviderGroup, "sessions-provider-group", "identity.miloapis.com", "Provider group for sessions")
 	fs.StringVar(&sessionsProviderVersion, "sessions-provider-version", "v1alpha1", "Provider version for sessions")
 	fs.StringVar(&sessionsProviderResource, "sessions-provider-resource", "sessions", "Provider resource for sessions")
+	fs.StringVar(&sessionsProviderURL, "sessions-provider-url", "", "Direct provider base URL (e.g., https://zitadel-apiserver:8443)")
+	fs.StringVar(&sessionsProviderCAFile, "sessions-provider-ca-file", "", "Path to CA file to validate provider TLS")
+	fs.StringVar(&sessionsProviderClientCert, "sessions-provider-client-cert", "", "Client certificate for mTLS to provider")
+	fs.StringVar(&sessionsProviderClientKey, "sessions-provider-client-key", "", "Client private key for mTLS to provider")
 	fs.IntVar(&providerTimeoutSeconds, "provider-timeout", 3, "Provider request timeout in seconds")
 	fs.IntVar(&providerRetries, "provider-retries", 2, "Provider request retries")
-	fs.StringSliceVar(&impersonateForwardExtras, "impersonate-forward-extras", []string{"iam.miloapis.com/parent-api-group", "iam.miloapis.com/parent-type", "iam.miloapis.com/parent-name"}, "User extras keys to forward during impersonation")
+	fs.StringSliceVar(&forwardExtras, "forward-extras", []string{"iam.miloapis.com/parent-api-group", "iam.miloapis.com/parent-type", "iam.miloapis.com/parent-name"}, "User extras keys to forward during impersonation")
 
 	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cliflag.SetUsageAndHelpFunc(cmd, namedFlagSets, cols)
@@ -222,9 +223,13 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 	config.ExtraConfig.SessionsProvider.Group = sessionsProviderGroup
 	config.ExtraConfig.SessionsProvider.Version = sessionsProviderVersion
 	config.ExtraConfig.SessionsProvider.Resource = sessionsProviderResource
+	config.ExtraConfig.SessionsProvider.URL = sessionsProviderURL
+	config.ExtraConfig.SessionsProvider.CAFile = sessionsProviderCAFile
+	config.ExtraConfig.SessionsProvider.ClientCertFile = sessionsProviderClientCert
+	config.ExtraConfig.SessionsProvider.ClientKeyFile = sessionsProviderClientKey
 	config.ExtraConfig.SessionsProvider.TimeoutSeconds = providerTimeoutSeconds
 	config.ExtraConfig.SessionsProvider.Retries = providerRetries
-	config.ExtraConfig.SessionsProvider.ImpersonateForwardExtras = impersonateForwardExtras
+	config.ExtraConfig.SessionsProvider.ForwardExtras = forwardExtras
 
 	completed, err := config.Complete()
 	if err != nil {

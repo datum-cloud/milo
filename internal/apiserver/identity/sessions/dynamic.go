@@ -3,10 +3,10 @@ package sessions
 import (
 	"context"
 	"fmt"
-	"strings"
+	"net/http"
+	"net/url"
 	"time"
 
-	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,14 +17,34 @@ import (
 	apirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/transport"
 )
 
+// Config controls how the provider talks to the remote sessions API **always via a remote URL**.
+//
+// We no longer assume in-cluster aggregated discovery. Instead we take a
+// ProviderURL and force client-go to talk to that host with the right TLS/SNI
+// while still injecting X-Remote-* via WrapTransport.
+//
+// Notes:
+// - BaseConfig is used as a template for timeouts/proxies/etc.
+// - We require proper SNI (ServerName from ProviderURL).
+// - If you use mTLS for the front-proxy trust, set ClientCert/Key.
+//
+
 type Config struct {
-	BaseConfig             *rest.Config
-	ProviderGVR            schema.GroupVersionResource
-	Timeout                time.Duration
-	Retries                int
-	ImpersonateExtrasAllow map[string]struct{}
+	BaseConfig  *rest.Config
+	ProviderGVR schema.GroupVersionResource
+
+	ProviderURL string
+
+	CAFile         string
+	ClientCertFile string
+	ClientKeyFile  string
+
+	Timeout     time.Duration
+	Retries     int
+	ExtrasAllow map[string]struct{}
 }
 
 type DynamicProvider struct {
@@ -36,18 +56,44 @@ type DynamicProvider struct {
 }
 
 func NewDynamicProvider(cfg Config) (*DynamicProvider, error) {
-	if cfg.BaseConfig == nil {
-		return nil, fmt.Errorf("base rest.Config is required")
+	if cfg.ProviderURL == "" {
+		return nil, fmt.Errorf("ProviderURL is required")
 	}
+
+	// Build from scratch
+	base := &rest.Config{}
+	base.Host = cfg.ProviderURL
+
+	var sni string
+	if u, err := url.Parse(cfg.ProviderURL); err == nil {
+		sni = u.Hostname()
+	}
+
+	// Wire TLS from files
+	base.TLSClientConfig = rest.TLSClientConfig{
+		CAFile:   cfg.CAFile,
+		CertFile: cfg.ClientCertFile,
+		KeyFile:  cfg.ClientKeyFile,
+		// We enforce verification; set Insecure=true only for dev
+		Insecure:   false,
+		ServerName: sni,
+	}
+
+	// Respect our explicit timeout
+	if cfg.Timeout > 0 {
+		base.Timeout = cfg.Timeout
+	}
+
 	return &DynamicProvider{
-		base:        rest.CopyConfig(cfg.BaseConfig),
+		base:        base,
 		gvr:         cfg.ProviderGVR,
 		to:          cfg.Timeout,
-		retries:     cfg.Retries,
-		allowExtras: cfg.ImpersonateExtrasAllow,
+		retries:     max(0, cfg.Retries),
+		allowExtras: cfg.ExtrasAllow,
 	}, nil
 }
 
+// dynForUser creates a per-call client-go dynamic.Interface that forwards identity via X-Remote-*.
 func (b *DynamicProvider) dynForUser(ctx context.Context) (dynamic.Interface, error) {
 	u, ok := apirequest.UserFrom(ctx)
 	if !ok || u == nil {
@@ -57,42 +103,47 @@ func (b *DynamicProvider) dynForUser(ctx context.Context) (dynamic.Interface, er
 	if b.to > 0 {
 		cfg.Timeout = b.to
 	}
-	extras := map[string][]string{}
-	for k, v := range u.GetExtra() {
-		if _, ok := b.allowExtras[k]; ok {
-			extras[k] = v
+	prev := cfg.WrapTransport
+	cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+		if prev != nil {
+			rt = prev(rt)
 		}
+		return transport.NewAuthProxyRoundTripper(
+			u.GetName(),
+			u.GetUID(),
+			u.GetGroups(),
+			b.filterExtras(u.GetExtra()),
+			rt,
+		)
 	}
-
-	// If this request arrived via the user-scoped control-plane virtual path,
-	// reconstruct the same prefix for outgoing loopback calls by extending the
-	// Host with the virtual workspace path. This mirrors how other controllers
-	// in this repo scope clients (via Host path suffix).
-	if pg := first(u.GetExtra()[iamv1alpha1.ParentAPIGroupExtraKey]); pg == iamv1alpha1.SchemeGroupVersion.Group {
-		if pk := first(u.GetExtra()[iamv1alpha1.ParentKindExtraKey]); strings.EqualFold(pk, "User") {
-			if pn := first(u.GetExtra()[iamv1alpha1.ParentNameExtraKey]); pn != "" {
-				prefix := "/apis/" + iamv1alpha1.SchemeGroupVersion.Group + "/" + iamv1alpha1.SchemeGroupVersion.Version + "/users/" + pn + "/control-plane"
-				cfg.Host = strings.TrimSuffix(cfg.Host, "/") + prefix
-			}
-		}
-	}
-	cfg.Impersonate = rest.ImpersonationConfig{
-		UserName: u.GetName(),
-		UID:      u.GetUID(),
-		Groups:   u.GetGroups(),
-		Extra:    extras,
-	}
-
 	return dynamic.NewForConfig(cfg)
 }
 
+func (b *DynamicProvider) filterExtras(src map[string][]string) map[string][]string {
+	if len(b.allowExtras) == 0 || len(src) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(src))
+	for k, v := range src {
+		if _, ok := b.allowExtras[k]; ok {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// ---- Public API ----
+
 func (b *DynamicProvider) ListSessions(ctx context.Context, _ authuser.Info, opts *metav1.ListOptions) (*identityv1alpha1.SessionList, error) {
+	if opts == nil {
+		opts = &metav1.ListOptions{}
+	}
 	dyn, err := b.dynForUser(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var ul *unstructured.UnstructuredList
 	var lastErr error
+	var ul *unstructured.UnstructuredList
 	for i := 0; i <= b.retries; i++ {
 		ul, lastErr = dyn.Resource(b.gvr).List(ctx, *opts)
 		if lastErr == nil {
@@ -114,8 +165,8 @@ func (b *DynamicProvider) GetSession(ctx context.Context, _ authuser.Info, name 
 	if err != nil {
 		return nil, err
 	}
-	var uobj *unstructured.Unstructured
 	var lastErr error
+	var uobj *unstructured.Unstructured
 	for i := 0; i <= b.retries; i++ {
 		uobj, lastErr = dyn.Resource(b.gvr).Get(ctx, name, metav1.GetOptions{})
 		if lastErr == nil {
@@ -141,16 +192,16 @@ func (b *DynamicProvider) DeleteSession(ctx context.Context, _ authuser.Info, na
 	for i := 0; i <= b.retries; i++ {
 		lastErr = dyn.Resource(b.gvr).Delete(ctx, name, metav1.DeleteOptions{})
 		if lastErr == nil {
-			break
+			return nil
 		}
 	}
 	return lastErr
 }
 
-// first returns the first element of a slice or "" if empty.
-func first(v []string) string {
-	if len(v) > 0 {
-		return v[0]
+// small util
+func max(a, b int) int {
+	if a > b {
+		return a
 	}
-	return ""
+	return b
 }

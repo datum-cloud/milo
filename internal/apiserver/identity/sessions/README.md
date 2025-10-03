@@ -2,8 +2,7 @@ Virtual Sessions API (identity.miloapis.com/v1alpha1)
 
 This package implements Milo's public, virtual Sessions API. It exposes
 identity.miloapis.com/v1alpha1, Resource=sessions without persisting anything
-to etcd. All operations are delegated to a provider API (e.g.,
-zitadel.identity.miloapis.com) using user impersonation so RBAC and audit
+to etcd. All operations are delegated to a provider API so RBAC and audit
 reflect the end-user.
 
 Components and flow
@@ -24,28 +23,18 @@ Components and flow
 Configuration
 - Enable the feature and point to a provider GVR via flags on the apiserver:
   - --feature-sessions=true
-  - --sessions-provider-group=zitadel.identity.miloapis.com
+  - --sessions-provider-group=identity.miloapis.com
   - --sessions-provider-version=v1alpha1
   - --sessions-provider-resource=sessions
+  - --sessions-provider-url=https://identity.miloapis.com
+  - --sessions-provider-ca-file=
+  - --sessions-provider-client-cert=
+  - --sessions-provider-client-key=
   - Optional: --provider-timeout, --provider-retries,
-    --impersonate-forward-extras=org,tenant
+    --forward-extras=org,tenant
 - At startup Milo builds a GroupVersionResource from the flags and uses it in
   DynamicProvider for all requests.
 
-RBAC
-- Milo apiserver ServiceAccount must be allowed to impersonate identities:
-  authentication.k8s.io users, groups, serviceaccounts, userextras/* with
-  verb impersonate.
-- End-user access is enforced by the provider. Because Milo impersonates the
-  caller, end users must have verbs on the provider GVR (e.g.,
-  zitadel.identity.miloapis.com/sessions).
-
-Local testing
-- Fake provider CRD in Milo (dev-only): apply a CRD and sample Sessions under
-  zitadel.identity.miloapis.com/v1alpha1 in the Milo apiserver and point the
-  flags to that GVR.
-- Chainsaw E2E: see test/identity/sessions/ for a suite that applies provider
-  Sessions, verifies the public API, and deletes via the public API.
 
 Naming & structure
 - internal/apiserver/storage/identity/storageprovider.go — group installer
