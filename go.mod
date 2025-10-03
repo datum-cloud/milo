@@ -22,7 +22,7 @@ require (
 	k8s.io/kube-aggregator v0.32.0
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
 	k8s.io/kubernetes v1.32.0
-	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
+	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/multicluster-runtime v0.20.4-alpha.6
 	sigs.k8s.io/yaml v1.4.0
