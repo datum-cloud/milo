@@ -14,6 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
+const cgmrByContactGroupTupleKey = "contactMembershipRemovalByContactGroupTupleKey"
+
 var cgrLog = logf.Log.WithName("contactgroupmembershipremoval-resource")
 
 // SetupContactGroupMembershipRemovalWebhooksWithManager registers webhooks for ContactGroupMembershipRemoval.
@@ -21,7 +23,7 @@ func SetupContactGroupMembershipRemovalWebhooksWithManager(mgr ctrl.Manager) err
 	cgrLog.Info("Setting up notification.miloapis.com contactgroupmembershipremoval webhooks")
 
 	// Field index on contact name for quick lookups
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroupMembershipRemoval{}, contactMembershipRemovalCompositeKey, func(raw client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.ContactGroupMembershipRemoval{}, cgmrByContactGroupTupleKey, func(raw client.Object) []string {
 		obj := raw.(*notificationv1alpha1.ContactGroupMembershipRemoval)
 		return []string{buildContactGroupTupleKey(obj.Spec.ContactRef, obj.Spec.ContactGroupRef)}
 	}); err != nil {
@@ -66,7 +68,7 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 
 	// Prevent duplicate removals
 	var existing notificationv1alpha1.ContactGroupMembershipRemovalList
-	if err := v.Client.List(ctx, &existing, client.InNamespace(removal.Namespace), client.MatchingFields{contactMembershipRemovalCompositeKey: buildContactGroupTupleKey(removal.Spec.ContactRef, removal.Spec.ContactGroupRef)}); err != nil {
+	if err := v.Client.List(ctx, &existing, client.InNamespace(removal.Namespace), client.MatchingFields{cgmrByContactGroupTupleKey: buildContactGroupTupleKey(removal.Spec.ContactRef, removal.Spec.ContactGroupRef)}); err != nil {
 		return nil, errors.NewInternalError(fmt.Errorf("failed to list removals: %w", err))
 	}
 	if len(existing.Items) > 0 {

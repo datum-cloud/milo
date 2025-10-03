@@ -86,7 +86,7 @@ func TestContactGroupMembershipRemovalValidator(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			builder := fake.NewClientBuilder().WithScheme(cgrTestScheme).
-				WithIndex(&notificationv1alpha1.ContactGroupMembershipRemoval{}, contactMembershipRemovalCompositeKey, func(o client.Object) []string {
+				WithIndex(&notificationv1alpha1.ContactGroupMembershipRemoval{}, cgmrByContactGroupTupleKey, func(o client.Object) []string {
 					r := o.(*notificationv1alpha1.ContactGroupMembershipRemoval)
 					return []string{buildContactGroupTupleKey(r.Spec.ContactRef, r.Spec.ContactGroupRef)}
 				})
