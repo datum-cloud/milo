@@ -22,6 +22,7 @@ components:
   - components/certificates
   - ../../components/certificates
   - ../../components/apiserver-audit-logging
+  - ../../components/apiserver-tracing
 
 patches:
   # Configure API server for etcd connection

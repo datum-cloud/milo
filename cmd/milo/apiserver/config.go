@@ -3,12 +3,16 @@ package app
 import (
 	"net/http"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/endpoints/filterlatency"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	genericfeatures "k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/server"
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
@@ -17,6 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/util/webhook"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
+	"k8s.io/component-base/tracing"
 	utilversion "k8s.io/component-base/version"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
 	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
@@ -135,6 +140,12 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	c.ControlPlane = kubeAPIs
 	c.ControlPlane.Generic.EffectiveVersion = utilversion.DefaultKubeEffectiveVersion()
 
+	// Configure tracing for the loopback client to ensure trace context propagation
+	// to admission plugins that use dynamic clients (e.g., quota admission plugin)
+	if kubeAPIs.Generic.LoopbackClientConfig != nil && kubeAPIs.Generic.TracerProvider != nil {
+		kubeAPIs.Generic.LoopbackClientConfig.Wrap(tracing.WrapperFor(kubeAPIs.Generic.TracerProvider))
+	}
+
 	combinedInits := append(upstreamInits, loopbackInit)
 
 	authInfoResolver := webhook.NewDefaultAuthenticationInfoResolverWrapper(kubeAPIs.ProxyTransport, kubeAPIs.Generic.EgressSelector, kubeAPIs.Generic.LoopbackClientConfig, kubeAPIs.Generic.TracerProvider)
@@ -251,7 +262,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	// }
 	handler = genericfilters.WithHTTPLogging(handler)
 	if c.FeatureGate.Enabled(genericfeatures.APIServerTracing) {
-		handler = genericapifilters.WithTracing(handler, c.TracerProvider)
+		handler = withCustomTracing(handler, c.TracerProvider)
 	}
 	handler = genericapifilters.WithLatencyTrackers(handler)
 	// WithRoutine will execute future handlers in a separate goroutine and serving
@@ -273,4 +284,55 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	handler = datumfilters.UserContextHandler(handler, c.Serializer)
 
 	return handler
+}
+
+// withCustomTracing provides tracing that always creates child spans (not links)
+// ensuring proper trace hierarchy for all requests including internal loopback requests.
+func withCustomTracing(handler http.Handler, tp trace.TracerProvider) http.Handler {
+	opts := []otelhttp.Option{
+		otelhttp.WithPropagators(tracing.Propagators()),
+		otelhttp.WithTracerProvider(tp),
+		otelhttp.WithServerName("milo-apiserver"),
+		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+			ctx := r.Context()
+			info, exist := request.RequestInfoFrom(ctx)
+			if !exist || !info.IsResourceRequest {
+				return r.Method
+			}
+			return getSpanNameFromRequestInfo(info, r)
+		}),
+		// Note: NOT using WithPublicEndpoint() to always create child spans instead of links
+	}
+
+	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Add the http.target attribute to the span
+		if r.URL != nil {
+			trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPTarget(r.URL.RequestURI()))
+		}
+		handler.ServeHTTP(w, r)
+	})
+
+	// With Noop TracerProvider, the otelhttp still handles context propagation.
+	// See https://github.com/open-telemetry/opentelemetry-go/tree/main/example/passthrough
+	return otelhttp.NewHandler(wrappedHandler, "MiloAPI", opts...)
+}
+
+// getSpanNameFromRequestInfo creates span names from Kubernetes request info
+func getSpanNameFromRequestInfo(info *request.RequestInfo, r *http.Request) string {
+	spanName := "/" + info.APIPrefix
+	if info.APIGroup != "" {
+		spanName += "/" + info.APIGroup
+	}
+	spanName += "/" + info.APIVersion
+	if info.Namespace != "" {
+		spanName += "/namespaces/{:namespace}"
+	}
+	spanName += "/" + info.Resource
+	if info.Name != "" {
+		spanName += "/" + "{:name}"
+	}
+	if info.Subresource != "" {
+		spanName += "/" + info.Subresource
+	}
+	return r.Method + " " + spanName
 }
