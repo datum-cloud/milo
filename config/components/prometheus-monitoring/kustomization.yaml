@@ -4,3 +4,4 @@ namespace: milo-system
 resources:
   - cert-service-monitoring.yaml
   - servicemonitor-milo-apiserver.yaml
+  - servicemonitor-milo-controller-manager.yaml
