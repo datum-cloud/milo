@@ -23,9 +23,6 @@ Components and flow
 Configuration
 - Enable the feature and point to a provider GVR via flags on the apiserver:
   - --feature-sessions=true
-  - --sessions-provider-group=identity.miloapis.com
-  - --sessions-provider-version=v1alpha1
-  - --sessions-provider-resource=sessions
   - --sessions-provider-url=https://identity.miloapis.com
   - --sessions-provider-ca-file=
   - --sessions-provider-client-cert=

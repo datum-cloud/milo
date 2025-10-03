@@ -52,9 +52,6 @@ spec:
           - --audit-webhook-mode=$(AUDIT_WEBHOOK_MODE)
           - --audit-webhook-initial-backoff=$(AUDIT_WEBHOOK_INITIAL_BACKOFF)
           - --feature-sessions=true
-          - --sessions-provider-group=identity.miloapis.com
-          - --sessions-provider-version=v1alpha1
-          - --sessions-provider-resource=sessions
           - --sessions-provider-url=$(SESSIONS_PROVIDER_URL)
           - --sessions-provider-ca-file=$(SESSIONS_PROVIDER_CA_FILE)
           - --sessions-provider-client-cert=$(SESSIONS_PROVIDER_CLIENT_CERT_FILE)
