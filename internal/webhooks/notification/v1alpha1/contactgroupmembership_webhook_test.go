@@ -133,13 +133,4 @@ func TestContactGroupMembershipValidator(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("update rejected", func(t *testing.T) {
-		fakeClient := fake.NewClientBuilder().WithScheme(cgmTestScheme).Build()
-		v := &ContactGroupMembershipValidator{Client: fakeClient}
-		obj := makeMembership("m6", "c1", "g1")
-		_, err := v.ValidateUpdate(context.Background(), obj, obj)
-		assert.Error(t, err)
-		assert.Contains(t, strings.ToLower(err.Error()), "immutable")
-	})
 }

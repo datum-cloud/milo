@@ -116,7 +116,7 @@ func (v *ContactGroupMembershipValidator) ValidateCreate(ctx context.Context, ob
 }
 
 func (v *ContactGroupMembershipValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	return nil, errors.NewBadRequest("ContactGroupMembership is immutable; delete the existing resource and create a new one to make changes")
+	return nil, nil
 }
 
 func (v *ContactGroupMembershipValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
