@@ -1,0 +1,11 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-contact-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    # Read-only permissions for contact resources
+    - notification.miloapis.com/contacts.get
+    - notification.miloapis.com/contacts.list
+    - notification.miloapis.com/contacts.watch

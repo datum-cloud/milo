@@ -1,0 +1,14 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: ContactGroupMembershipRemoval
+metadata:
+  name: alice-remove-from-eng
+  namespace: default
+spec:
+  # Contact that requests to be excluded from the group
+  contactRef:
+    name: alice-contact-sample
+    namespace: default
+  # Group from which the contact must be removed
+  contactGroupRef:
+    name: engineering-team
+    namespace: milo-system
