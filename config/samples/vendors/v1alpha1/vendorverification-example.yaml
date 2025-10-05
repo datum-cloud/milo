@@ -34,7 +34,6 @@ spec:
 status:
   completedAt: "2024-01-15T14:30:00Z"
   lastUpdatedAt: "2024-01-15T14:30:00Z"
-  attemptCount: 1
 ---
 # Business verification for ACME Corporation
 apiVersion: vendors.miloapis.com/v1alpha1
@@ -72,7 +71,6 @@ spec:
 status:
   completedAt: "2024-01-16T09:15:00Z"
   lastUpdatedAt: "2024-01-16T09:15:00Z"
-  attemptCount: 1
 ---
 # Identity verification for John Doe Consulting
 apiVersion: vendors.miloapis.com/v1alpha1
@@ -108,7 +106,6 @@ spec:
   required: true
 status:
   lastUpdatedAt: "2024-01-17T11:20:00Z"
-  attemptCount: 2
   lastError: "Address verification document not provided"
 ---
 # Compliance verification for international vendor
@@ -147,7 +144,6 @@ spec:
   externalReference: "COMP-2024-001234"
 status:
   lastUpdatedAt: "2024-01-18T08:45:00Z"
-  attemptCount: 0
 ---
 # Rejected verification example
 apiVersion: vendors.miloapis.com/v1alpha1
@@ -180,5 +176,4 @@ spec:
 status:
   completedAt: "2024-01-19T16:30:00Z"
   lastUpdatedAt: "2024-01-19T16:30:00Z"
-  attemptCount: 3
   lastError: "Invalid tax ID format and missing required fields"

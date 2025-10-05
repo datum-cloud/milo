@@ -396,12 +396,12 @@ func (in *VendorVerificationStatus) DeepCopyInto(out *VendorVerificationStatus) 
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.CompletedAt != nil {
-		in, out := &in.CompletedAt, &out.CompletedAt
-		*out = (*in).DeepCopy()
-	}
 	if in.LastUpdatedAt != nil {
 		in, out := &in.LastUpdatedAt, &out.LastUpdatedAt
+		*out = (*in).DeepCopy()
+	}
+	if in.CompletedAt != nil {
+		in, out := &in.CompletedAt, &out.CompletedAt
 		*out = (*in).DeepCopy()
 	}
 }

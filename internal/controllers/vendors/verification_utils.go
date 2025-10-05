@@ -188,9 +188,6 @@ func UpdateVerificationStatus(ctx context.Context, c client.Client, verification
 		verification.Status.CompletedAt = &now
 	}
 
-	// Increment attempt count
-	verification.Status.AttemptCount++
-
 	return c.Update(ctx, verification)
 }
 

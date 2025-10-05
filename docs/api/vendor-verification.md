@@ -63,7 +63,6 @@ spec:
 status:
   completedAt: "2024-01-15T14:30:00Z"
   lastUpdatedAt: "2024-01-15T14:30:00Z"
-  attemptCount: 1
 ```
 
 ## Verification Types

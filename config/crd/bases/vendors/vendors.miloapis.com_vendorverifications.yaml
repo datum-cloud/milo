@@ -186,10 +186,6 @@ spec:
           status:
             description: VendorVerificationStatus defines the observed state of VendorVerification
             properties:
-              attemptCount:
-                description: Number of verification attempts
-                format: int32
-                type: integer
               completedAt:
                 description: Timestamp when verification was completed
                 format: date-time

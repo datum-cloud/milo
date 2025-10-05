@@ -117,10 +117,6 @@ type VendorVerificationSpec struct {
 	// +kubebuilder:default=5
 	Priority int32 `json:"priority"`
 
-	// Whether this verification is required for vendor activation
-	// +kubebuilder:default=true
-	Required bool `json:"required"`
-
 	// Expiration date for this verification
 	// +optional
 	ExpirationDate *metav1.Time `json:"expirationDate,omitempty"`
@@ -128,6 +124,10 @@ type VendorVerificationSpec struct {
 	// External system reference (if verification is done by external service)
 	// +optional
 	ExternalReference string `json:"externalReference,omitempty"`
+
+	// Whether this verification is required for vendor activation
+	// +kubebuilder:default=true
+	Required bool `json:"required"`
 }
 
 // VendorVerificationStatus defines the observed state of VendorVerification
@@ -145,17 +145,13 @@ type VendorVerificationStatus struct {
 	// +patchStrategy=merge
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
-	// Timestamp when verification was completed
-	// +optional
-	CompletedAt *metav1.Time `json:"completedAt,omitempty"`
-
 	// Timestamp when verification was last updated
 	// +optional
 	LastUpdatedAt *metav1.Time `json:"lastUpdatedAt,omitempty"`
 
-	// Number of verification attempts
+	// Timestamp when verification was completed
 	// +optional
-	AttemptCount int32 `json:"attemptCount,omitempty"`
+	CompletedAt *metav1.Time `json:"completedAt,omitempty"`
 
 	// Last error message if verification failed
 	// +optional
