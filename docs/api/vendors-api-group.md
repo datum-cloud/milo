@@ -152,22 +152,3 @@ config/
     ├── vendor-example.yaml
     └── corporationtypeconfig-example.yaml
 ```
-
-## Next Steps
-
-1. **Deploy the new CRDs** to your cluster
-2. **Update any existing vendor resources** to use the new API group
-3. **Update client applications** to reference `vendors.miloapis.com/v1alpha1`
-4. **Consider adding vendor-specific controllers** for business logic
-5. **Add vendor-specific webhooks** for validation and admission control
-
-## Backward Compatibility
-
-This is a breaking change that requires updating existing vendor resources to use the new API group. The resource structure remains the same, only the API group and version change.
-
-### Migration Script Example
-
-```bash
-# Update existing vendor resources
-kubectl get vendors -o yaml | sed 's/resourcemanager.miloapis.com/vendors.miloapis.com/g' | kubectl apply -f -
-```
