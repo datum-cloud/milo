@@ -1,5 +1,11 @@
 # API Reference
 
+**NOTE:**
+
+As of the most recent update, all vendor-related APIs (including `Vendor`, `VendorTypeDefinition`, etc.) have been moved from the `resourcemanager.miloapis.com/v1alpha1` API group to a new, dedicated API group: `vendors.miloapis.com/v1alpha1`.
+
+- For documentation and OpenAPI for vendor resource APIs, see: [docs/api/vendors-api-group.md](vendors-api-group.md)
+- This document now only describes resources remaining in `resourcemanager.miloapis.com/v1alpha1` (OrganizationMembership, Organization, and Project).
 
 Packages:
 
@@ -725,4 +731,4 @@ with respect to the current state of the instance.<br/>
         <td>false</td>
       </tr></tbody>
 </table>
- 
+  
