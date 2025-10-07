@@ -30,6 +30,7 @@ type GrantTriggerSpec struct {
 	// +kubebuilder:validation:Required
 	Resource GrantTriggerResource `json:"resource"`
 	// Constraints are CEL expressions that must evaluate to true for grant creation.
+	// These are pure CEL expressions WITHOUT {{ }} delimiters (unlike template fields).
 	// All constraints must pass for the policy to trigger.
 	// The 'object' variable contains the trigger resource being evaluated.
 	//
@@ -59,19 +60,20 @@ type GrantTriggerResource struct {
 // All expressions in a policy's trigger conditions must evaluate to true for the policy to activate.
 type ConditionExpression struct {
 	// Expression specifies the CEL expression to evaluate against the trigger resource.
+	// This is a pure CEL expression WITHOUT {{ }} delimiters (unlike template fields).
 	// Must return a boolean value (true to match, false to skip).
 	// Maximum 1024 characters.
 	//
 	// Available variables in GrantCreationPolicy context:
-	// - object: The complete resource being watched (map[string]any)
-	//   - object.metadata.name, object.spec.*, object.status.*, etc.
+	// - trigger: The complete resource being watched (map[string]any)
+	//   - trigger.metadata.name, trigger.spec.*, trigger.status.*, etc.
 	//
 	// Common expression patterns:
-	// - object.spec.tier == "premium" (check resource field)
-	// - object.metadata.labels["environment"] == "prod" (check labels)
-	// - object.status.phase == "Active" (check status)
-	// - object.metadata.namespace == "production" (check namespace)
-	// - has(object.spec.quotaProfile) (check field existence)
+	// - trigger.spec.tier == "premium" (check resource field)
+	// - trigger.metadata.labels["environment"] == "prod" (check labels)
+	// - trigger.status.phase == "Active" (check status)
+	// - trigger.metadata.namespace == "production" (check namespace)
+	// - has(trigger.spec.quotaProfile) (check field existence)
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
@@ -100,7 +102,8 @@ type GrantTargetSpec struct {
 	// +optional
 	ParentContext *GrantParentContextSpec `json:"parentContext,omitempty"`
 	// ResourceGrantTemplate defines how to create **ResourceGrants**.
-	// String fields support Go template syntax for dynamic content.
+	// String fields support CEL expressions wrapped in {{ }} delimiters for dynamic content.
+	// Plain strings without {{ }} are treated as literal values.
 	//
 	// +kubebuilder:validation:Required
 	ResourceGrantTemplate ResourceGrantTemplate `json:"resourceGrantTemplate"`
@@ -157,21 +160,21 @@ type GrantParentContextSpec struct {
 	NameExpression string `json:"nameExpression"`
 }
 
-// ResourceGrantTemplate defines the template for creating ResourceGrants using actual ResourceGrant structure.
+// ResourceGrantTemplate defines the specification for creating ResourceGrants using actual ResourceGrant structure.
 type ResourceGrantTemplate struct {
 	// Metadata for the created ResourceGrant.
-	// String fields support Go template syntax.
+	// String fields support CEL expressions wrapped in {{ }} delimiters.
 	//
 	// +kubebuilder:validation:Required
 	Metadata ObjectMetaTemplate `json:"metadata"`
 	// Spec for the created ResourceGrant.
-	// String fields support Go template syntax.
+	// String fields support CEL expressions wrapped in {{ }} delimiters.
 	//
 	// +kubebuilder:validation:Required
 	Spec ResourceGrantSpec `json:"spec"`
 }
 
-// ObjectMetaTemplate defines a minimal, templatable subset of ObjectMeta for use in templates.
+// ObjectMetaTemplate defines a minimal subset of ObjectMeta for use in resource creation.
 // Only safe, user-controlled fields are exposed.
 // ObjectMetaTemplate is declared in claimcreationpolicy_types.go
 
@@ -233,15 +236,62 @@ func (t *GrantTriggerResource) GetGVK() schema.GroupVersionKind {
 //
 // ### How It Works
 // - Watch the kind in `spec.trigger.resource` and evaluate all `spec.trigger.constraints[]`.
-// - When all constraints are true, render `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
+// - When all constraints are true, evaluate `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
 // - Optionally target a parent control plane via `spec.target.parentContext` (CEL-resolved name) for cross-cluster allocation.
-// - Templating supports variables `.trigger`, `.requestInfo`, `.user` and functions `lower`, `upper`, `title`, `default`, `contains`, `join`, `split`, `replace`, `trim`, `toInt`, `toString`.
 // - Allowances (resource types and amounts) are static in `v1alpha1`.
+//
+// ### Template Expressions
+// Template expressions generate dynamic content for ResourceGrant fields including metadata and specification.
+// Content inside `{{ }}` delimiters is evaluated as CEL expressions, while content outside is treated as literal text.
+//
+// **Template Expression Rules:**
+// - `{{expression}}` - Pure CEL expression, evaluated and substituted
+// - `literal-text` - Used as-is without any evaluation
+// - `{{expression}}-literal` - CEL output combined with literal text
+// - `prefix-{{expression}}-suffix` - Literal text surrounding CEL expression
+//
+// **Template Expression Examples:**
+// - `{{trigger.metadata.name + '-grant'}}` - Pure CEL expression (metadata)
+// - `{{trigger.metadata.name}}-quota-grant` - CEL + literal suffix (metadata)
+// - `{{trigger.spec.type + "-consumer"}}` - Extract spec field for consumer name (spec)
+// - `{{trigger.metadata.labels["environment"] + "-grants"}}` - Label-based naming (spec)
+// - `fixed-grant-name` - Literal string only (no evaluation)
+//
+// **Use Template Expressions For:** ResourceGrantTemplate fields (metadata and spec)
+//
+// ### Constraint Expressions
+// Constraint expressions determine whether a policy should trigger by evaluating boolean conditions.
+// These are pure CEL expressions without delimiters that must return true/false values.
+//
+// **Constraint Expression Rules:**
+// - Write pure CEL expressions directly (no wrapping syntax)
+// - Must return boolean values (true = trigger policy, false = skip)
+// - All constraints in a policy must return true for the policy to activate
+//
+// **Constraint Expression Examples:**
+// - `trigger.spec.tier == "premium"` - Field equality check
+// - `trigger.metadata.labels["environment"] == "prod"` - Label-based filtering
+// - `trigger.status.phase == "Active"` - Status condition check
+// - `has(trigger.spec.quotaProfile)` - Field existence check
+//
+// **Use Constraint Expressions For:** spec.trigger.constraints fields
+//
+// ### Expression Variables
+// Both template and constraint expressions have access to the resource context variables:
+//
+// **trigger**: The complete resource that triggered the policy, including all metadata, spec,
+// and status fields. Navigate using CEL property access: `trigger.metadata.name`, `trigger.spec.tier`.
+// This is the only variable available since GrantCreationPolicy runs during resource watching,
+// not during admission processing.
+//
+// **CEL Functions**: Standard CEL functions available for data manipulation including conditional
+// expressions (`condition ? value1 : value2`), string methods (`lowerAscii()`, `upperAscii()`, `trim()`),
+// and collection operations (`exists()`, `all()`, `filter()`).
 //
 // ### Works With
 // - Creates [ResourceGrant](#resourcegrant) objects whose `allowances[].resourceType` must exist in a [ResourceRegistration](#resourceregistration).
 // - May target a parent control plane via `spec.target.parentContext` for cross-plane quota allocation.
-// - Policy readiness (`status.conditions[type=Ready]`) signals template/constraint validity.
+// - Policy readiness (`status.conditions[type=Ready]`) signals expression/constraint validity.
 //
 // ### Status
 // - `status.conditions[type=Ready]`: Policy validated and active.

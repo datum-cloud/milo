@@ -549,49 +549,57 @@ quota claims that prevent resource creation when quota limits are exceeded.
 - No constraints evaluated, no claims created
 - Useful for temporarily disabling quota enforcement
 
-### Template System
-The template system transforms static ResourceClaim specifications into dynamic claims that reflect
-the context of each admission request. When a policy triggers, the template engine receives rich
-contextual information about the resource being created, the user making the request, and details
-about the admission operation itself.
+### Template Expressions
+Template expressions generate dynamic content for ResourceClaim fields including metadata and specification.
+Content inside `{{ }}` delimiters is evaluated as CEL expressions, while content outside is treated as literal text.
 
-The most important template variable is `.trigger`, which contains the complete structure of the
-resource that triggered the policy. This includes all metadata like labels and annotations, the
-entire spec section, and any status information if the resource already exists. You can navigate
-this structure using standard template dot notation: `.trigger.metadata.name` gives you the
-resource's name, while `.trigger.spec.replicas` might tell you how many instances are requested.
+**Template Expression Rules:**
+- `{{expression}}` - Pure CEL expression, evaluated and substituted
+- `literal-text` - Used as-is without any evaluation
+- `{{expression}}-literal` - CEL output combined with literal text
+- `prefix-{{expression}}-suffix` - Literal text surrounding CEL expression
 
-Authentication context comes through the `.user` variable, providing access to the requester's
-name, unique identifier, group memberships, and any additional attributes. This enables policies
-to create claims that track who requested resources and potentially apply different quota rules
-based on user attributes. The `.requestInfo` variable adds operational context like the specific
-API verb being performed and which resource type is being manipulated.
+**Template Expression Examples:**
+- `{{trigger.metadata.name + '-claim'}}` - Pure CEL expression (metadata)
+- `{{trigger.metadata.name}}-quota-claim` - CEL + literal suffix (metadata)
+- `{{trigger.spec.organization}}` - Extract spec field for consumer name (spec)
+- `{{trigger.metadata.labels["tier"] + "-tier"}}` - Label-based naming (spec)
+- `fixed-claim-name` - Literal string only (no evaluation)
 
-Template functions help transform and manipulate these values. The `default` function proves
-particularly useful for providing fallback values when template variables might be empty.
-String manipulation functions like `lower`, `upper`, and `trim` help normalize names and values,
-while `replace` enables pattern substitution for complex naming schemes. For example, you might
-use `{{default "milo-system" .trigger.metadata.namespace}}` to place claims in a system namespace
-when the triggering resource doesn't specify one.
+**Use Template Expressions For:** ResourceClaimTemplate fields (metadata and spec)
 
-### CEL Expression System
-CEL expressions act as the gatekeepers that determine whether a policy should create a quota claim
-for a particular resource. These expressions have access to the same rich contextual information
-as templates but focus on making boolean decisions rather than generating content. Each expression
-must evaluate to either true (activate the policy) or false (skip this resource), and all expressions
-in a policy's constraint list must return true for the policy to trigger.
+### Constraint Expressions
+Constraint expressions determine whether a policy should trigger by evaluating boolean conditions.
+These are pure CEL expressions without delimiters that must return true/false values.
 
-The expression environment includes the triggering resource under the `trigger` variable, letting
-you examine any field in the resource's structure. This enables sophisticated filtering based on
-resource specifications, labels, annotations, or even status conditions. You might write
-`trigger.spec.tier == "premium"` to only apply quota policies to premium resources, or use
-`trigger.metadata.labels["environment"] == "prod"` to restrict enforcement to production workloads.
+**Constraint Expression Rules:**
+- Write pure CEL expressions directly (no wrapping syntax)
+- Must return boolean values (true = trigger policy, false = skip)
+- All constraints in a policy must return true for the policy to activate
 
-User context through the `user` variable enables authorization-based policies. The expression
-`user.groups.exists(g, g == "admin")` would limit quota enforcement to resources created by
-administrators, while `user.name.startsWith("service-")` might target service accounts.
-Combined with resource filtering, you can create nuanced policies that apply different quota
-rules based on who is creating what types of resources in which contexts.
+**Constraint Expression Examples:**
+- `trigger.spec.tier == "premium"` - Field equality check
+- `trigger.metadata.labels["environment"] == "prod"` - Label-based filtering
+- `user.groups.exists(g, g == "admin")` - User authorization check
+- `has(trigger.spec.quotaProfile)` - Field existence check
+
+**Use Constraint Expressions For:** spec.trigger.constraints fields
+
+### Expression Variables
+Both template and constraint expressions have access to the same context variables:
+
+**trigger**: The complete resource that triggered the policy, including all metadata, spec,
+and status fields. Navigate using CEL property access: `trigger.metadata.name`, `trigger.spec.replicas`.
+
+**user**: Authentication context providing access to the requester's name, unique identifier,
+group memberships, and additional attributes. Enables user-based quota policies.
+
+**requestInfo**: Operational context including the API verb being performed and resource type
+being manipulated. Useful for distinguishing between create, update, and delete operations.
+
+**CEL Functions**: Standard CEL functions available for data manipulation including conditional
+expressions (`condition ? value1 : value2`), string methods (`lowerAscii()`, `upperAscii()`, `trim()`),
+and collection operations (`exists()`, `all()`, `filter()`).
 
 ### Consumer Resolution
 The system automatically resolves spec.consumerRef for created claims:
@@ -602,9 +610,9 @@ The system automatically resolves spec.consumerRef for created claims:
 ### Validation and Dependencies
 **Policy Validation:**
 - Target resource type must exist and be accessible
-- All resource types in claim template must have active ResourceRegistrations
+- All resource types in claim specification must have active ResourceRegistrations
 - Consumer resolution must be resolvable for target resources
-- CEL expressions and Go templates must be syntactically valid
+- CEL expressions must be syntactically valid
 
 **Runtime Dependencies:**
 - ResourceRegistration must be Active for each requested resource type
@@ -613,8 +621,8 @@ The system automatically resolves spec.consumerRef for created claims:
 
 ### Policy Lifecycle
 1. **Creation**: Administrator creates ClaimCreationPolicy
-2. **Validation**: Controller validates target resource, expressions, and templates
-3. **Activation**: Controller sets Ready=True when validation passes
+2. **Validation**: System validates target resource and expressions
+3. **Activation**: System sets Ready=True when validation passes
 4. **Operation**: Admission webhook uses active policies to create claims
 5. **Updates**: Changes trigger re-validation; only Ready policies are used
 
@@ -633,8 +641,8 @@ Claims created by ClaimCreationPolicy include:
 ### Field Constraints and Limits
 - Maximum 10 constraints per trigger (spec.trigger.constraints)
 - Static amounts only in v1alpha1 (no expression-based quota amounts)
-- Template metadata labels are literal strings (no template processing)
-- Template annotation values support templating
+- Template metadata labels are literal strings (no expression processing)
+- Template annotation values support CEL expressions
 
 ### Selectors and Filtering
 - **Field selectors**: spec.trigger.resource.kind, spec.trigger.resource.apiVersion, spec.disabled
@@ -651,7 +659,7 @@ Claims created by ClaimCreationPolicy include:
 
 ### Troubleshooting
 - **Policy not triggering**: Check spec.disabled=false and status.conditions[type=Ready]=True
-- **Template errors**: Review status condition message for template syntax issues
+- **Template errors**: Review status condition message for CEL expression syntax issues
 - **CEL expression failures**: Validate expression syntax and available variables
 - **Claims not created**: Verify trigger constraints match the incoming resource
 - **Consumer resolution errors**: Check parent context resolution and ResourceRegistration setup
@@ -783,7 +791,7 @@ Target defines how and where **ResourceClaims** should be created.
         <td>object</td>
         <td>
           ResourceClaimTemplate defines how to create **ResourceClaims**.
-String fields support Go template syntax for dynamic content.<br/>
+String fields support CEL expressions for dynamic content.<br/>
         </td>
         <td>true</td>
       </tr></tbody>
@@ -796,7 +804,7 @@ String fields support Go template syntax for dynamic content.<br/>
 
 
 ResourceClaimTemplate defines how to create **ResourceClaims**.
-String fields support Go template syntax for dynamic content.
+String fields support CEL expressions for dynamic content.
 
 <table>
     <thead>
@@ -812,7 +820,7 @@ String fields support Go template syntax for dynamic content.
         <td>object</td>
         <td>
           Metadata for the created **ResourceClaim**.
-String fields support Go template syntax.<br/>
+String fields support CEL expressions.<br/>
         </td>
         <td>true</td>
       </tr><tr>
@@ -820,7 +828,7 @@ String fields support Go template syntax.<br/>
         <td>object</td>
         <td>
           Spec for the created ResourceClaim.
-String fields support Go template syntax.<br/>
+String fields support CEL expressions.<br/>
         </td>
         <td>true</td>
       </tr></tbody>
@@ -833,7 +841,7 @@ String fields support Go template syntax.<br/>
 
 
 Metadata for the created **ResourceClaim**.
-String fields support Go template syntax.
+String fields support CEL expressions.
 
 <table>
     <thead>
@@ -849,18 +857,18 @@ String fields support Go template syntax.
         <td>map[string]string</td>
         <td>
           Annotations specifies annotations to apply to the created ResourceClaim.
-Values support Go template syntax for dynamic content.
+Values support CEL expressions wrapped in {{ }} delimiters for dynamic content.
 The system automatically adds standard annotations for tracking.
 
 Template variables available:
-- .trigger: The resource triggering claim creation
-- .requestInfo: Request details
-- .user: User information
+- trigger: The resource triggering claim creation
+- requestInfo: Request details
+- user: User information
 
 Examples:
-- created-for: "{{.trigger.metadata.name}}"
-- requested-by: "{{.user.name}}"
-- trigger-kind: "{{.trigger.kind}}"<br/>
+- created-for: "{{trigger.metadata.name}}" (CEL expression)
+- requested-by: "{{user.name}}" (CEL expression)
+- environment: "production" (literal string)<br/>
         </td>
         <td>false</td>
       </tr><tr>
@@ -869,9 +877,12 @@ Examples:
         <td>
           GenerateName specifies a prefix for auto-generated names when Name is empty.
 Kubernetes appends random characters to create unique names.
-Supports Go template syntax.
+Supports CEL expressions wrapped in {{ }} delimiters.
 
-Example: "{{.trigger.spec.type}}-claim-"<br/>
+Examples:
+- "{{trigger.spec.type + '-claim-'}}" (CEL expression)
+- "{{trigger.spec.type}}-claim-" (CEL + literal)
+- "quota-claim-" (literal string)<br/>
         </td>
         <td>false</td>
       </tr><tr>
@@ -893,15 +904,21 @@ Useful for:
         <td>string</td>
         <td>
           Name specifies the exact name for the created ResourceClaim.
-Supports Go template syntax with access to template variables.
+Supports CEL expressions wrapped in {{ }} delimiters with access to template variables.
 Leave empty to use GenerateName for auto-generated names.
 
-Template variables available:
-- .trigger: The resource triggering claim creation
-- .requestInfo: Request details (verb, resource, name, etc.)
-- .user: User information (name, uid, groups, extra)
+CEL Expression Syntax: CEL expressions must be enclosed in double curly braces {{ }}.
+Plain strings without {{ }} are treated as literal values.
 
-Example: "{{.trigger.metadata.name}}-quota-claim"<br/>
+Template variables available:
+- trigger: The resource triggering claim creation
+- requestInfo: Request details (verb, resource, name, etc.)
+- user: User information (name, uid, groups, extra)
+
+Examples:
+- "{{trigger.metadata.name + '-quota-claim'}}" (CEL expression)
+- "{{trigger.metadata.name}}-claim" (CEL + literal)
+- "fixed-claim-name" (literal string)<br/>
         </td>
         <td>false</td>
       </tr><tr>
@@ -909,13 +926,13 @@ Example: "{{.trigger.metadata.name}}-quota-claim"<br/>
         <td>string</td>
         <td>
           Namespace specifies where the ResourceClaim will be created.
-Supports Go template syntax to derive namespace from trigger resource.
+Supports CEL expressions wrapped in {{ }} delimiters to derive namespace from trigger resource.
 Leave empty to create in the same namespace as the trigger resource.
 
 Examples:
-- "{{.trigger.metadata.namespace}}" (same namespace as trigger)
-- "milo-system" (fixed system namespace)
-- "{{.trigger.spec.organization}}-claims" (derived namespace)<br/>
+- "{{trigger.metadata.namespace}}" (CEL: same namespace as trigger)
+- "milo-system" (literal: fixed system namespace)
+- "{{trigger.spec.organization + '-claims'}}" (CEL: derived namespace)<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -928,7 +945,7 @@ Examples:
 
 
 Spec for the created ResourceClaim.
-String fields support Go template syntax.
+String fields support CEL expressions.
 
 <table>
     <thead>
@@ -1246,6 +1263,7 @@ Trigger defines what resource changes should trigger claim creation.
         <td>[]object</td>
         <td>
           Constraints are CEL expressions that must evaluate to true for claim creation to occur.
+These are pure CEL expressions WITHOUT {{ }} delimiters (unlike template fields).
 Evaluated in the admission context.<br/>
         </td>
         <td>false</td>
@@ -1309,19 +1327,20 @@ All expressions in a policy's trigger conditions must evaluate to true for the p
         <td>string</td>
         <td>
           Expression specifies the CEL expression to evaluate against the trigger resource.
+This is a pure CEL expression WITHOUT {{ }} delimiters (unlike template fields).
 Must return a boolean value (true to match, false to skip).
 Maximum 1024 characters.
 
 Available variables in GrantCreationPolicy context:
-- object: The complete resource being watched (map[string]any)
-  - object.metadata.name, object.spec.*, object.status.*, etc.
+- trigger: The complete resource being watched (map[string]any)
+  - trigger.metadata.name, trigger.spec.*, trigger.status.*, etc.
 
 Common expression patterns:
-- object.spec.tier == "premium" (check resource field)
-- object.metadata.labels["environment"] == "prod" (check labels)
-- object.status.phase == "Active" (check status)
-- object.metadata.namespace == "production" (check namespace)
-- has(object.spec.quotaProfile) (check field existence)<br/>
+- trigger.spec.tier == "premium" (check resource field)
+- trigger.metadata.labels["environment"] == "prod" (check labels)
+- trigger.status.phase == "Active" (check status)
+- trigger.metadata.namespace == "production" (check namespace)
+- has(trigger.spec.quotaProfile) (check field existence)<br/>
         </td>
         <td>true</td>
       </tr><tr>
@@ -1472,15 +1491,62 @@ Use it to provision quota based on resource lifecycle events and attributes.
 
 ### How It Works
 - Watch the kind in `spec.trigger.resource` and evaluate all `spec.trigger.constraints[]`.
-- When all constraints are true, render `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
+- When all constraints are true, evaluate `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
 - Optionally target a parent control plane via `spec.target.parentContext` (CEL-resolved name) for cross-cluster allocation.
-- Templating supports variables `.trigger`, `.requestInfo`, `.user` and functions `lower`, `upper`, `title`, `default`, `contains`, `join`, `split`, `replace`, `trim`, `toInt`, `toString`.
 - Allowances (resource types and amounts) are static in `v1alpha1`.
+
+### Template Expressions
+Template expressions generate dynamic content for ResourceGrant fields including metadata and specification.
+Content inside `{{ }}` delimiters is evaluated as CEL expressions, while content outside is treated as literal text.
+
+**Template Expression Rules:**
+- `{{expression}}` - Pure CEL expression, evaluated and substituted
+- `literal-text` - Used as-is without any evaluation
+- `{{expression}}-literal` - CEL output combined with literal text
+- `prefix-{{expression}}-suffix` - Literal text surrounding CEL expression
+
+**Template Expression Examples:**
+- `{{trigger.metadata.name + '-grant'}}` - Pure CEL expression (metadata)
+- `{{trigger.metadata.name}}-quota-grant` - CEL + literal suffix (metadata)
+- `{{trigger.spec.type + "-consumer"}}` - Extract spec field for consumer name (spec)
+- `{{trigger.metadata.labels["environment"] + "-grants"}}` - Label-based naming (spec)
+- `fixed-grant-name` - Literal string only (no evaluation)
+
+**Use Template Expressions For:** ResourceGrantTemplate fields (metadata and spec)
+
+### Constraint Expressions
+Constraint expressions determine whether a policy should trigger by evaluating boolean conditions.
+These are pure CEL expressions without delimiters that must return true/false values.
+
+**Constraint Expression Rules:**
+- Write pure CEL expressions directly (no wrapping syntax)
+- Must return boolean values (true = trigger policy, false = skip)
+- All constraints in a policy must return true for the policy to activate
+
+**Constraint Expression Examples:**
+- `trigger.spec.tier == "premium"` - Field equality check
+- `trigger.metadata.labels["environment"] == "prod"` - Label-based filtering
+- `trigger.status.phase == "Active"` - Status condition check
+- `has(trigger.spec.quotaProfile)` - Field existence check
+
+**Use Constraint Expressions For:** spec.trigger.constraints fields
+
+### Expression Variables
+Both template and constraint expressions have access to the resource context variables:
+
+**trigger**: The complete resource that triggered the policy, including all metadata, spec,
+and status fields. Navigate using CEL property access: `trigger.metadata.name`, `trigger.spec.tier`.
+This is the only variable available since GrantCreationPolicy runs during resource watching,
+not during admission processing.
+
+**CEL Functions**: Standard CEL functions available for data manipulation including conditional
+expressions (`condition ? value1 : value2`), string methods (`lowerAscii()`, `upperAscii()`, `trim()`),
+and collection operations (`exists()`, `all()`, `filter()`).
 
 ### Works With
 - Creates [ResourceGrant](#resourcegrant) objects whose `allowances[].resourceType` must exist in a [ResourceRegistration](#resourceregistration).
 - May target a parent control plane via `spec.target.parentContext` for cross-plane quota allocation.
-- Policy readiness (`status.conditions[type=Ready]`) signals template/constraint validity.
+- Policy readiness (`status.conditions[type=Ready]`) signals expression/constraint validity.
 
 ### Status
 - `status.conditions[type=Ready]`: Policy validated and active.
@@ -1628,7 +1694,8 @@ Target defines where and how grants should be created.
         <td>object</td>
         <td>
           ResourceGrantTemplate defines how to create **ResourceGrants**.
-String fields support Go template syntax for dynamic content.<br/>
+String fields support CEL expressions wrapped in {{ }} delimiters for dynamic content.
+Plain strings without {{ }} are treated as literal values.<br/>
         </td>
         <td>true</td>
       </tr><tr>
@@ -1650,7 +1717,8 @@ instead of the current control plane.<br/>
 
 
 ResourceGrantTemplate defines how to create **ResourceGrants**.
-String fields support Go template syntax for dynamic content.
+String fields support CEL expressions wrapped in {{ }} delimiters for dynamic content.
+Plain strings without {{ }} are treated as literal values.
 
 <table>
     <thead>
@@ -1666,7 +1734,7 @@ String fields support Go template syntax for dynamic content.
         <td>object</td>
         <td>
           Metadata for the created ResourceGrant.
-String fields support Go template syntax.<br/>
+String fields support CEL expressions wrapped in {{ }} delimiters.<br/>
         </td>
         <td>true</td>
       </tr><tr>
@@ -1674,7 +1742,7 @@ String fields support Go template syntax.<br/>
         <td>object</td>
         <td>
           Spec for the created ResourceGrant.
-String fields support Go template syntax.<br/>
+String fields support CEL expressions wrapped in {{ }} delimiters.<br/>
         </td>
         <td>true</td>
       </tr></tbody>
@@ -1687,7 +1755,7 @@ String fields support Go template syntax.<br/>
 
 
 Metadata for the created ResourceGrant.
-String fields support Go template syntax.
+String fields support CEL expressions wrapped in {{ }} delimiters.
 
 <table>
     <thead>
@@ -1703,18 +1771,18 @@ String fields support Go template syntax.
         <td>map[string]string</td>
         <td>
           Annotations specifies annotations to apply to the created ResourceClaim.
-Values support Go template syntax for dynamic content.
+Values support CEL expressions wrapped in {{ }} delimiters for dynamic content.
 The system automatically adds standard annotations for tracking.
 
 Template variables available:
-- .trigger: The resource triggering claim creation
-- .requestInfo: Request details
-- .user: User information
+- trigger: The resource triggering claim creation
+- requestInfo: Request details
+- user: User information
 
 Examples:
-- created-for: "{{.trigger.metadata.name}}"
-- requested-by: "{{.user.name}}"
-- trigger-kind: "{{.trigger.kind}}"<br/>
+- created-for: "{{trigger.metadata.name}}" (CEL expression)
+- requested-by: "{{user.name}}" (CEL expression)
+- environment: "production" (literal string)<br/>
         </td>
         <td>false</td>
       </tr><tr>
@@ -1723,9 +1791,12 @@ Examples:
         <td>
           GenerateName specifies a prefix for auto-generated names when Name is empty.
 Kubernetes appends random characters to create unique names.
-Supports Go template syntax.
+Supports CEL expressions wrapped in {{ }} delimiters.
 
-Example: "{{.trigger.spec.type}}-claim-"<br/>
+Examples:
+- "{{trigger.spec.type + '-claim-'}}" (CEL expression)
+- "{{trigger.spec.type}}-claim-" (CEL + literal)
+- "quota-claim-" (literal string)<br/>
         </td>
         <td>false</td>
       </tr><tr>
@@ -1747,15 +1818,21 @@ Useful for:
         <td>string</td>
         <td>
           Name specifies the exact name for the created ResourceClaim.
-Supports Go template syntax with access to template variables.
+Supports CEL expressions wrapped in {{ }} delimiters with access to template variables.
 Leave empty to use GenerateName for auto-generated names.
 
-Template variables available:
-- .trigger: The resource triggering claim creation
-- .requestInfo: Request details (verb, resource, name, etc.)
-- .user: User information (name, uid, groups, extra)
+CEL Expression Syntax: CEL expressions must be enclosed in double curly braces {{ }}.
+Plain strings without {{ }} are treated as literal values.
 
-Example: "{{.trigger.metadata.name}}-quota-claim"<br/>
+Template variables available:
+- trigger: The resource triggering claim creation
+- requestInfo: Request details (verb, resource, name, etc.)
+- user: User information (name, uid, groups, extra)
+
+Examples:
+- "{{trigger.metadata.name + '-quota-claim'}}" (CEL expression)
+- "{{trigger.metadata.name}}-claim" (CEL + literal)
+- "fixed-claim-name" (literal string)<br/>
         </td>
         <td>false</td>
       </tr><tr>
@@ -1763,13 +1840,13 @@ Example: "{{.trigger.metadata.name}}-quota-claim"<br/>
         <td>string</td>
         <td>
           Namespace specifies where the ResourceClaim will be created.
-Supports Go template syntax to derive namespace from trigger resource.
+Supports CEL expressions wrapped in {{ }} delimiters to derive namespace from trigger resource.
 Leave empty to create in the same namespace as the trigger resource.
 
 Examples:
-- "{{.trigger.metadata.namespace}}" (same namespace as trigger)
-- "milo-system" (fixed system namespace)
-- "{{.trigger.spec.organization}}-claims" (derived namespace)<br/>
+- "{{trigger.metadata.namespace}}" (CEL: same namespace as trigger)
+- "milo-system" (literal: fixed system namespace)
+- "{{trigger.spec.organization + '-claims'}}" (CEL: derived namespace)<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -1782,7 +1859,7 @@ Examples:
 
 
 Spec for the created ResourceGrant.
-String fields support Go template syntax.
+String fields support CEL expressions wrapped in {{ }} delimiters.
 
 <table>
     <thead>
@@ -2092,6 +2169,7 @@ Trigger defines what resource changes should trigger grant creation.
         <td>[]object</td>
         <td>
           Constraints are CEL expressions that must evaluate to true for grant creation.
+These are pure CEL expressions WITHOUT {{ }} delimiters (unlike template fields).
 All constraints must pass for the policy to trigger.
 The 'object' variable contains the trigger resource being evaluated.<br/>
         </td>
@@ -2157,19 +2235,20 @@ All expressions in a policy's trigger conditions must evaluate to true for the p
         <td>string</td>
         <td>
           Expression specifies the CEL expression to evaluate against the trigger resource.
+This is a pure CEL expression WITHOUT {{ }} delimiters (unlike template fields).
 Must return a boolean value (true to match, false to skip).
 Maximum 1024 characters.
 
 Available variables in GrantCreationPolicy context:
-- object: The complete resource being watched (map[string]any)
-  - object.metadata.name, object.spec.*, object.status.*, etc.
+- trigger: The complete resource being watched (map[string]any)
+  - trigger.metadata.name, trigger.spec.*, trigger.status.*, etc.
 
 Common expression patterns:
-- object.spec.tier == "premium" (check resource field)
-- object.metadata.labels["environment"] == "prod" (check labels)
-- object.status.phase == "Active" (check status)
-- object.metadata.namespace == "production" (check namespace)
-- has(object.spec.quotaProfile) (check field existence)<br/>
+- trigger.spec.tier == "premium" (check resource field)
+- trigger.metadata.labels["environment"] == "prod" (check labels)
+- trigger.status.phase == "Active" (check status)
+- trigger.metadata.namespace == "production" (check namespace)
+- has(trigger.spec.quotaProfile) (check field existence)<br/>
         </td>
         <td>true</td>
       </tr><tr>
