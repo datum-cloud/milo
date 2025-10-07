@@ -9,7 +9,7 @@ import (
 // For example, when registering "Projects per Organization", **Organization** is the consumer type.
 type ConsumerType struct {
 	// APIGroup specifies the API group of the quota consumer resource type.
-	// Use empty string for Kubernetes core resources (**Pod**, **Service**, etc.).
+	// Use empty string for Kubernetes core resources (**Secret**, **ConfigMap**, etc.).
 	// Use full group name for custom resources (for example, `resourcemanager.miloapis.com`).
 	// Must follow DNS subdomain format with lowercase letters, numbers, and hyphens.
 	//
@@ -87,8 +87,8 @@ type ResourceRegistrationSpec struct {
 	//
 	// Examples:
 	// - "Projects created within Organizations"
-	// - "CPU millicores allocated to Pods"
-	// - "Storage bytes claimed by PersistentVolumeClaims"
+	// - "CPU millicores allocated to workloads"
+	// - "Storage bytes claimed by volume requests"
 	//
 	// +kubebuilder:validation:Optional +kubebuilder:validation:MaxLength=500
 	// +kubebuilder:validation:MinLength=1
@@ -157,13 +157,13 @@ type ResourceRegistrationSpec struct {
 // for this registration. Uses unversioned references to remain valid across API version changes.
 type ClaimingResource struct {
 	// APIGroup specifies the API group of the resource that can create claims.
-	// Use empty string for Kubernetes core resources (**Pod**, **Service**, etc.).
+	// Use empty string for Kubernetes core resources (**Secret**, **ConfigMap**, etc.).
 	// Use full group name for custom resources.
 	//
 	// Examples:
-	// - `""` (core resources like **Pod**, **Namespace**)
-	// - `apps` (Kubernetes apps group)
+	// - `""` (core resources like **Secret**, **ConfigMap**)
 	// - `resourcemanager.miloapis.com` (custom resource group)
+	// - `iam.miloapis.com` (Milo IAM resources)
 	//
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Pattern=`^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
