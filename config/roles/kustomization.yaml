@@ -4,7 +4,7 @@ kind: Component
 resources:
   - owner.yaml
   - project-manager.yaml
-  - iam-reader.yaml
+  - iam-viewer.yaml
   - iam-editor.yaml
   - iam-admin.yaml
   - resourcemanager-reader.yaml
@@ -46,3 +46,7 @@ resources:
   - iam-role-reader.yaml
   - iam-role-editor.yaml
   - iam-role-admin.yaml
+  - organization-viewer.yaml
+  - organization-admin.yaml
+  - project-viewer.yaml
+  - project-admin.yaml
