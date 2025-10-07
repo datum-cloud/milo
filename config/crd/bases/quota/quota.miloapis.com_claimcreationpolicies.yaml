@@ -1,0 +1,649 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: claimcreationpolicies.quota.miloapis.com
+spec:
+  group: quota.miloapis.com
+  names:
+    kind: ClaimCreationPolicy
+    listKind: ClaimCreationPolicyList
+    plural: claimcreationpolicies
+    singular: claimcreationpolicy
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.trigger.resource.kind
+      name: Target
+      type: string
+    - jsonPath: .spec.disabled
+      name: Disabled
+      type: boolean
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ClaimCreationPolicy automatically creates ResourceClaims during admission to enforce quota in real-time.
+          Policies intercept resource creation requests, evaluate trigger conditions, and generate
+          quota claims that prevent resource creation when quota limits are exceeded.
+
+          ### How It Works
+          1. **Trigger Matching**: Admission webhook matches incoming resource creates against spec.trigger.resource
+          2. **Constraint Evaluation**: All CEL expressions in spec.trigger.constraints must evaluate to true
+          3. **Template Rendering**: Policy renders spec.target.resourceClaimTemplate using available template variables
+          4. **Claim Creation**: System creates the rendered ResourceClaim in the specified namespace
+          5. **Quota Evaluation**: Claim is immediately evaluated against AllowanceBucket capacity
+          6. **Admission Decision**: Original resource creation succeeds or fails based on claim result
+
+          ### Policy Processing Flow
+          **Active Policies** (spec.disabled=false):
+          1. Admission webhook receives resource creation request
+          2. Finds all ClaimCreationPolicies matching the resource type
+          3. Evaluates trigger constraints for each matching policy
+          4. Creates ResourceClaim for each policy where all constraints are true
+          5. Evaluates all created claims against quota buckets
+          6. Allows resource creation only if all claims are granted
+
+          **Disabled Policies** (spec.disabled=true):
+          - Completely ignored during admission processing
+          - No constraints evaluated, no claims created
+          - Useful for temporarily disabling quota enforcement
+
+          ### Template Expressions
+          Template expressions generate dynamic content for ResourceClaim fields including metadata and specification.
+          Content inside `{{ }}` delimiters is evaluated as CEL expressions, while content outside is treated as literal text.
+
+          **Template Expression Rules:**
+          - `{{expression}}` - Pure CEL expression, evaluated and substituted
+          - `literal-text` - Used as-is without any evaluation
+          - `{{expression}}-literal` - CEL output combined with literal text
+          - `prefix-{{expression}}-suffix` - Literal text surrounding CEL expression
+
+          **Template Expression Examples:**
+          - `{{trigger.metadata.name + '-claim'}}` - Pure CEL expression (metadata)
+          - `{{trigger.metadata.name}}-quota-claim` - CEL + literal suffix (metadata)
+          - `{{trigger.spec.organization}}` - Extract spec field for consumer name (spec)
+          - `{{trigger.metadata.labels["tier"] + "-tier"}}` - Label-based naming (spec)
+          - `fixed-claim-name` - Literal string only (no evaluation)
+
+          **Use Template Expressions For:** ResourceClaimTemplate fields (metadata and spec)
+
+          ### Constraint Expressions
+          Constraint expressions determine whether a policy should trigger by evaluating boolean conditions.
+          These are pure CEL expressions without delimiters that must return true/false values.
+
+          **Constraint Expression Rules:**
+          - Write pure CEL expressions directly (no wrapping syntax)
+          - Must return boolean values (true = trigger policy, false = skip)
+          - All constraints in a policy must return true for the policy to activate
+
+          **Constraint Expression Examples:**
+          - `trigger.spec.tier == "premium"` - Field equality check
+          - `trigger.metadata.labels["environment"] == "prod"` - Label-based filtering
+          - `user.groups.exists(g, g == "admin")` - User authorization check
+          - `has(trigger.spec.quotaProfile)` - Field existence check
+
+          **Use Constraint Expressions For:** spec.trigger.constraints fields
+
+          ### Expression Variables
+          Both template and constraint expressions have access to the same context variables:
+
+          **trigger**: The complete resource that triggered the policy, including all metadata, spec,
+          and status fields. Navigate using CEL property access: `trigger.metadata.name`, `trigger.spec.replicas`.
+
+          **user**: Authentication context providing access to the requester's name, unique identifier,
+          group memberships, and additional attributes. Enables user-based quota policies.
+
+          **requestInfo**: Operational context including the API verb being performed and resource type
+          being manipulated. Useful for distinguishing between create, update, and delete operations.
+
+          **CEL Functions**: Standard CEL functions available for data manipulation including conditional
+          expressions (`condition ? value1 : value2`), string methods (`lowerAscii()`, `upperAscii()`, `trim()`),
+          and collection operations (`exists()`, `all()`, `filter()`).
+
+          ### Consumer Resolution
+          The system automatically resolves spec.consumerRef for created claims:
+          - Uses parent context resolution to find the appropriate consumer
+          - Typically resolves to Organization for Project resources, Project for User resources, etc.
+          - Consumer must match the ResourceRegistration.spec.consumerType for the requested resource type
+
+          ### Validation and Dependencies
+          **Policy Validation:**
+          - Target resource type must exist and be accessible
+          - All resource types in claim specification must have active ResourceRegistrations
+          - Consumer resolution must be resolvable for target resources
+          - CEL expressions must be syntactically valid
+
+          **Runtime Dependencies:**
+          - ResourceRegistration must be Active for each requested resource type
+          - Triggering resource kind must be listed in ResourceRegistration.spec.claimingResources
+          - AllowanceBucket must exist (created automatically when ResourceGrants are active)
+
+          ### Policy Lifecycle
+          1. **Creation**: Administrator creates ClaimCreationPolicy
+          2. **Validation**: System validates target resource and expressions
+          3. **Activation**: System sets Ready=True when validation passes
+          4. **Operation**: Admission webhook uses active policies to create claims
+          5. **Updates**: Changes trigger re-validation; only Ready policies are used
+
+          ### Status Conditions
+          - **Ready=True**: Policy is validated and actively creating claims
+          - **Ready=False, reason=ValidationFailed**: Configuration errors prevent activation (check message)
+          - **Ready=False, reason=PolicyDisabled**: Policy is disabled (spec.disabled=true)
+
+          ### Automatic Claim Features
+          Claims created by ClaimCreationPolicy include:
+          - **Standard Labels**: quota.miloapis.com/auto-created=true, quota.miloapis.com/policy=<policy-name>
+          - **Standard Annotations**: quota.miloapis.com/created-by=claim-creation-plugin, timestamps
+          - **Owner References**: Set to triggering resource when possible for lifecycle management
+          - **Cleanup**: Automatically cleaned up when denied to prevent accumulation
+
+          ### Field Constraints and Limits
+          - Maximum 10 constraints per trigger (spec.trigger.constraints)
+          - Static amounts only in v1alpha1 (no expression-based quota amounts)
+          - Template metadata labels are literal strings (no expression processing)
+          - Template annotation values support CEL expressions
+
+          ### Selectors and Filtering
+          - **Field selectors**: spec.trigger.resource.kind, spec.trigger.resource.apiVersion, spec.disabled
+          - **Recommended labels** (add manually):
+            - quota.miloapis.com/target-kind: Project
+            - quota.miloapis.com/environment: production
+            - quota.miloapis.com/tier: premium
+
+          ### Common Queries
+          - All policies for a resource kind: label selector quota.miloapis.com/target-kind=<kind>
+          - Active policies only: field selector spec.disabled=false
+          - Environment-specific policies: label selector quota.miloapis.com/environment=<env>
+          - Failed policies: filter by status.conditions[type=Ready].status=False
+
+          ### Troubleshooting
+          - **Policy not triggering**: Check spec.disabled=false and status.conditions[type=Ready]=True
+          - **Template errors**: Review status condition message for CEL expression syntax issues
+          - **CEL expression failures**: Validate expression syntax and available variables
+          - **Claims not created**: Verify trigger constraints match the incoming resource
+          - **Consumer resolution errors**: Check parent context resolution and ResourceRegistration setup
+
+          ### Performance Considerations
+          - Policies are evaluated synchronously during admission (affects API latency)
+          - Complex CEL expressions can impact admission performance
+          - Template rendering occurs for every matching admission request
+          - Consider using specific trigger constraints to limit policy evaluation scope
+
+          ### Security Considerations
+          - Templates can access complete trigger resource data (sensitive field exposure)
+          - CEL expressions have access to user information and request details
+          - Only trusted administrators should create or modify policies
+          - Review template output to ensure no sensitive data leakage in claim metadata
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClaimCreationPolicySpec defines the desired state of ClaimCreationPolicy.
+            properties:
+              disabled:
+                default: false
+                description: |-
+                  Disabled determines if this policy is inactive.
+                  If true, no **ResourceClaims** will be created for matching resources.
+                type: boolean
+              target:
+                description: Target defines how and where **ResourceClaims** should
+                  be created.
+                properties:
+                  resourceClaimTemplate:
+                    description: |-
+                      ResourceClaimTemplate defines how to create **ResourceClaims**.
+                      String fields support CEL expressions for dynamic content.
+                    properties:
+                      metadata:
+                        description: |-
+                          Metadata for the created **ResourceClaim**.
+                          String fields support CEL expressions.
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              Annotations specifies annotations to apply to the created ResourceClaim.
+                              Values support CEL expressions wrapped in {{ }} delimiters for dynamic content.
+                              The system automatically adds standard annotations for tracking.
+
+                              Template variables available:
+                              - trigger: The resource triggering claim creation
+                              - requestInfo: Request details
+                              - user: User information
+
+                              Examples:
+                              - created-for: "{{trigger.metadata.name}}" (CEL expression)
+                              - requested-by: "{{user.name}}" (CEL expression)
+                              - environment: "production" (literal string)
+                            type: object
+                          generateName:
+                            description: |-
+                              GenerateName specifies a prefix for auto-generated names when Name is empty.
+                              Kubernetes appends random characters to create unique names.
+                              Supports CEL expressions wrapped in {{ }} delimiters.
+
+                              Examples:
+                              - "{{trigger.spec.type + '-claim-'}}" (CEL expression)
+                              - "{{trigger.spec.type}}-claim-" (CEL + literal)
+                              - "quota-claim-" (literal string)
+                            type: string
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              Labels specifies static labels to apply to the created ResourceClaim.
+                              Values are literal strings (no template processing).
+                              The system automatically adds standard labels for policy tracking.
+
+                              Useful for:
+                              - Organizing claims by policy or resource type
+                              - Adding environment or tier indicators
+                              - Enabling label-based queries and monitoring
+                            type: object
+                          name:
+                            description: |-
+                              Name specifies the exact name for the created ResourceClaim.
+                              Supports CEL expressions wrapped in {{ }} delimiters with access to template variables.
+                              Leave empty to use GenerateName for auto-generated names.
+
+                              CEL Expression Syntax: CEL expressions must be enclosed in double curly braces {{ }}.
+                              Plain strings without {{ }} are treated as literal values.
+
+                              Template variables available:
+                              - trigger: The resource triggering claim creation
+                              - requestInfo: Request details (verb, resource, name, etc.)
+                              - user: User information (name, uid, groups, extra)
+
+                              Examples:
+                              - "{{trigger.metadata.name + '-quota-claim'}}" (CEL expression)
+                              - "{{trigger.metadata.name}}-claim" (CEL + literal)
+                              - "fixed-claim-name" (literal string)
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace specifies where the ResourceClaim will be created.
+                              Supports CEL expressions wrapped in {{ }} delimiters to derive namespace from trigger resource.
+                              Leave empty to create in the same namespace as the trigger resource.
+
+                              Examples:
+                              - "{{trigger.metadata.namespace}}" (CEL: same namespace as trigger)
+                              - "milo-system" (literal: fixed system namespace)
+                              - "{{trigger.spec.organization + '-claims'}}" (CEL: derived namespace)
+                            type: string
+                        type: object
+                      spec:
+                        description: |-
+                          Spec for the created ResourceClaim.
+                          String fields support CEL expressions.
+                        properties:
+                          consumerRef:
+                            description: |-
+                              ConsumerRef identifies the quota consumer making this claim. The consumer
+                              must match the ConsumerType defined in the ResourceRegistration for each
+                              requested resource type. The system validates this relationship during
+                              claim processing.
+
+                              Examples:
+
+                                - Organization consuming Project quota
+                                - Project consuming User quota
+                                - Organization consuming storage quota
+                            properties:
+                              apiGroup:
+                                description: |-
+                                  APIGroup specifies the API group of the consumer resource.
+                                  Use full group name for Milo resources.
+
+                                  Examples:
+                                  - "resourcemanager.miloapis.com" (Organization/Project resources)
+                                  - "iam.miloapis.com" (User/Group resources)
+                                  - "infrastructure.miloapis.com" (infrastructure resources)
+                                type: string
+                              kind:
+                                description: |-
+                                  Kind specifies the type of consumer resource.
+                                  Must match an existing Kubernetes resource type that can receive quota grants.
+
+                                  Common consumer types:
+                                  - "Organization" (top-level quota consumer)
+                                  - "Project" (project-level quota consumer)
+                                  - "User" (user-level quota consumer)
+                                type: string
+                              name:
+                                description: |-
+                                  Name identifies the specific consumer resource instance.
+                                  Must match the name of an existing consumer resource in the cluster.
+
+                                  Examples:
+                                  - "acme-corp" (Organization name)
+                                  - "web-application" (Project name)
+                                  - "john.doe" (User name)
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace identifies the namespace of the consumer resource.
+                                  Required for namespaced consumer resources (e.g., Projects).
+                                  Leave empty for cluster-scoped consumer resources (e.g., Organizations).
+
+                                  Examples:
+                                  - "" (empty for cluster-scoped Organizations)
+                                  - "organization-acme-corp" (namespace for Projects within an organization)
+                                  - "project-web-app" (namespace for resources within a project)
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                          requests:
+                            description: |-
+                              Requests specifies the resource types and amounts being claimed from quota.
+                              Each resource type can appear only once in the requests array. Minimum 1
+                              request, maximum 20 requests per claim.
+
+                              The system processes all requests as a single atomic operation: either all
+                              requests are granted or all are denied.
+                            items:
+                              description: |-
+                                ResourceRequest defines a single resource request within a ResourceClaim.
+                                Each request specifies a resource type and the amount of quota being claimed.
+                              properties:
+                                amount:
+                                  description: |-
+                                    Amount specifies how much quota to claim for this resource type. Must be
+                                    measured in the BaseUnit defined by the corresponding ResourceRegistration.
+                                    Must be a positive integer (minimum value is 0, but 0 means no quota
+                                    requested).
+
+                                    For Entity registrations: Use 1 for single resource instances (1 Project, 1
+                                    User) For Allocation registrations: Use actual capacity amounts (2048 for
+                                    2048 MB, 1000 for 1000 millicores)
+
+                                    Examples:
+
+                                      - 1 (claiming 1 Project)
+                                      - 2048 (claiming 2048 bytes of storage)
+                                      - 1000 (claiming 1000 CPU millicores)
+                                  format: int64
+                                  minimum: 0
+                                  type: integer
+                                resourceType:
+                                  description: |-
+                                    ResourceType identifies the specific resource type being claimed. Must
+                                    exactly match a ResourceRegistration.spec.resourceType that is currently
+                                    active. The quota system validates this reference during claim processing.
+
+                                    The format is defined by platform administrators when creating ResourceRegistrations.
+                                    Service providers can use any identifier that makes sense for their quota system usage.
+
+                                    Examples:
+
+                                      - "resourcemanager.miloapis.com/projects"
+                                      - "compute_cpu"
+                                      - "storage.volumes"
+                                      - "custom-service-quota"
+                                  type: string
+                              required:
+                              - amount
+                              - resourceType
+                              type: object
+                            maxItems: 20
+                            type: array
+                          resourceRef:
+                            description: |-
+                              ResourceRef identifies the actual Kubernetes resource that triggered this
+                              claim. ClaimCreationPolicy automatically populates this field during
+                              admission. Uses unversioned reference (apiGroup + kind + name + namespace)
+                              to remain valid across API version changes.
+
+                              The referenced resource's kind must be listed in the ResourceRegistration's
+                              spec.claimingResources for the claim to be valid.
+
+                              Examples:
+
+                                - Project resource triggering Project quota claim
+                                - User resource triggering User quota claim
+                                - Organization resource triggering storage quota claim
+                            properties:
+                              apiGroup:
+                                description: |-
+                                  APIGroup specifies the API group of the referenced resource.
+                                  Use full group name for Milo resources.
+
+                                  Examples:
+                                  - "resourcemanager.miloapis.com" (Project, Organization)
+                                  - "iam.miloapis.com" (User, Group)
+                                  - "infrastructure.miloapis.com" (infrastructure resources)
+                                type: string
+                              kind:
+                                description: |-
+                                  Kind specifies the type of the referenced resource.
+                                  Must match an existing Kubernetes resource type.
+
+                                  Examples:
+                                  - "Project" (Project resource that triggered quota claim)
+                                  - "User" (User resource that triggered quota claim)
+                                  - "Organization" (Organization resource that triggered quota claim)
+                                type: string
+                              name:
+                                description: |-
+                                  Name identifies the specific resource instance that triggered the quota claim.
+                                  Used for linking claims back to their triggering resources.
+
+                                  Examples:
+                                  - "web-app-project" (Project that triggered Project quota claim)
+                                  - "john.doe" (User that triggered User quota claim)
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace specifies the namespace containing the referenced resource.
+                                  Required for namespaced resources, omitted for cluster-scoped resources.
+
+                                  Examples:
+                                  - "acme-corp" (organization namespace containing Project)
+                                  - "team-alpha" (project namespace containing User)
+                                  - "" or omitted (for cluster-scoped resources like Organization)
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                        required:
+                        - consumerRef
+                        - requests
+                        - resourceRef
+                        type: object
+                    required:
+                    - metadata
+                    - spec
+                    type: object
+                    x-kubernetes-validations:
+                    - message: resourceRef field is automatically populated and cannot
+                        be set in template
+                      rule: '!has(self.spec.resourceRef)'
+                required:
+                - resourceClaimTemplate
+                type: object
+              trigger:
+                description: Trigger defines what resource changes should trigger
+                  claim creation.
+                properties:
+                  constraints:
+                    description: |-
+                      Constraints are CEL expressions that must evaluate to true for claim creation to occur.
+                      These are pure CEL expressions WITHOUT {{ }} delimiters (unlike template fields).
+                      Evaluated in the admission context.
+                    items:
+                      description: |-
+                        ConditionExpression defines a CEL expression that determines when the policy should trigger.
+                        All expressions in a policy's trigger conditions must evaluate to true for the policy to activate.
+                      properties:
+                        expression:
+                          description: |-
+                            Expression specifies the CEL expression to evaluate against the trigger resource.
+                            This is a pure CEL expression WITHOUT {{ }} delimiters (unlike template fields).
+                            Must return a boolean value (true to match, false to skip).
+                            Maximum 1024 characters.
+
+                            Available variables in GrantCreationPolicy context:
+                            - trigger: The complete resource being watched (map[string]any)
+                              - trigger.metadata.name, trigger.spec.*, trigger.status.*, etc.
+
+                            Common expression patterns:
+                            - trigger.spec.tier == "premium" (check resource field)
+                            - trigger.metadata.labels["environment"] == "prod" (check labels)
+                            - trigger.status.phase == "Active" (check status)
+                            - trigger.metadata.namespace == "production" (check namespace)
+                            - has(trigger.spec.quotaProfile) (check field existence)
+                          maxLength: 1024
+                          minLength: 1
+                          type: string
+                        message:
+                          description: |-
+                            Message provides a human-readable description explaining when this condition applies.
+                            Used for documentation and debugging. Maximum 256 characters.
+
+                            Examples:
+                            - "Applies only to premium tier organizations"
+                            - "Matches organizations in production environment"
+                            - "Triggers when quota profile is specified"
+                          maxLength: 256
+                          type: string
+                      required:
+                      - expression
+                      type: object
+                    maxItems: 10
+                    type: array
+                  resource:
+                    description: Resource specifies which resource type triggers this
+                      policy.
+                    properties:
+                      apiVersion:
+                        description: APIVersion of the trigger resource in the format
+                          "group/version".
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/v[0-9]+((alpha|beta)[0-9]*)?$
+                        type: string
+                      kind:
+                        description: Kind is the kind of the trigger resource.
+                        minLength: 1
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    type: object
+                required:
+                - resource
+                type: object
+            required:
+            - target
+            - trigger
+            type: object
+          status:
+            description: |-
+              ClaimCreationPolicyStatus defines the observed state of ClaimCreationPolicy.
+
+              Status fields
+              - conditions[type=Ready]: True when the policy is validated and active.
+
+              See also
+              - [ResourceClaim](#resourceclaim): The object created by this policy.
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                  of the policy's current state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed.
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    selectableFields:
+    - jsonPath: .spec.trigger.resource.kind
+    - jsonPath: .spec.trigger.resource.apiVersion
+    - jsonPath: .spec.disabled
+    served: true
+    storage: true
+    subresources:
+      status: {}
