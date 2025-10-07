@@ -23,14 +23,14 @@ type ClaimCreationPolicySpec struct {
 	Disabled *bool `json:"disabled,omitempty"`
 }
 
-// ClaimTargetResource identifies the resource type that this policy applies to.
-type ClaimTargetResource struct {
-	// APIVersion of the target resource in the format "group/version".
+// ClaimTriggerResource identifies the resource type that triggers this policy.
+type ClaimTriggerResource struct {
+	// APIVersion of the trigger resource in the format "group/version".
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/v[0-9]+((alpha|beta)[0-9]*)?$`
 	APIVersion string `json:"apiVersion"`
-	// Kind is the kind of the target resource.
+	// Kind is the kind of the trigger resource.
 	//
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
@@ -42,7 +42,7 @@ type ClaimTriggerSpec struct {
 	// Resource specifies which resource type triggers this policy.
 	//
 	// +kubebuilder:validation:Required
-	Resource ClaimTargetResource `json:"resource"`
+	Resource ClaimTriggerResource `json:"resource"`
 	// Constraints are CEL expressions that must evaluate to true for claim creation to occur.
 	// These are pure CEL expressions WITHOUT {{ }} delimiters (unlike template fields).
 	// Evaluated in the admission context.
@@ -190,8 +190,8 @@ const (
 	ClaimCreationPolicyDisabledReason = "PolicyDisabled"
 )
 
-// Helper method to get the GVK for the target resource.
-func (t *ClaimTargetResource) GetGVK() schema.GroupVersionKind {
+// Helper method to get the GVK for the trigger resource.
+func (t *ClaimTriggerResource) GetGVK() schema.GroupVersionKind {
 	gv, _ := schema.ParseGroupVersion(t.APIVersion)
 	return schema.GroupVersionKind{
 		Group:   gv.Group,

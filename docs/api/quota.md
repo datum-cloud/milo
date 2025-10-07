@@ -1293,14 +1293,14 @@ Resource specifies which resource type triggers this policy.
         <td><b>apiVersion</b></td>
         <td>string</td>
         <td>
-          APIVersion of the target resource in the format "group/version".<br/>
+          APIVersion of the trigger resource in the format "group/version".<br/>
         </td>
         <td>true</td>
       </tr><tr>
         <td><b>kind</b></td>
         <td>string</td>
         <td>
-          Kind is the kind of the target resource.<br/>
+          Kind is the kind of the trigger resource.<br/>
         </td>
         <td>true</td>
       </tr></tbody>
