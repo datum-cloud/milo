@@ -1,0 +1,17 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Contact
+metadata:
+  name: alice-contact-sample
+  namespace: default
+spec:
+  subjectRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: example
+    uid: 00000000-0000-0000-0000-000000000000
+    namespace: organization-example
+  # Required personal details
+  familyName: Example
+  givenName: Alice
+  # Preferred e-mail for notifications (can match subject.email)
+  email: alice@example.com
