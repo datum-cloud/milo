@@ -1,7 +1,7 @@
 apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
-  name: iam-reader
+  name: iam-viewer
 spec:
   launchStage: Beta
   includedPermissions:
