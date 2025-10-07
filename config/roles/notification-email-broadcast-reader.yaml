@@ -1,0 +1,11 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-email-broadcast-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    # Read-only permissions for EmailBroadcast resources
+    - notification.miloapis.com/emailbroadcasts.get
+    - notification.miloapis.com/emailbroadcasts.list
+    - notification.miloapis.com/emailbroadcasts.watch
