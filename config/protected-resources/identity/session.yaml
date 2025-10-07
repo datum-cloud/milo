@@ -1,0 +1,19 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: identity.miloapis.com-session
+spec:
+  serviceRef:
+    name: "identity.miloapis.com"
+  kind: Session
+  plural: sessions
+  singular: session
+  permissions:
+    - list
+    - get
+    - delete
+  parentResources:
+    - apiGroup: iam.miloapis.com
+      kind: User
+
+

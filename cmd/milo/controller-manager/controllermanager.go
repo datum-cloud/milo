@@ -74,6 +74,7 @@ import (
 	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
+	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
@@ -83,6 +84,7 @@ import (
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -125,6 +127,7 @@ func init() {
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(apiregistrationv1.AddToScheme(Scheme))
 }
 
 const (
@@ -480,6 +483,17 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userInvitationCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user invitation controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			reconciler := &remoteapiservicecontroller.RemoteAPIServiceAvailabilityReconciler{
+				Client:      ctrl.GetClient(),
+				Reason:      "Remote",
+				Message:     "Availability managed by custom controller",
+				ResyncEvery: 0, // or time.Hour if you want periodic reaffirmation
+			}
+			if err := reconciler.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up remote API service availability reconciler")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

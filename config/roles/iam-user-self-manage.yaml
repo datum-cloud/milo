@@ -14,3 +14,6 @@ spec:
   - resourcemanager.miloapis.com/organizationmemberships.list
   - resourcemanager.miloapis.com/organizationmemberships.get
   - resourcemanager.miloapis.com/organizationmemberships.delete
+  - identity.miloapis.com/sessions.list
+  - identity.miloapis.com/sessions.get
+  - identity.miloapis.com/sessions.delete
