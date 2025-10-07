@@ -31,7 +31,7 @@ var (
 			Help:           "Per-project child storage creations",
 			StabilityLevel: k8smetrics.ALPHA,
 		},
-		[]string{"project", "resource"},
+		[]string{"project", "resource_group", "resource_kind"},
 	)
 
 	firstReady = k8smetrics.NewHistogramVec(
@@ -41,7 +41,7 @@ var (
 			Buckets:        []float64{0.02, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10},
 			StabilityLevel: k8smetrics.ALPHA,
 		},
-		[]string{"project", "resource"},
+		[]string{"project", "resource_group", "resource_kind"},
 	)
 
 	reinitErrors = k8smetrics.NewCounterVec(
@@ -50,12 +50,11 @@ var (
 			Help:           "Ops that hit 'storage is (re)initializing'",
 			StabilityLevel: k8smetrics.ALPHA,
 		},
-		[]string{"project", "resource", "verb"},
+		[]string{"project", "resource_group", "resource_kind", "verb"},
 	)
 )
 
 func init() {
-	// Registers to the same registry that /metrics uses in apiserver
 	k8slegacy.MustRegister(childCreations, firstReady, reinitErrors)
 }
 
@@ -63,13 +62,13 @@ func isReinitErr(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "storage is (re)initializing")
 }
 
-func incrReinit(project, resource, verb string) {
-	reinitErrors.WithLabelValues(project, resource, verb).Inc()
+func incrReinit(project, group, kind, verb string) {
+	reinitErrors.WithLabelValues(project, group, kind, verb).Inc()
 }
 
-func recordFirstReady(c *child, project, resource string) {
+func recordFirstReady(c *child, project, group, kind string) {
 	c.readyOnce.Do(func() {
-		firstReady.WithLabelValues(project, resource).
+		firstReady.WithLabelValues(project, group, kind).
 			Observe(time.Since(c.created).Seconds())
 	})
 }
@@ -84,6 +83,10 @@ type child struct {
 }
 
 type decoratorArgs struct {
+	// labels/identity
+	resourceGroup string // e.g. "", "apps", "iam.miloapis.com" (empty means core)
+	resourceKind  string // resource plural (e.g., "roles", "protectedresources")
+
 	resourcePrefix string
 	keyFunc        func(obj runtime.Object) (string, error)
 	newFunc        func() runtime.Object
@@ -96,27 +99,27 @@ type decoratorArgs struct {
 // -------------------- instrumented wrapper --------------------
 
 // instrumentedStorage wraps a storage.Interface to emit metrics once per child
-// (time-to-first-success) and on "storage is (re)initializing" errors.
 type instrumentedStorage struct {
-	inner    storage.Interface
-	child    *child
-	project  string
-	resource string
+	inner   storage.Interface
+	child   *child
+	project string
+
+	// normalized labels
+	group string // API group ("" => "core" when you query; we keep "" here)
+	kind  string // resource plural
 }
 
 func (i *instrumentedStorage) markSuccess() {
-	recordFirstReady(i.child, i.project, i.resource)
+	recordFirstReady(i.child, i.project, i.group, i.kind)
 }
 func (i *instrumentedStorage) markReinit(verb string, err error) error {
 	if isReinitErr(err) {
-		incrReinit(i.project, i.resource, verb)
+		incrReinit(i.project, i.group, i.kind, verb)
 	}
 	return err
 }
 
-func (i *instrumentedStorage) Versioner() storage.Versioner {
-	return i.inner.Versioner()
-}
+func (i *instrumentedStorage) Versioner() storage.Versioner { return i.inner.Versioner() }
 
 func (i *instrumentedStorage) Create(ctx context.Context, key string, obj, out runtime.Object, ttl uint64) error {
 	if err := i.inner.Create(ctx, key, obj, out, ttl); err != nil {
@@ -139,7 +142,6 @@ func (i *instrumentedStorage) Watch(ctx context.Context, key string, opts storag
 	if err != nil {
 		return nil, i.markReinit("watch", err)
 	}
-	// A watch that starts successfully implies cache is usable.
 	i.markSuccess()
 	return w, nil
 }
@@ -165,12 +167,8 @@ func (i *instrumentedStorage) GuaranteedUpdate(ctx context.Context, key string, 
 	i.markSuccess()
 	return nil
 }
-func (i *instrumentedStorage) Count(key string) (int64, error) {
-	return i.inner.Count(key)
-}
-func (i *instrumentedStorage) ReadinessCheck() error {
-	return i.inner.ReadinessCheck()
-}
+func (i *instrumentedStorage) Count(key string) (int64, error) { return i.inner.Count(key) }
+func (i *instrumentedStorage) ReadinessCheck() error           { return i.inner.ReadinessCheck() }
 func (i *instrumentedStorage) RequestWatchProgress(ctx context.Context) error {
 	if err := i.inner.RequestWatchProgress(ctx); err != nil {
 		return i.markReinit("watch_progress", err)
@@ -233,15 +231,16 @@ func (m *projectMux) childForProject(project string) (storage.Interface, error) 
 	// Wrap the child once with instrumentation.
 	c := &child{s: s, destroy: destroy, created: time.Now()}
 	wrapped := &instrumentedStorage{
-		inner:    s,
-		child:    c,
-		project:  project,
-		resource: m.args.resourcePrefix,
+		inner:   s,
+		child:   c,
+		project: project,
+		group:   m.args.resourceGroup,
+		kind:    m.args.resourceKind,
 	}
 	c.s = wrapped
 
 	m.children[project] = c
-	childCreations.WithLabelValues(project, m.args.resourcePrefix).Inc()
+	childCreations.WithLabelValues(project, m.args.resourceGroup, m.args.resourceKind).Inc()
 	return c.s, nil
 }
 
@@ -273,15 +272,8 @@ func (m *projectMux) Create(ctx context.Context, key string, obj, out runtime.Ob
 	return s.Create(ctx, key, obj, out, ttl)
 }
 
-func (m *projectMux) Delete(
-	ctx context.Context,
-	key string,
-	out runtime.Object,
-	precond *storage.Preconditions,
-	validateDeletion storage.ValidateObjectFunc,
-	cachedExistingObject runtime.Object,
-	opts storage.DeleteOptions,
-) error {
+func (m *projectMux) Delete(ctx context.Context, key string, out runtime.Object, precond *storage.Preconditions,
+	validateDeletion storage.ValidateObjectFunc, cachedExistingObject runtime.Object, opts storage.DeleteOptions) error {
 	s, err := m.pick(ctx)
 	if err != nil {
 		return err
@@ -313,15 +305,8 @@ func (m *projectMux) GetList(ctx context.Context, key string, opts storage.ListO
 	return s.GetList(ctx, key, opts, listObj)
 }
 
-func (m *projectMux) GuaranteedUpdate(
-	ctx context.Context,
-	key string,
-	out runtime.Object,
-	ignoreNotFound bool,
-	precond *storage.Preconditions,
-	tryUpdate storage.UpdateFunc,
-	suggestion runtime.Object,
-) error {
+func (m *projectMux) GuaranteedUpdate(ctx context.Context, key string, out runtime.Object, ignoreNotFound bool,
+	precond *storage.Preconditions, tryUpdate storage.UpdateFunc, suggestion runtime.Object) error {
 	s, err := m.pick(ctx)
 	if err != nil {
 		return err
