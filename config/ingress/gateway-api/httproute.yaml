@@ -6,7 +6,24 @@ spec:
   parentRefs:
   - name: default-gateway
     namespace: envoy-gateway-system
+
   rules:
+  # 1) GET gets retries
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+      method: GET
+    backendRefs:
+    - name: milo-apiserver
+      port: 6443
+      kind: Service
+    retry:
+      codes: [429]
+      attempts: 5
+      backoff: 300ms
+
+  # 2) everything else (no retries)
   - matches:
     - path:
         type: PathPrefix
