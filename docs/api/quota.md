@@ -2841,7 +2841,7 @@ still processing recent changes.<br/>
 
 
 
-RequestAllocation tracks the allocation status for a specific resource
+ResourceClaimAllocationStatus tracks the allocation status for a specific resource
 request within a claim. The system creates one allocation entry for each
 request in the claim specification.
 

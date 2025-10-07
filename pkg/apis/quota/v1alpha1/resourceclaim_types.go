@@ -89,10 +89,10 @@ type ResourceClaimSpec struct {
 	ResourceRef UnversionedObjectReference `json:"resourceRef"`
 }
 
-// RequestAllocation tracks the allocation status for a specific resource
+// ResourceClaimAllocationStatus tracks the allocation status for a specific resource
 // request within a claim. The system creates one allocation entry for each
 // request in the claim specification.
-type RequestAllocation struct {
+type ResourceClaimAllocationStatus struct {
 	// ResourceType identifies which resource request this allocation status
 	// describes. Must exactly match one of the resourceType values in
 	// spec.requests.
@@ -182,7 +182,7 @@ type ResourceClaimStatus struct {
 	// +kubebuilder:validation:Optional
 	// +listType=map
 	// +listMapKey=resourceType
-	Allocations []RequestAllocation `json:"allocations,omitempty"`
+	Allocations []ResourceClaimAllocationStatus `json:"allocations,omitempty"`
 
 	// Conditions represents the overall status of the claim evaluation.
 	// Controllers set these conditions to provide a high-level view of claim
@@ -228,14 +228,14 @@ const (
 	ResourceClaimPendingReason = "PendingEvaluation"
 )
 
-// Request allocation status constants
+// ResourceClaimAllocationStatus status constants
 const (
 	// Request allocation is granted and resources are reserved
-	RequestAllocationGranted = "Granted"
+	ResourceClaimAllocationStatusGranted = "Granted"
 	// Request allocation is denied due to insufficient quota
-	RequestAllocationDenied = "Denied"
+	ResourceClaimAllocationStatusDenied = "Denied"
 	// Request allocation is pending evaluation
-	RequestAllocationPending = "Pending"
+	ResourceClaimAllocationStatusPending = "Pending"
 )
 
 // ResourceClaim requests quota allocation during resource creation. Claims
