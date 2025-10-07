@@ -35,8 +35,8 @@ spec:
           Use it to provision quota based on resource lifecycle events and attributes.
 
           ### How It Works
-          - Watch the kind in `spec.trigger.resource` and evaluate all `spec.trigger.conditions[]`.
-          - When all conditions are true, render `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
+          - Watch the kind in `spec.trigger.resource` and evaluate all `spec.trigger.constraints[]`.
+          - When all constraints are true, render `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
           - Optionally target a parent control plane via `spec.target.parentContext` (CEL-resolved name) for cross-cluster allocation.
           - Templating supports variables `.trigger`, `.requestInfo`, `.user` and functions `lower`, `upper`, `title`, `default`, `contains`, `join`, `split`, `replace`, `trim`, `toInt`, `toString`.
           - Allowances (resource types and amounts) are static in `v1alpha1`.
@@ -44,7 +44,7 @@ spec:
           ### Works With
           - Creates [ResourceGrant](#resourcegrant) objects whose `allowances[].resourceType` must exist in a [ResourceRegistration](#resourceregistration).
           - May target a parent control plane via `spec.target.parentContext` for cross-plane quota allocation.
-          - Policy readiness (`status.conditions[type=Ready]`) signals template/condition validity.
+          - Policy readiness (`status.conditions[type=Ready]`) signals template/constraint validity.
 
           ### Status
           - `status.conditions[type=Ready]`: Policy validated and active.
@@ -377,10 +377,10 @@ spec:
                 description: Trigger defines what resource changes should trigger
                   grant creation.
                 properties:
-                  conditions:
+                  constraints:
                     description: |-
-                      Conditions are CEL expressions that must evaluate to true for grant creation.
-                      All conditions must pass for the policy to trigger.
+                      Constraints are CEL expressions that must evaluate to true for grant creation.
+                      All constraints must pass for the policy to trigger.
                       The 'object' variable contains the trigger resource being evaluated.
                     items:
                       description: |-

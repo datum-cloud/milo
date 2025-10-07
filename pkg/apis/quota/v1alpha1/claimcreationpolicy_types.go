@@ -43,12 +43,12 @@ type ClaimTriggerSpec struct {
 	//
 	// +kubebuilder:validation:Required
 	Resource TargetResource `json:"resource"`
-	// Conditions are CEL expressions that must evaluate to true for claim creation to occur.
+	// Constraints are CEL expressions that must evaluate to true for claim creation to occur.
 	// Evaluated in the admission context.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=10
-	Conditions []ConditionExpression `json:"conditions,omitempty"`
+	Constraints []ConditionExpression `json:"constraints,omitempty"`
 }
 
 // ClaimTargetSpec defines how **ResourceClaims** are created for a matched trigger.
@@ -194,7 +194,7 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 //
 // ### How It Works
 // 1. **Trigger Matching**: Admission webhook matches incoming resource creates against spec.trigger.resource
-// 2. **Condition Evaluation**: All CEL expressions in spec.trigger.conditions must evaluate to true
+// 2. **Constraint Evaluation**: All CEL expressions in spec.trigger.constraints must evaluate to true
 // 3. **Template Rendering**: Policy renders spec.target.resourceClaimTemplate using available template variables
 // 4. **Claim Creation**: System creates the rendered ResourceClaim in the specified namespace
 // 5. **Quota Evaluation**: Claim is immediately evaluated against AllowanceBucket capacity
@@ -204,14 +204,14 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // **Enabled Policies** (spec.enabled=true):
 // 1. Admission webhook receives resource creation request
 // 2. Finds all ClaimCreationPolicies matching the resource type
-// 3. Evaluates trigger conditions for each matching policy
-// 4. Creates ResourceClaim for each policy where all conditions are true
+// 3. Evaluates trigger constraints for each matching policy
+// 4. Creates ResourceClaim for each policy where all constraints are true
 // 5. Evaluates all created claims against quota buckets
 // 6. Allows resource creation only if all claims are granted
 //
 // **Disabled Policies** (spec.enabled=false):
 // - Completely ignored during admission processing
-// - No conditions evaluated, no claims created
+// - No constraints evaluated, no claims created
 // - Useful for temporarily disabling quota enforcement
 //
 // ### Template System
@@ -244,7 +244,7 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // for a particular resource. These expressions have access to the same rich contextual information
 // as templates but focus on making boolean decisions rather than generating content. Each expression
 // must evaluate to either true (activate the policy) or false (skip this resource), and all expressions
-// in a policy's condition list must return true for the policy to trigger.
+// in a policy's constraint list must return true for the policy to trigger.
 //
 // The expression environment includes the triggering resource under the `trigger` variable, letting
 // you examine any field in the resource's structure. This enables sophisticated filtering based on
@@ -296,7 +296,7 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // - **Cleanup**: Automatically cleaned up when denied to prevent accumulation
 //
 // ### Field Constraints and Limits
-// - Maximum 10 conditions per trigger (spec.trigger.conditions)
+// - Maximum 10 constraints per trigger (spec.trigger.constraints)
 // - Static amounts only in v1alpha1 (no expression-based quota amounts)
 // - Template metadata labels are literal strings (no template processing)
 // - Template annotation values support templating
@@ -318,14 +318,14 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // - **Policy not triggering**: Check spec.enabled=true and status.conditions[type=Ready]=True
 // - **Template errors**: Review status condition message for template syntax issues
 // - **CEL expression failures**: Validate expression syntax and available variables
-// - **Claims not created**: Verify trigger conditions match the incoming resource
+// - **Claims not created**: Verify trigger constraints match the incoming resource
 // - **Consumer resolution errors**: Check parent context resolution and ResourceRegistration setup
 //
 // ### Performance Considerations
 // - Policies are evaluated synchronously during admission (affects API latency)
 // - Complex CEL expressions can impact admission performance
 // - Template rendering occurs for every matching admission request
-// - Consider using specific trigger conditions to limit policy evaluation scope
+// - Consider using specific trigger constraints to limit policy evaluation scope
 //
 // ### Security Considerations
 // - Templates can access complete trigger resource data (sensitive field exposure)

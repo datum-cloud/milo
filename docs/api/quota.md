@@ -529,7 +529,7 @@ quota claims that prevent resource creation when quota limits are exceeded.
 
 ### How It Works
 1. **Trigger Matching**: Admission webhook matches incoming resource creates against spec.trigger.resource
-2. **Condition Evaluation**: All CEL expressions in spec.trigger.conditions must evaluate to true
+2. **Constraint Evaluation**: All CEL expressions in spec.trigger.constraints must evaluate to true
 3. **Template Rendering**: Policy renders spec.target.resourceClaimTemplate using available template variables
 4. **Claim Creation**: System creates the rendered ResourceClaim in the specified namespace
 5. **Quota Evaluation**: Claim is immediately evaluated against AllowanceBucket capacity
@@ -539,14 +539,14 @@ quota claims that prevent resource creation when quota limits are exceeded.
 **Enabled Policies** (spec.enabled=true):
 1. Admission webhook receives resource creation request
 2. Finds all ClaimCreationPolicies matching the resource type
-3. Evaluates trigger conditions for each matching policy
-4. Creates ResourceClaim for each policy where all conditions are true
+3. Evaluates trigger constraints for each matching policy
+4. Creates ResourceClaim for each policy where all constraints are true
 5. Evaluates all created claims against quota buckets
 6. Allows resource creation only if all claims are granted
 
 **Disabled Policies** (spec.enabled=false):
 - Completely ignored during admission processing
-- No conditions evaluated, no claims created
+- No constraints evaluated, no claims created
 - Useful for temporarily disabling quota enforcement
 
 ### Template System
@@ -579,7 +579,7 @@ CEL expressions act as the gatekeepers that determine whether a policy should cr
 for a particular resource. These expressions have access to the same rich contextual information
 as templates but focus on making boolean decisions rather than generating content. Each expression
 must evaluate to either true (activate the policy) or false (skip this resource), and all expressions
-in a policy's condition list must return true for the policy to trigger.
+in a policy's constraint list must return true for the policy to trigger.
 
 The expression environment includes the triggering resource under the `trigger` variable, letting
 you examine any field in the resource's structure. This enables sophisticated filtering based on
@@ -631,7 +631,7 @@ Claims created by ClaimCreationPolicy include:
 - **Cleanup**: Automatically cleaned up when denied to prevent accumulation
 
 ### Field Constraints and Limits
-- Maximum 10 conditions per trigger (spec.trigger.conditions)
+- Maximum 10 constraints per trigger (spec.trigger.constraints)
 - Static amounts only in v1alpha1 (no expression-based quota amounts)
 - Template metadata labels are literal strings (no template processing)
 - Template annotation values support templating
@@ -653,14 +653,14 @@ Claims created by ClaimCreationPolicy include:
 - **Policy not triggering**: Check spec.enabled=true and status.conditions[type=Ready]=True
 - **Template errors**: Review status condition message for template syntax issues
 - **CEL expression failures**: Validate expression syntax and available variables
-- **Claims not created**: Verify trigger conditions match the incoming resource
+- **Claims not created**: Verify trigger constraints match the incoming resource
 - **Consumer resolution errors**: Check parent context resolution and ResourceRegistration setup
 
 ### Performance Considerations
 - Policies are evaluated synchronously during admission (affects API latency)
 - Complex CEL expressions can impact admission performance
 - Template rendering occurs for every matching admission request
-- Consider using specific trigger conditions to limit policy evaluation scope
+- Consider using specific trigger constraints to limit policy evaluation scope
 
 ### Security Considerations
 - Templates can access complete trigger resource data (sensitive field exposure)
@@ -1242,10 +1242,10 @@ Trigger defines what resource changes should trigger claim creation.
         </td>
         <td>true</td>
       </tr><tr>
-        <td><b><a href="#claimcreationpolicyspectriggerconditionsindex">conditions</a></b></td>
+        <td><b><a href="#claimcreationpolicyspectriggerconstraintsindex">constraints</a></b></td>
         <td>[]object</td>
         <td>
-          Conditions are CEL expressions that must evaluate to true for claim creation to occur.
+          Constraints are CEL expressions that must evaluate to true for claim creation to occur.
 Evaluated in the admission context.<br/>
         </td>
         <td>false</td>
@@ -1287,7 +1287,7 @@ Resource specifies which resource type triggers this policy.
 </table>
 
 
-### ClaimCreationPolicy.spec.trigger.conditions[index]
+### ClaimCreationPolicy.spec.trigger.constraints[index]
 <sup><sup>[↩ Parent](#claimcreationpolicyspectrigger)</sup></sup>
 
 
@@ -1471,8 +1471,8 @@ GrantCreationPolicy automates ResourceGrant creation when observed resources mee
 Use it to provision quota based on resource lifecycle events and attributes.
 
 ### How It Works
-- Watch the kind in `spec.trigger.resource` and evaluate all `spec.trigger.conditions[]`.
-- When all conditions are true, render `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
+- Watch the kind in `spec.trigger.resource` and evaluate all `spec.trigger.constraints[]`.
+- When all constraints are true, render `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
 - Optionally target a parent control plane via `spec.target.parentContext` (CEL-resolved name) for cross-cluster allocation.
 - Templating supports variables `.trigger`, `.requestInfo`, `.user` and functions `lower`, `upper`, `title`, `default`, `contains`, `join`, `split`, `replace`, `trim`, `toInt`, `toString`.
 - Allowances (resource types and amounts) are static in `v1alpha1`.
@@ -1480,7 +1480,7 @@ Use it to provision quota based on resource lifecycle events and attributes.
 ### Works With
 - Creates [ResourceGrant](#resourcegrant) objects whose `allowances[].resourceType` must exist in a [ResourceRegistration](#resourceregistration).
 - May target a parent control plane via `spec.target.parentContext` for cross-plane quota allocation.
-- Policy readiness (`status.conditions[type=Ready]`) signals template/condition validity.
+- Policy readiness (`status.conditions[type=Ready]`) signals template/constraint validity.
 
 ### Status
 - `status.conditions[type=Ready]`: Policy validated and active.
@@ -2088,11 +2088,11 @@ Trigger defines what resource changes should trigger grant creation.
         </td>
         <td>true</td>
       </tr><tr>
-        <td><b><a href="#grantcreationpolicyspectriggerconditionsindex">conditions</a></b></td>
+        <td><b><a href="#grantcreationpolicyspectriggerconstraintsindex">constraints</a></b></td>
         <td>[]object</td>
         <td>
-          Conditions are CEL expressions that must evaluate to true for grant creation.
-All conditions must pass for the policy to trigger.
+          Constraints are CEL expressions that must evaluate to true for grant creation.
+All constraints must pass for the policy to trigger.
 The 'object' variable contains the trigger resource being evaluated.<br/>
         </td>
         <td>false</td>
@@ -2135,7 +2135,7 @@ For core resources, use "v1".<br/>
 </table>
 
 
-### GrantCreationPolicy.spec.trigger.conditions[index]
+### GrantCreationPolicy.spec.trigger.constraints[index]
 <sup><sup>[↩ Parent](#grantcreationpolicyspectrigger)</sup></sup>
 
 

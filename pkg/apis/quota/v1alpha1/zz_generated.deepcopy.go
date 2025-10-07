@@ -282,8 +282,8 @@ func (in *ClaimTargetSpec) DeepCopy() *ClaimTargetSpec {
 func (in *ClaimTriggerSpec) DeepCopyInto(out *ClaimTriggerSpec) {
 	*out = *in
 	out.Resource = in.Resource
-	if in.Conditions != nil {
-		in, out := &in.Conditions, &out.Conditions
+	if in.Constraints != nil {
+		in, out := &in.Constraints, &out.Constraints
 		*out = make([]ConditionExpression, len(*in))
 		copy(*out, *in)
 	}
@@ -972,8 +972,8 @@ func (in *TriggerResource) DeepCopy() *TriggerResource {
 func (in *TriggerSpec) DeepCopyInto(out *TriggerSpec) {
 	*out = *in
 	out.Resource = in.Resource
-	if in.Conditions != nil {
-		in, out := &in.Conditions, &out.Conditions
+	if in.Constraints != nil {
+		in, out := &in.Constraints, &out.Constraints
 		*out = make([]ConditionExpression, len(*in))
 		copy(*out, *in)
 	}

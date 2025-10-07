@@ -29,13 +29,13 @@ type TriggerSpec struct {
 	//
 	// +kubebuilder:validation:Required
 	Resource TriggerResource `json:"resource"`
-	// Conditions are CEL expressions that must evaluate to true for grant creation.
-	// All conditions must pass for the policy to trigger.
+	// Constraints are CEL expressions that must evaluate to true for grant creation.
+	// All constraints must pass for the policy to trigger.
 	// The 'object' variable contains the trigger resource being evaluated.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=10
-	Conditions []ConditionExpression `json:"conditions,omitempty"`
+	Constraints []ConditionExpression `json:"constraints,omitempty"`
 }
 
 // TriggerResource identifies the resource type that triggers grant creation.
@@ -232,8 +232,8 @@ func (t *TriggerResource) GetGVK() schema.GroupVersionKind {
 // Use it to provision quota based on resource lifecycle events and attributes.
 //
 // ### How It Works
-// - Watch the kind in `spec.trigger.resource` and evaluate all `spec.trigger.conditions[]`.
-// - When all conditions are true, render `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
+// - Watch the kind in `spec.trigger.resource` and evaluate all `spec.trigger.constraints[]`.
+// - When all constraints are true, render `spec.target.resourceGrantTemplate` and create a `ResourceGrant`.
 // - Optionally target a parent control plane via `spec.target.parentContext` (CEL-resolved name) for cross-cluster allocation.
 // - Templating supports variables `.trigger`, `.requestInfo`, `.user` and functions `lower`, `upper`, `title`, `default`, `contains`, `join`, `split`, `replace`, `trim`, `toInt`, `toString`.
 // - Allowances (resource types and amounts) are static in `v1alpha1`.
@@ -241,7 +241,7 @@ func (t *TriggerResource) GetGVK() schema.GroupVersionKind {
 // ### Works With
 // - Creates [ResourceGrant](#resourcegrant) objects whose `allowances[].resourceType` must exist in a [ResourceRegistration](#resourceregistration).
 // - May target a parent control plane via `spec.target.parentContext` for cross-plane quota allocation.
-// - Policy readiness (`status.conditions[type=Ready]`) signals template/condition validity.
+// - Policy readiness (`status.conditions[type=Ready]`) signals template/constraint validity.
 //
 // ### Status
 // - `status.conditions[type=Ready]`: Policy validated and active.
@@ -304,6 +304,6 @@ type GrantCreationPolicyList struct {
 
 // Validation rules using kubebuilder CEL expressions
 //
-// +kubebuilder:validation:XValidation:rule="!has(self.spec.enabled) || self.spec.enabled == true || size(self.spec.trigger.conditions) == 0",message="disabled policies should not have trigger conditions"
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.enabled) || self.spec.enabled == true || size(self.spec.trigger.constraints) == 0",message="disabled policies should not have trigger constraints"
 // +kubebuilder:validation:XValidation:rule="!has(self.spec.target.parentContext) || size(self.spec.target.parentContext.nameExpression) > 0",message="parent context must have a name expression"
 // +kubebuilder:validation:XValidation:rule="size(self.spec.target.resourceGrantTemplate.spec.allowances) <= 20",message="maximum 20 allowances per policy"
