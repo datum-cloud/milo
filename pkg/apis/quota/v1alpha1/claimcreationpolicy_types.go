@@ -15,12 +15,12 @@ type ClaimCreationPolicySpec struct {
 	//
 	// +kubebuilder:validation:Required
 	Target ClaimTargetSpec `json:"target"`
-	// Enabled determines if this policy is active.
-	// If false, no **ResourceClaims** will be created for matching resources.
+	// Disabled determines if this policy is inactive.
+	// If true, no **ResourceClaims** will be created for matching resources.
 	//
-	// +kubebuilder:default=true
+	// +kubebuilder:default=false
 	// +optional
-	Enabled *bool `json:"enabled,omitempty"`
+	Disabled *bool `json:"disabled,omitempty"`
 }
 
 // TargetResource identifies the resource type that this policy applies to.
@@ -201,7 +201,7 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // 6. **Admission Decision**: Original resource creation succeeds or fails based on claim result
 //
 // ### Policy Processing Flow
-// **Enabled Policies** (spec.enabled=true):
+// **Active Policies** (spec.disabled=false):
 // 1. Admission webhook receives resource creation request
 // 2. Finds all ClaimCreationPolicies matching the resource type
 // 3. Evaluates trigger constraints for each matching policy
@@ -209,7 +209,7 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // 5. Evaluates all created claims against quota buckets
 // 6. Allows resource creation only if all claims are granted
 //
-// **Disabled Policies** (spec.enabled=false):
+// **Disabled Policies** (spec.disabled=true):
 // - Completely ignored during admission processing
 // - No constraints evaluated, no claims created
 // - Useful for temporarily disabling quota enforcement
@@ -286,7 +286,7 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // ### Status Conditions
 // - **Ready=True**: Policy is validated and actively creating claims
 // - **Ready=False, reason=ValidationFailed**: Configuration errors prevent activation (check message)
-// - **Ready=False, reason=PolicyDisabled**: Policy is disabled (spec.enabled=false)
+// - **Ready=False, reason=PolicyDisabled**: Policy is disabled (spec.disabled=true)
 //
 // ### Automatic Claim Features
 // Claims created by ClaimCreationPolicy include:
@@ -302,7 +302,7 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // - Template annotation values support templating
 //
 // ### Selectors and Filtering
-// - **Field selectors**: spec.trigger.resource.kind, spec.trigger.resource.apiVersion, spec.enabled
+// - **Field selectors**: spec.trigger.resource.kind, spec.trigger.resource.apiVersion, spec.disabled
 // - **Recommended labels** (add manually):
 //   - quota.miloapis.com/target-kind: Project
 //   - quota.miloapis.com/environment: production
@@ -310,12 +310,12 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 //
 // ### Common Queries
 // - All policies for a resource kind: label selector quota.miloapis.com/target-kind=<kind>
-// - Enabled policies only: field selector spec.enabled=true
+// - Active policies only: field selector spec.disabled=false
 // - Environment-specific policies: label selector quota.miloapis.com/environment=<env>
 // - Failed policies: filter by status.conditions[type=Ready].status=False
 //
 // ### Troubleshooting
-// - **Policy not triggering**: Check spec.enabled=true and status.conditions[type=Ready]=True
+// - **Policy not triggering**: Check spec.disabled=false and status.conditions[type=Ready]=True
 // - **Template errors**: Review status condition message for template syntax issues
 // - **CEL expression failures**: Validate expression syntax and available variables
 // - **Claims not created**: Verify trigger constraints match the incoming resource
@@ -338,13 +338,13 @@ func (t *TargetResource) GetGVK() schema.GroupVersionKind {
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Target",type="string",JSONPath=".spec.trigger.resource.kind"
-// +kubebuilder:printcolumn:name="Enabled",type="boolean",JSONPath=".spec.enabled"
+// +kubebuilder:printcolumn:name="Disabled",type="boolean",JSONPath=".spec.disabled"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +k8s:openapi-gen=true
 // +kubebuilder:selectablefield:JSONPath=".spec.trigger.resource.kind"
 // +kubebuilder:selectablefield:JSONPath=".spec.trigger.resource.apiVersion"
-// +kubebuilder:selectablefield:JSONPath=".spec.enabled"
+// +kubebuilder:selectablefield:JSONPath=".spec.disabled"
 type ClaimCreationPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

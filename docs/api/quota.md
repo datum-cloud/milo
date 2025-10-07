@@ -536,7 +536,7 @@ quota claims that prevent resource creation when quota limits are exceeded.
 6. **Admission Decision**: Original resource creation succeeds or fails based on claim result
 
 ### Policy Processing Flow
-**Enabled Policies** (spec.enabled=true):
+**Active Policies** (spec.disabled=false):
 1. Admission webhook receives resource creation request
 2. Finds all ClaimCreationPolicies matching the resource type
 3. Evaluates trigger constraints for each matching policy
@@ -544,7 +544,7 @@ quota claims that prevent resource creation when quota limits are exceeded.
 5. Evaluates all created claims against quota buckets
 6. Allows resource creation only if all claims are granted
 
-**Disabled Policies** (spec.enabled=false):
+**Disabled Policies** (spec.disabled=true):
 - Completely ignored during admission processing
 - No constraints evaluated, no claims created
 - Useful for temporarily disabling quota enforcement
@@ -621,7 +621,7 @@ The system automatically resolves spec.consumerRef for created claims:
 ### Status Conditions
 - **Ready=True**: Policy is validated and actively creating claims
 - **Ready=False, reason=ValidationFailed**: Configuration errors prevent activation (check message)
-- **Ready=False, reason=PolicyDisabled**: Policy is disabled (spec.enabled=false)
+- **Ready=False, reason=PolicyDisabled**: Policy is disabled (spec.disabled=true)
 
 ### Automatic Claim Features
 Claims created by ClaimCreationPolicy include:
@@ -637,7 +637,7 @@ Claims created by ClaimCreationPolicy include:
 - Template annotation values support templating
 
 ### Selectors and Filtering
-- **Field selectors**: spec.trigger.resource.kind, spec.trigger.resource.apiVersion, spec.enabled
+- **Field selectors**: spec.trigger.resource.kind, spec.trigger.resource.apiVersion, spec.disabled
 - **Recommended labels** (add manually):
   - quota.miloapis.com/target-kind: Project
   - quota.miloapis.com/environment: production
@@ -645,12 +645,12 @@ Claims created by ClaimCreationPolicy include:
 
 ### Common Queries
 - All policies for a resource kind: label selector quota.miloapis.com/target-kind=<kind>
-- Enabled policies only: field selector spec.enabled=true
+- Active policies only: field selector spec.disabled=false
 - Environment-specific policies: label selector quota.miloapis.com/environment=<env>
 - Failed policies: filter by status.conditions[type=Ready].status=False
 
 ### Troubleshooting
-- **Policy not triggering**: Check spec.enabled=true and status.conditions[type=Ready]=True
+- **Policy not triggering**: Check spec.disabled=false and status.conditions[type=Ready]=True
 - **Template errors**: Review status condition message for template syntax issues
 - **CEL expression failures**: Validate expression syntax and available variables
 - **Claims not created**: Verify trigger constraints match the incoming resource
@@ -749,13 +749,13 @@ ClaimCreationPolicySpec defines the desired state of ClaimCreationPolicy.
         </td>
         <td>true</td>
       </tr><tr>
-        <td><b>enabled</b></td>
+        <td><b>disabled</b></td>
         <td>boolean</td>
         <td>
-          Enabled determines if this policy is active.
-If false, no **ResourceClaims** will be created for matching resources.<br/>
+          Disabled determines if this policy is inactive.
+If true, no **ResourceClaims** will be created for matching resources.<br/>
           <br/>
-            <i>Default</i>: true<br/>
+            <i>Default</i>: false<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -1496,14 +1496,14 @@ Use it to provision quota based on resource lifecycle events and attributes.
   - `quota.miloapis.com/environment`: `prod`
   - Common queries:
   - All policies for a trigger kind: label selector `quota.miloapis.com/trigger-kind`.
-  - All enabled policies: field selector `spec.enabled=true`.
+  - All active policies: field selector `spec.disabled=false`.
 
 ### Defaults and Limits
 - Resource grant allowances are static (no expression-based amounts) in `v1alpha1`.
 
 ### Notes
 - If `ParentContextReady=False`, verify `nameExpression` and referenced attributes.
-- Disabled policies (`spec.enabled=false`) do not create grants.
+- Disabled policies (`spec.disabled=true`) do not create grants.
 
 ### See Also
 - [ResourceGrant](#resourcegrant): The object created by this policy.
@@ -1594,13 +1594,13 @@ GrantCreationPolicySpec defines the desired state of GrantCreationPolicy.
         </td>
         <td>true</td>
       </tr><tr>
-        <td><b>enabled</b></td>
+        <td><b>disabled</b></td>
         <td>boolean</td>
         <td>
-          Enabled determines if this policy is active.
-If false, no **ResourceGrants** will be created for matching resources.<br/>
+          Disabled determines if this policy is inactive.
+If true, no **ResourceGrants** will be created for matching resources.<br/>
           <br/>
-            <i>Default</i>: true<br/>
+            <i>Default</i>: false<br/>
         </td>
         <td>false</td>
       </tr></tbody>

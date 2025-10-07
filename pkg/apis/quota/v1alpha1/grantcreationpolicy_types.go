@@ -15,12 +15,12 @@ type GrantCreationPolicySpec struct {
 	//
 	// +kubebuilder:validation:Required
 	Target TargetSpec `json:"target"`
-	// Enabled determines if this policy is active.
-	// If false, no **ResourceGrants** will be created for matching resources.
+	// Disabled determines if this policy is inactive.
+	// If true, no **ResourceGrants** will be created for matching resources.
 	//
-	// +kubebuilder:default=true
+	// +kubebuilder:default=false
 	// +optional
-	Enabled *bool `json:"enabled,omitempty"`
+	Disabled *bool `json:"disabled,omitempty"`
 }
 
 // TriggerSpec defines the resource and conditions that trigger grant creation.
@@ -257,14 +257,14 @@ func (t *TriggerResource) GetGVK() schema.GroupVersionKind {
 //   - `quota.miloapis.com/environment`: `prod`
 //   - Common queries:
 //   - All policies for a trigger kind: label selector `quota.miloapis.com/trigger-kind`.
-//   - All enabled policies: field selector `spec.enabled=true`.
+//   - All active policies: field selector `spec.disabled=false`.
 //
 // ### Defaults and Limits
 // - Resource grant allowances are static (no expression-based amounts) in `v1alpha1`.
 //
 // ### Notes
 // - If `ParentContextReady=False`, verify `nameExpression` and referenced attributes.
-// - Disabled policies (`spec.enabled=false`) do not create grants.
+// - Disabled policies (`spec.disabled=true`) do not create grants.
 //
 // ### See Also
 // - [ResourceGrant](#resourcegrant): The object created by this policy.
@@ -276,7 +276,7 @@ func (t *TriggerResource) GetGVK() schema.GroupVersionKind {
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Trigger",type="string",JSONPath=".spec.trigger.resource.kind"
-// +kubebuilder:printcolumn:name="Enabled",type="boolean",JSONPath=".spec.enabled"
+// +kubebuilder:printcolumn:name="Disabled",type="boolean",JSONPath=".spec.disabled"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +k8s:openapi-gen=true
@@ -304,6 +304,6 @@ type GrantCreationPolicyList struct {
 
 // Validation rules using kubebuilder CEL expressions
 //
-// +kubebuilder:validation:XValidation:rule="!has(self.spec.enabled) || self.spec.enabled == true || size(self.spec.trigger.constraints) == 0",message="disabled policies should not have trigger constraints"
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.disabled) || self.spec.disabled == false || size(self.spec.trigger.constraints) == 0",message="disabled policies should not have trigger constraints"
 // +kubebuilder:validation:XValidation:rule="!has(self.spec.target.parentContext) || size(self.spec.target.parentContext.nameExpression) > 0",message="parent context must have a name expression"
 // +kubebuilder:validation:XValidation:rule="size(self.spec.target.resourceGrantTemplate.spec.allowances) <= 20",message="maximum 20 allowances per policy"

@@ -18,8 +18,8 @@ spec:
     - jsonPath: .spec.trigger.resource.kind
       name: Trigger
       type: string
-    - jsonPath: .spec.enabled
-      name: Enabled
+    - jsonPath: .spec.disabled
+      name: Disabled
       type: boolean
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -60,14 +60,14 @@ spec:
             - `quota.miloapis.com/environment`: `prod`
             - Common queries:
             - All policies for a trigger kind: label selector `quota.miloapis.com/trigger-kind`.
-            - All enabled policies: field selector `spec.enabled=true`.
+            - All active policies: field selector `spec.disabled=false`.
 
           ### Defaults and Limits
           - Resource grant allowances are static (no expression-based amounts) in `v1alpha1`.
 
           ### Notes
           - If `ParentContextReady=False`, verify `nameExpression` and referenced attributes.
-          - Disabled policies (`spec.enabled=false`) do not create grants.
+          - Disabled policies (`spec.disabled=true`) do not create grants.
 
           ### See Also
           - [ResourceGrant](#resourcegrant): The object created by this policy.
@@ -94,11 +94,11 @@ spec:
           spec:
             description: GrantCreationPolicySpec defines the desired state of GrantCreationPolicy.
             properties:
-              enabled:
-                default: true
+              disabled:
+                default: false
                 description: |-
-                  Enabled determines if this policy is active.
-                  If false, no **ResourceGrants** will be created for matching resources.
+                  Disabled determines if this policy is inactive.
+                  If true, no **ResourceGrants** will be created for matching resources.
                 type: boolean
               target:
                 description: Target defines where and how grants should be created.

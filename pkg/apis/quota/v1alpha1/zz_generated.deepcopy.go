@@ -223,8 +223,8 @@ func (in *ClaimCreationPolicySpec) DeepCopyInto(out *ClaimCreationPolicySpec) {
 	*out = *in
 	in.Trigger.DeepCopyInto(&out.Trigger)
 	in.Target.DeepCopyInto(&out.Target)
-	if in.Enabled != nil {
-		in, out := &in.Enabled, &out.Enabled
+	if in.Disabled != nil {
+		in, out := &in.Disabled, &out.Disabled
 		*out = new(bool)
 		**out = **in
 	}
@@ -453,8 +453,8 @@ func (in *GrantCreationPolicySpec) DeepCopyInto(out *GrantCreationPolicySpec) {
 	*out = *in
 	in.Trigger.DeepCopyInto(&out.Trigger)
 	in.Target.DeepCopyInto(&out.Target)
-	if in.Enabled != nil {
-		in, out := &in.Enabled, &out.Enabled
+	if in.Disabled != nil {
+		in, out := &in.Disabled, &out.Disabled
 		*out = new(bool)
 		**out = **in
 	}
