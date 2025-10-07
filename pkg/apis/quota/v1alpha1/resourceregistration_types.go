@@ -4,10 +4,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ConsumerTypeRef identifies the resource type that consumes quota.
+// ConsumerType identifies the resource type that consumes quota.
 // The consumer receives **ResourceGrants** and creates **ResourceClaims** for the registered resource.
 // For example, when registering "Projects per Organization", **Organization** is the consumer type.
-type ConsumerTypeRef struct {
+type ConsumerType struct {
 	// APIGroup specifies the API group of the quota consumer resource type.
 	// Use empty string for Kubernetes core resources (**Pod**, **Service**, etc.).
 	// Use full group name for custom resources (for example, `resourcemanager.miloapis.com`).
@@ -37,15 +37,15 @@ type ConsumerTypeRef struct {
 
 // ResourceRegistrationSpec defines the desired state of ResourceRegistration.
 type ResourceRegistrationSpec struct {
-	// ConsumerTypeRef specifies which resource type receives grants and creates claims for this registration.
+	// ConsumerType specifies which resource type receives grants and creates claims for this registration.
 	// The consumer type must exist in the cluster before creating the registration.
 	//
-	// Example: When registering "Projects per Organization", set `ConsumerTypeRef` to **Organization**
+	// Example: When registering "Projects per Organization", set `ConsumerType` to **Organization**
 	// (apiGroup: `resourcemanager.miloapis.com`, kind: `Organization`). **Organizations** then
 	// receive **ResourceGrants** allocating **Project** quota and create **ResourceClaims** when **Projects** are created.
 	//
 	// +kubebuilder:validation:Required
-	ConsumerTypeRef ConsumerTypeRef `json:"consumerTypeRef"`
+	ConsumerType ConsumerType `json:"consumerType"`
 
 	// Type specifies the measurement method for quota tracking.
 	// This field is immutable after creation.
@@ -242,7 +242,7 @@ const (
 // ### Core Relationships
 // - **ResourceGrant.spec.allowances[].resourceType** must match this registration's **spec.resourceType**
 // - **ResourceClaim.spec.requests[].resourceType** must match this registration's **spec.resourceType**
-// - **ResourceClaim.spec.consumerRef** must match this registration's **spec.consumerTypeRef** type
+// - **ResourceClaim.spec.consumerRef** must match this registration's **spec.consumerType** type
 // - **ResourceClaim.spec.resourceRef** kind must be listed in this registration's **spec.claimingResources**
 //
 // ### Registration Lifecycle
@@ -263,13 +263,13 @@ const (
 //
 // ### Field Constraints and Limits
 // - Maximum 20 entries in **spec.claimingResources**
-// - **spec.resourceType**, **spec.consumerTypeRef**, and **spec.type** are immutable after creation
+// - **spec.resourceType**, **spec.consumerType**, and **spec.type** are immutable after creation
 // - **spec.description** maximum 500 characters
 // - **spec.baseUnit** and **spec.displayUnit** maximum 50 characters each
 // - **spec.unitConversionFactor** minimum value is 1
 //
 // ### Selectors and Filtering
-// - **Field selectors**: spec.consumerTypeRef.kind, spec.consumerTypeRef.apiGroup, spec.resourceType
+// - **Field selectors**: spec.consumerType.kind, spec.consumerType.apiGroup, spec.resourceType
 // - **Recommended labels** (add manually):
 //   - quota.miloapis.com/resource-kind: Project
 //   - quota.miloapis.com/resource-apigroup: resourcemanager.miloapis.com
@@ -288,11 +288,11 @@ const (
 // +kubebuilder:printcolumn:name="Type",type="string",JSONPath=".spec.type"
 // +kubebuilder:printcolumn:name="Active",type="string",JSONPath=".status.conditions[?(@.type=='Active')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:selectablefield:JSONPath=".spec.consumerTypeRef.kind"
-// +kubebuilder:selectablefield:JSONPath=".spec.consumerTypeRef.apiGroup"
+// +kubebuilder:selectablefield:JSONPath=".spec.consumerType.kind"
+// +kubebuilder:selectablefield:JSONPath=".spec.consumerType.apiGroup"
 // +kubebuilder:selectablefield:JSONPath=".spec.resourceType"
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.resourceType) || self.spec.resourceType == oldSelf.spec.resourceType",message="spec.resourceType is immutable"
-// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.consumerTypeRef) || self.spec.consumerTypeRef == oldSelf.spec.consumerTypeRef",message="spec.consumerTypeRef is immutable"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.consumerType) || self.spec.consumerType == oldSelf.spec.consumerType",message="spec.consumerType is immutable"
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.type) || self.spec.type == oldSelf.spec.type",message="spec.type is immutable"
 type ResourceRegistration struct {
 	metav1.TypeMeta   `json:",inline"`

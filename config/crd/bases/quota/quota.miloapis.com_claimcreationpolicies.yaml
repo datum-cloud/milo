@@ -105,7 +105,7 @@ spec:
           The system automatically resolves spec.consumerRef for created claims:
           - Uses parent context resolution to find the appropriate consumer
           - Typically resolves to Organization for Project resources, Project for User resources, etc.
-          - Consumer must match the ResourceRegistration.spec.consumerTypeRef for the requested resource type
+          - Consumer must match the ResourceRegistration.spec.consumerType for the requested resource type
 
           ### Validation and Dependencies
           **Policy Validation:**
@@ -288,7 +288,7 @@ spec:
                           consumerRef:
                             description: |-
                               ConsumerRef identifies the quota consumer making this claim. The consumer
-                              must match the ConsumerTypeRef defined in the ResourceRegistration for each
+                              must match the ConsumerType defined in the ResourceRegistration for each
                               requested resource type. The system validates this relationship during
                               claim processing.
 

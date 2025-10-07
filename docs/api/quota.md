@@ -597,7 +597,7 @@ rules based on who is creating what types of resources in which contexts.
 The system automatically resolves spec.consumerRef for created claims:
 - Uses parent context resolution to find the appropriate consumer
 - Typically resolves to Organization for Project resources, Project for User resources, etc.
-- Consumer must match the ResourceRegistration.spec.consumerTypeRef for the requested resource type
+- Consumer must match the ResourceRegistration.spec.consumerType for the requested resource type
 
 ### Validation and Dependencies
 **Policy Validation:**
@@ -944,7 +944,7 @@ String fields support Go template syntax.
         <td>object</td>
         <td>
           ConsumerRef identifies the quota consumer making this claim. The consumer
-must match the ConsumerTypeRef defined in the ResourceRegistration for each
+must match the ConsumerType defined in the ResourceRegistration for each
 requested resource type. The system validates this relationship during
 claim processing.
 
@@ -996,7 +996,7 @@ Examples:
 
 
 ConsumerRef identifies the quota consumer making this claim. The consumer
-must match the ConsumerTypeRef defined in the ResourceRegistration for each
+must match the ConsumerType defined in the ResourceRegistration for each
 requested resource type. The system validates this relationship during
 claim processing.
 
@@ -1812,7 +1812,7 @@ All allowances in a single grant:
         <td>object</td>
         <td>
           ConsumerRef identifies the quota consumer that receives these allowances.
-The consumer type must match the ConsumerTypeRef defined in the ResourceRegistration
+The consumer type must match the ConsumerType defined in the ResourceRegistration
 for each allowance resource type. The system validates this relationship.
 
 Examples:
@@ -1922,7 +1922,7 @@ Examples:
 
 
 ConsumerRef identifies the quota consumer that receives these allowances.
-The consumer type must match the ConsumerTypeRef defined in the ResourceRegistration
+The consumer type must match the ConsumerType defined in the ResourceRegistration
 for each allowance resource type. The system validates this relationship.
 
 Examples:
@@ -2328,7 +2328,7 @@ Kubernetes resource for lifecycle management and auditing.
 resolution. When a **ClaimCreationPolicy** triggers during admission, it
 creates a **ResourceClaim** that immediately enters the quota evaluation
 pipeline. The quota system first validates that the consumer type matches the
-expected `ConsumerTypeRef` from the **ResourceRegistration**, then verifies
+expected `ConsumerType` from the **ResourceRegistration**, then verifies
 that the triggering resource kind is authorized to claim the requested
 resource types.
 
@@ -2389,7 +2389,7 @@ status with detailed results for each resource request, including which
 
   - Maximum 20 resource requests per claim
   - Each resource type can appear only once in requests
-  - Consumer type must match `ResourceRegistration.spec.consumerTypeRef` for each requested type
+  - Consumer type must match `ResourceRegistration.spec.consumerType` for each requested type
   - Triggering resource kind must be listed in `ResourceRegistration.spec.claimingResources`
 
 ### Selectors and Filtering
@@ -2487,7 +2487,7 @@ ResourceClaimSpec defines the desired state of ResourceClaim.
         <td>object</td>
         <td>
           ConsumerRef identifies the quota consumer making this claim. The consumer
-must match the ConsumerTypeRef defined in the ResourceRegistration for each
+must match the ConsumerType defined in the ResourceRegistration for each
 requested resource type. The system validates this relationship during
 claim processing.
 
@@ -2539,7 +2539,7 @@ Examples:
 
 
 ConsumerRef identifies the quota consumer making this claim. The consumer
-must match the ConsumerTypeRef defined in the ResourceRegistration for each
+must match the ConsumerType defined in the ResourceRegistration for each
 requested resource type. The system validates this relationship during
 claim processing.
 
@@ -3034,7 +3034,7 @@ available quota for ResourceClaim evaluation.
 **ResourceGrants** begin their lifecycle when either an administrator creates them manually or a
 **GrantCreationPolicy** generates them automatically in response to observed resource changes. Upon
 creation, the grant enters a validation phase where the quota system examines the consumer type
-to ensure it matches the expected `ConsumerTypeRef` from each **ResourceRegistration** targeted by
+to ensure it matches the expected `ConsumerType` from each **ResourceRegistration** targeted by
 the grant's allowances. The quota system also verifies that all specified resource types correspond
 to active registrations and that the allowance amounts are valid non-negative integers.
 
@@ -3085,7 +3085,7 @@ Each grant can contain multiple allowances for different resource types:
 - Automatically managed based on trigger conditions
 
 ### Validation Requirements
-- Consumer type must match ResourceRegistration.spec.consumerTypeRef for each resource type
+- Consumer type must match ResourceRegistration.spec.consumerType for each resource type
 - All resource types must reference active ResourceRegistration objects
 - Maximum 20 allowances per grant
 - All amounts must be non-negative integers in BaseUnit
@@ -3212,7 +3212,7 @@ All allowances in a single grant:
         <td>object</td>
         <td>
           ConsumerRef identifies the quota consumer that receives these allowances.
-The consumer type must match the ConsumerTypeRef defined in the ResourceRegistration
+The consumer type must match the ConsumerType defined in the ResourceRegistration
 for each allowance resource type. The system validates this relationship.
 
 Examples:
@@ -3322,7 +3322,7 @@ Examples:
 
 
 ConsumerRef identifies the quota consumer that receives these allowances.
-The consumer type must match the ConsumerTypeRef defined in the ResourceRegistration
+The consumer type must match the ConsumerType defined in the ResourceRegistration
 for each allowance resource type. The system validates this relationship.
 
 Examples:
@@ -3551,7 +3551,7 @@ and claiming permissions.
 ### Core Relationships
 - **ResourceGrant.spec.allowances[].resourceType** must match this registration's **spec.resourceType**
 - **ResourceClaim.spec.requests[].resourceType** must match this registration's **spec.resourceType**
-- **ResourceClaim.spec.consumerRef** must match this registration's **spec.consumerTypeRef** type
+- **ResourceClaim.spec.consumerRef** must match this registration's **spec.consumerType** type
 - **ResourceClaim.spec.resourceRef** kind must be listed in this registration's **spec.claimingResources**
 
 ### Registration Lifecycle
@@ -3572,13 +3572,13 @@ and claiming permissions.
 
 ### Field Constraints and Limits
 - Maximum 20 entries in **spec.claimingResources**
-- **spec.resourceType**, **spec.consumerTypeRef**, and **spec.type** are immutable after creation
+- **spec.resourceType**, **spec.consumerType**, and **spec.type** are immutable after creation
 - **spec.description** maximum 500 characters
 - **spec.baseUnit** and **spec.displayUnit** maximum 50 characters each
 - **spec.unitConversionFactor** minimum value is 1
 
 ### Selectors and Filtering
-- **Field selectors**: spec.consumerTypeRef.kind, spec.consumerTypeRef.apiGroup, spec.resourceType
+- **Field selectors**: spec.consumerType.kind, spec.consumerType.apiGroup, spec.resourceType
 - **Recommended labels** (add manually):
   - quota.miloapis.com/resource-kind: Project
   - quota.miloapis.com/resource-apigroup: resourcemanager.miloapis.com
@@ -3667,13 +3667,13 @@ Examples:
         </td>
         <td>true</td>
       </tr><tr>
-        <td><b><a href="#resourceregistrationspecconsumertyperef">consumerTypeRef</a></b></td>
+        <td><b><a href="#resourceregistrationspecconsumertype">consumerType</a></b></td>
         <td>object</td>
         <td>
-          ConsumerTypeRef specifies which resource type receives grants and creates claims for this registration.
+          ConsumerType specifies which resource type receives grants and creates claims for this registration.
 The consumer type must exist in the cluster before creating the registration.
 
-Example: When registering "Projects per Organization", set `ConsumerTypeRef` to **Organization**
+Example: When registering "Projects per Organization", set `ConsumerType` to **Organization**
 (apiGroup: `resourcemanager.miloapis.com`, kind: `Organization`). **Organizations** then
 receive **ResourceGrants** allocating **Project** quota and create **ResourceClaims** when **Projects** are created.<br/>
         </td>
@@ -3783,15 +3783,15 @@ Examples:
 </table>
 
 
-### ResourceRegistration.spec.consumerTypeRef
+### ResourceRegistration.spec.consumerType
 <sup><sup>[↩ Parent](#resourceregistrationspec)</sup></sup>
 
 
 
-ConsumerTypeRef specifies which resource type receives grants and creates claims for this registration.
+ConsumerType specifies which resource type receives grants and creates claims for this registration.
 The consumer type must exist in the cluster before creating the registration.
 
-Example: When registering "Projects per Organization", set `ConsumerTypeRef` to **Organization**
+Example: When registering "Projects per Organization", set `ConsumerType` to **Organization**
 (apiGroup: `resourcemanager.miloapis.com`, kind: `Organization`). **Organizations** then
 receive **ResourceGrants** allocating **Project** quota and create **ResourceClaims** when **Projects** are created.
 
