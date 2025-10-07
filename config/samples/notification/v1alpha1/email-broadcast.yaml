@@ -1,0 +1,14 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: EmailBroadcast
+metadata:
+  name: engineering-august-announcement
+  namespace: milo-system
+spec:
+  displayName: "Engineering August Announcement"
+  contactGroupRef:
+    name: engineering-team
+    namespace: milo-system
+  templateRef:
+    name: user-invitation
+  # Schedule the broadcast for 10:00 UTC on 30 Sep 2025
+  scheduledAt: "2025-09-30T10:00:00Z"
