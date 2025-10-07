@@ -1,7 +1,7 @@
 apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
-  name: resourcemanager.miloapis.com/organization-admin
+  name: resourcemanager.miloapis.com-organization-admin
   annotations:
     kubernetes.io/display-name: Organization Admin
     kubernetes.io/description: "Full access to all organization and organization membership resources"
@@ -9,7 +9,7 @@ spec:
   launchStage: Beta
   inheritedRoles:
     - name: organizationmembership-admin
-    - name: organization-viewer
+    - name: resourcemanager.miloapis.com-organization-viewer
   includedPermissions:
     - resourcemanager.miloapis.com/organizations.create
     - resourcemanager.miloapis.com/organizations.update

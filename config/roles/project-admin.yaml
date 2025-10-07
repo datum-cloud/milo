@@ -1,14 +1,14 @@
 apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
-  name: resourcemanager.miloapis.com/project-admin
+  name: resourcemanager.miloapis.com-project-admin
   annotations:
     kubernetes.io/display-name: Project Admin
     kubernetes.io/description: "Full access to all project resources"
 spec:
   launchStage: Beta
   inheritedRoles:
-    - name: project-viewer
+    - name: resourcemanager.miloapis.com-project-viewer
   includedPermissions:
     - resourcemanager.miloapis.com/projects.create
     - resourcemanager.miloapis.com/projects.update
