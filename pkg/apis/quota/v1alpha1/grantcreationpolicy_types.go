@@ -174,10 +174,6 @@ type ResourceGrantTemplate struct {
 	Spec ResourceGrantSpec `json:"spec"`
 }
 
-// ObjectMetaTemplate defines a minimal subset of ObjectMeta for use in resource creation.
-// Only safe, user-controlled fields are exposed.
-// ObjectMetaTemplate is declared in claimcreationpolicy_types.go
-
 // GrantCreationPolicyStatus defines the observed state of GrantCreationPolicy.
 //
 // Status fields
