@@ -8,27 +8,15 @@ spec:
     namespace: envoy-gateway-system
 
   rules:
-  # 1) Retry on 429s so that project storage initialization has time to complete
   - matches:
     - path:
         type: PathPrefix
         value: /
-      method: GET
     backendRefs:
     - name: milo-apiserver
       port: 6443
       kind: Service
-    retry:
+    retry: # Retry on 429s so that project storage initialization has time to complete
       codes: [429]
       attempts: 5
       backoff: 300ms
-
-  # 2) everything else (no retries)
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /
-    backendRefs:
-    - name: milo-apiserver
-      port: 6443
-      kind: Service
