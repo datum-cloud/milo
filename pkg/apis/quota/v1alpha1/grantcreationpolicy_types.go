@@ -10,11 +10,11 @@ type GrantCreationPolicySpec struct {
 	// Trigger defines what resource changes should trigger grant creation.
 	//
 	// +kubebuilder:validation:Required
-	Trigger TriggerSpec `json:"trigger"`
+	Trigger GrantTriggerSpec `json:"trigger"`
 	// Target defines where and how grants should be created.
 	//
 	// +kubebuilder:validation:Required
-	Target TargetSpec `json:"target"`
+	Target GrantTargetSpec `json:"target"`
 	// Disabled determines if this policy is inactive.
 	// If true, no **ResourceGrants** will be created for matching resources.
 	//
@@ -23,12 +23,12 @@ type GrantCreationPolicySpec struct {
 	Disabled *bool `json:"disabled,omitempty"`
 }
 
-// TriggerSpec defines the resource and conditions that trigger grant creation.
-type TriggerSpec struct {
+// GrantTriggerSpec defines the resource and conditions that trigger grant creation.
+type GrantTriggerSpec struct {
 	// Resource specifies which resource type triggers this policy.
 	//
 	// +kubebuilder:validation:Required
-	Resource TriggerResource `json:"resource"`
+	Resource GrantTriggerResource `json:"resource"`
 	// Constraints are CEL expressions that must evaluate to true for grant creation.
 	// All constraints must pass for the policy to trigger.
 	// The 'object' variable contains the trigger resource being evaluated.
@@ -38,8 +38,8 @@ type TriggerSpec struct {
 	Constraints []ConditionExpression `json:"constraints,omitempty"`
 }
 
-// TriggerResource identifies the resource type that triggers grant creation.
-type TriggerResource struct {
+// GrantTriggerResource identifies the resource type that triggers grant creation.
+type GrantTriggerResource struct {
 	// APIVersion of the trigger resource in the format "group/version".
 	// For core resources, use "v1".
 	//
@@ -91,14 +91,14 @@ type ConditionExpression struct {
 	Message string `json:"message,omitempty"`
 }
 
-// TargetSpec defines where and how grants are created.
-type TargetSpec struct {
+// GrantTargetSpec defines where and how grants are created.
+type GrantTargetSpec struct {
 	// ParentContext defines cross-control-plane targeting.
 	// If specified, grants will be created in the target parent context
 	// instead of the current control plane.
 	//
 	// +optional
-	ParentContext *ParentContextSpec `json:"parentContext,omitempty"`
+	ParentContext *GrantParentContextSpec `json:"parentContext,omitempty"`
 	// ResourceGrantTemplate defines how to create **ResourceGrants**.
 	// String fields support Go template syntax for dynamic content.
 	//
@@ -106,9 +106,9 @@ type TargetSpec struct {
 	ResourceGrantTemplate ResourceGrantTemplate `json:"resourceGrantTemplate"`
 }
 
-// ParentContextSpec enables cross-cluster grant creation by targeting a parent control plane.
+// GrantParentContextSpec enables cross-cluster grant creation by targeting a parent control plane.
 // Used to create grants in infrastructure clusters when policies run in child clusters.
-type ParentContextSpec struct {
+type GrantParentContextSpec struct {
 	// APIGroup specifies the API group of the parent context resource.
 	// Must follow DNS subdomain format. Maximum 253 characters.
 	//
@@ -219,7 +219,7 @@ const (
 )
 
 // Helper method to get the GVK for the trigger resource.
-func (t *TriggerResource) GetGVK() schema.GroupVersionKind {
+func (t *GrantTriggerResource) GetGVK() schema.GroupVersionKind {
 	gv, _ := schema.ParseGroupVersion(t.APIVersion)
 	return schema.GroupVersionKind{
 		Group:   gv.Group,
