@@ -4,3 +4,7 @@ kind: Kustomization
 resources:
   - email.yaml
   - emailtemplate.yaml
+  - contact.yaml
+  - contactgroup.yaml
+  - contactgroupmembership.yaml
+  - contactgroupmembershipremoval.yaml

@@ -6,6 +6,7 @@ spec:
   parentRefs:
   - name: default-gateway
     namespace: envoy-gateway-system
+
   rules:
   - matches:
     - path:
@@ -15,3 +16,7 @@ spec:
     - name: milo-apiserver
       port: 6443
       kind: Service
+    retry: # Retry on 429s so that project storage initialization has time to complete
+      codes: [429]
+      attempts: 5
+      backoff: 300ms
