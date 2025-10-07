@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: resourcemanager.miloapis.com-project-viewer
+  annotations:
+    kubernetes.io/display-name: Project Viewer
+    kubernetes.io/description: "View access to all project resources"
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - resourcemanager.miloapis.com/projects.get
+    - resourcemanager.miloapis.com/projects.list
+    - resourcemanager.miloapis.com/projects.watch
