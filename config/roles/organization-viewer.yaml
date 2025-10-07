@@ -1,0 +1,15 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: resourcemanager.miloapis.com/organization-viewer
+  annotations:
+    kubernetes.io/display-name: Organization Viewer
+    kubernetes.io/description: "View access to all organization and organization membership resources"
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: organizationmembership-reader
+  includedPermissions:
+    - resourcemanager.miloapis.com/organizations.get
+    - resourcemanager.miloapis.com/organizations.list
+    - resourcemanager.miloapis.com/organizations.watch
