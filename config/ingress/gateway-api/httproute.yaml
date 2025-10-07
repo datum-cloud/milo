@@ -8,7 +8,7 @@ spec:
     namespace: envoy-gateway-system
 
   rules:
-  # 1) GET gets retries
+  # 1) Retry on 429s so that project storage initialization has time to complete
   - matches:
     - path:
         type: PathPrefix
