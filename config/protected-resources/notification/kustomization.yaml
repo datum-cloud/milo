@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - email.yaml
+  - emailbroadcast.yaml
   - emailtemplate.yaml
   - contact.yaml
   - contactgroup.yaml
