@@ -792,6 +792,8 @@ Target defines how and where **ResourceClaims** should be created.
         <td>
           ResourceClaimTemplate defines how to create **ResourceClaims**.
 String fields support CEL expressions for dynamic content.<br/>
+          <br/>
+            <i>Validations</i>:<li>!has(self.spec.resourceRef): resourceRef field is automatically populated and cannot be set in template</li>
         </td>
         <td>true</td>
       </tr></tbody>
