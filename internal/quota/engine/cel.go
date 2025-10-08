@@ -18,8 +18,8 @@ type CELEngine interface {
 	// ValidateConditions validates CEL expressions in trigger conditions.
 	ValidateConditions(conditions []quotav1alpha1.ConditionExpression) error
 
-	// ValidateNameExpression validates a CEL expression that should return a string.
-	ValidateNameExpression(expression string) error
+	// ValidateTemplateExpression validates a CEL template expression.
+	ValidateTemplateExpression(expression string) error
 
 	// EvaluateConditions evaluates all trigger conditions against a resource object.
 	EvaluateConditions(conditions []quotav1alpha1.ConditionExpression, obj *unstructured.Unstructured) (bool, error)
@@ -57,12 +57,12 @@ func NewCELEngine() (CELEngine, error) {
 
 // ValidateConditions validates CEL expressions in trigger conditions.
 func (e *celEngine) ValidateConditions(conditions []quotav1alpha1.ConditionExpression) error {
-	return e.validator.ValidateConditions(conditions)
+	return e.validator.ValidateConstraints(conditions)
 }
 
-// ValidateNameExpression validates a CEL expression that should return a string.
-func (e *celEngine) ValidateNameExpression(expression string) error {
-	return e.validator.ValidateNameExpression(expression)
+// ValidateTemplateExpression validates a CEL template expression.
+func (e *celEngine) ValidateTemplateExpression(expression string) error {
+	return e.validator.ValidateTemplateExpression(expression)
 }
 
 // EvaluateConditions evaluates all trigger conditions against a resource object.
