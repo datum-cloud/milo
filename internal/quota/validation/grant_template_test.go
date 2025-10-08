@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 // MockResourceTypeValidator for testing
@@ -34,11 +35,14 @@ func (m *MockResourceTypeValidator) IsReady() bool {
 }
 
 func TestValidateLabelKey(t *testing.T) {
-	validator := NewGrantTemplateValidator(&MockResourceTypeValidator{
+	validator, err := NewGrantTemplateValidator(&MockResourceTypeValidator{
 		validResourceTypes: map[string]bool{
 			"test.example.com/projects": true,
 		},
 	})
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -134,23 +138,26 @@ func TestValidateLabelKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validator.validateLabelKey(tt.key)
-			if tt.expectError && err == nil {
+			errs := validator.validateLabelKey(tt.key, field.NewPath("labels").Key(tt.key))
+			if tt.expectError && len(errs) == 0 {
 				t.Errorf("Expected error for key '%s', but got none. %s", tt.key, tt.description)
 			}
-			if !tt.expectError && err != nil {
-				t.Errorf("Unexpected error for key '%s': %v. %s", tt.key, err, tt.description)
+			if !tt.expectError && len(errs) > 0 {
+				t.Errorf("Unexpected error for key '%s': %v. %s", tt.key, errs, tt.description)
 			}
 		})
 	}
 }
 
 func TestValidateLabelValue(t *testing.T) {
-	validator := NewGrantTemplateValidator(&MockResourceTypeValidator{
+	validator, err := NewGrantTemplateValidator(&MockResourceTypeValidator{
 		validResourceTypes: map[string]bool{
 			"test.example.com/projects": true,
 		},
 	})
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -228,23 +235,26 @@ func TestValidateLabelValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validator.validateLabelValue(tt.value)
-			if tt.expectError && err == nil {
+			errs := validator.validateLabelValue(tt.value, field.NewPath("labels").Key("test-key"))
+			if tt.expectError && len(errs) == 0 {
 				t.Errorf("Expected error for value '%s', but got none. %s", tt.value, tt.description)
 			}
-			if !tt.expectError && err != nil {
-				t.Errorf("Unexpected error for value '%s': %v. %s", tt.value, err, tt.description)
+			if !tt.expectError && len(errs) > 0 {
+				t.Errorf("Unexpected error for value '%s': %v. %s", tt.value, errs, tt.description)
 			}
 		})
 	}
 }
 
 func TestValidateMetadataTemplateLabels(t *testing.T) {
-	validator := NewGrantTemplateValidator(&MockResourceTypeValidator{
+	validator, err := NewGrantTemplateValidator(&MockResourceTypeValidator{
 		validResourceTypes: map[string]bool{
 			"test.example.com/projects": true,
 		},
 	})
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -299,24 +309,202 @@ func TestValidateMetadataTemplateLabels(t *testing.T) {
 				Name:      "test-grant",
 				Namespace: "test-namespace",
 				Annotations: map[string]string{
-					"quota.miloapis.com/description":  "Auto-generated grant for {{.trigger.metadata.name}}",
+					"quota.miloapis.com/description":  "Auto-generated grant for test-resource",
 					"quota.miloapis.com/created-by":   "grant-creation-policy",
-					"quota.miloapis.com/organization": "{{.trigger.metadata.name}}",
+					"quota.miloapis.com/organization": "test-org",
 				},
 			},
 			expectError: false,
-			description: "Valid annotations with template variables should be valid",
+			description: "Valid annotations with CEL template expressions should be valid",
+		},
+		{
+			name: "invalid CEL expression syntax",
+			metadata: quotav1alpha1.ObjectMetaTemplate{
+				Name:      "test-grant",
+				Namespace: "test-namespace",
+				Annotations: map[string]string{
+					"quota.miloapis.com/description": "Invalid CEL {{invalid..syntax}}",
+				},
+			},
+			expectError: true,
+			description: "Invalid CEL syntax should fail validation",
+		},
+		{
+			name: "invalid template variable",
+			metadata: quotav1alpha1.ObjectMetaTemplate{
+				Name:      "test-grant",
+				Namespace: "test-namespace",
+				Annotations: map[string]string{
+					"quota.miloapis.com/description": "Invalid variable {{invalid + '.field'}}",
+				},
+			},
+			expectError: true,
+			description: "Invalid template variable should fail validation",
+		},
+		{
+			name: "mixed literal and CEL content",
+			metadata: quotav1alpha1.ObjectMetaTemplate{
+				Name:      "test-grant",
+				Namespace: "test-namespace",
+				Annotations: map[string]string{
+					"quota.miloapis.com/description": "Grant for test-resource in production",
+				},
+			},
+			expectError: false,
+			description: "Mixed literal and CEL content should be valid",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validator.ValidateMetadataTemplate(tt.metadata)
-			if tt.expectError && err == nil {
+			errs := validator.ValidateMetadataTemplate(tt.metadata, field.NewPath("metadata"))
+			if tt.expectError && len(errs) == 0 {
 				t.Errorf("Expected error for metadata, but got none. %s", tt.description)
 			}
-			if !tt.expectError && err != nil {
-				t.Errorf("Unexpected error for metadata: %v. %s", err, tt.description)
+			if !tt.expectError && len(errs) > 0 {
+				t.Errorf("Unexpected error for metadata: %v. %s", errs, tt.description)
+			}
+		})
+	}
+}
+
+func TestGrantTemplateValidator_ValidateGrantTemplate(t *testing.T) {
+	validator, err := NewGrantTemplateValidator(&MockResourceTypeValidator{
+		validResourceTypes: map[string]bool{
+			"test.example.com/projects": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		template    quotav1alpha1.ResourceGrantTemplate
+		expectError bool
+		description string
+	}{
+		{
+			name: "valid template with CEL expressions",
+			template: quotav1alpha1.ResourceGrantTemplate{
+				Metadata: quotav1alpha1.ObjectMetaTemplate{
+					Name:      "{{trigger.metadata.name + '-grant'}}",
+					Namespace: "{{trigger.metadata.namespace}}",
+					Annotations: map[string]string{
+						"created-for":  "{{trigger.metadata.name}}",
+						"trigger-kind": "{{trigger.kind}}",
+						"description":  "{{trigger.metadata.name + ' quota grant'}}",
+					},
+				},
+				Spec: quotav1alpha1.ResourceGrantSpec{
+					ConsumerRef: quotav1alpha1.ConsumerRef{
+						APIGroup: "resourcemanager.miloapis.com",
+						Kind:     "Organization",
+						Name:     "test-org",
+					},
+					Allowances: []quotav1alpha1.Allowance{
+						{
+							ResourceType: "test.example.com/projects",
+							Buckets: []quotav1alpha1.Bucket{
+								{Amount: 10},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+			description: "Valid template with CEL expressions should pass",
+		},
+		{
+			name: "template with mixed literal and CEL expressions",
+			template: quotav1alpha1.ResourceGrantTemplate{
+				Metadata: quotav1alpha1.ObjectMetaTemplate{
+					Name:      "{{trigger.metadata.name}}-grant",
+					Namespace: "{{trigger.metadata.namespace}}",
+					Annotations: map[string]string{
+						"description": "Grant for {{trigger.metadata.name}} in production environment",
+						"source":      "policy-{{trigger.kind}}",
+					},
+				},
+				Spec: quotav1alpha1.ResourceGrantSpec{
+					ConsumerRef: quotav1alpha1.ConsumerRef{
+						APIGroup: "resourcemanager.miloapis.com",
+						Kind:     "Organization",
+						Name:     "test-org",
+					},
+					Allowances: []quotav1alpha1.Allowance{
+						{
+							ResourceType: "test.example.com/projects",
+							Buckets: []quotav1alpha1.Bucket{
+								{Amount: 5},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+			description: "Template with mixed literal and CEL expressions should pass",
+		},
+		{
+			name: "template with invalid CEL expression",
+			template: quotav1alpha1.ResourceGrantTemplate{
+				Metadata: quotav1alpha1.ObjectMetaTemplate{
+					Name: "{{invalid..syntax}}",
+				},
+				Spec: quotav1alpha1.ResourceGrantSpec{
+					ConsumerRef: quotav1alpha1.ConsumerRef{
+						APIGroup: "resourcemanager.miloapis.com",
+						Kind:     "Organization",
+						Name:     "test-org",
+					},
+					Allowances: []quotav1alpha1.Allowance{
+						{
+							ResourceType: "test.example.com/projects",
+							Buckets: []quotav1alpha1.Bucket{
+								{Amount: 5},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			description: "Template with invalid CEL syntax should fail",
+		},
+		{
+			name: "template with invalid variable",
+			template: quotav1alpha1.ResourceGrantTemplate{
+				Metadata: quotav1alpha1.ObjectMetaTemplate{
+					Name: "{{user.name + '-grant'}}",
+				},
+				Spec: quotav1alpha1.ResourceGrantSpec{
+					ConsumerRef: quotav1alpha1.ConsumerRef{
+						APIGroup: "resourcemanager.miloapis.com",
+						Kind:     "Organization",
+						Name:     "test-org",
+					},
+					Allowances: []quotav1alpha1.Allowance{
+						{
+							ResourceType: "test.example.com/projects",
+							Buckets: []quotav1alpha1.Bucket{
+								{Amount: 5},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			description: "Template with invalid variable (user not allowed in grant templates) should fail",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := validator.ValidateGrantTemplate(context.Background(), tt.template)
+			if tt.expectError && len(errs) == 0 {
+				t.Errorf("Expected error for template, but got none. %s", tt.description)
+			}
+			if !tt.expectError && len(errs) > 0 {
+				t.Errorf("Unexpected error for template: %v. %s", errs, tt.description)
 			}
 		})
 	}
