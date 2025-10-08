@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"go.miloapis.com/milo/internal/quota/templateutil"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -111,7 +112,10 @@ func (v *GrantTemplateValidator) ValidateConsumerRefTemplate(consumerRef quotav1
 	var allErrs field.ErrorList
 
 	if consumerRef.APIGroup != "" {
-		if containsCELExpressions(consumerRef.APIGroup) {
+		hasExpr, err := templateutil.ContainsExpression(consumerRef.APIGroup)
+		if err != nil {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("apiGroup"), consumerRef.APIGroup, err.Error()))
+		} else if hasExpr {
 			if errs := v.ValidateTemplate(consumerRef.APIGroup, fldPath.Child("apiGroup")); len(errs) > 0 {
 				allErrs = append(allErrs, errs...)
 			}
@@ -122,7 +126,10 @@ func (v *GrantTemplateValidator) ValidateConsumerRefTemplate(consumerRef quotav1
 		}
 	}
 
-	if containsCELExpressions(consumerRef.Kind) {
+	hasExpr, err := templateutil.ContainsExpression(consumerRef.Kind)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("kind"), consumerRef.Kind, err.Error()))
+	} else if hasExpr {
 		if errs := v.ValidateTemplate(consumerRef.Kind, fldPath.Child("kind")); len(errs) > 0 {
 			allErrs = append(allErrs, errs...)
 		}

@@ -4,8 +4,10 @@ import (
 	"reflect"
 	"testing"
 
+	"go.miloapis.com/milo/internal/quota/templateutil"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
+
 
 func TestCELExpressionParsing(t *testing.T) {
 
@@ -108,7 +110,20 @@ func TestCELExpressionParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractCELExpressions(tt.input)
+			segments, err := templateutil.Split(tt.input)
+			var result []string
+			if err != nil {
+				result = []string{}
+			} else {
+				for _, segment := range segments {
+					if segment.Expression {
+						result = append(result, segment.Value)
+					}
+				}
+				if len(result) == 0 {
+					result = []string{}
+				}
+			}
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("extractCELExpressions(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
@@ -190,7 +205,20 @@ func TestCELExpressionParsingEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractCELExpressions(tt.input)
+			segments, err := templateutil.Split(tt.input)
+			var result []string
+			if err != nil {
+				result = []string{}
+			} else {
+				for _, segment := range segments {
+					if segment.Expression {
+						result = append(result, segment.Value)
+					}
+				}
+				if len(result) == 0 {
+					result = []string{}
+				}
+			}
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("extractCELExpressions(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
@@ -223,7 +251,20 @@ func TestClaimTemplateValidatorCELParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractCELExpressions(tt.input)
+			segments, err := templateutil.Split(tt.input)
+			var result []string
+			if err != nil {
+				result = []string{}
+			} else {
+				for _, segment := range segments {
+					if segment.Expression {
+						result = append(result, segment.Value)
+					}
+				}
+				if len(result) == 0 {
+					result = []string{}
+				}
+			}
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("extractCELExpressions(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
