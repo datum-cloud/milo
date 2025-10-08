@@ -24,8 +24,8 @@ type CELEngine interface {
 	// EvaluateConditions evaluates all trigger conditions against a resource object.
 	EvaluateConditions(conditions []quotav1alpha1.ConditionExpression, obj *unstructured.Unstructured) (bool, error)
 
-	// EvaluateNameExpression evaluates a name expression against a resource object.
-	EvaluateNameExpression(expression string, obj *unstructured.Unstructured) (string, error)
+	// EvaluateTemplateExpression evaluates a template expression with context variables (trigger, user, requestInfo).
+	EvaluateTemplateExpression(expression string, variables map[string]interface{}) (string, error)
 }
 
 // celEngine implements CELEngine with program caching for performance.
@@ -88,23 +88,17 @@ func (e *celEngine) EvaluateConditions(conditions []quotav1alpha1.ConditionExpre
 	return true, nil // All conditions passed
 }
 
-// EvaluateNameExpression evaluates a name expression against a resource object.
+// EvaluateTemplateExpression evaluates a template expression with context variables.
 // Returns the string result of the expression.
-func (e *celEngine) EvaluateNameExpression(expression string, obj *unstructured.Unstructured) (string, error) {
-	objData := obj.Object
-
+func (e *celEngine) EvaluateTemplateExpression(expression string, variables map[string]interface{}) (string, error) {
 	// Get or create cached program
 	program, err := e.getOrCompileProgram(expression)
 	if err != nil {
 		return "", err
 	}
 
-	// Evaluate with the resource object
-	vars := map[string]interface{}{
-		"trigger": objData,
-	}
-
-	result, _, err := program.Eval(vars)
+	// Evaluate with provided variables
+	result, _, err := program.Eval(variables)
 	if err != nil {
 		return "", fmt.Errorf("evaluation failed: %w", err)
 	}
