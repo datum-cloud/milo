@@ -14,7 +14,7 @@ import (
 // mockCELEngine implements CELEngine for testing
 type mockCELEngine struct{}
 
-func (m *mockCELEngine) ValidateConditions(conditions []quotav1alpha1.ConditionExpression) error {
+func (m *mockCELEngine) ValidateConstraints(constraints []quotav1alpha1.ConditionExpression) error {
 	return nil
 }
 

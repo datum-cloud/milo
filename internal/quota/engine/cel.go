@@ -15,8 +15,8 @@ import (
 // CELEngine provides CEL expression evaluation capabilities for quota operations.
 // It combines compile-time validation with runtime evaluation and program caching.
 type CELEngine interface {
-	// ValidateConditions validates CEL expressions in trigger conditions.
-	ValidateConditions(conditions []quotav1alpha1.ConditionExpression) error
+	// ValidateConstraints validates CEL expressions in trigger constraints.
+	ValidateConstraints(constraints []quotav1alpha1.ConditionExpression) error
 
 	// ValidateTemplateExpression validates a CEL template expression.
 	ValidateTemplateExpression(expression string) error
@@ -55,9 +55,9 @@ func NewCELEngine() (CELEngine, error) {
 	}, nil
 }
 
-// ValidateConditions validates CEL expressions in trigger conditions.
-func (e *celEngine) ValidateConditions(conditions []quotav1alpha1.ConditionExpression) error {
-	return e.validator.ValidateConstraints(conditions)
+// ValidateConstraints validates CEL expressions in trigger constraints.
+func (e *celEngine) ValidateConstraints(constraints []quotav1alpha1.ConditionExpression) error {
+	return e.validator.ValidateConstraints(constraints)
 }
 
 // ValidateTemplateExpression validates a CEL template expression.
