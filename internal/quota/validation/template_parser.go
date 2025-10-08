@@ -5,91 +5,17 @@ import (
 	"regexp"
 	"strings"
 
+	"go.miloapis.com/milo/internal/quota/templateutil"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
-// extractCELExpressions extracts CEL expressions from {{ }} delimiters in a template string.
-// Uses a simplified parser that handles string literals but not nested braces for better performance.
-func extractCELExpressions(templateStr string) []string {
-	expressions := make([]string, 0)
-	runes := []rune(templateStr)
-
-	for i := 0; i < len(runes)-1; {
-		if runes[i] == '{' && runes[i+1] == '{' {
-			// Skip triple braces - not valid CEL syntax
-			if i < len(runes)-2 && runes[i+2] == '{' {
-				// Skip past all consecutive braces to avoid processing overlapping {{
-				for i < len(runes) && runes[i] == '{' {
-					i++
-				}
-				continue
-			}
-
-			// Find closing delimiter
-			if end := findClosingDelimiter(runes, i+2); end != -1 {
-				expr := strings.TrimSpace(string(runes[i+2 : end]))
-				if expr != "" {
-					expressions = append(expressions, expr)
-				}
-				i = end + 2
-			} else {
-				i++
-			}
-		} else {
-			i++
-		}
-	}
-
-	return expressions
-}
-
-// findClosingDelimiter finds the closing }} delimiter, handling string literals.
-func findClosingDelimiter(runes []rune, start int) int {
-	for i := start; i < len(runes)-1; i++ {
-		// Handle string literals to avoid }} inside strings
-		if runes[i] == '"' || runes[i] == '\'' {
-			i = skipString(runes, i)
-			if i == -1 {
-				return -1 // Malformed string
-			}
-			continue
-		}
-		if runes[i] == '}' && runes[i+1] == '}' {
-			return i
-		}
-	}
-	return -1
-}
-
-// skipString skips over a string literal, handling escape sequences.
-func skipString(runes []rune, start int) int {
-	if start >= len(runes) {
-		return -1
-	}
-
-	delimiter := runes[start]
-	for i := start + 1; i < len(runes); i++ {
-		if runes[i] == delimiter {
-			// Check if it's escaped
-			backslashCount := 0
-			for j := i - 1; j >= start && runes[j] == '\\'; j-- {
-				backslashCount++
-			}
-			// If even number of backslashes, the quote is not escaped
-			if backslashCount%2 == 0 {
-				return i
-			}
-		}
-	}
-	return -1 // Unterminated string
-}
+var variableRegexp = regexp.MustCompile(`\b(trigger|user|requestInfo)\b`)
 
 // extractVariablesFromCEL extracts variable references from a CEL expression.
 // e.g., trigger.metadata.name -> "trigger"
 func extractVariablesFromCEL(expression string) []string {
-	re := regexp.MustCompile(`\b(trigger|user|requestInfo)\b`)
-	matches := re.FindAllString(expression, -1)
+	matches := variableRegexp.FindAllString(expression, -1)
 
 	var variables []string
 	seen := make(map[string]bool)
@@ -103,16 +29,17 @@ func extractVariablesFromCEL(expression string) []string {
 	return variables
 }
 
-// containsCELExpressions checks if a string contains CEL template expressions.
-func containsCELExpressions(str string) bool {
-	return strings.Contains(str, "{{") && strings.Contains(str, "}}")
-}
-
 // validateCELTemplate validates a string that contains CEL expressions with the given allowed variables.
 func validateCELTemplate(templateStr string, allowedVariables []string, fldPath *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 
 	if templateStr == "" {
+		return allErrs
+	}
+
+	segments, err := templateutil.Split(templateStr)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath, templateStr, err.Error()))
 		return allErrs
 	}
 
@@ -122,11 +49,15 @@ func validateCELTemplate(templateStr string, allowedVariables []string, fldPath 
 		return allErrs
 	}
 
-	expressions := extractCELExpressions(templateStr)
-	for i, expr := range expressions {
-		if errs := validateCELExpression(expr, allowedVariables, celValidator, fldPath.Index(i)); len(errs) > 0 {
+	exprIndex := 0
+	for _, segment := range segments {
+		if !segment.Expression {
+			continue
+		}
+		if errs := validateCELExpression(segment.Value, allowedVariables, celValidator, fldPath.Index(exprIndex)); len(errs) > 0 {
 			allErrs = append(allErrs, errs...)
 		}
+		exprIndex++
 	}
 
 	return allErrs
@@ -166,14 +97,19 @@ func validateTemplateOrKubernetesName(str string, allowedVariables []string, all
 		return allErrs
 	}
 
-	// If it contains CEL expressions, validate as template
-	if containsCELExpressions(str) {
+	hasExpression, err := templateutil.ContainsExpression(str)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath, str, err.Error()))
+		return allErrs
+	}
+
+	if hasExpression {
 		allErrs = append(allErrs, validateCELTemplate(str, allowedVariables, fldPath)...)
-	} else {
-		// Otherwise validate as Kubernetes name using official validation
-		if errs := validation.IsDNS1123Subdomain(str); len(errs) > 0 {
-			allErrs = append(allErrs, field.Invalid(fldPath, str, fmt.Sprintf("invalid Kubernetes name: %s", strings.Join(errs, "; "))))
-		}
+		return allErrs
+	}
+
+	if errs := validation.IsDNS1123Subdomain(str); len(errs) > 0 {
+		allErrs = append(allErrs, field.Invalid(fldPath, str, fmt.Sprintf("invalid Kubernetes name: %s", strings.Join(errs, "; "))))
 	}
 
 	return allErrs
@@ -191,7 +127,13 @@ func validateTemplateOrGenerateName(str string, allowedVariables []string, allow
 		return allErrs
 	}
 
-	if containsCELExpressions(str) {
+	hasExpression, err := templateutil.ContainsExpression(str)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath, str, err.Error()))
+		return allErrs
+	}
+
+	if hasExpression {
 		allErrs = append(allErrs, validateCELTemplate(str, allowedVariables, fldPath)...)
 		return allErrs
 	}
@@ -225,9 +167,16 @@ func validateTemplateOrLiteral(str string, allowedVariables []string, allowEmpty
 		return allErrs
 	}
 
-	if containsCELExpressions(str) {
+	hasExpression, err := templateutil.ContainsExpression(str)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath, str, err.Error()))
+		return allErrs
+	}
+
+	if hasExpression {
 		allErrs = append(allErrs, validateCELTemplate(str, allowedVariables, fldPath)...)
 	}
 
 	return allErrs
 }
+
