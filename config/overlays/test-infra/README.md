@@ -30,7 +30,7 @@ Manages TLS certificates for the test environment:
 ## Shared Resources
 
 ### Gateway API Configuration
-This overlay uses the shared Gateway API configuration from `config/ingress/gateway-api/` which provides:
+This overlay uses the shared Gateway API configuration from `config/components/gateway-api/` which provides:
 - HTTPRoute for routing traffic to the API server
 - BackendTLSPolicy for TLS backend connections
 
@@ -58,7 +58,7 @@ kubectl get httproute -n milo-system
 
 To customize for different environments:
 
-1. **Different Gateway**: Update the ingress reference in `kustomization.yaml`
+1. **Different Gateway**: Update the Gateway API component reference in `kustomization.yaml` (now located at `../../components/gateway-api`)
 2. **Custom Certificates**: Modify or replace the certificates component
 3. **Additional Auth**: Extend the auth component with new secrets
 4. **Environment Patches**: Add new patches in the `patches/` directory
