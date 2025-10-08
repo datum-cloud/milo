@@ -10,7 +10,7 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
-// CELValidator provides compile-time validation for CEL expressions.
+// CELValidator provides compile-time validation for CEL expressions used in quota templates.
 // It validates syntax, type safety, and security constraints but does not execute expressions.
 type CELValidator struct {
 	env *cel.Env
@@ -26,19 +26,51 @@ func NewCELValidator() (*CELValidator, error) {
 	return &CELValidator{env: env}, nil
 }
 
-// ValidateConditions validates CEL expressions in trigger conditions.
-func (v *CELValidator) ValidateConditions(conditions []quotav1alpha1.ConditionExpression) error {
-	for i, condition := range conditions {
-		if err := v.validateExpression(condition.Expression, cel.BoolType); err != nil {
-			return fmt.Errorf("condition %d: %w", i, err)
+// ValidateConstraints validates CEL expressions in trigger constraints.
+// These are pure CEL expressions (without {{ }} delimiters) that must return boolean values.
+func (v *CELValidator) ValidateConstraints(constraints []quotav1alpha1.ConditionExpression) error {
+	for i, constraint := range constraints {
+		if err := v.validateExpression(constraint.Expression, cel.BoolType); err != nil {
+			return fmt.Errorf("constraint %d: %w", i, err)
 		}
 	}
 	return nil
 }
 
-// ValidateNameExpression validates a CEL expression that should return a string.
-func (v *CELValidator) ValidateNameExpression(expression string) error {
-	return v.validateExpression(expression, cel.StringType)
+// ValidateTemplateExpression validates a CEL expression extracted from {{ }} delimiters in template fields.
+// The expression must return a string value or a dynamic value that will be converted to string during rendering.
+func (v *CELValidator) ValidateTemplateExpression(expression string) error {
+	return v.validateTemplateExpression(expression)
+}
+
+// validateTemplateExpression validates template expressions allowing both string and dynamic types.
+// Template expressions are ultimately converted to strings during rendering, so we accept both.
+func (v *CELValidator) validateTemplateExpression(expression string) error {
+	if strings.TrimSpace(expression) == "" {
+		return fmt.Errorf("expression cannot be empty")
+	}
+
+	ast, issues := v.env.Parse(expression)
+	if issues != nil && issues.Err() != nil {
+		return fmt.Errorf("parse error: %w", issues.Err())
+	}
+
+	checked, issues := v.env.Check(ast)
+	if issues != nil && issues.Err() != nil {
+		return fmt.Errorf("type check error: %w", issues.Err())
+	}
+
+	// Accept both string and dynamic types since templates convert to strings at runtime
+	outputType := checked.OutputType()
+	if !outputType.IsEquivalentType(cel.StringType) && !outputType.IsEquivalentType(cel.DynType) {
+		return fmt.Errorf("expression must return string or dynamic type, got %s", outputType)
+	}
+
+	if err := v.validateSecurity(expression); err != nil {
+		return fmt.Errorf("security validation failed: %w", err)
+	}
+
+	return nil
 }
 
 // validateExpression validates that a CEL expression is syntactically correct and returns the expected type.
@@ -47,24 +79,19 @@ func (v *CELValidator) validateExpression(expression string, expectedType *cel.T
 		return fmt.Errorf("expression cannot be empty")
 	}
 
-	// Parse the expression
 	ast, issues := v.env.Parse(expression)
 	if issues != nil && issues.Err() != nil {
 		return fmt.Errorf("parse error: %w", issues.Err())
 	}
 
-	// Type-check the expression
 	checked, issues := v.env.Check(ast)
 	if issues != nil && issues.Err() != nil {
 		return fmt.Errorf("type check error: %w", issues.Err())
 	}
 
-	// Verify the return type matches expectations
 	if !checked.OutputType().IsEquivalentType(expectedType) {
 		return fmt.Errorf("expression must return %s, got %s", expectedType, checked.OutputType())
 	}
-
-	// Additional security checks
 	if err := v.validateSecurity(expression); err != nil {
 		return fmt.Errorf("security validation failed: %w", err)
 	}
@@ -72,7 +99,6 @@ func (v *CELValidator) validateExpression(expression string, expectedType *cel.T
 	return nil
 }
 
-// validateSecurity performs basic security validation on CEL expressions.
 func (v *CELValidator) validateSecurity(expression string) error {
 	// Prevent potentially dangerous operations
 	forbidden := []string{
@@ -92,11 +118,9 @@ func (v *CELValidator) validateSecurity(expression string) error {
 		}
 	}
 
-	// Limit expression length to prevent DoS
 	if len(expression) > 1024 {
 		return fmt.Errorf("expression exceeds maximum length of 1024 characters")
 	}
 
 	return nil
 }
-

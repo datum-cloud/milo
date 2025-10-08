@@ -15,7 +15,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/admission"
-	_ "k8s.io/apiserver/pkg/admission"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -50,6 +49,16 @@ var (
 	// Configure the namespace that is used for system components and resources
 	// automatically bootstrapped by the control plane.
 	SystemNamespace string
+	// Sessions feature/config flags
+	featureSessions bool
+	// Standalone provider connection (direct URL + mTLS)
+	sessionsProviderURL        string
+	sessionsProviderCAFile     string
+	sessionsProviderClientCert string
+	sessionsProviderClientKey  string
+	providerTimeoutSeconds     int
+	providerRetries            int
+	forwardExtras              []string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters
@@ -140,6 +149,14 @@ func NewCommand() *cobra.Command {
 		"Path to socket where a external JWT signer is listening. This flag is mutually exclusive with --service-account-signing-key-file and --service-account-key-file. Requires enabling feature gate (ExternalServiceAccountTokenSigner)")
 
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
+	fs.BoolVar(&featureSessions, "feature-sessions", false, "Enable identity sessions virtual API")
+	fs.StringVar(&sessionsProviderURL, "sessions-provider-url", "", "Direct provider base URL (e.g., https://zitadel-apiserver:8443)")
+	fs.StringVar(&sessionsProviderCAFile, "sessions-provider-ca-file", "", "Path to CA file to validate provider TLS")
+	fs.StringVar(&sessionsProviderClientCert, "sessions-provider-client-cert", "", "Client certificate for mTLS to provider")
+	fs.StringVar(&sessionsProviderClientKey, "sessions-provider-client-key", "", "Client private key for mTLS to provider")
+	fs.IntVar(&providerTimeoutSeconds, "provider-timeout", 3, "Provider request timeout in seconds")
+	fs.IntVar(&providerRetries, "provider-retries", 2, "Provider request retries")
+	fs.StringSliceVar(&forwardExtras, "forward-extras", []string{"iam.miloapis.com/parent-api-group", "iam.miloapis.com/parent-type", "iam.miloapis.com/parent-name"}, "User extras keys to forward during impersonation")
 
 	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cliflag.SetUsageAndHelpFunc(cmd, namedFlagSets, cols)
@@ -181,6 +198,16 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 	if err != nil {
 		return err
 	}
+
+	// inject flag-derived extra config
+	config.ExtraConfig.FeatureSessions = featureSessions
+	config.ExtraConfig.SessionsProvider.URL = sessionsProviderURL
+	config.ExtraConfig.SessionsProvider.CAFile = sessionsProviderCAFile
+	config.ExtraConfig.SessionsProvider.ClientCertFile = sessionsProviderClientCert
+	config.ExtraConfig.SessionsProvider.ClientKeyFile = sessionsProviderClientKey
+	config.ExtraConfig.SessionsProvider.TimeoutSeconds = providerTimeoutSeconds
+	config.ExtraConfig.SessionsProvider.Retries = providerRetries
+	config.ExtraConfig.SessionsProvider.ForwardExtras = forwardExtras
 
 	completed, err := config.Complete()
 	if err != nil {

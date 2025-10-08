@@ -844,14 +844,14 @@ func TestUserInvitationController_createInvitationEmail(t *testing.T) {
 	for _, v := range email.Spec.Variables {
 		vars[v.Name] = v.Value
 	}
-	if vars["UserName"] != "Invite E" {
-		t.Errorf("UserName variable mismatch, got %s", vars["UserName"])
+	if vars["InviterDisplayName"] != "Invite E" {
+		t.Errorf("InviterDisplayName variable mismatch, got %s", vars["InviterDisplayName"])
 	}
-	if vars["CompanyName"] != "Test Org" {
-		t.Errorf("CompanyNam variable mismatch, got %s", vars["CompanyNam"])
+	if vars["OrganizationDisplayName"] != "Test Org" {
+		t.Errorf("OrganizationDisplayName variable mismatch, got %s", vars["OrganizationDisplayName"])
 	}
-	if vars["InviteLink"] != "https://cloud.staging.env.datum.net/invitation/inv/accept" {
-		t.Errorf("InviteLink variable mismatch, got %s", vars["InviteLink"])
+	if vars["UserInvitationName"] != "inv" {
+		t.Errorf("UserInvitationName variable mismatch, got %s", vars["UserInvitationName"])
 	}
 
 	// Idempotency: second call should not error and should not create duplicate Email (still one)
