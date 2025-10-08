@@ -598,15 +598,15 @@ func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui
 	variables := []notificationv1alpha1.EmailVariable{
 
 		{
-			Name:  "CompanyName",
+			Name:  "OrganizationDisplayName",
 			Value: organizationDisplayName,
 		},
 		{
-			Name:  "InviteLink",
-			Value: "https://cloud.staging.env.datum.net/invitation/" + ui.GetName() + "/accept",
+			Name:  "UserInvitationName",
+			Value: ui.GetName(),
 		},
 		{
-			Name:  "UserName",
+			Name:  "InviterDisplayName",
 			Value: username,
 		},
 	}
