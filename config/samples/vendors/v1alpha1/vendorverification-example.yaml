@@ -1,0 +1,179 @@
+# Tax verification for ACME Corporation
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorVerification
+metadata:
+  name: acme-corp-tax-verification
+  annotations:
+    kubernetes.io/display-name: "ACME Corp Tax Verification"
+spec:
+  vendorRef:
+    name: acme-corp
+    namespace: default
+  verificationType: tax
+  status: approved
+  description: "Tax ID verification for EIN 12-3456789"
+  documents:
+    - type: "W-9"
+      reference: "acme-corp-w9-document"
+      version: "2024-01-15"
+      valid: true
+    - type: "EIN-Confirmation"
+      reference: "acme-corp-ein-confirmation"
+      version: "2024-01-15"
+      valid: true
+  verifierRef:
+    type: admin
+    name: "admin@company.com"
+    metadata:
+      department: "Finance"
+      role: "Tax Specialist"
+  notes: "Tax ID verified through IRS database and W-9 form validation"
+  priority: 8
+  required: true
+  expirationDate: "2025-01-15T00:00:00Z"
+status:
+  completedAt: "2024-01-15T14:30:00Z"
+  lastUpdatedAt: "2024-01-15T14:30:00Z"
+---
+# Business verification for ACME Corporation
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorVerification
+metadata:
+  name: acme-corp-business-verification
+  annotations:
+    kubernetes.io/display-name: "ACME Corp Business Verification"
+spec:
+  vendorRef:
+    name: acme-corp
+    namespace: default
+  verificationType: business
+  status: approved
+  description: "Business registration and incorporation verification"
+  documents:
+    - type: "Articles-of-Incorporation"
+      reference: "acme-corp-articles"
+      version: "2023-06-01"
+      valid: true
+    - type: "Business-License"
+      reference: "acme-corp-license"
+      version: "2024-01-01"
+      expirationDate: "2024-12-31T00:00:00Z"
+      valid: true
+  verifierRef:
+    type: external-service
+    name: "business-verification-service"
+    metadata:
+      service: "Dun & Bradstreet"
+      api-version: "v2.1"
+  notes: "Business verified through D&B database and state records"
+  priority: 7
+  required: true
+status:
+  completedAt: "2024-01-16T09:15:00Z"
+  lastUpdatedAt: "2024-01-16T09:15:00Z"
+---
+# Identity verification for John Doe Consulting
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorVerification
+metadata:
+  name: john-doe-identity-verification
+  annotations:
+    kubernetes.io/display-name: "John Doe Identity Verification"
+spec:
+  vendorRef:
+    name: john-doe-consulting
+    namespace: default
+  verificationType: identity
+  status: in-progress
+  description: "Identity verification for individual contractor"
+  documents:
+    - type: "Government-ID"
+      reference: "john-doe-drivers-license"
+      version: "2024-01-10"
+      valid: true
+    - type: "SSN-Verification"
+      reference: "john-doe-ssn-verification"
+      version: "2024-01-10"
+      valid: true
+  verifierRef:
+    type: user
+    name: "verifier@company.com"
+    metadata:
+      department: "HR"
+      role: "Background Check Specialist"
+  notes: "Pending additional documentation for address verification"
+  priority: 6
+  required: true
+status:
+  lastUpdatedAt: "2024-01-17T11:20:00Z"
+  lastError: "Address verification document not provided"
+---
+# Compliance verification for international vendor
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorVerification
+metadata:
+  name: international-corp-compliance-verification
+  annotations:
+    kubernetes.io/display-name: "International Corp Compliance Verification"
+spec:
+  vendorRef:
+    name: international-corp
+    namespace: default
+  verificationType: compliance
+  status: pending
+  description: "International compliance and regulatory verification"
+  documents:
+    - type: "VAT-Certificate"
+      reference: "international-corp-vat-cert"
+      version: "2024-01-01"
+      valid: true
+    - type: "Export-License"
+      reference: "international-corp-export-license"
+      version: "2024-01-01"
+      expirationDate: "2024-12-31T00:00:00Z"
+      valid: true
+  verifierRef:
+    type: external-service
+    name: "compliance-verification-service"
+    metadata:
+      service: "Global Compliance Check"
+      region: "EU"
+  notes: "Awaiting additional regulatory documentation"
+  priority: 9
+  required: true
+  externalReference: "COMP-2024-001234"
+status:
+  lastUpdatedAt: "2024-01-18T08:45:00Z"
+---
+# Rejected verification example
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorVerification
+metadata:
+  name: rejected-vendor-verification
+  annotations:
+    kubernetes.io/display-name: "Rejected Vendor Verification"
+spec:
+  vendorRef:
+    name: rejected-vendor
+    namespace: default
+  verificationType: tax
+  status: rejected
+  description: "Tax verification failed due to invalid documentation"
+  documents:
+    - type: "W-9"
+      reference: "rejected-vendor-w9"
+      version: "2024-01-10"
+      valid: false
+  verifierRef:
+    type: admin
+    name: "admin@company.com"
+    metadata:
+      department: "Finance"
+      role: "Tax Specialist"
+  notes: "W-9 form contains invalid information and cannot be verified"
+  priority: 5
+  required: true
+status:
+  completedAt: "2024-01-19T16:30:00Z"
+  lastUpdatedAt: "2024-01-19T16:30:00Z"
+  lastError: "Invalid tax ID format and missing required fields"

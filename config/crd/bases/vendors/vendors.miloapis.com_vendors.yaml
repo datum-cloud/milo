@@ -1,0 +1,330 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: vendors.vendors.miloapis.com
+spec:
+  group: vendors.miloapis.com
+  names:
+    categories:
+    - datum
+    kind: Vendor
+    listKind: VendorList
+    plural: vendors
+    singular: vendor
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.legalName
+      name: Legal Name
+      type: string
+    - jsonPath: .spec.profileType
+      name: Profile Type
+      type: string
+    - jsonPath: .status.status
+      name: Status
+      type: string
+    - jsonPath: .status.verificationStatus
+      name: Verification
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Vendor is the Schema for the Vendors API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: VendorSpec defines the desired state of Vendor
+            properties:
+              billingAddress:
+                description: Billing address
+                properties:
+                  city:
+                    description: City
+                    type: string
+                  country:
+                    description: Country
+                    type: string
+                  postalCode:
+                    description: Postal or ZIP code
+                    type: string
+                  state:
+                    description: State or province
+                    type: string
+                  street:
+                    description: Street address line 1
+                    type: string
+                  street2:
+                    description: Street address line 2 (optional)
+                    type: string
+                required:
+                - city
+                - country
+                - postalCode
+                - state
+                - street
+                type: object
+              corporationDBA:
+                description: Doing business as name
+                type: string
+              description:
+                description: Description of the vendor
+                type: string
+              legalName:
+                description: Legal name of the vendor (required)
+                type: string
+              mailingAddress:
+                description: Mailing address (if different from billing)
+                properties:
+                  city:
+                    description: City
+                    type: string
+                  country:
+                    description: Country
+                    type: string
+                  postalCode:
+                    description: Postal or ZIP code
+                    type: string
+                  state:
+                    description: State or province
+                    type: string
+                  street:
+                    description: Street address line 1
+                    type: string
+                  street2:
+                    description: Street address line 2 (optional)
+                    type: string
+                required:
+                - city
+                - country
+                - postalCode
+                - state
+                - street
+                type: object
+              nickname:
+                description: Nickname or display name
+                type: string
+              profileType:
+                description: Profile type - person or business
+                enum:
+                - person
+                - business
+                type: string
+              registrationNumber:
+                description: Registration number (optional)
+                type: string
+              stateOfIncorporation:
+                description: State of incorporation
+                type: string
+              taxInfo:
+                description: Tax information
+                properties:
+                  country:
+                    description: Country for tax purposes
+                    type: string
+                  taxDocument:
+                    description: Tax document reference (e.g., W-9, W-8BEN)
+                    type: string
+                  taxIdRef:
+                    description: Reference to the tax identification number stored
+                      in a Secret
+                    properties:
+                      namespace:
+                        description: Namespace of the Secret (if empty, uses the same
+                          namespace as the Vendor)
+                        type: string
+                      secretKey:
+                        description: Key within the Secret that contains the tax ID
+                        type: string
+                      secretName:
+                        description: Name of the Secret containing the tax ID
+                        type: string
+                    required:
+                    - secretKey
+                    - secretName
+                    type: object
+                  taxIdType:
+                    description: Type of tax identification
+                    enum:
+                    - SSN
+                    - EIN
+                    - ITIN
+                    - UNSPECIFIED
+                    type: string
+                required:
+                - country
+                - taxDocument
+                - taxIdRef
+                - taxIdType
+                type: object
+              vendorType:
+                description: Business-specific fields (only applicable when profileType
+                  is business)
+                pattern: ^[a-z0-9-]+$
+                type: string
+              website:
+                description: Website URL
+                type: string
+            required:
+            - billingAddress
+            - legalName
+            - profileType
+            - taxInfo
+            type: object
+          status:
+            description: VendorStatus defines the observed state of Vendor
+            properties:
+              activatedAt:
+                description: Timestamp when vendor was activated
+                format: date-time
+                type: string
+              completedVerifications:
+                description: Number of completed verifications
+                format: int32
+                type: integer
+              conditions:
+                default:
+                - lastTransitionTime: "1970-01-01T00:00:00Z"
+                  message: Waiting for control plane to reconcile
+                  reason: Unknown
+                  status: Unknown
+                  type: Ready
+                description: |-
+                  Conditions represents the observations of a vendor's current state.
+                  Known condition types are: "Ready", "Validated", "Verified", "Active"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              expiredVerifications:
+                description: Number of expired verifications
+                format: int32
+                type: integer
+              lastVerifiedAt:
+                description: Timestamp when vendor was last verified
+                format: date-time
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the most recent generation observed
+                  for this Vendor by the controller.
+                format: int64
+                type: integer
+              pendingVerifications:
+                description: Number of pending verifications
+                format: int32
+                type: integer
+              rejectedAt:
+                description: Timestamp when vendor was rejected
+                format: date-time
+                type: string
+              rejectedVerifications:
+                description: Number of rejected verifications
+                format: int32
+                type: integer
+              rejectionReason:
+                description: Reason for rejection (if applicable)
+                type: string
+              requiredVerifications:
+                description: Number of required verifications
+                format: int32
+                type: integer
+              status:
+                description: Current status of the vendor
+                enum:
+                - pending
+                - active
+                - rejected
+                - archived
+                type: string
+              verificationStatus:
+                description: Overall verification status
+                enum:
+                - pending
+                - in-progress
+                - approved
+                - rejected
+                - expired
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

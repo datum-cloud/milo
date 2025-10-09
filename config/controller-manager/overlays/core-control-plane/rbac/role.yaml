@@ -8,6 +8,7 @@ rules:
   - ""
   resources:
   - namespaces
+  - secrets
   verbs:
   - create
   - delete
@@ -178,3 +179,31 @@ rules:
   - projects/finalizers
   verbs:
   - update
+- apiGroups:
+  - vendors.miloapis.com
+  resources:
+  - vendors
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - vendors.miloapis.com
+  resources:
+  - vendors/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - vendors.miloapis.com
+  resources:
+  - vendortypedefinitions
+  verbs:
+  - get
+  - list
+  - watch
