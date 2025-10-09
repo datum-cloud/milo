@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"strings"
 	"time"
 
@@ -250,8 +249,8 @@ func (p *ResourceQuotaEnforcementPlugin) handleResourceQuotaEnforcement(ctx cont
 		return nil
 	}
 
-	// Check if policy is enabled
-	if policy.Spec.Enabled == nil || !*policy.Spec.Enabled {
+	// Check if policy is disabled
+	if policy.Spec.Disabled != nil && *policy.Spec.Disabled {
 		// Record policy disabled decision with full context
 		admissionResultTotal.WithLabelValues("policy_disabled", policy.Name, policy.Namespace,
 			gvk.Group, gvk.Kind).Inc()
@@ -291,7 +290,7 @@ func (p *ResourceQuotaEnforcementPlugin) lookupPolicyForResource(ctx context.Con
 	if policy != nil {
 		policySpan.SetAttributes(
 			attribute.String("policy.name", policy.Name),
-			attribute.Bool("policy.enabled", policy.Spec.Enabled != nil && *policy.Spec.Enabled),
+			attribute.Bool("policy.disabled", policy.Spec.Disabled != nil && *policy.Spec.Disabled),
 		)
 	}
 
@@ -395,71 +394,50 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 		))
 	defer span.End()
 
-	// Render the ResourceClaim spec from the policy template
+	// Render the complete ResourceClaim from the policy template
 	// Convert admission EvaluationContext to engine EvaluationContext
 	engineContext := p.convertToEngineContext(evalContext)
-	spec, err := p.templateEngine.RenderResourceClaim(ctx, policy.Spec.Target.ResourceClaimTemplate, engineContext)
+	claim, err := p.templateEngine.RenderClaim(policy, engineContext)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to render ResourceClaim spec: %w", err)
+		return "", "", fmt.Errorf("failed to render ResourceClaim: %w", err)
 	}
-
-	// Render metadata (name/generateName/namespace and annotations)
-	name, generateName, namespace, metaLabels, metaAnnotations, err := p.templateEngine.RenderClaimMetadata(policy.Spec.Target.ResourceClaimTemplate.Metadata, engineContext)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to render ResourceClaim metadata: %w", err)
-	}
-
-	// Default GenerateName if neither name nor generateName provided
-	if strings.TrimSpace(name) == "" && strings.TrimSpace(generateName) == "" {
-		generateName = p.generateResourceClaimNamePrefix(evalContext)
-	}
-
-	gvr := schema.GroupVersionResource{
-		Group:    "quota.miloapis.com",
-		Version:  "v1alpha1",
-		Resource: "resourceclaims",
-	}
-
-	// Prepare labels (literal) and annotations (rendered)
-	labels := map[string]string{
-		"quota.miloapis.com/auto-created": "true",
-		"quota.miloapis.com/policy":       policy.Name,
-		"quota.miloapis.com/gvk":          fmt.Sprintf("%s.%s.%s", evalContext.GVK.Group, evalContext.GVK.Version, evalContext.GVK.Kind),
-	}
-
-	// Add metadata labels (literal)
-	for key, value := range metaLabels {
-		labels[key] = value
-	}
-
-	annotations := map[string]string{
-		"quota.miloapis.com/created-by":    "claim-creation-plugin",
-		"quota.miloapis.com/created-at":    time.Now().Format(time.RFC3339),
-		"quota.miloapis.com/resource-name": evalContext.Object.GetName(),
-		"quota.miloapis.com/policy":        policy.Name,
-	}
-
-	// Add rendered metadata annotations
-	maps.Copy(annotations, metaAnnotations)
 
 	// Populate the ResourceRef with the unversioned reference to the resource being created
-	spec.ResourceRef = quotav1alpha1.UnversionedObjectReference{
+	claim.Spec.ResourceRef = quotav1alpha1.UnversionedObjectReference{
 		APIGroup:  evalContext.GVK.Group,
 		Kind:      evalContext.GVK.Kind,
 		Name:      evalContext.Object.GetName(),
 		Namespace: evalContext.Object.GetNamespace(), // Will be empty for cluster-scoped resources
 	}
 
-	// Create the ResourceClaim and set name/generateName based on rendered metadata
-	claim := &quotav1alpha1.ResourceClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:         strings.TrimSpace(name),
-			GenerateName: strings.TrimSpace(generateName),
-			Namespace:    namespace,
-			Labels:       labels,
-			Annotations:  annotations,
-		},
-		Spec: *spec,
+	// Default GenerateName if neither name nor generateName provided
+	if strings.TrimSpace(claim.Name) == "" && strings.TrimSpace(claim.GenerateName) == "" {
+		claim.GenerateName = p.generateResourceClaimNamePrefix(evalContext)
+	}
+
+	// Add admission-specific labels and annotations
+	if claim.Labels == nil {
+		claim.Labels = make(map[string]string)
+	}
+	if claim.Annotations == nil {
+		claim.Annotations = make(map[string]string)
+	}
+
+	// Add standard admission labels
+	claim.Labels["quota.miloapis.com/auto-created"] = "true"
+	claim.Labels["quota.miloapis.com/policy"] = policy.Name
+	claim.Labels["quota.miloapis.com/gvk"] = fmt.Sprintf("%s.%s.%s", evalContext.GVK.Group, evalContext.GVK.Version, evalContext.GVK.Kind)
+
+	// Add standard admission annotations
+	claim.Annotations["quota.miloapis.com/created-by"] = "claim-creation-plugin"
+	claim.Annotations["quota.miloapis.com/created-at"] = time.Now().Format(time.RFC3339)
+	claim.Annotations["quota.miloapis.com/resource-name"] = evalContext.Object.GetName()
+	claim.Annotations["quota.miloapis.com/policy"] = policy.Name
+
+	gvr := schema.GroupVersionResource{
+		Group:    "quota.miloapis.com",
+		Version:  "v1alpha1",
+		Resource: "resourceclaims",
 	}
 
 	// Convert ResourceClaim to unstructured
@@ -481,7 +459,7 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 	})
 
 	// Create the ResourceClaim using dynamic client
-	createdClaim, err := p.dynamicClient.Resource(gvr).Namespace(namespace).Create(ctx, unstructuredObj, metav1.CreateOptions{})
+	createdClaim, err := p.dynamicClient.Resource(gvr).Namespace(claim.Namespace).Create(ctx, unstructuredObj, metav1.CreateOptions{})
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create ResourceClaim: %w", err)
 	}
@@ -491,12 +469,12 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 
 	p.logger.V(2).Info("ResourceClaim created successfully",
 		"claimName", claimName,
-		"namespace", namespace,
+		"namespace", claim.Namespace,
 		"policy", policy.Name,
 		"resourceName", evalContext.Object.GetName(),
 	)
 
-	return claimName, namespace, nil
+	return claimName, claim.Namespace, nil
 }
 
 // waitForClaimGranted watches a ResourceClaim and waits for it to be granted or denied.

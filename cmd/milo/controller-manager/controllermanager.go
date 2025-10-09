@@ -133,8 +133,11 @@ func init() {
 	utilruntime.Must(apiregistrationv1.AddToScheme(Scheme))
 }
 
+const (
 	// ControllerStartJitter is the Jitter used when starting controller managers
+	ControllerStartJitter = 1.0
 	// ConfigzName is the name used for registering datum-controller-manager /configz.
+	ConfigzName = "datumcontrollermanager.config.k8s.io"
 )
 
 // ControllerLoopMode is the datum-controller-manager's mode of running controller loops that are cloud provider dependent
