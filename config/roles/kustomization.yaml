@@ -22,6 +22,27 @@ resources:
   - notification-email-reader.yaml
   - notification-email-creator.yaml
   - notification-email-admin.yaml
+  - notification-email-broadcast-reader.yaml
+  - notification-email-broadcast-creator.yaml
+  - notification-email-broadcast-admin.yaml
+  - notification-contact-reader.yaml
+  - notification-contact-editor.yaml
+  - notification-contact-admin.yaml
+  - notification-contact-group-reader.yaml
+  - notification-contact-group-editor.yaml
+  - notification-contact-group-admin.yaml
+  - notification-contact-group-membership-reader.yaml
+  - notification-contact-group-membership-editor.yaml
+  - notification-contact-group-membership-admin.yaml
   - iam-user-invitations-reader.yaml
   - iam-user-invitations-editor.yaml
   - iam-user-invitations-admin.yaml
+  - notification-contact-group-membership-removal-reader.yaml
+  - notification-contact-group-membership-removal-editor.yaml
+  - notification-contact-group-membership-removal-admin.yaml
+  - organizationmembership-reader.yaml
+  - organizationmembership-editor.yaml
+  - organizationmembership-admin.yaml
+  - iam-role-reader.yaml
+  - iam-role-editor.yaml
+  - iam-role-admin.yaml

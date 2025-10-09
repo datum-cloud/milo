@@ -187,8 +187,8 @@ func (e *policyEngine) GetPolicyForGVK(gvk schema.GroupVersionKind) (*quotav1alp
 
 	if value, ok := e.gvkIndex.Load(gvk.String()); ok {
 		if policy, ok := value.(*quotav1alpha1.ClaimCreationPolicy); ok {
-			// Check if policy is enabled
-			if policy.Spec.Enabled != nil && !*policy.Spec.Enabled {
+			// Skip disabled policies
+			if policy.Spec.Disabled != nil && *policy.Spec.Disabled {
 				return nil, nil // Policy exists but is disabled
 			}
 			e.logger.V(1).Info("Found policy for GVK", "gvk", gvk.String(), "policy", policy.Name)
@@ -306,7 +306,7 @@ func (e *policyEngine) updatePolicy(policy *quotav1alpha1.ClaimCreationPolicy) e
 	gvkKey := gvk.String()
 
 	// Check if policy is disabled
-	if policy.Spec.Enabled != nil && !*policy.Spec.Enabled {
+	if policy.Spec.Disabled != nil && *policy.Spec.Disabled {
 		// Remove disabled policy from cache
 		e.removePolicy(policy.Name)
 		e.logger.V(1).Info("Policy disabled, removed from cache", "policy", policy.Name, "gvk", gvk)
@@ -334,7 +334,7 @@ func (e *policyEngine) updatePolicy(policy *quotav1alpha1.ClaimCreationPolicy) e
 		"policy", policy.Name,
 		"gvk", gvk,
 		"ready", true,
-		"enabled", policy.Spec.Enabled == nil || *policy.Spec.Enabled)
+		"disabled", policy.Spec.Disabled != nil && *policy.Spec.Disabled)
 
 	return nil
 }

@@ -185,7 +185,7 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 
 		// Check allocations for granted requests that match this bucket
 		for _, allocation := range claim.Status.Allocations {
-			if allocation.Status != quotav1alpha1.RequestAllocationGranted {
+			if allocation.Status != quotav1alpha1.ResourceClaimAllocationStatusGranted {
 				continue
 			}
 
@@ -298,7 +298,7 @@ func (r *AllowanceBucketController) processPendingGrants(ctx context.Context, bu
 			}
 
 			// Check if this request is already processed by looking at allocations
-			if r.isRequestAllocationProcessed(&claim, request.ResourceType) {
+			if r.isResourceClaimAllocationProcessed(&claim, request.ResourceType) {
 				logger.V(2).Info("Request allocation already processed, skipping",
 					"claimName", claim.Name,
 					"resourceType", request.ResourceType)
@@ -314,7 +314,7 @@ func (r *AllowanceBucketController) processPendingGrants(ctx context.Context, bu
 					"available", limit-allocated)
 
 				// Mark this specific request as denied
-				if err := r.updateRequestAllocation(ctx, &claim, request.ResourceType, quotav1alpha1.RequestAllocationDenied,
+				if err := r.updateResourceClaimAllocation(ctx, &claim, request.ResourceType, quotav1alpha1.ResourceClaimAllocationStatusDenied,
 					quotav1alpha1.ResourceClaimDeniedReason,
 					fmt.Sprintf("Resource quota exceeded: requested %d, available %d", request.Amount, limit-allocated),
 					0, "", fieldManagerName); err != nil {
@@ -342,7 +342,7 @@ func (r *AllowanceBucketController) processPendingGrants(ctx context.Context, bu
 			allocated = bucket.Status.Allocated
 
 			// Mark this specific request as granted
-			if err := r.updateRequestAllocation(ctx, &claim, request.ResourceType, quotav1alpha1.RequestAllocationGranted,
+			if err := r.updateResourceClaimAllocation(ctx, &claim, request.ResourceType, quotav1alpha1.ResourceClaimAllocationStatusGranted,
 				quotav1alpha1.ResourceClaimGrantedReason,
 				"Capacity reserved",
 				request.Amount, bucket.Name, fieldManagerName); err != nil {
@@ -357,22 +357,22 @@ func (r *AllowanceBucketController) processPendingGrants(ctx context.Context, bu
 	return nil
 }
 
-// isRequestAllocationProcessed checks if a specific request allocation has already been processed.
-func (r *AllowanceBucketController) isRequestAllocationProcessed(claim *quotav1alpha1.ResourceClaim, resourceType string) bool {
+// isResourceClaimAllocationProcessed checks if a specific request allocation has already been processed.
+func (r *AllowanceBucketController) isResourceClaimAllocationProcessed(claim *quotav1alpha1.ResourceClaim, resourceType string) bool {
 	for _, allocation := range claim.Status.Allocations {
 		if allocation.ResourceType == resourceType &&
-			(allocation.Status == quotav1alpha1.RequestAllocationGranted || allocation.Status == quotav1alpha1.RequestAllocationDenied) {
+			(allocation.Status == quotav1alpha1.ResourceClaimAllocationStatusGranted || allocation.Status == quotav1alpha1.ResourceClaimAllocationStatusDenied) {
 			return true
 		}
 	}
 	return false
 }
 
-// updateRequestAllocation updates or creates a request allocation status using Server Side Apply.
-func (r *AllowanceBucketController) updateRequestAllocation(ctx context.Context, claim *quotav1alpha1.ResourceClaim,
+// updateResourceClaimAllocation updates or creates a request allocation status using Server Side Apply.
+func (r *AllowanceBucketController) updateResourceClaimAllocation(ctx context.Context, claim *quotav1alpha1.ResourceClaim,
 	resourceType string, status, reason, message string, allocatedAmount int64, bucketName, fieldManagerName string) error {
 
-	allocation := quotav1alpha1.RequestAllocation{
+	allocation := quotav1alpha1.ResourceClaimAllocationStatus{
 		ResourceType:       resourceType,
 		Status:             status,
 		Reason:             reason,
@@ -382,7 +382,7 @@ func (r *AllowanceBucketController) updateRequestAllocation(ctx context.Context,
 	}
 
 	// Set the allocating bucket reference only when status is Granted
-	if status == quotav1alpha1.RequestAllocationGranted {
+	if status == quotav1alpha1.ResourceClaimAllocationStatusGranted {
 		allocation.AllocatingBucket = bucketName
 	}
 
@@ -397,7 +397,7 @@ func (r *AllowanceBucketController) updateRequestAllocation(ctx context.Context,
 			Namespace: claim.Namespace,
 		},
 		Status: quotav1alpha1.ResourceClaimStatus{
-			Allocations: []quotav1alpha1.RequestAllocation{allocation},
+			Allocations: []quotav1alpha1.ResourceClaimAllocationStatus{allocation},
 		},
 	}
 
