@@ -2,6 +2,7 @@ package projectstorage
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	generic "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
@@ -12,7 +13,7 @@ import (
 )
 
 // ProjectAwareDecorator builds (and reuses) a child cacher per project prefix.
-func ProjectAwareDecorator(inner generic.StorageDecorator) generic.StorageDecorator {
+func ProjectAwareDecorator(gr schema.GroupResource, inner generic.StorageDecorator) generic.StorageDecorator {
 	return func(
 		cfg *storagebackend.ConfigForResource,
 		resourcePrefix string,
@@ -33,7 +34,18 @@ func ProjectAwareDecorator(inner generic.StorageDecorator) generic.StorageDecora
 		mux := &projectMux{
 			inner: inner,
 			cfg:   *cfg, // copy
-			args:  decoratorArgs{resourcePrefix, keyFunc, newFunc, newListFunc, getAttrs, triggerFn, indexers},
+			args: decoratorArgs{
+				resourceGroup:  gr.Group,    // "" means core
+				resourceKind:   gr.Resource, // plural
+				resourcePrefix: resourcePrefix,
+
+				keyFunc:     keyFunc,
+				newFunc:     newFunc,
+				newListFunc: newListFunc,
+				getAttrs:    getAttrs,
+				triggerFn:   triggerFn,
+				indexers:    indexers,
+			},
 			children: map[string]*child{
 				"": {s: defS, destroy: defDestroy},
 			},

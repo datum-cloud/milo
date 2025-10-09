@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-contact-group-membership-removal-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: notification-contact-group-membership-removal-reader
+  includedPermissions:
+    - notification.miloapis.com/contactgroupmembershipremovals.create
+    - notification.miloapis.com/contactgroupmembershipremovals.update
+    - notification.miloapis.com/contactgroupmembershipremovals.patch
+    - notification.miloapis.com/contactgroupmembershipremovals.delete
