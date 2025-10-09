@@ -1,7 +1,7 @@
 apiVersion: document.miloapis.com/v1alpha1
 kind: DocumentRevision
 metadata:
-  name: sample-document-revision
+  name: sample-daocument-revision
   namespace: default
 spec:
   documentRef:

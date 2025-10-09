@@ -23,6 +23,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&DocumentList{},
 		&DocumentRevision{},
 		&DocumentRevisionList{},
+		&DocumentAcceptance{},
+		&DocumentAcceptanceList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
