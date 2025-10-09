@@ -60,12 +60,6 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	// Store original status to detect changes
 	originalStatus := policy.Status.DeepCopy()
 
-	// Set defaults
-	if policy.Spec.Enabled == nil {
-		enabled := true
-		policy.Spec.Enabled = &enabled
-	}
-
 	// Validate full policy (templates and resource types)
 	validationErr := r.validatePolicy(ctx, &policy)
 
@@ -119,7 +113,7 @@ func (r *ClaimCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1
 		return
 	}
 
-	if policy.Spec.Enabled != nil && !*policy.Spec.Enabled {
+	if policy.Spec.Disabled != nil && *policy.Spec.Disabled {
 		// Policy is disabled
 		apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
 			Type:               quotav1alpha1.ClaimCreationPolicyReady,
@@ -190,7 +184,7 @@ func (r *ClaimCreationPolicyReconciler) validatePolicy(ctx context.Context, poli
 	// Validate claim template structure and template syntax
 	if r.ClaimTemplateValidator != nil {
 		if err := r.ClaimTemplateValidator.ValidateClaimTemplate(policy.Spec.Target.ResourceClaimTemplate); err != nil {
-			return fmt.Errorf("claim template validation failed: %w", err)
+			return fmt.Errorf("claim template validation failed: %v", err)
 		}
 	}
 	// Validate resource types against ResourceRegistrations

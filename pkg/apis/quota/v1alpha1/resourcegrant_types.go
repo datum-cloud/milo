@@ -57,7 +57,7 @@ type Allowance struct {
 // ResourceGrantSpec defines the desired state of ResourceGrant.
 type ResourceGrantSpec struct {
 	// ConsumerRef identifies the quota consumer that receives these allowances.
-	// The consumer type must match the ConsumerTypeRef defined in the ResourceRegistration
+	// The consumer type must match the ConsumerType defined in the ResourceRegistration
 	// for each allowance resource type. The system validates this relationship.
 	//
 	// Examples:
@@ -138,7 +138,7 @@ const (
 // **ResourceGrants** begin their lifecycle when either an administrator creates them manually or a
 // **GrantCreationPolicy** generates them automatically in response to observed resource changes. Upon
 // creation, the grant enters a validation phase where the quota system examines the consumer type
-// to ensure it matches the expected `ConsumerTypeRef` from each **ResourceRegistration** targeted by
+// to ensure it matches the expected `ConsumerType` from each **ResourceRegistration** targeted by
 // the grant's allowances. The quota system also verifies that all specified resource types correspond
 // to active registrations and that the allowance amounts are valid non-negative integers.
 //
@@ -189,7 +189,7 @@ const (
 // - Automatically managed based on trigger conditions
 //
 // ### Validation Requirements
-// - Consumer type must match ResourceRegistration.spec.consumerTypeRef for each resource type
+// - Consumer type must match ResourceRegistration.spec.consumerType for each resource type
 // - All resource types must reference active ResourceRegistration objects
 // - Maximum 20 allowances per grant
 // - All amounts must be non-negative integers in BaseUnit
