@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: notification.miloapis.com-contactgroupmembership
+spec:
+  serviceRef:
+    name: "notification.miloapis.com"
+  kind: ContactGroupMembership
+  plural: contactgroupmemberships
+  singular: contactgroupmembership
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch

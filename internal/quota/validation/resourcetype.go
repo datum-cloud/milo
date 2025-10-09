@@ -24,7 +24,7 @@ import (
 // claimingPermissions represents the claiming rules for a specific resource type
 type claimingPermissions struct {
 	resourceType      string
-	consumerTypeRef   quotav1alpha1.ConsumerTypeRef
+	consumerType      quotav1alpha1.ConsumerType
 	claimingResources []quotav1alpha1.ClaimingResource
 	registrationName  string // For error messages
 }
@@ -32,12 +32,8 @@ type claimingPermissions struct {
 // ResourceTypeValidator provides an interface for validating resource types against ResourceRegistrations.
 // The validator uses a shared informer to cache claiming permissions for fast O(1) lookups.
 type ResourceTypeValidator interface {
-	// ValidateResourceType validates a single resource type against ResourceRegistrations.
-	// Returns an error if the resource type is not registered or not active.
-	// Returns nil if the resource type is valid and active.
 	ValidateResourceType(ctx context.Context, resourceType string) error
 
-	// IsClaimingResourceAllowed checks if the given resource type is allowed to claim quota for the specified resource type.
 	// This performs a cached lookup and validates claiming permissions without exposing the method on the API type.
 	// Returns allowed status and detailed error message information for user-friendly feedback.
 	IsClaimingResourceAllowed(ctx context.Context, resourceType string, consumerRef quotav1alpha1.ConsumerRef, claimingAPIGroup, claimingKind string) (bool, []string, error)
@@ -104,14 +100,12 @@ func NewResourceTypeValidator(dynamicClient dynamic.Interface) ResourceTypeValid
 
 // tryInitializeInformer attempts to create and sync the informer, returning an error if it fails
 func (v *resourceTypeValidator) tryInitializeInformer() error {
-	// Create shared informer for ResourceRegistrations
 	gvr := schema.GroupVersionResource{
 		Group:    quotav1alpha1.GroupVersion.Group,
 		Version:  quotav1alpha1.GroupVersion.Version,
 		Resource: "resourceregistrations",
 	}
 
-	// Create ListWatch for the informer
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			return v.dynamicClient.Resource(gvr).List(context.Background(), options)
@@ -121,7 +115,6 @@ func (v *resourceTypeValidator) tryInitializeInformer() error {
 		},
 	}
 
-	// Create shared informer with 10 minute resync period
 	informer := cache.NewSharedIndexInformer(
 		lw,
 		&unstructured.Unstructured{},
@@ -142,7 +135,6 @@ func (v *resourceTypeValidator) tryInitializeInformer() error {
 		},
 	)
 
-	// Add event handlers to maintain cache
 	if _, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    v.onResourceRegistrationAdd,
 		UpdateFunc: v.onResourceRegistrationUpdate,
@@ -151,7 +143,6 @@ func (v *resourceTypeValidator) tryInitializeInformer() error {
 		return fmt.Errorf("failed to add event handler: %w", err)
 	}
 
-	// Set the informer (this makes the validator functional)
 	v.cacheMutex.Lock()
 	v.informer = informer
 	v.cacheMutex.Unlock()
@@ -186,7 +177,6 @@ func (v *resourceTypeValidator) tryInitializeInformer() error {
 
 // ValidateResourceType validates using the cached data.
 // The cache only contains active ResourceRegistrations, so this is a simple lookup.
-// Returns an error if the validator is not ready or if the resource type is not registered.
 func (v *resourceTypeValidator) ValidateResourceType(ctx context.Context, resourceType string) error {
 	v.cacheMutex.RLock()
 	defer v.cacheMutex.RUnlock()
@@ -211,15 +201,14 @@ func (v *resourceTypeValidator) IsClaimingResourceAllowed(ctx context.Context, r
 	}
 
 	// Verify this registration is for the correct consumer type
-	if permissions.consumerTypeRef.APIGroup != consumerRef.APIGroup ||
-		permissions.consumerTypeRef.Kind != consumerRef.Kind {
+	if permissions.consumerType.APIGroup != consumerRef.APIGroup ||
+		permissions.consumerType.Kind != consumerRef.Kind {
 		return false, nil, fmt.Errorf("consumer type mismatch for resource type %s: expected %s/%s, got %s/%s",
 			resourceType,
 			consumerRef.APIGroup, consumerRef.Kind,
-			permissions.consumerTypeRef.APIGroup, permissions.consumerTypeRef.Kind)
+			permissions.consumerType.APIGroup, permissions.consumerType.Kind)
 	}
 
-	// Check claiming permissions
 	if len(permissions.claimingResources) == 0 {
 		// When not specified, deny by default for security
 		return false, nil, nil // No allowed resources configured
@@ -234,7 +223,6 @@ func (v *resourceTypeValidator) IsClaimingResourceAllowed(ctx context.Context, r
 			allowedList = append(allowedList, fmt.Sprintf("%s/%s", allowedResource.APIGroup, allowedResource.Kind))
 		}
 
-		// Check if this claiming resource is allowed
 		if allowedResource.APIGroup == claimingAPIGroup &&
 			strings.EqualFold(allowedResource.Kind, claimingKind) {
 			return true, allowedList, nil // Match found
@@ -309,7 +297,6 @@ func (v *resourceTypeValidator) convertToResourceRegistration(obj interface{}) *
 func (v *resourceTypeValidator) updateCacheForRegistration(reg *quotav1alpha1.ResourceRegistration) {
 	resourceType := reg.Spec.ResourceType
 
-	// Check if the ResourceRegistration is active
 	activeCondition := apimeta.FindStatusCondition(reg.Status.Conditions, quotav1alpha1.ResourceRegistrationActive)
 	isActive := activeCondition != nil && activeCondition.Status == metav1.ConditionTrue
 
@@ -317,27 +304,24 @@ func (v *resourceTypeValidator) updateCacheForRegistration(reg *quotav1alpha1.Re
 	defer v.cacheMutex.Unlock()
 
 	if isActive {
-		// Create claiming permissions from registration
 		permissions := &claimingPermissions{
 			resourceType:      resourceType,
-			consumerTypeRef:   reg.Spec.ConsumerTypeRef,
+			consumerType:      reg.Spec.ConsumerType,
 			claimingResources: make([]quotav1alpha1.ClaimingResource, len(reg.Spec.ClaimingResources)),
 			registrationName:  reg.Name,
 		}
 		copy(permissions.claimingResources, reg.Spec.ClaimingResources)
 
-		// Add/update active registration in cache
 		v.cache[resourceType] = permissions
 		v.logger.V(1).Info("Updated active ResourceRegistration in cache",
 			"resourceType", resourceType,
-			"consumerType", fmt.Sprintf("%s/%s", reg.Spec.ConsumerTypeRef.APIGroup, reg.Spec.ConsumerTypeRef.Kind))
+			"consumerType", fmt.Sprintf("%s/%s", reg.Spec.ConsumerType.APIGroup, reg.Spec.ConsumerType.Kind))
 	} else {
-		// Remove inactive registration from cache
 		if _, exists := v.cache[resourceType]; exists {
 			delete(v.cache, resourceType)
 			v.logger.V(1).Info("Removed inactive ResourceRegistration from cache",
 				"resourceType", resourceType,
-				"consumerType", fmt.Sprintf("%s/%s", reg.Spec.ConsumerTypeRef.APIGroup, reg.Spec.ConsumerTypeRef.Kind),
+				"consumerType", fmt.Sprintf("%s/%s", reg.Spec.ConsumerType.APIGroup, reg.Spec.ConsumerType.Kind),
 				"reason", "not active")
 		}
 	}
