@@ -67,12 +67,12 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 			policy: &quotav1alpha1.ClaimCreationPolicy{
 				Spec: quotav1alpha1.ClaimCreationPolicySpec{
 					Trigger: quotav1alpha1.ClaimTriggerSpec{
-						Resource: quotav1alpha1.TargetResource{
+						Resource: quotav1alpha1.ClaimTriggerResource{
 							APIVersion: "networking.datumapis.com/v1alpha",
 							Kind:       "HTTPProxy",
 						},
 					},
-					Enabled: ptr.To(true),
+					Disabled: ptr.To(false),
 					Target: quotav1alpha1.ClaimTargetSpec{
 						ResourceClaimTemplate: quotav1alpha1.ResourceClaimTemplate{
 							Metadata: quotav1alpha1.ObjectMetaTemplate{},
@@ -165,12 +165,12 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 			policy: &quotav1alpha1.ClaimCreationPolicy{
 				Spec: quotav1alpha1.ClaimCreationPolicySpec{
 					Trigger: quotav1alpha1.ClaimTriggerSpec{
-						Resource: quotav1alpha1.TargetResource{
+						Resource: quotav1alpha1.ClaimTriggerResource{
 							APIVersion: "apps/v1",
 							Kind:       "Deployment",
 						},
 					},
-					Enabled: ptr.To(false), // Disabled
+					Disabled: ptr.To(true), // Disabled
 					Target: quotav1alpha1.ClaimTargetSpec{
 						ResourceClaimTemplate: quotav1alpha1.ResourceClaimTemplate{
 							Metadata: quotav1alpha1.ObjectMetaTemplate{},
@@ -231,12 +231,12 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 			policy: &quotav1alpha1.ClaimCreationPolicy{
 				Spec: quotav1alpha1.ClaimCreationPolicySpec{
 					Trigger: quotav1alpha1.ClaimTriggerSpec{
-						Resource: quotav1alpha1.TargetResource{
+						Resource: quotav1alpha1.ClaimTriggerResource{
 							APIVersion: "apps/v1",
 							Kind:       "Deployment",
 						},
 					},
-					Enabled: ptr.To(true),
+					Disabled: ptr.To(false),
 					Target: quotav1alpha1.ClaimTargetSpec{
 						ResourceClaimTemplate: quotav1alpha1.ResourceClaimTemplate{
 							Metadata: quotav1alpha1.ObjectMetaTemplate{},
@@ -298,12 +298,12 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 			policy: &quotav1alpha1.ClaimCreationPolicy{
 				Spec: quotav1alpha1.ClaimCreationPolicySpec{
 					Trigger: quotav1alpha1.ClaimTriggerSpec{
-						Resource: quotav1alpha1.TargetResource{
+						Resource: quotav1alpha1.ClaimTriggerResource{
 							APIVersion: "apps/v1",
 							Kind:       "Deployment",
 						},
 					},
-					Enabled: ptr.To(true),
+					Disabled: ptr.To(false),
 					Target: quotav1alpha1.ClaimTargetSpec{
 						ResourceClaimTemplate: quotav1alpha1.ResourceClaimTemplate{
 							Metadata: quotav1alpha1.ObjectMetaTemplate{},
@@ -1056,12 +1056,12 @@ func TestClaimWaitScenarios(t *testing.T) {
 				},
 				Spec: quotav1alpha1.ClaimCreationPolicySpec{
 					Trigger: quotav1alpha1.ClaimTriggerSpec{
-						Resource: quotav1alpha1.TargetResource{
+						Resource: quotav1alpha1.ClaimTriggerResource{
 							APIVersion: "apps/v1",
 							Kind:       "Deployment",
 						},
 					},
-					Enabled: ptr.To(true),
+					Disabled: ptr.To(false),
 					Target: quotav1alpha1.ClaimTargetSpec{
 						ResourceClaimTemplate: quotav1alpha1.ResourceClaimTemplate{
 							Metadata: quotav1alpha1.ObjectMetaTemplate{},
