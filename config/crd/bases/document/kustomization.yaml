@@ -1,2 +1,3 @@
 resources:
 - document.miloapis.com_documents.yaml
+- document.miloapis.com_documentrevisions.yaml
