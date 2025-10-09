@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
@@ -42,7 +43,12 @@ import (
 	svmrest "k8s.io/kubernetes/pkg/registry/storagemigration/rest"
 
 	"go.miloapis.com/milo/internal/apiserver/admission/initializer"
+	sessionsbackend "go.miloapis.com/milo/internal/apiserver/identity/sessions"
+	identitystorage "go.miloapis.com/milo/internal/apiserver/storage/identity"
+	identityapi "go.miloapis.com/milo/pkg/apis/identity"
+	identityopenapi "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
+	openapicommon "k8s.io/kube-openapi/pkg/common"
 )
 
 type Config struct {
@@ -56,6 +62,20 @@ type Config struct {
 }
 
 type ExtraConfig struct {
+	FeatureSessions  bool
+	SessionsProvider SessionsProviderConfig
+}
+
+// SessionsProviderConfig groups configuration for the sessions backend provider.
+type SessionsProviderConfig struct {
+	// Direct provider connection (standalone upstream serving Milo public GVK)
+	URL            string
+	CAFile         string
+	ClientCertFile string
+	ClientKeyFile  string
+	TimeoutSeconds int
+	Retries        int
+	ForwardExtras  []string
 }
 
 type completedConfig struct {
@@ -74,7 +94,7 @@ type CompletedConfig struct {
 }
 
 func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryInterface) ([]controlplaneapiserver.RESTStorageProvider, error) {
-	return []controlplaneapiserver.RESTStorageProvider{
+	providers := []controlplaneapiserver.RESTStorageProvider{
 		c.ControlPlane.NewCoreGenericConfig(),
 		apiserverinternalrest.StorageProvider{},
 		authenticationrest.RESTStorageProvider{Authenticator: c.ControlPlane.Generic.Authentication.Authenticator, APIAudiences: c.ControlPlane.Generic.Authentication.APIAudiences},
@@ -86,7 +106,33 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 		admissionregistrationrest.RESTStorageProvider{Authorizer: c.ControlPlane.Generic.Authorization.Authorizer, DiscoveryClient: discovery},
 		eventsrest.RESTStorageProvider{TTL: c.ControlPlane.EventTTL},
 		discoveryrest.StorageProvider{},
-	}, nil
+	}
+
+	if c.ExtraConfig.FeatureSessions {
+		// Build identity sessions storage provider
+		providers = append(providers, newIdentitySessionsProvider(c))
+	}
+
+	return providers, nil
+}
+
+func newIdentitySessionsProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
+	allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ForwardExtras))
+	for _, k := range c.ExtraConfig.SessionsProvider.ForwardExtras {
+		allow[k] = struct{}{}
+	}
+	cfg := sessionsbackend.Config{
+		BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
+		ProviderURL:    c.ExtraConfig.SessionsProvider.URL,
+		CAFile:         c.ExtraConfig.SessionsProvider.CAFile,
+		ClientCertFile: c.ExtraConfig.SessionsProvider.ClientCertFile,
+		ClientKeyFile:  c.ExtraConfig.SessionsProvider.ClientKeyFile,
+		Timeout:        time.Duration(c.ExtraConfig.SessionsProvider.TimeoutSeconds) * time.Second,
+		Retries:        c.ExtraConfig.SessionsProvider.Retries,
+		ExtrasAllow:    allow,
+	}
+	backend, _ := sessionsbackend.NewDynamicProvider(cfg)
+	return identitystorage.StorageProvider{Sessions: backend}
 }
 
 func (c *Config) Complete() (CompletedConfig, error) {
@@ -106,14 +152,28 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		Options: opts,
 	}
 
+	// Initialize Milo scheme with identity APIs and install into legacy scheme
+	miloScheme := runtime.NewScheme()
+	identityapi.Install(miloScheme)
+	identityapi.Install(legacyscheme.Scheme)
+
 	apiResourceConfigSource := controlplane.DefaultAPIResourceConfigSource()
 	apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("serviceaccounts"))
+	// Enable identity group/version served by virtual storage
+	apiResourceConfigSource.EnableVersions(identityopenapi.SchemeGroupVersion)
 
 	genericConfig, versionedInformers, storageFactory, err := controlplaneapiserver.BuildGenericConfig(
 		opts,
-		[]*runtime.Scheme{legacyscheme.Scheme, apiextensionsapiserver.Scheme, aggregatorscheme.Scheme},
+		[]*runtime.Scheme{legacyscheme.Scheme, apiextensionsapiserver.Scheme, aggregatorscheme.Scheme, miloScheme},
 		apiResourceConfigSource,
-		generatedopenapi.GetOpenAPIDefinitions,
+		func(ref openapicommon.ReferenceCallback) map[string]openapicommon.OpenAPIDefinition {
+			base := generatedopenapi.GetOpenAPIDefinitions(ref)
+			id := identityopenapi.GetOpenAPIDefinitions(ref)
+			for k, v := range id {
+				base[k] = v
+			}
+			return base
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -214,10 +274,6 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	}
 
 	handler = filterlatency.TrackCompleted(handler)
-	handler = genericapifilters.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
-	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "impersonation")
-
-	handler = filterlatency.TrackCompleted(handler)
 	handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator, c.LongRunningFunc)
 	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "audit")
 
@@ -230,6 +286,10 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 
 	failedHandler := genericapifilters.Unauthorized(c.Serializer)
 	failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyRuleEvaluator)
+
+	handler = filterlatency.TrackCompleted(handler)
+	handler = genericapifilters.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
+	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "impersonation")
 
 	failedHandler = filterlatency.TrackCompleted(failedHandler)
 	handler = filterlatency.TrackCompleted(handler)

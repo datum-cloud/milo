@@ -30,6 +30,8 @@ type GrantCreationController struct {
 	Scheme *runtime.Scheme
 	// TemplateEngine renders grant templates with trigger resource data.
 	TemplateEngine engine.TemplateEngine
+	// CELEngine evaluates CEL expressions for parent context resolution.
+	CELEngine engine.CELEngine
 	// ParentContextResolver resolves cross-cluster clients for grant creation.
 	ParentContextResolver *ParentContextResolver
 	// EventRecorder records events for processed resources.
@@ -69,6 +71,7 @@ func NewGrantCreationController(
 	client client.Client,
 	scheme *runtime.Scheme,
 	templateEngine engine.TemplateEngine,
+	celEngine engine.CELEngine,
 	parentContextResolver *ParentContextResolver,
 	eventRecorder record.EventRecorder,
 	informerManager informer.Manager,
@@ -79,6 +82,7 @@ func NewGrantCreationController(
 		Client:                client,
 		Scheme:                scheme,
 		TemplateEngine:        templateEngine,
+		CELEngine:             celEngine,
 		ParentContextResolver: parentContextResolver,
 		EventRecorder:         eventRecorder,
 		informerManager:       informerManager,
@@ -245,7 +249,7 @@ func (r *GrantCreationController) processPolicy(
 	logger := log.FromContext(ctx).WithValues("policy", policy.Name)
 
 	// Evaluate trigger conditions
-	conditionsMet, err := r.TemplateEngine.EvaluateConditions(policy.Spec.Trigger.Conditions, triggerObj)
+	conditionsMet, err := r.TemplateEngine.EvaluateConditions(policy.Spec.Trigger.Constraints, triggerObj)
 	if err != nil {
 		return fmt.Errorf("failed to evaluate conditions: %w", err)
 	}
@@ -291,10 +295,13 @@ func (r *GrantCreationController) resolveTargetClient(
 		return r.Client, nil
 	}
 
-	// Resolve parent context name
-	parentContextName, err := r.TemplateEngine.EvaluateParentContextName(
+	// Resolve parent context name using CEL template expression
+	variables := map[string]interface{}{
+		"trigger": triggerObj.Object,
+	}
+	parentContextName, err := r.CELEngine.EvaluateTemplateExpression(
 		policy.Spec.Target.ParentContext.NameExpression,
-		triggerObj,
+		variables,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate parent context name: %w", err)

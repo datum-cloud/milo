@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: organizationmembership-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: organizationmembership-reader
+  includedPermissions:
+    - resourcemanager.miloapis.com/organizationmemberships.create
+    - resourcemanager.miloapis.com/organizationmemberships.update
+    - resourcemanager.miloapis.com/organizationmemberships.patch
+    - resourcemanager.miloapis.com/organizationmemberships.delete

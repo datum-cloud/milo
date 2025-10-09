@@ -15,14 +15,19 @@ import (
 // to ensure expressions validated at policy creation time work correctly during execution.
 //
 // Variables:
-//   - trigger (dyn): The resource object that triggered the policy evaluation
+//   - trigger (dyn): The Kubernetes resource object that triggered the policy evaluation
+//   - user (dyn): The user context for the request (ClaimCreationPolicy only)
+//   - requestInfo (dyn): The admission request context (ClaimCreationPolicy only)
 //
 // Functions:
 //   - has(obj, field): Check if a nested field exists using dot notation (e.g., has(trigger, "spec.tier"))
 func NewQuotaEnvironment() (*cel.Env, error) {
 	return cel.NewEnv(
-		// Add the 'trigger' variable that contains the trigger resource
+		// Add variables as dynamic types for maximum flexibility
+		// Template validation accepts both string and dynamic types
 		cel.Variable("trigger", cel.DynType),
+		cel.Variable("user", cel.DynType),
+		cel.Variable("requestInfo", cel.DynType),
 
 		// Add custom functions for Kubernetes operations
 		cel.Function("has",

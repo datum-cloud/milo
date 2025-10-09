@@ -336,6 +336,26 @@ tasks:
       - "\"{{.TOOL_DIR}}/controller-gen\" rbac:roleName=milo-controller-manager paths=\"./internal/controllers/...\" paths=\"./internal/quota/controllers/...\" output:dir=\"./config/controller-manager/overlays/core-control-plane/rbac\""
     silent: true
 
+  generate:openapi:identity:
+    desc: Generate OpenAPI definitions for identity API types
+    deps:
+      - task: install-go-tool
+        vars:
+          NAME: openapi-gen
+          PACKAGE: k8s.io/code-generator/cmd/openapi-gen
+          VERSION: v0.23.0
+    cmds:
+      - echo "Generating OpenAPI definitions for identity types..."
+      - |
+        set -e
+        "{{.TOOL_DIR}}/openapi-gen" \
+          --input-dirs=go.miloapis.com/milo/pkg/apis/identity/v1alpha1 \
+          --output-package=pkg/apis/identity/v1alpha1 \
+          --output-base=. \
+          --output-file-base=zz_generated.openapi \
+          --go-header-file=/dev/null
+    silent: true
+
   generate:docs:
     desc: Generate API docs
     deps:

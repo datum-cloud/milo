@@ -66,7 +66,7 @@ func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *ResourceClaimController) updateOverallClaimConditionFromAllocations(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
 
 	// Initialize allocation map for tracking which requests have been processed
-	allocationMap := make(map[string]quotav1alpha1.RequestAllocation)
+	allocationMap := make(map[string]quotav1alpha1.ResourceClaimAllocationStatus)
 	for _, allocation := range claim.Status.Allocations {
 		allocationMap[allocation.ResourceType] = allocation
 	}
@@ -84,11 +84,11 @@ func (r *ResourceClaimController) updateOverallClaimConditionFromAllocations(ctx
 		}
 
 		switch allocation.Status {
-		case quotav1alpha1.RequestAllocationGranted:
+		case quotav1alpha1.ResourceClaimAllocationStatusGranted:
 			grantedCount++
-		case quotav1alpha1.RequestAllocationDenied:
+		case quotav1alpha1.ResourceClaimAllocationStatusDenied:
 			deniedCount++
-		case quotav1alpha1.RequestAllocationPending:
+		case quotav1alpha1.ResourceClaimAllocationStatusPending:
 			pendingCount++
 		default:
 			// Unknown status - treat as pending
