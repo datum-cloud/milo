@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-contact-group-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: notification-contact-group-reader
+  includedPermissions:
+    - notification.miloapis.com/contactgroups.create
+    - notification.miloapis.com/contactgroups.update
+    - notification.miloapis.com/contactgroups.patch
+    - notification.miloapis.com/contactgroups.delete

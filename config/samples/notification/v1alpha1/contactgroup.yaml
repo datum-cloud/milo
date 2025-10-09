@@ -1,0 +1,8 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: ContactGroup
+metadata:
+  name: engineering-team
+  namespace: milo-system
+spec:
+  # Human-readable label that will appear in UIs / notifications
+  displayName: Engineering Team Contacts
