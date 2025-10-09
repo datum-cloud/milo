@@ -43,7 +43,7 @@
 // **[ClaimCreationPolicy](#claimcreationpolicy)**: Creates ResourceClaims during admission.
 // Policies intercept resource creation requests and generate quota claims for evaluation.
 // For example, create a "1 Project" claim when a Project resource is created.
-// Uses Go templates for dynamic claim content and CEL expressions for trigger conditions.
+// Uses CEL expressions for dynamic claim content and trigger conditions.
 //
 // # How the System Works
 //
@@ -69,9 +69,9 @@
 //
 // - **Active/Ready conditions**: Indicate when resources are operational and contributing to quota decisions.
 // - **Validation conditions**: Report configuration errors and resolution guidance.
-// - **ObservedGeneration**: Tracks which specification version the controller has processed.
+// - **ObservedGeneration**: Tracks which specification version the system has processed.
 //
-// Controllers update status conditions to reflect current state and provide troubleshooting information
+// The system updates status conditions to reflect current state and provide troubleshooting information
 // when problems occur.
 //
 // +k8s:deepcopy-gen=package,register

@@ -1,0 +1,11 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: notification-email-broadcast-creator
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: notification-email-broadcast-reader
+  includedPermissions:
+    - notification.miloapis.com/emailbroadcasts.create
+    - notification.miloapis.com/emailbroadcasts.delete

@@ -51,6 +51,14 @@ spec:
           - --audit-webhook-config-file=$(AUDIT_WEBHOOK_CONFIG_FILE)
           - --audit-webhook-mode=$(AUDIT_WEBHOOK_MODE)
           - --audit-webhook-initial-backoff=$(AUDIT_WEBHOOK_INITIAL_BACKOFF)
+          - --feature-sessions=true
+          - --sessions-provider-url=$(SESSIONS_PROVIDER_URL)
+          - --sessions-provider-ca-file=$(SESSIONS_PROVIDER_CA_FILE)
+          - --sessions-provider-client-cert=$(SESSIONS_PROVIDER_CLIENT_CERT_FILE)
+          - --sessions-provider-client-key=$(SESSIONS_PROVIDER_CLIENT_KEY_FILE)
+          - --provider-timeout=3
+          - --provider-retries=2
+          - --forward-extras=iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name
         env:
           - name: LOG_LEVEL
             value: "4"
@@ -103,6 +111,14 @@ spec:
           - name: AUDIT_WEBHOOK_MODE
             value: ""
           - name: AUDIT_WEBHOOK_INITIAL_BACKOFF
+            value: ""
+          - name: SESSIONS_PROVIDER_URL
+            value: ""
+          - name: SESSIONS_PROVIDER_CA_FILE
+            value: ""
+          - name: SESSIONS_PROVIDER_CLIENT_CERT_FILE
+            value: ""
+          - name: SESSIONS_PROVIDER_CLIENT_KEY_FILE
             value: ""
         livenessProbe:
           failureThreshold: 3

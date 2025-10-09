@@ -15,17 +15,17 @@ import (
 // CELEngine provides CEL expression evaluation capabilities for quota operations.
 // It combines compile-time validation with runtime evaluation and program caching.
 type CELEngine interface {
-	// ValidateConditions validates CEL expressions in trigger conditions.
-	ValidateConditions(conditions []quotav1alpha1.ConditionExpression) error
+	// ValidateConstraints validates CEL expressions in trigger constraints.
+	ValidateConstraints(constraints []quotav1alpha1.ConditionExpression) error
 
-	// ValidateNameExpression validates a CEL expression that should return a string.
-	ValidateNameExpression(expression string) error
+	// ValidateTemplateExpression validates a CEL template expression.
+	ValidateTemplateExpression(expression string) error
 
 	// EvaluateConditions evaluates all trigger conditions against a resource object.
 	EvaluateConditions(conditions []quotav1alpha1.ConditionExpression, obj *unstructured.Unstructured) (bool, error)
 
-	// EvaluateNameExpression evaluates a name expression against a resource object.
-	EvaluateNameExpression(expression string, obj *unstructured.Unstructured) (string, error)
+	// EvaluateTemplateExpression evaluates a template expression with context variables (trigger, user, requestInfo).
+	EvaluateTemplateExpression(expression string, variables map[string]interface{}) (string, error)
 }
 
 // celEngine implements CELEngine with program caching for performance.
@@ -55,14 +55,14 @@ func NewCELEngine() (CELEngine, error) {
 	}, nil
 }
 
-// ValidateConditions validates CEL expressions in trigger conditions.
-func (e *celEngine) ValidateConditions(conditions []quotav1alpha1.ConditionExpression) error {
-	return e.validator.ValidateConditions(conditions)
+// ValidateConstraints validates CEL expressions in trigger constraints.
+func (e *celEngine) ValidateConstraints(constraints []quotav1alpha1.ConditionExpression) error {
+	return e.validator.ValidateConstraints(constraints)
 }
 
-// ValidateNameExpression validates a CEL expression that should return a string.
-func (e *celEngine) ValidateNameExpression(expression string) error {
-	return e.validator.ValidateNameExpression(expression)
+// ValidateTemplateExpression validates a CEL template expression.
+func (e *celEngine) ValidateTemplateExpression(expression string) error {
+	return e.validator.ValidateTemplateExpression(expression)
 }
 
 // EvaluateConditions evaluates all trigger conditions against a resource object.
@@ -88,23 +88,17 @@ func (e *celEngine) EvaluateConditions(conditions []quotav1alpha1.ConditionExpre
 	return true, nil // All conditions passed
 }
 
-// EvaluateNameExpression evaluates a name expression against a resource object.
+// EvaluateTemplateExpression evaluates a template expression with context variables.
 // Returns the string result of the expression.
-func (e *celEngine) EvaluateNameExpression(expression string, obj *unstructured.Unstructured) (string, error) {
-	objData := obj.Object
-
+func (e *celEngine) EvaluateTemplateExpression(expression string, variables map[string]interface{}) (string, error) {
 	// Get or create cached program
 	program, err := e.getOrCompileProgram(expression)
 	if err != nil {
 		return "", err
 	}
 
-	// Evaluate with the resource object
-	vars := map[string]interface{}{
-		"trigger": objData,
-	}
-
-	result, _, err := program.Eval(vars)
+	// Evaluate with provided variables
+	result, _, err := program.Eval(variables)
 	if err != nil {
 		return "", fmt.Errorf("evaluation failed: %w", err)
 	}
