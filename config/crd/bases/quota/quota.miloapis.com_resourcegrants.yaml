@@ -1,0 +1,395 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: resourcegrants.quota.miloapis.com
+spec:
+  group: quota.miloapis.com
+  names:
+    kind: ResourceGrant
+    listKind: ResourceGrantList
+    plural: resourcegrants
+    singular: resourcegrant
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=='Active')].status
+      name: Active
+      type: string
+    - jsonPath: .spec.consumerRef.apiGroup
+      name: Consumer Group
+      priority: 1
+      type: string
+    - jsonPath: .spec.consumerRef.kind
+      name: Consumer Type
+      priority: 1
+      type: string
+    - jsonPath: .spec.consumerRef.name
+      name: Consumer
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ResourceGrant allocates quota capacity to a consumer for specific resource types.
+          Grants provide the allowances that AllowanceBuckets aggregate to determine
+          available quota for ResourceClaim evaluation.
+
+          ### How It Works
+          **ResourceGrants** begin their lifecycle when either an administrator creates them manually or a
+          **GrantCreationPolicy** generates them automatically in response to observed resource changes. Upon
+          creation, the grant enters a validation phase where the quota system examines the consumer type
+          to ensure it matches the expected `ConsumerType` from each **ResourceRegistration** targeted by
+          the grant's allowances. The quota system also verifies that all specified resource types correspond
+          to active registrations and that the allowance amounts are valid non-negative integers.
+
+          When validation succeeds, the quota system marks the grant as `Active`, signaling to **AllowanceBucket**
+          resources that this grant should contribute to quota calculations. The bucket resources
+          continuously monitor for active grants and aggregate their allowance amounts into the appropriate
+          buckets based on consumer and resource type matching. This aggregation process makes the granted
+          quota capacity available for **ResourceClaim** consumption.
+
+          **ResourceClaims** then consume the capacity that active grants provide, creating a flow from grants
+          through buckets to claims. The grant's capacity remains reserved as long as claims reference it,
+          ensuring that quota allocations persist until the consuming resources are removed. This creates
+          a stable quota environment where capacity allocations remain consistent across resource lifecycles.
+
+          ### Core Relationships
+          - **Provides capacity to**: AllowanceBucket matching (spec.consumerRef, spec.allowances[].resourceType)
+          - **Consumed by**: ResourceClaim objects processed against the aggregated buckets
+          - **Validated against**: ResourceRegistration for each spec.allowances[].resourceType
+          - **Created by**: Administrators manually or GrantCreationPolicy automatically
+
+          ### Quota Aggregation Logic
+          Multiple ResourceGrants for the same (consumer, resourceType) combination:
+          - Aggregate into a single AllowanceBucket for that combination
+          - All bucket amounts from all allowances are summed for total capacity
+          - Only Active grants contribute to the aggregated limit
+          - Inactive grants are excluded from quota calculations
+
+          ### Grant vs Bucket Relationship
+          - **ResourceGrant**: Specifies intended quota allocations
+          - **AllowanceBucket**: Aggregates actual available quota from active grants
+          - **ResourceClaim**: Consumes quota from buckets (which source from grants)
+
+          ### Allowance Structure
+          Each grant can contain multiple allowances for different resource types:
+          - All allowances share the same consumer (spec.consumerRef)
+          - Each allowance can have multiple buckets (for tracking, attribution, or incremental increases)
+          - Bucket amounts within an allowance are summed for that resource type
+
+          ### Manual vs Automated Grants
+          **Manual Grants** (created by administrators):
+          - Explicit quota allocations for specific consumers
+          - Require direct management and updates
+          - Useful for base quotas, special allocations, or testing
+
+          **Automated Grants** (created by GrantCreationPolicy):
+          - Generated based on resource lifecycle events
+          - Include labels/annotations for tracking policy source
+          - Automatically managed based on trigger conditions
+
+          ### Validation Requirements
+          - Consumer type must match ResourceRegistration.spec.consumerType for each resource type
+          - All resource types must reference active ResourceRegistration objects
+          - Maximum 20 allowances per grant
+          - All amounts must be non-negative integers in BaseUnit
+
+          ### Field Constraints and Limits
+          - Maximum 20 allowances per grant
+          - Each allowance must have at least 1 bucket
+          - Bucket amounts must be non-negative (0 is allowed but provides no quota)
+          - All amounts measured in BaseUnit from ResourceRegistration
+
+          ### Status Information
+          - **Active condition**: Indicates whether grant is contributing to quota buckets
+          - **Validation errors**: Reported in condition message when Active=False
+          - **Processing status**: ObservedGeneration tracks spec changes
+
+          ### Selectors and Filtering
+          - **Field selectors**: spec.consumerRef.kind, spec.consumerRef.name
+          - **Recommended labels** (add manually for better organization):
+            - quota.miloapis.com/consumer-kind: Organization
+            - quota.miloapis.com/consumer-name: acme-corp
+            - quota.miloapis.com/source: policy-name or manual
+            - quota.miloapis.com/tier: basic, premium, enterprise
+
+          ### Common Queries
+          - All grants for a consumer: field selector spec.consumerRef.kind + spec.consumerRef.name
+          - Grants by source policy: label selector quota.miloapis.com/source=<policy-name>
+          - Grants by resource tier: label selector quota.miloapis.com/tier=<tier-name>
+          - Active vs inactive grants: check status.conditions[type=Active].status
+
+          ### Cross-Cluster Allocation
+          GrantCreationPolicy can create grants in parent control planes for cross-cluster quota:
+          - Policy running in child cluster creates grants in parent cluster
+          - Grants provide capacity that spans multiple child clusters
+          - Enables centralized quota management across cluster hierarchies
+
+          ### Troubleshooting
+          - **Inactive grants**: Check status.conditions[type=Active] for validation errors
+          - **Missing quota**: Verify grants are Active and contributing to correct buckets
+          - **Grant conflicts**: Multiple grants for same consumer+resourceType are aggregated, not conflicting
+
+          ### Performance Considerations
+          - Large numbers of grants can impact bucket aggregation performance
+          - Consider consolidating grants where possible to reduce aggregation overhead
+          - Grant status updates are asynchronous and may lag spec changes
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ResourceGrantSpec defines the desired state of ResourceGrant.
+            properties:
+              allowances:
+                description: |-
+                  Allowances specifies the quota allocations provided by this grant.
+                  Each allowance grants capacity for a specific resource type.
+                  Minimum 1 allowance required, maximum 20 allowances per grant.
+
+                  All allowances in a single grant:
+                  - Apply to the same consumer (spec.consumerRef)
+                  - Contribute to the same AllowanceBucket for each resource type
+                  - Activate and deactivate together based on the grant's status
+                items:
+                  description: |-
+                    Allowance defines quota allocation for a specific resource type within a ResourceGrant.
+                    Each allowance can contain multiple buckets that sum to provide total capacity.
+                  properties:
+                    buckets:
+                      description: |-
+                        Buckets contains the quota allocations for this resource type.
+                        All bucket amounts are summed to determine the total allowance.
+                        Minimum 1 bucket required per allowance.
+
+                        Multiple buckets can be used for:
+                        - Separating quota from different sources or tiers
+                        - Managing incremental quota increases over time
+                        - Tracking quota attribution for billing or reporting
+                      items:
+                        description: |-
+                          Bucket represents a single allocation of quota capacity within an allowance.
+                          Each bucket contributes its amount to the total allowance for a resource type.
+                        properties:
+                          amount:
+                            description: |-
+                              Amount specifies the quota capacity provided by this bucket.
+                              Must be measured in the BaseUnit defined by the corresponding ResourceRegistration.
+                              Must be a non-negative integer (0 is valid but provides no quota).
+
+                              Examples:
+                              - 100 (providing 100 projects)
+                              - 2048000 (providing 2048000 bytes = 2GB)
+                              - 5000 (providing 5000 CPU millicores = 5 cores)
+                            format: int64
+                            minimum: 0
+                            type: integer
+                        required:
+                        - amount
+                        type: object
+                      minItems: 1
+                      type: array
+                    resourceType:
+                      description: |-
+                        ResourceType identifies the specific resource type receiving quota allocation.
+                        Must exactly match a ResourceRegistration.spec.resourceType that is currently active.
+                        The quota system validates this reference when processing the grant.
+
+                        The identifier format is flexible, as defined by platform administrators
+                        in their ResourceRegistrations.
+
+                        Examples:
+                        - "resourcemanager.miloapis.com/projects"
+                        - "compute_cpu"
+                        - "storage.volumes"
+                        - "custom-service-quota"
+                      type: string
+                  required:
+                  - buckets
+                  - resourceType
+                  type: object
+                minItems: 1
+                type: array
+              consumerRef:
+                description: |-
+                  ConsumerRef identifies the quota consumer that receives these allowances.
+                  The consumer type must match the ConsumerType defined in the ResourceRegistration
+                  for each allowance resource type. The system validates this relationship.
+
+                  Examples:
+                  - Organization receiving Project quota allowances
+                  - Project receiving User quota allowances
+                  - Organization receiving storage quota allowances
+                properties:
+                  apiGroup:
+                    description: |-
+                      APIGroup specifies the API group of the consumer resource.
+                      Use full group name for Milo resources.
+
+                      Examples:
+                      - "resourcemanager.miloapis.com" (Organization/Project resources)
+                      - "iam.miloapis.com" (User/Group resources)
+                      - "infrastructure.miloapis.com" (infrastructure resources)
+                    type: string
+                  kind:
+                    description: |-
+                      Kind specifies the type of consumer resource.
+                      Must match an existing Kubernetes resource type that can receive quota grants.
+
+                      Common consumer types:
+                      - "Organization" (top-level quota consumer)
+                      - "Project" (project-level quota consumer)
+                      - "User" (user-level quota consumer)
+                    type: string
+                  name:
+                    description: |-
+                      Name identifies the specific consumer resource instance.
+                      Must match the name of an existing consumer resource in the cluster.
+
+                      Examples:
+                      - "acme-corp" (Organization name)
+                      - "web-application" (Project name)
+                      - "john.doe" (User name)
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace identifies the namespace of the consumer resource.
+                      Required for namespaced consumer resources (e.g., Projects).
+                      Leave empty for cluster-scoped consumer resources (e.g., Organizations).
+
+                      Examples:
+                      - "" (empty for cluster-scoped Organizations)
+                      - "organization-acme-corp" (namespace for Projects within an organization)
+                      - "project-web-app" (namespace for resources within a project)
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+            required:
+            - allowances
+            - consumerRef
+            type: object
+          status:
+            description: |-
+              ResourceGrantStatus reports the grant's operational state and processing status.
+              Controllers update status conditions to indicate whether the grant is active
+              and contributing capacity to AllowanceBuckets.
+            properties:
+              conditions:
+                description: |-
+                  Conditions represents the latest available observations of the grant's state.
+                  Controllers set these conditions to communicate operational status.
+
+                  Standard condition types:
+                  - "Active": Indicates whether the grant is operational and contributing to quota buckets.
+                    When True, allowances are aggregated into AllowanceBuckets and available for claims.
+                    When False, allowances do not contribute to quota decisions.
+
+                  Standard condition reasons for "Active":
+                  - "GrantActive": Grant is validated and contributing to quota buckets
+                  - "ValidationFailed": Specification contains errors preventing activation (see message)
+                  - "GrantPending": Grant is being processed by the quota system
+
+                  Grant Lifecycle:
+                  1. Created: Active=Unknown, reason=GrantPending
+                  2. Validated: Active=True, reason=GrantActive OR Active=False, reason=ValidationFailed
+                  3. Updated: Active condition changes only when validation results change
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-validations:
+                - message: Active condition reason must be valid
+                  rule: 'self.all(c, c.type == ''Active'' ? c.reason in [''GrantActive'',
+                    ''ValidationFailed'', ''GrantPending''] : true)'
+              observedGeneration:
+                description: |-
+                  ObservedGeneration indicates the most recent spec generation the quota system has processed.
+                  When ObservedGeneration matches metadata.generation, the status reflects the current spec.
+                  When ObservedGeneration is lower, the quota system is still processing recent changes.
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    selectableFields:
+    - jsonPath: .spec.consumerRef.kind
+    - jsonPath: .spec.consumerRef.name
+    served: true
+    storage: true
+    subresources:
+      status: {}
