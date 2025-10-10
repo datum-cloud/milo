@@ -90,7 +90,8 @@ type ResourceRegistrationSpec struct {
 	// - "CPU millicores allocated to workloads"
 	// - "Storage bytes claimed by volume requests"
 	//
-	// +kubebuilder:validation:Optional +kubebuilder:validation:MaxLength=500
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:MaxLength=500
 	// +kubebuilder:validation:MinLength=1
 	Description string `json:"description,omitempty"`
 
@@ -104,7 +105,8 @@ type ResourceRegistrationSpec struct {
 	// - "byte" (for storage or memory)
 	// - "user" (for Entity type tracking Users)
 	//
-	// +kubebuilder:validation:Required +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=50
 	BaseUnit string `json:"baseUnit"`
 
@@ -117,7 +119,8 @@ type ResourceRegistrationSpec struct {
 	// - "GiB" (for displaying memory/storage instead of bytes)
 	// - "TB" (for large storage volumes)
 	//
-	// +kubebuilder:validation:Required +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=50
 	DisplayUnit string `json:"displayUnit"`
 
