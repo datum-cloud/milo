@@ -113,14 +113,14 @@ spec:
                   (contains($error, 'spec.resourceType is immutable')): true
 
     - name: test-immutable-consumer-type-ref
-      description: Verify that consumerTypeRef field cannot be modified after creation (CEL validation)
+      description: Verify that consumerType field cannot be modified after creation (CEL validation)
       try:
         - patch:
             file: test-data/patch-consumer-type-ref.yaml
             expect:
               - check:
                   ($error != null): true
-                  (contains($error, 'spec.consumerTypeRef is immutable')): true
+                  (contains($error, 'spec.consumerType is immutable')): true
 
     - name: test-immutable-type
       description: Verify that type field cannot be modified after creation (CEL validation)

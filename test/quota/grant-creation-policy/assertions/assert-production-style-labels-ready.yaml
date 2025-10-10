@@ -5,7 +5,7 @@ metadata:
   labels:
     test.miloapis.com/quota: "grant-creation-policy"
 spec:
-  enabled: true
+  disabled: false
   target:
     resourceGrantTemplate:
       metadata:

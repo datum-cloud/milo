@@ -101,7 +101,7 @@ Verify that resourceType field cannot be modified after creation (CEL validation
 
 ### Step: `test-immutable-consumer-type-ref`
 
-Verify that consumerTypeRef field cannot be modified after creation (CEL validation)
+Verify that consumerType field cannot be modified after creation (CEL validation)
 
 #### Try
 

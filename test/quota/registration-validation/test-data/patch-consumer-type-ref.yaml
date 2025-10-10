@@ -3,7 +3,7 @@ kind: ResourceRegistration
 metadata:
   name: test-immutable-registration
 spec:
-  # Attempting to change immutable consumerTypeRef field
-  consumerTypeRef:
+  # Attempting to change immutable consumerType field
+  consumerType:
     apiGroup: iam.miloapis.com
     kind: User

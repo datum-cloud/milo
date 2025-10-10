@@ -60,12 +60,6 @@ func (r *GrantCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	// Store original status to detect changes
 	originalStatus := policy.Status.DeepCopy()
 
-	// Set defaults
-	if policy.Spec.Enabled == nil {
-		enabled := true
-		policy.Spec.Enabled = &enabled
-	}
-
 	// Perform comprehensive validation
 	validationErr := r.validatePolicy(ctx, &policy)
 
@@ -93,26 +87,26 @@ func (r *GrantCreationPolicyReconciler) validatePolicy(ctx context.Context, poli
 	logger := log.FromContext(ctx)
 
 	// Skip validation if policy is disabled
-	if policy.Spec.Enabled != nil && !*policy.Spec.Enabled {
+	if policy.Spec.Disabled != nil && *policy.Spec.Disabled {
 		logger.V(2).Info("Policy is disabled, skipping validation", "policy", policy.Name)
 		return nil
 	}
 
-	// Validate CEL expressions in trigger conditions
-	if err := r.CELValidator.ValidateConditions(policy.Spec.Trigger.Conditions); err != nil {
-		return fmt.Errorf("trigger condition validation failed: %w", err)
+	// Validate CEL expressions in trigger constraints
+	if err := r.CELValidator.ValidateConstraints(policy.Spec.Trigger.Constraints); err != nil {
+		return fmt.Errorf("trigger constraint validation failed: %w", err)
 	}
 
 	// Validate parent context name expression if specified
 	if policy.Spec.Target.ParentContext != nil {
-		if err := r.CELValidator.ValidateNameExpression(policy.Spec.Target.ParentContext.NameExpression); err != nil {
+		if err := r.CELValidator.ValidateTemplateExpression(policy.Spec.Target.ParentContext.NameExpression); err != nil {
 			return fmt.Errorf("parent context name expression validation failed: %w", err)
 		}
 	}
 
 	// Validate grant template structure (including resource type validation)
 	if err := r.TemplateValidator.ValidateGrantTemplate(ctx, policy.Spec.Target.ResourceGrantTemplate); err != nil {
-		return fmt.Errorf("grant template validation failed: %w", err)
+		return fmt.Errorf("grant template validation failed: %v", err)
 	}
 
 	logger.V(2).Info("Policy validation passed", "policy", policy.Name)
@@ -138,7 +132,7 @@ func (r *GrantCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1
 		return
 	}
 
-	if policy.Spec.Enabled != nil && !*policy.Spec.Enabled {
+	if policy.Spec.Disabled != nil && *policy.Spec.Disabled {
 		// Policy is disabled
 		apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
 			Type:               quotav1alpha1.GrantCreationPolicyReady,

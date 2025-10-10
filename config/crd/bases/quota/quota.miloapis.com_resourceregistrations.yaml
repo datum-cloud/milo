@@ -41,7 +41,7 @@ spec:
           ### Core Relationships
           - **ResourceGrant.spec.allowances[].resourceType** must match this registration's **spec.resourceType**
           - **ResourceClaim.spec.requests[].resourceType** must match this registration's **spec.resourceType**
-          - **ResourceClaim.spec.consumerRef** must match this registration's **spec.consumerTypeRef** type
+          - **ResourceClaim.spec.consumerRef** must match this registration's **spec.consumerType** type
           - **ResourceClaim.spec.resourceRef** kind must be listed in this registration's **spec.claimingResources**
 
           ### Registration Lifecycle
@@ -62,13 +62,13 @@ spec:
 
           ### Field Constraints and Limits
           - Maximum 20 entries in **spec.claimingResources**
-          - **spec.resourceType**, **spec.consumerTypeRef**, and **spec.type** are immutable after creation
+          - **spec.resourceType**, **spec.consumerType**, and **spec.type** are immutable after creation
           - **spec.description** maximum 500 characters
           - **spec.baseUnit** and **spec.displayUnit** maximum 50 characters each
           - **spec.unitConversionFactor** minimum value is 1
 
           ### Selectors and Filtering
-          - **Field selectors**: spec.consumerTypeRef.kind, spec.consumerTypeRef.apiGroup, spec.resourceType
+          - **Field selectors**: spec.consumerType.kind, spec.consumerType.apiGroup, spec.resourceType
           - **Recommended labels** (add manually):
             - quota.miloapis.com/resource-kind: Project
             - quota.miloapis.com/resource-apigroup: resourcemanager.miloapis.com
@@ -111,6 +111,7 @@ spec:
                   - "byte" (for storage or memory)
                   - "user" (for Entity type tracking Users)
                 maxLength: 50
+                minLength: 1
                 type: string
               claimingResources:
                 description: |-
@@ -133,13 +134,13 @@ spec:
                     apiGroup:
                       description: |-
                         APIGroup specifies the API group of the resource that can create claims.
-                        Use empty string for Kubernetes core resources (**Pod**, **Service**, etc.).
+                        Use empty string for Kubernetes core resources (**Secret**, **ConfigMap**, etc.).
                         Use full group name for custom resources.
 
                         Examples:
-                        - `""` (core resources like **Pod**, **Namespace**)
-                        - `apps` (Kubernetes apps group)
+                        - `""` (core resources like **Secret**, **ConfigMap**)
                         - `resourcemanager.miloapis.com` (custom resource group)
+                        - `iam.miloapis.com` (Milo IAM resources)
                       pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                       type: string
                     kind:
@@ -159,19 +160,19 @@ spec:
                   type: object
                 maxItems: 20
                 type: array
-              consumerTypeRef:
+              consumerType:
                 description: |-
-                  ConsumerTypeRef specifies which resource type receives grants and creates claims for this registration.
+                  ConsumerType specifies which resource type receives grants and creates claims for this registration.
                   The consumer type must exist in the cluster before creating the registration.
 
-                  Example: When registering "Projects per Organization", set `ConsumerTypeRef` to **Organization**
+                  Example: When registering "Projects per Organization", set `ConsumerType` to **Organization**
                   (apiGroup: `resourcemanager.miloapis.com`, kind: `Organization`). **Organizations** then
                   receive **ResourceGrants** allocating **Project** quota and create **ResourceClaims** when **Projects** are created.
                 properties:
                   apiGroup:
                     description: |-
                       APIGroup specifies the API group of the quota consumer resource type.
-                      Use empty string for Kubernetes core resources (**Pod**, **Service**, etc.).
+                      Use empty string for Kubernetes core resources (**Secret**, **ConfigMap**, etc.).
                       Use full group name for custom resources (for example, `resourcemanager.miloapis.com`).
                       Must follow DNS subdomain format with lowercase letters, numbers, and hyphens.
 
@@ -204,8 +205,9 @@ spec:
 
                   Examples:
                   - "Projects created within Organizations"
-                  - "CPU millicores allocated to Pods"
-                  - "Storage bytes claimed by PersistentVolumeClaims"
+                  - "CPU millicores allocated to workloads"
+                  - "Storage bytes claimed by volume requests"
+                maxLength: 500
                 minLength: 1
                 type: string
               displayUnit:
@@ -219,6 +221,7 @@ spec:
                   - "GiB" (for displaying memory/storage instead of bytes)
                   - "TB" (for large storage volumes)
                 maxLength: 50
+                minLength: 1
                 type: string
               resourceType:
                 description: |-
@@ -271,7 +274,7 @@ spec:
                 type: integer
             required:
             - baseUnit
-            - consumerTypeRef
+            - consumerType
             - displayUnit
             - resourceType
             - type
@@ -369,14 +372,13 @@ spec:
         x-kubernetes-validations:
         - message: spec.resourceType is immutable
           rule: '!has(oldSelf.spec.resourceType) || self.spec.resourceType == oldSelf.spec.resourceType'
-        - message: spec.consumerTypeRef is immutable
-          rule: '!has(oldSelf.spec.consumerTypeRef) || self.spec.consumerTypeRef ==
-            oldSelf.spec.consumerTypeRef'
+        - message: spec.consumerType is immutable
+          rule: '!has(oldSelf.spec.consumerType) || self.spec.consumerType == oldSelf.spec.consumerType'
         - message: spec.type is immutable
           rule: '!has(oldSelf.spec.type) || self.spec.type == oldSelf.spec.type'
     selectableFields:
-    - jsonPath: .spec.consumerTypeRef.kind
-    - jsonPath: .spec.consumerTypeRef.apiGroup
+    - jsonPath: .spec.consumerType.kind
+    - jsonPath: .spec.consumerType.apiGroup
     - jsonPath: .spec.resourceType
     served: true
     storage: true

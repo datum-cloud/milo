@@ -8,7 +8,7 @@ items:
     labels:
       test.miloapis.com/scenario: multi-resource-claim
   spec:
-    consumerTypeRef:
+    consumerType:
       apiGroup: resourcemanager.miloapis.com
       kind: Organization
     type: "Entity"
@@ -29,7 +29,7 @@ items:
     labels:
       test.miloapis.com/scenario: multi-resource-claim
   spec:
-    consumerTypeRef:
+    consumerType:
       apiGroup: resourcemanager.miloapis.com
       kind: Organization
     type: "Entity"

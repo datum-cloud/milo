@@ -3,7 +3,7 @@ kind: ResourceRegistration
 metadata:
   name: test-invalid-enum
 spec:
-  consumerTypeRef:
+  consumerType:
     apiGroup: resourcemanager.miloapis.com
     kind: Organization
   # Invalid type - must be Entity or Allocation

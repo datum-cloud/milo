@@ -47,7 +47,7 @@ type ResourceRequest struct {
 // ResourceClaimSpec defines the desired state of ResourceClaim.
 type ResourceClaimSpec struct {
 	// ConsumerRef identifies the quota consumer making this claim. The consumer
-	// must match the ConsumerTypeRef defined in the ResourceRegistration for each
+	// must match the ConsumerType defined in the ResourceRegistration for each
 	// requested resource type. The system validates this relationship during
 	// claim processing.
 	//
@@ -67,7 +67,8 @@ type ResourceClaimSpec struct {
 	// The system processes all requests as a single atomic operation: either all
 	// requests are granted or all are denied.
 	//
-	// +kubebuilder:validation:Required +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
 	Requests []ResourceRequest `json:"requests"`
 
@@ -84,20 +85,19 @@ type ResourceClaimSpec struct {
 	//   - Project resource triggering Project quota claim
 	//   - User resource triggering User quota claim
 	//   - Organization resource triggering storage quota claim
-	//
-	// +kubebuilder:validation:Required
-	ResourceRef UnversionedObjectReference `json:"resourceRef"`
+	ResourceRef UnversionedObjectReference `json:"resourceRef,omitempty"`
 }
 
-// RequestAllocation tracks the allocation status for a specific resource
+// ResourceClaimAllocationStatus tracks the allocation status for a specific resource
 // request within a claim. The system creates one allocation entry for each
 // request in the claim specification.
-type RequestAllocation struct {
+type ResourceClaimAllocationStatus struct {
 	// ResourceType identifies which resource request this allocation status
 	// describes. Must exactly match one of the resourceType values in
 	// spec.requests.
 	//
-	// +kubebuilder:validation:Required +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
 	ResourceType string `json:"resourceType"`
 
 	// Status indicates the allocation result for this specific resource request.
@@ -139,7 +139,8 @@ type RequestAllocation struct {
 	// Set to the requested amount when Status=Granted, 0 when Status=Denied or
 	// Pending.
 	//
-	// +kubebuilder:validation:Optional +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=0
 	AllocatedAmount int64 `json:"allocatedAmount,omitempty"`
 
 	// AllocatingBucket identifies the AllowanceBucket that provided the quota for
@@ -182,7 +183,7 @@ type ResourceClaimStatus struct {
 	// +kubebuilder:validation:Optional
 	// +listType=map
 	// +listMapKey=resourceType
-	Allocations []RequestAllocation `json:"allocations,omitempty"`
+	Allocations []ResourceClaimAllocationStatus `json:"allocations,omitempty"`
 
 	// Conditions represents the overall status of the claim evaluation.
 	// Controllers set these conditions to provide a high-level view of claim
@@ -228,14 +229,14 @@ const (
 	ResourceClaimPendingReason = "PendingEvaluation"
 )
 
-// Request allocation status constants
+// ResourceClaimAllocationStatus status constants
 const (
 	// Request allocation is granted and resources are reserved
-	RequestAllocationGranted = "Granted"
+	ResourceClaimAllocationStatusGranted = "Granted"
 	// Request allocation is denied due to insufficient quota
-	RequestAllocationDenied = "Denied"
+	ResourceClaimAllocationStatusDenied = "Denied"
 	// Request allocation is pending evaluation
-	RequestAllocationPending = "Pending"
+	ResourceClaimAllocationStatusPending = "Pending"
 )
 
 // ResourceClaim requests quota allocation during resource creation. Claims
@@ -248,7 +249,7 @@ const (
 // resolution. When a **ClaimCreationPolicy** triggers during admission, it
 // creates a **ResourceClaim** that immediately enters the quota evaluation
 // pipeline. The quota system first validates that the consumer type matches the
-// expected `ConsumerTypeRef` from the **ResourceRegistration**, then verifies
+// expected `ConsumerType` from the **ResourceRegistration**, then verifies
 // that the triggering resource kind is authorized to claim the requested
 // resource types.
 //
@@ -309,7 +310,7 @@ const (
 //
 //   - Maximum 20 resource requests per claim
 //   - Each resource type can appear only once in requests
-//   - Consumer type must match `ResourceRegistration.spec.consumerTypeRef` for each requested type
+//   - Consumer type must match `ResourceRegistration.spec.consumerType` for each requested type
 //   - Triggering resource kind must be listed in `ResourceRegistration.spec.claimingResources`
 //
 // ### Selectors and Filtering

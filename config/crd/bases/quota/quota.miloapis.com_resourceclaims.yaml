@@ -39,7 +39,7 @@ spec:
           resolution. When a **ClaimCreationPolicy** triggers during admission, it
           creates a **ResourceClaim** that immediately enters the quota evaluation
           pipeline. The quota system first validates that the consumer type matches the
-          expected `ConsumerTypeRef` from the **ResourceRegistration**, then verifies
+          expected `ConsumerType` from the **ResourceRegistration**, then verifies
           that the triggering resource kind is authorized to claim the requested
           resource types.
 
@@ -100,7 +100,7 @@ spec:
 
             - Maximum 20 resource requests per claim
             - Each resource type can appear only once in requests
-            - Consumer type must match `ResourceRegistration.spec.consumerTypeRef` for each requested type
+            - Consumer type must match `ResourceRegistration.spec.consumerType` for each requested type
             - Triggering resource kind must be listed in `ResourceRegistration.spec.claimingResources`
 
           ### Selectors and Filtering
@@ -151,7 +151,7 @@ spec:
               consumerRef:
                 description: |-
                   ConsumerRef identifies the quota consumer making this claim. The consumer
-                  must match the ConsumerTypeRef defined in the ResourceRegistration for each
+                  must match the ConsumerType defined in the ResourceRegistration for each
                   requested resource type. The system validates this relationship during
                   claim processing.
 
@@ -259,6 +259,7 @@ spec:
                   - resourceType
                   type: object
                 maxItems: 20
+                minItems: 1
                 type: array
               resourceRef:
                 description: |-
@@ -322,7 +323,6 @@ spec:
             required:
             - consumerRef
             - requests
-            - resourceRef
             type: object
           status:
             default:
@@ -348,7 +348,7 @@ spec:
                   List is indexed by ResourceType for efficient lookups.
                 items:
                   description: |-
-                    RequestAllocation tracks the allocation status for a specific resource
+                    ResourceClaimAllocationStatus tracks the allocation status for a specific resource
                     request within a claim. The system creates one allocation entry for each
                     request in the claim specification.
                   properties:
@@ -362,6 +362,7 @@ spec:
                         Set to the requested amount when Status=Granted, 0 when Status=Denied or
                         Pending.
                       format: int64
+                      minimum: 0
                       type: integer
                     allocatingBucket:
                       description: |-
@@ -400,6 +401,7 @@ spec:
                         ResourceType identifies which resource request this allocation status
                         describes. Must exactly match one of the resourceType values in
                         spec.requests.
+                      minLength: 1
                       type: string
                     status:
                       description: |-

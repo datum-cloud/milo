@@ -5,12 +5,12 @@ metadata:
   labels:
     test.miloapis.com/quota: "grant-creation-policy"
 spec:
-  enabled: true
+  disabled: false
   trigger:
     resource:
       apiVersion: "resourcemanager.miloapis.com/v1alpha1"
       kind: "Organization"
-    conditions:
+    constraints:
       # Trigger for production-style-org with grant-creation-policy test scenario
       - expression: 'trigger.metadata.name == "production-style-org" && has(trigger.metadata.labels) && "test.miloapis.com/scenario" in trigger.metadata.labels && trigger.metadata.labels["test.miloapis.com/scenario"] == "grant-creation-policy"'
   target:
@@ -29,7 +29,7 @@ spec:
         annotations:
           quota.miloapis.com/created-by: "standard-organization-project-quota-policy"
           quota.miloapis.com/description: "Project quota allocation for Standard organization"
-          quota.miloapis.com/organization: "{{ .trigger.metadata.name }}"
+          quota.miloapis.com/organization: "{{trigger.metadata.name}}"
       spec:
         consumerRef:
           apiGroup: "resourcemanager.miloapis.com"

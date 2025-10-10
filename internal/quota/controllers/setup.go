@@ -84,7 +84,10 @@ func SetupQuotaControllers(mgr ctrl.Manager, dynamicClient dynamic.Interface, lo
 
 	// 6. GrantCreationPolicy controller (policy validation)
 	logger.V(1).Info("Setting up GrantCreationPolicy controller")
-	templateValidator := validation.NewGrantTemplateValidator(sharedResourceTypeValidator)
+	templateValidator, err := validation.NewGrantTemplateValidator(sharedResourceTypeValidator)
+	if err != nil {
+		return fmt.Errorf("failed to create GrantTemplateValidator: %w", err)
+	}
 	if err := (&policy.GrantCreationPolicyReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -112,6 +115,7 @@ func SetupQuotaControllers(mgr ctrl.Manager, dynamicClient dynamic.Interface, lo
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		templateEngine,
+		celEngine,
 		parentContextResolver,
 		mgr.GetEventRecorderFor("grant-creation"),
 		informerManager,

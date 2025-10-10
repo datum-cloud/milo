@@ -3,12 +3,12 @@ kind: GrantCreationPolicy
 metadata:
   name: invalid-test-policy
 spec:
-  enabled: true
+  disabled: false
   trigger:
     resource:
       apiVersion: "resourcemanager.miloapis.com/v1alpha1"
       kind: "Organization"
-    conditions:
+    constraints:
       # Invalid CEL expression - should cause validation failure
       - expression: 'trigger.spec.invalid_field == "test" && invalid_function()'
   target:
