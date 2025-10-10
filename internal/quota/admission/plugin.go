@@ -61,11 +61,11 @@ func init() {
 // via automatic ResourceClaim creation and quota validation.
 type ResourceQuotaEnforcementPlugin struct {
 	*admission.Handler
-	dynamicClient         dynamic.Interface
-	policyEngine          engine.PolicyEngine
-	templateEngine        engine.TemplateEngine
-	validationEngine      validation.ValidationEngine
-	resourceTypeValidator validation.ResourceTypeValidator
+	dynamicClient            dynamic.Interface
+	policyEngine             engine.PolicyEngine
+	templateEngine           engine.TemplateEngine
+	resourceClaimValidator   validation.ResourceClaimValidator
+	resourceTypeValidator    validation.ResourceTypeValidator
 	watchManager          ClaimWatchManager
 	config                *AdmissionPluginConfig
 	logger                logr.Logger
@@ -114,8 +114,8 @@ func (p *ResourceQuotaEnforcementPlugin) ValidateInitialization() error {
 	if p.templateEngine == nil {
 		return fmt.Errorf("template engine not initialized")
 	}
-	if p.validationEngine == nil {
-		return fmt.Errorf("validation engine not initialized")
+	if p.resourceClaimValidator == nil {
+		return fmt.Errorf("resource claim validator not initialized")
 	}
 	// ResourceTypeValidator is optional and may initialize asynchronously
 	// It will provide optimized validation when ready, but isn't required
@@ -147,8 +147,8 @@ func (p *ResourceQuotaEnforcementPlugin) initializeEngines() {
 	p.resourceTypeValidator = validation.NewResourceTypeValidator(p.dynamicClient)
 	p.logger.V(2).Info("ResourceTypeValidator created, will sync in background")
 
-	// Create validation engine with shared ResourceTypeValidator
-	p.validationEngine = validation.NewValidationEngine(p.dynamicClient, p.resourceTypeValidator)
+	// Create resource claim validator with shared ResourceTypeValidator
+	p.resourceClaimValidator = validation.NewResourceClaimValidator(p.dynamicClient, p.resourceTypeValidator)
 
 	// Start policy engine in background
 	go func() {
@@ -310,7 +310,26 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 	// Build evaluation context
 	evalContext := p.buildEvaluationContext(attrs, obj)
 
-	p.logger.V(2).Info("Creating ResourceClaim based on policy",
+	// Evaluate trigger constraints to determine if this resource should trigger the policy
+	constraintsMet, err := p.templateEngine.EvaluateConditions(policy.Spec.Trigger.Constraints, obj)
+	if err != nil {
+		p.logger.Error(err, "Failed to evaluate policy constraints",
+			"policy", policy.Name,
+			"resourceName", attrs.GetName())
+		warning.AddWarning(ctx, "", fmt.Sprintf("Failed to evaluate policy constraints: %v", err))
+		return nil // Don't block resource creation on constraint evaluation errors
+	}
+
+	if !constraintsMet {
+		// Policy constraints not met - skip ResourceClaim creation
+		p.logger.V(3).Info("Policy constraints not met, skipping ResourceClaim creation",
+			"policy", policy.Name,
+			"resourceName", attrs.GetName(),
+			"gvk", gvk)
+		return nil
+	}
+
+	p.logger.V(2).Info("Policy constraints met, creating ResourceClaim based on policy",
 		"policy", policy.Name,
 		"resourceName", attrs.GetName())
 
@@ -660,7 +679,7 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceClaimFields(ctx context
 
 	// Validate that the claiming resource (ResourceRef) is allowed to claim these resources
 	if claim.Spec.ResourceRef.Kind != "" && claim.Spec.ResourceRef.Name != "" {
-		if err := p.validationEngine.ValidateResourceClaimAgainstRegistrations(ctx, claim); err != nil {
+		if err := p.resourceClaimValidator.ValidateResourceClaimAgainstRegistrations(ctx, claim); err != nil {
 			errs = append(errs, field.Invalid(
 				resourceRefPath,
 				fmt.Sprintf("%s/%s", claim.Spec.ResourceRef.APIGroup, claim.Spec.ResourceRef.Kind),
