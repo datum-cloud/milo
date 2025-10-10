@@ -216,7 +216,6 @@ func NewCommand() *cobra.Command {
 	// s.CSRSigningController.AddFlags(fss.FlagSet(names.CertificateSigningRequestSigningController))
 	s.GarbageCollectorController.AddFlags(namedFlagSets.FlagSet(names.GarbageCollectorController))
 	s.NamespaceController.AddFlags(namedFlagSets.FlagSet(names.NamespaceController))
-	s.ResourceQuotaController.AddFlags(namedFlagSets.FlagSet(names.ResourceQuotaController))
 	s.ValidatingAdmissionPolicyStatusController.AddFlags(namedFlagSets.FlagSet(names.ValidatingAdmissionPolicyStatusController))
 	s.Metrics.AddFlags(namedFlagSets.FlagSet("metrics"))
 	logsapi.AddFlags(s.Logs, namedFlagSets.FlagSet("logs"))
@@ -824,7 +823,6 @@ func NewControllerDescriptors() map[string]*ControllerDescriptor {
 
 	register(newNamespaceControllerDescriptor())
 	register(newGarbageCollectorControllerDescriptor())
-	register(newResourceQuotaControllerDescriptor())
 	// register(newCertificateSigningRequestSigningControllerDescriptor())
 	// register(newCertificateSigningRequestApprovingControllerDescriptor())
 	// register(newCertificateSigningRequestCleanerControllerDescriptor())

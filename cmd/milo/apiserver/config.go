@@ -159,6 +159,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 
 	apiResourceConfigSource := controlplane.DefaultAPIResourceConfigSource()
 	apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("serviceaccounts"))
+	apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("resourcequotas"))
 	// Enable identity group/version served by virtual storage
 	apiResourceConfigSource.EnableVersions(identityopenapi.SchemeGroupVersion)
 
