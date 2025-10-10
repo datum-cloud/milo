@@ -111,6 +111,7 @@ spec:
                   - "byte" (for storage or memory)
                   - "user" (for Entity type tracking Users)
                 maxLength: 50
+                minLength: 1
                 type: string
               claimingResources:
                 description: |-
@@ -206,6 +207,7 @@ spec:
                   - "Projects created within Organizations"
                   - "CPU millicores allocated to workloads"
                   - "Storage bytes claimed by volume requests"
+                maxLength: 500
                 minLength: 1
                 type: string
               displayUnit:
@@ -219,6 +221,7 @@ spec:
                   - "GiB" (for displaying memory/storage instead of bytes)
                   - "TB" (for large storage volumes)
                 maxLength: 50
+                minLength: 1
                 type: string
               resourceType:
                 description: |-

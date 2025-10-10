@@ -650,13 +650,23 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceClaimFields(ctx context
 		}
 	}
 
+	// Validate that resourceRef is provided (required for actual ResourceClaim objects)
+	if claim.Spec.ResourceRef.Kind == "" {
+		errs = append(errs, field.Required(resourceRefPath.Child("kind"), "resourceRef.kind is required"))
+	}
+	if claim.Spec.ResourceRef.Name == "" {
+		errs = append(errs, field.Required(resourceRefPath.Child("name"), "resourceRef.name is required"))
+	}
+
 	// Validate that the claiming resource (ResourceRef) is allowed to claim these resources
-	if err := p.validationEngine.ValidateResourceClaimAgainstRegistrations(ctx, claim); err != nil {
-		errs = append(errs, field.Invalid(
-			resourceRefPath,
-			fmt.Sprintf("%s/%s", claim.Spec.ResourceRef.APIGroup, claim.Spec.ResourceRef.Kind),
-			err.Error(),
-		))
+	if claim.Spec.ResourceRef.Kind != "" && claim.Spec.ResourceRef.Name != "" {
+		if err := p.validationEngine.ValidateResourceClaimAgainstRegistrations(ctx, claim); err != nil {
+			errs = append(errs, field.Invalid(
+				resourceRefPath,
+				fmt.Sprintf("%s/%s", claim.Spec.ResourceRef.APIGroup, claim.Spec.ResourceRef.Kind),
+				err.Error(),
+			))
+		}
 	}
 
 	return errs
