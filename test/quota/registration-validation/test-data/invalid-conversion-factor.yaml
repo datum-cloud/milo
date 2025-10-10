@@ -3,7 +3,7 @@ kind: ResourceRegistration
 metadata:
   name: test-invalid-conversion
 spec:
-  consumerTypeRef:
+  consumerType:
     apiGroup: resourcemanager.miloapis.com
     kind: Organization
   type: "Allocation"

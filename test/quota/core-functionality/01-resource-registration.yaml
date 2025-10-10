@@ -6,7 +6,7 @@ metadata:
     test.miloapis.com/quota: "core-functionality"
     test.miloapis.com/scenario: "core-functionality"
 spec:
-  consumerTypeRef:
+  consumerType:
     apiGroup: resourcemanager.miloapis.com
     kind: Organization
   type: "Entity"

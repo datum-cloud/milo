@@ -3,7 +3,7 @@ kind: ResourceRegistration
 metadata:
   name: test-first-registration
 spec:
-  consumerTypeRef:
+  consumerType:
     apiGroup: resourcemanager.miloapis.com
     kind: Organization
   type: "Entity"

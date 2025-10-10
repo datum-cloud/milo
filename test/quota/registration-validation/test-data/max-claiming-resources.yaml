@@ -3,7 +3,7 @@ kind: ResourceRegistration
 metadata:
   name: test-max-claiming
 spec:
-  consumerTypeRef:
+  consumerType:
     apiGroup: resourcemanager.miloapis.com
     kind: Organization
   type: "Entity"

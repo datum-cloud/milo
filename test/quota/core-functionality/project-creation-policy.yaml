@@ -5,30 +5,25 @@ metadata:
   labels:
     test.miloapis.com/quota: "true"
 spec:
-  enabled: true
+  disabled: false
   trigger:
     resource:
       apiVersion: "resourcemanager.miloapis.com/v1alpha1"
       kind: "Project"
-    conditions:
+    constraints:
       # Only trigger for projects with the core-functionality test scenario label
       - expression: 'has(trigger.metadata.labels) && "test.miloapis.com/scenario" in trigger.metadata.labels && trigger.metadata.labels["test.miloapis.com/scenario"] == "core-functionality"'
   target:
     resourceClaimTemplate:
       metadata:
-        namespace: "organization-{{ .trigger.spec.ownerRef.name }}"
+        namespace: "organization-{{trigger.spec.ownerRef.name}}"
         labels:
           quota.miloapis.com/test: "true"
       spec:
         consumerRef:
           apiGroup: "resourcemanager.miloapis.com"
           kind: "Organization"
-          name: "{{ .trigger.spec.ownerRef.name }}"
+          name: "{{trigger.spec.ownerRef.name}}"
         requests:
           - resourceType: "test.corefunction.miloapis.com/projects"
             amount: 1
-        resourceRef:
-          apiGroup: "resourcemanager.miloapis.com"
-          kind: "Project"
-          name: "{{ .trigger.metadata.name }}"
-          namespace: "{{ .trigger.metadata.namespace }}"
