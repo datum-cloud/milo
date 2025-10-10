@@ -145,6 +145,9 @@ spec:
                 type: array
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.groupRef.name
+    - jsonPath: .spec.userRef.name
     served: true
     storage: true
     subresources:

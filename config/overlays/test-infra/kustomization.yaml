@@ -14,8 +14,6 @@ resources:
   - ../../apiserver
   - ../../controller-manager/overlays/core-control-plane
 
-  # Ingress configuration (shared Gateway API with Envoy)
-  - ../../ingress/gateway-api
 
 components:
   - components/auth
@@ -23,6 +21,8 @@ components:
   - ../../components/certificates
   - ../../components/apiserver-audit-logging
   - ../../components/apiserver-tracing
+  # Ingress configuration (shared Gateway API with Envoy)
+  - ../../components/gateway-api
 
 patches:
   # Configure API server for etcd connection

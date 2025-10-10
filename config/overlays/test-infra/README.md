@@ -30,7 +30,7 @@ Manages TLS certificates for the test environment:
 ## Shared Resources
 
 ### Gateway API Configuration
-This overlay uses the shared Gateway API configuration from `config/ingress/gateway-api/` which provides:
+This overlay uses the shared Gateway API configuration from `components/gateway-api/` which provides:
 - HTTPRoute for routing traffic to the API server
 - BackendTLSPolicy for TLS backend connections
 

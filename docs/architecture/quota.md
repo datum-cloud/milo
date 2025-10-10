@@ -19,6 +19,10 @@
   - [Admission Control Flow](#admission-control-flow)
   - [Resource Claiming Flow](#resource-claiming-flow)
 - [Resource Cleanup](#resource-cleanup)
+- [Operational Visibility](#operational-visibility)
+  - [kube-state-metrics Integration](#kube-state-metrics-integration)
+  - [Quota System Implementation Metrics](#quota-system-implementation-metrics)
+  - [Monitoring and Alerting](#monitoring-and-alerting)
 
 ## System Overview
 
@@ -520,6 +524,169 @@ quota through owner references and garbage collection:
   ResourceClaims reference them
 - This prevents resource accumulation and maintains a clean quota state
 
-The cleanup process ensures quota capacity is immediately reclaimed without
-manual intervention, maintaining accurate quota availability for future resource
-creation requests.
+The cleanup process ensures quota capacity is immediately reclaimed without manual intervention, maintaining accurate quota availability for future resource creation requests.
+
+## Operational Visibility
+
+The quota system provides comprehensive operational visibility through two complementary metric systems: kube-state-metrics for resource state tracking and application-level metrics for runtime behavior monitoring.
+
+### kube-state-metrics Integration
+
+The quota system integrates with [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) to expose resource state as Prometheus metrics. [Custom resource state metrics](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/customresourcestate-metrics.md) are configured for all quota resources, providing detailed visibility into quota configuration and status.
+
+**ResourceRegistration Metrics**:
+- `milo_quota_registration_info`: Registration metadata including consumer type, resource type, registration type, units
+  - Labels: `uid`, `name`, `description`, `consumer_api_group`, `consumer_kind`, `resource_type`, `registration_type`, `base_unit`, `display_unit`, `unit_conversion_factor`
+- `milo_quota_registration_status_condition`: Ready/Active status conditions
+  - Labels: `type`, `status`
+- `milo_quota_registration_observed_generation`: Controller processing progress
+- `milo_quota_registration_current_generation`: Resource specification version
+
+**ClaimCreationPolicy Metrics**:
+- `milo_quota_claim_policy_info`: Policy metadata and configuration
+  - Labels: `uid`, `name`, `target_api_version`, `target_kind`, `enabled`
+- `milo_quota_claim_policy_status_condition`: Ready status conditions
+  - Labels: `type`, `status`
+- `milo_quota_claim_policy_enabled`: Policy enablement state (1=enabled, 0=disabled)
+- `milo_quota_claim_policy_observed_generation`: Controller processing progress
+- `milo_quota_claim_policy_current_generation`: Policy specification version
+
+**GrantCreationPolicy Metrics**:
+- `milo_quota_grant_policy_info`: Policy metadata and target configuration
+  - Labels: `uid`, `name`, `trigger_api_version`, `trigger_kind`, `parent_context_api_group`, `parent_context_kind`, `enabled`
+- `milo_quota_grant_policy_status_condition`: Ready status conditions
+  - Labels: `type`, `status`
+- `milo_quota_grant_policy_enabled`: Policy enablement state (1=enabled, 0=disabled)
+- `milo_quota_grant_policy_observed_generation`: Controller processing progress
+- `milo_quota_grant_policy_current_generation`: Policy specification version
+
+**ResourceGrant Metrics**:
+- `milo_quota_grant_info`: Grant metadata and consumer references
+  - Labels: `uid`, `name`, `namespace`, `consumer_api_group`, `consumer_kind`, `consumer_name`
+- `milo_quota_grant_status_condition`: Active status conditions
+  - Labels: `type`, `status`
+- `milo_quota_grant_observed_generation`: Controller processing progress
+- `milo_quota_grant_current_generation`: Grant specification version
+
+**ResourceClaim Metrics**:
+- `milo_quota_claim_info`: Claim metadata with consumer and triggering resource references
+  - Labels: `uid`, `name`, `namespace`, `consumer_api_group`, `consumer_kind`, `consumer_name`, `triggering_resource_api_group`, `triggering_resource_kind`, `triggering_resource_name`, `triggering_resource_namespace`
+- `milo_quota_claim_status_condition`: Granted/Denied status conditions
+  - Labels: `type`, `status`
+- `milo_quota_claim_observed_generation`: Controller processing progress
+- `milo_quota_claim_current_generation`: Claim specification version
+
+**AllowanceBucket Metrics**:
+- `milo_quota_bucket_info`: Bucket metadata and consumer references
+  - Labels: `uid`, `name`, `namespace`, `consumer_api_group`, `consumer_kind`, `consumer_name`, `resource_type`
+- `milo_quota_bucket_limit`: Total quota capacity from contributing grants
+- `milo_quota_bucket_allocated`: Total quota consumed by granted claims
+- `milo_quota_bucket_available`: Available quota capacity (limit - allocated)
+- `milo_quota_bucket_claim_count`: Number of claims consuming from this bucket
+- `milo_quota_bucket_grant_count`: Number of grants contributing to this bucket
+- `milo_quota_bucket_last_reconciliation_timestamp`: Time of last bucket update
+- `milo_quota_bucket_observed_generation`: Controller processing progress
+- `milo_quota_bucket_current_generation`: Bucket specification version
+
+All metrics include `component: quota_system` and `resource_type` labels for filtering and aggregation.
+
+**Configuration Location**: `/Users/scotwells/repos/datum-cloud/milo/config/services/quota/telemetry/metrics/control-plane/`
+
+### Quota System Implementation Metrics
+
+The quota system exposes application-level Prometheus metrics that provide visibility into runtime behavior, performance, and operational health. These metrics are exposed on the standard Kubernetes `/metrics` endpoint.
+
+**Admission Plugin Metrics**:
+
+*Decision Tracking*:
+- `milo_quota_admission_result_total`: Total admission decisions by outcome
+  - Labels: `result` (granted|denied|policy_disabled), `policy_name`, `policy_namespace`, `resource_group`, `resource_kind`
+  - Use case: Track quota enforcement patterns and denial rates per policy
+
+*Watch Manager Performance*:
+- `milo_quota_waiters_current`: Current number of active ResourceClaim waiters
+  - Use case: Monitor concurrent admission requests and system load
+- `milo_quota_wait_register_total`: Total waiter registrations
+  - Use case: Track admission request volume over time
+- `milo_quota_wait_unregister_total`: Total waiter unregistrations
+  - Use case: Monitor waiter lifecycle completion
+- `milo_quota_wait_time_seconds`: Time from waiter registration to final result (histogram)
+  - Labels: `result` (granted|denied|timeout|not_found)
+  - Buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60]
+  - Use case: Track admission latency and identify slow quota decisions
+- `milo_quota_informer_events_total`: ResourceClaim events observed by shared informer
+  - Labels: `type` (add|update|delete|unknown)
+  - Use case: Monitor informer activity and event processing rates
+
+*Policy Engine Performance*:
+- `milo_quota_policy_informer_events_total`: ClaimCreationPolicy events observed by shared informer
+  - Labels: `type` (add|update|delete|unknown)
+  - Use case: Track policy lifecycle events and cache updates
+- `milo_quota_policy_load_total`: Total ClaimCreationPolicy load operations
+  - Use case: Monitor policy cache refresh frequency
+- `milo_quota_policies_active`: Current number of active ClaimCreationPolicy objects in cache
+  - Use case: Track active policy count for capacity planning
+
+**Standard client-go Metrics** (Namespace: `workqueue`):
+- The quota system uses named workqueues that expose [standard client-go workqueue metrics](https://github.com/kubernetes/client-go/blob/master/util/workqueue/metrics.go):
+  - `workqueue_*{name="quota_admission_claim_watch"}`: Admission plugin watch manager metrics
+  - `workqueue_*{name="quota_policy_engine"}`: Policy engine workqueue metrics
+- Available metrics include: `depth`, `adds_total`, `latency_seconds`, `work_duration_seconds`, `unfinished_work_seconds`, `longest_running_processor_seconds`, `retries_total`
+
+**Metric Registration**: All quota system metrics are registered with the [Kubernetes legacy registry](https://pkg.go.dev/k8s.io/component-base/metrics/legacyregistry) (`k8s.io/component-base/metrics/legacyregistry`) during initialization, ensuring they appear on the apiserver `/metrics` endpoint alongside standard Kubernetes metrics.
+
+**Implementation Locations**:
+- Admission Plugin: `/Users/scotwells/repos/datum-cloud/milo/internal/quota/admission/plugin.go:44-59`
+- Watch Manager: `/Users/scotwells/repos/datum-cloud/milo/internal/quota/admission/watch_manager.go:58-107`
+- Policy Engine: `/Users/scotwells/repos/datum-cloud/milo/internal/quota/engine/policy.go:26-62`
+
+### Monitoring and Alerting
+
+The quota system metrics support comprehensive monitoring through [Prometheus](https://prometheus.io/) and visualization through [Grafana](https://grafana.com/). The following sections provide [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/) queries for common operational scenarios.
+
+**Key Monitoring Scenarios**:
+
+*Quota Exhaustion Detection*:
+```promql
+# Organizations approaching quota limits (>90% utilized)
+(milo_quota_bucket_allocated / milo_quota_bucket_limit) > 0.9
+```
+
+*Admission Performance*:
+```promql
+# 95th percentile admission latency by result
+histogram_quantile(0.95,
+  rate(milo_quota_wait_time_seconds_bucket[5m])
+) by (result)
+
+# High denial rates
+rate(milo_quota_admission_result_total{result="denied"}[5m])
+```
+
+*System Health*:
+```promql
+# Stale AllowanceBuckets (not reconciled in 5 minutes)
+(time() - milo_quota_bucket_last_reconciliation_timestamp) > 300
+
+# High waiter counts indicating system load
+milo_quota_waiters_current > 100
+
+# Policy cache stability
+rate(milo_quota_policy_load_total[5m])
+```
+
+*Resource State Tracking*:
+```promql
+# Claims in pending state (condition status != True|False)
+milo_quota_claim_status_condition{type="Granted", status="Unknown"}
+
+# Policies not ready
+milo_quota_claim_policy_status_condition{type="Ready", status="False"}
+```
+
+**Dashboard Recommendations**:
+- Quota utilization panels showing allocated vs limit per consumer
+- Admission latency histograms with breakdown by result type
+- Active waiter counts and policy cache size trends
+- Denial rate trends with policy and resource type breakdowns
+- Workqueue metrics for processing delay detection

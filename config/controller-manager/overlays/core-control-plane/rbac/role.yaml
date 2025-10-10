@@ -40,6 +40,12 @@ rules:
   - patch
   - update
 - apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+- apiGroups:
   - gateway.networking.k8s.io
   resources:
   - gatewayclasses
