@@ -792,6 +792,8 @@ Target defines how and where **ResourceClaims** should be created.
         <td>
           ResourceClaimTemplate defines how to create **ResourceClaims**.
 String fields support CEL expressions for dynamic content.<br/>
+          <br/>
+            <i>Validations</i>:<li>!has(self.spec.resourceRef): resourceRef field is automatically populated and cannot be set in template</li>
         </td>
         <td>true</td>
       </tr></tbody>
@@ -2980,6 +2982,7 @@ Set to the requested amount when Status=Granted, 0 when Status=Denied or
 Pending.<br/>
           <br/>
             <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
         </td>
         <td>false</td>
       </tr><tr>

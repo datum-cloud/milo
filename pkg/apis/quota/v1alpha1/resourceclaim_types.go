@@ -67,7 +67,8 @@ type ResourceClaimSpec struct {
 	// The system processes all requests as a single atomic operation: either all
 	// requests are granted or all are denied.
 	//
-	// +kubebuilder:validation:Required +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
 	Requests []ResourceRequest `json:"requests"`
 
@@ -84,7 +85,6 @@ type ResourceClaimSpec struct {
 	//   - Project resource triggering Project quota claim
 	//   - User resource triggering User quota claim
 	//   - Organization resource triggering storage quota claim
-	//
 	ResourceRef UnversionedObjectReference `json:"resourceRef,omitempty"`
 }
 
@@ -96,7 +96,8 @@ type ResourceClaimAllocationStatus struct {
 	// describes. Must exactly match one of the resourceType values in
 	// spec.requests.
 	//
-	// +kubebuilder:validation:Required +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
 	ResourceType string `json:"resourceType"`
 
 	// Status indicates the allocation result for this specific resource request.
@@ -138,7 +139,8 @@ type ResourceClaimAllocationStatus struct {
 	// Set to the requested amount when Status=Granted, 0 when Status=Denied or
 	// Pending.
 	//
-	// +kubebuilder:validation:Optional +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=0
 	AllocatedAmount int64 `json:"allocatedAmount,omitempty"`
 
 	// AllocatingBucket identifies the AllowanceBucket that provided the quota for

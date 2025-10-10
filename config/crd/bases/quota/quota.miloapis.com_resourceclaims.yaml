@@ -259,6 +259,7 @@ spec:
                   - resourceType
                   type: object
                 maxItems: 20
+                minItems: 1
                 type: array
               resourceRef:
                 description: |-
@@ -361,6 +362,7 @@ spec:
                         Set to the requested amount when Status=Granted, 0 when Status=Denied or
                         Pending.
                       format: int64
+                      minimum: 0
                       type: integer
                     allocatingBucket:
                       description: |-
@@ -399,6 +401,7 @@ spec:
                         ResourceType identifies which resource request this allocation status
                         describes. Must exactly match one of the resourceType values in
                         spec.requests.
+                      minLength: 1
                       type: string
                     status:
                       description: |-

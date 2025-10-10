@@ -413,6 +413,7 @@ spec:
                               - resourceType
                               type: object
                             maxItems: 20
+                            minItems: 1
                             type: array
                           resourceRef:
                             description: |-
@@ -481,6 +482,10 @@ spec:
                     - metadata
                     - spec
                     type: object
+                    x-kubernetes-validations:
+                    - message: resourceRef field is automatically populated and cannot
+                        be set in template
+                      rule: '!has(self.spec.resourceRef)'
                 required:
                 - resourceClaimTemplate
                 type: object
