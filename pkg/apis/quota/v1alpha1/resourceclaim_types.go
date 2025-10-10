@@ -85,8 +85,7 @@ type ResourceClaimSpec struct {
 	//   - User resource triggering User quota claim
 	//   - Organization resource triggering storage quota claim
 	//
-	// +kubebuilder:validation:Required
-	ResourceRef UnversionedObjectReference `json:"resourceRef"`
+	ResourceRef UnversionedObjectReference `json:"resourceRef,omitempty"`
 }
 
 // ResourceClaimAllocationStatus tracks the allocation status for a specific resource

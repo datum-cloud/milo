@@ -322,7 +322,6 @@ spec:
             required:
             - consumerRef
             - requests
-            - resourceRef
             type: object
           status:
             default:

@@ -62,8 +62,7 @@ type ClaimTargetSpec struct {
 }
 
 // ResourceClaimTemplate defines how to create **ResourceClaims** using actual **ResourceClaim** structure.
-//
-// +kubebuilder:validation:XValidation:rule="!has(self.spec.resourceRef)",message="resourceRef field is automatically populated and cannot be set in template"
+// The resourceRef field is automatically populated by the admission controller and should not be included in templates.
 type ResourceClaimTemplate struct {
 	// Metadata for the created **ResourceClaim**.
 	// String fields support CEL expressions.

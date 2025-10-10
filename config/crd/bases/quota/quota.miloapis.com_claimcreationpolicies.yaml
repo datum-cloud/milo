@@ -476,16 +476,11 @@ spec:
                         required:
                         - consumerRef
                         - requests
-                        - resourceRef
                         type: object
                     required:
                     - metadata
                     - spec
                     type: object
-                    x-kubernetes-validations:
-                    - message: resourceRef field is automatically populated and cannot
-                        be set in template
-                      rule: '!has(self.spec.resourceRef)'
                 required:
                 - resourceClaimTemplate
                 type: object

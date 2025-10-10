@@ -792,8 +792,6 @@ Target defines how and where **ResourceClaims** should be created.
         <td>
           ResourceClaimTemplate defines how to create **ResourceClaims**.
 String fields support CEL expressions for dynamic content.<br/>
-          <br/>
-            <i>Validations</i>:<li>!has(self.spec.resourceRef): resourceRef field is automatically populated and cannot be set in template</li>
         </td>
         <td>true</td>
       </tr></tbody>
@@ -1004,7 +1002,7 @@ Examples:
   - User resource triggering User quota claim
   - Organization resource triggering storage quota claim<br/>
         </td>
-        <td>true</td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -2609,7 +2607,7 @@ Examples:
   - User resource triggering User quota claim
   - Organization resource triggering storage quota claim<br/>
         </td>
-        <td>true</td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -3856,8 +3854,8 @@ Maximum 500 characters.
 
 Examples:
 - "Projects created within Organizations"
-- "CPU millicores allocated to Pods"
-- "Storage bytes claimed by PersistentVolumeClaims"<br/>
+- "CPU millicores allocated to workloads"
+- "Storage bytes claimed by volume requests"<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -3890,7 +3888,7 @@ receive **ResourceGrants** allocating **Project** quota and create **ResourceCla
         <td>string</td>
         <td>
           APIGroup specifies the API group of the quota consumer resource type.
-Use empty string for Kubernetes core resources (**Pod**, **Service**, etc.).
+Use empty string for Kubernetes core resources (**Secret**, **ConfigMap**, etc.).
 Use full group name for custom resources (for example, `resourcemanager.miloapis.com`).
 Must follow DNS subdomain format with lowercase letters, numbers, and hyphens.
 
@@ -3953,13 +3951,13 @@ Examples:
         <td>string</td>
         <td>
           APIGroup specifies the API group of the resource that can create claims.
-Use empty string for Kubernetes core resources (**Pod**, **Service**, etc.).
+Use empty string for Kubernetes core resources (**Secret**, **ConfigMap**, etc.).
 Use full group name for custom resources.
 
 Examples:
-- `""` (core resources like **Pod**, **Namespace**)
-- `apps` (Kubernetes apps group)
-- `resourcemanager.miloapis.com` (custom resource group)<br/>
+- `""` (core resources like **Secret**, **ConfigMap**)
+- `resourcemanager.miloapis.com` (custom resource group)
+- `iam.miloapis.com` (Milo IAM resources)<br/>
         </td>
         <td>false</td>
       </tr></tbody>
