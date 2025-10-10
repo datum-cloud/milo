@@ -1,0 +1,18 @@
+# ResourceGrant for quota enforcement testing (lower limits to test enforcement)
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: edge-test-quota-enforcement-org-grant
+  namespace: milo-system
+  labels:
+    test.miloapis.com/quota: "enforcement"
+    test.miloapis.com/scenario: "quota-enforcement"
+spec:
+  consumerRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: edge-test-quota-enforcement-org
+  allowances:
+    - resourceType: "test.miloapis.com/edgeprojects"
+      buckets:
+        - amount: 2  # Lower limit to test enforcement

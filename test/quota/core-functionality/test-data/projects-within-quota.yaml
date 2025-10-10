@@ -1,0 +1,22 @@
+---
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: core-test-basic-project-1
+  labels:
+    test.miloapis.com/scenario: "core-functionality"
+spec:
+  ownerRef:
+    kind: Organization
+    name: core-test-basic-quota-org
+---
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: core-test-basic-project-2
+  labels:
+    test.miloapis.com/scenario: "core-functionality"
+spec:
+  ownerRef:
+    kind: Organization
+    name: core-test-basic-quota-org

@@ -1,0 +1,20 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: core-test-projects-per-org
+  labels:
+    test.miloapis.com/quota: "core-functionality"
+    test.miloapis.com/scenario: "core-functionality"
+spec:
+  consumerType:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  resourceType: "test.corefunction.miloapis.com/projects"
+  description: "Core functionality test quota for maximum projects per organization"
+  baseUnit: "project"
+  displayUnit: "projects"
+  unitConversionFactor: 1
+  claimingResources:
+    - apiGroup: resourcemanager.miloapis.com
+      kind: Project

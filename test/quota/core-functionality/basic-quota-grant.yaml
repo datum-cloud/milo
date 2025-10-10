@@ -1,0 +1,18 @@
+# ResourceGrant for basic quota enforcement testing
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: core-test-basic-quota-org-grant
+  namespace: organization-core-test-basic-quota-org
+  labels:
+    test.miloapis.com/quota: "basic"
+    test.miloapis.com/scenario: "core-functionality"
+spec:
+  consumerRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: core-test-basic-quota-org
+  allowances:
+    - resourceType: "test.corefunction.miloapis.com/projects"
+      buckets:
+        - amount: 2

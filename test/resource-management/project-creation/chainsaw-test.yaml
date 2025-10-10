@@ -3,6 +3,15 @@ kind: Test
 metadata:
   name: project-creation
 spec:
+  description: |
+    Tests basic Project creation and multi-cluster visibility.
+
+    This test verifies:
+    - Projects can be created within an Organization namespace
+    - Projects reach Ready status
+    - Projects are visible in both organization and main cluster contexts
+    - User and OrganizationMembership setup works correctly
+
   # Define clusters for organizational context testing
   clusters:
     main:
@@ -13,6 +22,7 @@ spec:
   steps:
     # Create test organization
     - name: setup-organization
+      description: Create Organization, User, and OrganizationMembership for project testing
       try:
         - apply:
             file: 01-test-organization.yaml
@@ -41,6 +51,7 @@ spec:
 
     # Test project creation and Ready status through organizational context
     - name: test-project-creation-and-ready-status
+      description: Create Project in organization context and verify it reaches Ready status
       cluster: org
       try:
         - apply:
@@ -59,6 +70,7 @@ spec:
 
     # Verify project shows up in main cluster context with correct status
     - name: verify-project-in-main-cluster
+      description: Verify Project is visible in main cluster with correct status
       cluster: main
       try:
         - assert:

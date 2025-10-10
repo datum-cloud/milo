@@ -1,0 +1,15 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-immutable-registration
+spec:
+  # Updating mutable fields only - should succeed
+  description: "Updated description - this is allowed"
+  baseUnit: "thing"
+  displayUnit: "things"
+  unitConversionFactor: 1000
+  claimingResources:
+    - apiGroup: test.miloapis.com
+      kind: TestItem
+    - apiGroup: test.miloapis.com
+      kind: AnotherTestItem
