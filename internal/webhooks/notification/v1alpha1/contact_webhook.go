@@ -247,5 +247,21 @@ func (v *ContactValidator) ValidateUpdate(ctx context.Context, oldObj, newObj ru
 		}
 	}
 
+	// Validate that another contact (different object) with the same subject and email does not already exist
+	var existing notificationv1alpha1.ContactList
+	if err := v.Client.List(ctx, &existing,
+		client.MatchingFields{contactSpecKey: buildContactSpecKey(*contactNew)}); err != nil {
+		return nil, errors.NewInternalError(fmt.Errorf("failed to list contacts: %w", err))
+	}
+	for _, c := range existing.Items {
+		if c.Name == contactNew.Name && c.Namespace == contactNew.Namespace {
+			continue // skip the object being updated
+		}
+		dup := field.Duplicate(field.NewPath("spec"), contactNew.Spec)
+		dup.Detail = fmt.Sprintf("a Contact named %s already has this subject and email in the same Contact namespace", c.Name)
+		errs = append(errs, dup)
+		break
+	}
+
 	return nil, contactValidationResult(errs, contactNew)
 }
