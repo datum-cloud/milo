@@ -292,11 +292,71 @@ func TestContactValidator_ValidateCreate(t *testing.T) {
 			expectError:   true,
 			errorContains: "not found",
 		},
+		"duplicate newsletter contact": {
+			// An existing newsletter contact with the same email should make the new one invalid
+			contact: &notificationv1alpha1.Contact{
+				ObjectMeta: metav1.ObjectMeta{Name: "newsletter-dup"},
+				Spec: notificationv1alpha1.ContactSpec{
+					GivenName:  "Dup",
+					FamilyName: "Letter",
+					Email:      "news@example.com", // same email as the seeded one
+				},
+			},
+			// Seed an existing Contact with the same (nil) SubjectRef and email
+			seedObjects: []client.Object{&notificationv1alpha1.Contact{
+				ObjectMeta: metav1.ObjectMeta{Name: "newsletter"},
+				Spec: notificationv1alpha1.ContactSpec{
+					GivenName:  "News",
+					FamilyName: "Letter",
+					Email:      "news@example.com",
+				},
+			}},
+			expectError:   true,
+			errorContains: "already has this subject and email",
+		},
+		"duplicate user contact": {
+			contact: &notificationv1alpha1.Contact{
+				ObjectMeta: metav1.ObjectMeta{Name: "user-dup"},
+				Spec: notificationv1alpha1.ContactSpec{
+					GivenName:  "Dup",
+					FamilyName: "User",
+					Email:      "user@example.com",
+					SubjectRef: &notificationv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "test-user",
+					},
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "test-user"}, Spec: iamv1alpha1.UserSpec{Email: "test@example.com"}},
+				&notificationv1alpha1.Contact{
+					ObjectMeta: metav1.ObjectMeta{Name: "existing-user-contact"},
+					Spec: notificationv1alpha1.ContactSpec{
+						GivenName:  "Existing",
+						FamilyName: "User",
+						Email:      "user@example.com",
+						SubjectRef: &notificationv1alpha1.SubjectReference{
+							APIGroup: "iam.miloapis.com",
+							Kind:     "User",
+							Name:     "test-user",
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: "already has this subject and email",
+		},
 	}
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			builder := fake.NewClientBuilder().WithScheme(runtimeScheme)
+			// Register the composite index so MatchingFields queries work like the real manager
+			builder = builder.WithIndex(&notificationv1alpha1.Contact{}, contactSpecKey, func(obj client.Object) []string {
+				contact := obj.(*notificationv1alpha1.Contact)
+				return []string{buildContactSpecKey(*contact)}
+			})
 			if len(tt.seedObjects) > 0 {
 				builder = builder.WithObjects(tt.seedObjects...)
 			}
