@@ -310,7 +310,26 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 	// Build evaluation context
 	evalContext := p.buildEvaluationContext(attrs, obj)
 
-	p.logger.V(2).Info("Creating ResourceClaim based on policy",
+	// Evaluate trigger constraints to determine if this resource should trigger the policy
+	constraintsMet, err := p.templateEngine.EvaluateConditions(policy.Spec.Trigger.Constraints, obj)
+	if err != nil {
+		p.logger.Error(err, "Failed to evaluate policy constraints",
+			"policy", policy.Name,
+			"resourceName", attrs.GetName())
+		warning.AddWarning(ctx, "", fmt.Sprintf("Failed to evaluate policy constraints: %v", err))
+		return nil // Don't block resource creation on constraint evaluation errors
+	}
+
+	if !constraintsMet {
+		// Policy constraints not met - skip ResourceClaim creation
+		p.logger.V(3).Info("Policy constraints not met, skipping ResourceClaim creation",
+			"policy", policy.Name,
+			"resourceName", attrs.GetName(),
+			"gvk", gvk)
+		return nil
+	}
+
+	p.logger.V(2).Info("Policy constraints met, creating ResourceClaim based on policy",
 		"policy", policy.Name,
 		"resourceName", attrs.GetName())
 
