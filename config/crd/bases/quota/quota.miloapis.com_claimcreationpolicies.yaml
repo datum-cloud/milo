@@ -413,6 +413,7 @@ spec:
                               - resourceType
                               type: object
                             maxItems: 20
+                            minItems: 1
                             type: array
                           resourceRef:
                             description: |-
@@ -476,7 +477,6 @@ spec:
                         required:
                         - consumerRef
                         - requests
-                        - resourceRef
                         type: object
                     required:
                     - metadata
