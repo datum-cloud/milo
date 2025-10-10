@@ -795,14 +795,14 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 			mockValidator := &testResourceTypeValidator{
 				validResourceTypes: make(map[string]bool), // Empty = no registered types
 			}
-			validationEngine := validation.NewValidationEngine(fakeDynamicClient, mockValidator)
+			resourceClaimValidator := validation.NewResourceClaimValidator(fakeDynamicClient, mockValidator)
 
 			// Create plugin
 			plugin := &ResourceQuotaEnforcementPlugin{
-				Handler:               admission.NewHandler(admission.Create),
-				dynamicClient:         fakeDynamicClient,
-				resourceTypeValidator: mockValidator,
-				validationEngine:      validationEngine,
+				Handler:                  admission.NewHandler(admission.Create),
+				dynamicClient:            fakeDynamicClient,
+				resourceTypeValidator:    mockValidator,
+				resourceClaimValidator:   resourceClaimValidator,
 				config:                DefaultAdmissionPluginConfig(),
 				logger:                logger.WithName("plugin"),
 				watchManager:          &testWatchManager{behavior: "grant"}, // Use mock that grants immediately
@@ -897,7 +897,7 @@ func TestResourceQuotaEnforcementPlugin_InitializationValidation(t *testing.T) {
 					validResourceTypes: make(map[string]bool),
 				}
 				plugin.resourceTypeValidator = mockValidator
-				plugin.validationEngine = validation.NewValidationEngine(fakeDynamicClient, mockValidator)
+				plugin.resourceClaimValidator = validation.NewResourceClaimValidator(fakeDynamicClient, mockValidator)
 
 				// Initialize mock watch manager for test
 				plugin.watchManager = &testWatchManager{behavior: "grant"}
