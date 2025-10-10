@@ -1004,7 +1004,7 @@ Examples:
   - User resource triggering User quota claim
   - Organization resource triggering storage quota claim<br/>
         </td>
-        <td>true</td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -2609,7 +2609,7 @@ Examples:
   - User resource triggering User quota claim
   - Organization resource triggering storage quota claim<br/>
         </td>
-        <td>true</td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -2982,6 +2982,7 @@ Set to the requested amount when Status=Granted, 0 when Status=Denied or
 Pending.<br/>
           <br/>
             <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
         </td>
         <td>false</td>
       </tr><tr>
