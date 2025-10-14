@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: documentation.miloapis.com-documentrevision
+spec:
+  serviceRef:
+    name: "documentation.miloapis.com"
+  kind: DocumentRevision
+  plural: documentrevisions
+  singular: documentrevision
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch

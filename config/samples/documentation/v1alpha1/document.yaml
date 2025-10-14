@@ -1,0 +1,11 @@
+apiVersion: documentation.miloapis.com/v1alpha1
+kind: Document
+metadata:
+  name: sample-document
+spec:
+  title: "Terms of Serevice"
+  description: "Standard terms of service governing usage of the platform."
+  documentType: "tos"
+documentMetadata:
+  category: "Legal"
+  jurisdiction: "US"
