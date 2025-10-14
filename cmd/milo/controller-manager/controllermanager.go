@@ -16,6 +16,7 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/spf13/cobra"
+	agreementv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/agreement/v1alpha1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -453,6 +454,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := documentationv1alpha1webhook.SetupDocumentWebhooksWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up document webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := documentationv1alpha1webhook.SetupDocumentRevisionWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up document revision webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 			if err := agreementv1alpha1webhook.SetupDocumentAcceptanceWebhooksWithManager(ctrl); err != nil {
