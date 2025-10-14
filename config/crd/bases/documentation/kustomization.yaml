@@ -1,0 +1,4 @@
+resources:
+  - documentation.miloapis.com_documents.yaml
+  - documentation.miloapis.com_documentrevisions.yaml
+  - documentation.miloapis.com_documentacceptances.yaml
