@@ -1,0 +1,27 @@
+apiVersion: documentation.miloapis.com/v1alpha1
+kind: DocumentAcceptance
+metadata:
+  name: sample-document-acceptance
+  namespace: default
+spec:
+  documentRevisionRef:
+    name: sample-document-revision
+    namespace: default
+    version: v1.0.3
+  subjectRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Project
+    name: sample-project
+    namespace: default
+  accepterRef:
+    apiGroup: iam.moiloapis.com
+    kind: User
+    name: john-doe
+  acceptanceContext:
+    method: web
+    ipAddress: "203.0.113.42"
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_0)"
+    acceptanceLanguage: en-US
+  signature:
+    type: checkbox
+    timestamp: "2025-10-09T12:00:00Z"

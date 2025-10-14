@@ -46,3 +46,12 @@ resources:
   - iam-role-reader.yaml
   - iam-role-editor.yaml
   - iam-role-admin.yaml
+  - documentation-document-reader.yaml
+  - documentation-document-editor.yaml
+  - documentation-document-admin.yaml
+  - documentation-documentrevision-reader.yaml
+  - documentation-documentrevision-editor.yaml
+  - documentation-documentrevision-admin.yaml
+  - agreement-documentacceptance-reader.yaml
+  - agreement-documentacceptance-editor.yaml
+  - agreement-documentacceptance-admin.yaml
