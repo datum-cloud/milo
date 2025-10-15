@@ -2356,6 +2356,13 @@ UserInvitationStatus defines the observed state of UserInvitation
         </td>
         <td>false</td>
       </tr><tr>
+        <td><b><a href="#userinvitationstatusinviteruser">inviterUser</a></b></td>
+        <td>object</td>
+        <td>
+          InviterUser contains information about the user who invited the user in the invitation.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b><a href="#userinvitationstatusorganization">organization</a></b></td>
         <td>object</td>
         <td>
@@ -2437,6 +2444,33 @@ with respect to the current state of the instance.<br/>
           <br/>
             <i>Format</i>: int64<br/>
             <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### UserInvitation.status.inviterUser
+<sup><sup>[↩ Parent](#userinvitationstatus)</sup></sup>
+
+
+
+InviterUser contains information about the user who invited the user in the invitation.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>displayName</b></td>
+        <td>string</td>
+        <td>
+          DisplayName is the display name of the user who invited the user in the invitation.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
