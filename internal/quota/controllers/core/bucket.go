@@ -50,23 +50,17 @@ type AllowanceBucketController struct {
 // Reconcile maintains AllowanceBucket limits and usage aggregates by watching
 // ResourceGrants and ResourceClaims.
 func (r *AllowanceBucketController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
 	// Get the AllowanceBucket
 	var bucket quotav1alpha1.AllowanceBucket
 	if err := r.Get(ctx, req.NamespacedName, &bucket); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Single-writer: attempt to create the bucket if a claim references it
-			if created, cerr := r.ensureBucketFromClaims(ctx, req); cerr != nil {
-				return ctrl.Result{}, cerr
-			} else if !created {
-				logger.V(1).Info("AllowanceBucket not found and no claims reference it; skipping", "bucket", req.NamespacedName)
-				return ctrl.Result{}, nil
+			if err := r.ensureBucketFromClaims(ctx, req); err != nil {
+				return ctrl.Result{}, err
 			}
-			// Re-fetch after creation
-			if gerr := r.Get(ctx, req.NamespacedName, &bucket); gerr != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to get AllowanceBucket after create: %w", gerr)
-			}
+			// Return early. If an allowance bucket was created, the request has
+			// already been requeued and will be retried.
+			return ctrl.Result{}, nil
 		} else {
 			return ctrl.Result{}, fmt.Errorf("failed to get AllowanceBucket: %w", err)
 		}
@@ -228,10 +222,10 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 
 // ensureBucketFromClaims creates the bucket spec from a referencing claim if found.
 // It returns true if a bucket was created, false if no referencing claim was found.
-func (r *AllowanceBucketController) ensureBucketFromClaims(ctx context.Context, req ctrl.Request) (bool, error) {
+func (r *AllowanceBucketController) ensureBucketFromClaims(ctx context.Context, req ctrl.Request) error {
 	var claims quotav1alpha1.ResourceClaimList
 	if err := r.List(ctx, &claims, client.InNamespace(req.Namespace)); err != nil {
-		return false, fmt.Errorf("failed to list ResourceClaims: %w", err)
+		return fmt.Errorf("failed to list ResourceClaims: %w", err)
 	}
 	for _, claim := range claims.Items {
 		for _, request := range claim.Spec.Requests {
@@ -253,13 +247,13 @@ func (r *AllowanceBucketController) ensureBucketFromClaims(ctx context.Context, 
 					},
 				}
 				if err := r.Create(ctx, bucket); err != nil && !apierrors.IsAlreadyExists(err) {
-					return false, fmt.Errorf("failed to create AllowanceBucket %s: %w", req.Name, err)
+					return fmt.Errorf("failed to create AllowanceBucket %s: %w", req.Name, err)
 				}
-				return true, nil
+				return nil
 			}
 		}
 	}
-	return false, nil
+	return nil
 }
 
 // isResourceGrantActive checks if a ResourceGrant has an Active condition with status True.
