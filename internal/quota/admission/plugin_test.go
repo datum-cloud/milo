@@ -45,10 +45,11 @@ func (t *testResourceTypeValidator) IsClaimingResourceAllowed(ctx context.Contex
 	return true, []string{fmt.Sprintf("%s/%s", claimingAPIGroup, claimingKind)}, nil
 }
 
-func (t *testResourceTypeValidator) HasSynced() bool {
-	// Test mock is always synced
-	return true
+func (t *testResourceTypeValidator) IsResourceTypeRegistered(resourceType string) bool {
+	return false
 }
+
+func (t *testResourceTypeValidator) HasSynced() bool { return true }
 
 func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 	tests := []struct {

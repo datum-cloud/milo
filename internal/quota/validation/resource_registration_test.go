@@ -1,11 +1,31 @@
 package validation
 
 import (
+	"context"
 	"testing"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type mockResourceTypeValidator struct {
+	registrations map[string]string // resourceType -> registrationName
+}
+
+func (m *mockResourceTypeValidator) ValidateResourceType(ctx context.Context, resourceType string) error {
+	return nil
+}
+
+func (m *mockResourceTypeValidator) IsClaimingResourceAllowed(ctx context.Context, resourceType string, consumerRef quotav1alpha1.ConsumerRef, claimingAPIGroup, claimingKind string) (bool, []string, error) {
+	return true, nil, nil
+}
+
+func (m *mockResourceTypeValidator) IsResourceTypeRegistered(resourceType string) bool {
+	_, exists := m.registrations[resourceType]
+	return exists
+}
+
+func (m *mockResourceTypeValidator) HasSynced() bool { return true }
 
 func TestResourceRegistrationValidator_Validate(t *testing.T) {
 	tests := []struct {
@@ -120,9 +140,38 @@ func TestResourceRegistrationValidator_Validate(t *testing.T) {
 			wantErrs:    true,
 			errContains: "first occurrence at index 0",
 		},
+		{
+			name: "invalid registration with duplicate resourceType",
+			registration: &quotav1alpha1.ResourceRegistration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "new-registration",
+				},
+				Spec: quotav1alpha1.ResourceRegistrationSpec{
+					ResourceType: "duplicate-resource-type",
+					ConsumerType: quotav1alpha1.ConsumerType{
+						APIGroup: "resourcemanager.miloapis.com",
+						Kind:     "Organization",
+					},
+					ClaimingResources: []quotav1alpha1.ClaimingResource{
+						{
+							APIGroup: "resourcemanager.miloapis.com",
+							Kind:     "Project",
+						},
+					},
+				},
+			},
+			wantErrs:    true,
+			errContains: "already registered",
+		},
 	}
 
-	validator := NewResourceRegistrationValidator()
+	// Create mock with one existing registration
+	mock := &mockResourceTypeValidator{
+		registrations: map[string]string{
+			"duplicate-resource-type": "existing-registration",
+		},
+	}
+	validator := NewResourceRegistrationValidator(mock)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

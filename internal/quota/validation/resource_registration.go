@@ -8,18 +8,28 @@ import (
 )
 
 // ResourceRegistrationValidator validates ResourceRegistration resources.
-type ResourceRegistrationValidator struct{}
+type ResourceRegistrationValidator struct {
+	resourceTypeValidator ResourceTypeValidator
+}
 
 // NewResourceRegistrationValidator creates a new ResourceRegistrationValidator.
-func NewResourceRegistrationValidator() *ResourceRegistrationValidator {
-	return &ResourceRegistrationValidator{}
+func NewResourceRegistrationValidator(resourceTypeValidator ResourceTypeValidator) *ResourceRegistrationValidator {
+	return &ResourceRegistrationValidator{
+		resourceTypeValidator: resourceTypeValidator,
+	}
 }
 
 // Validate performs complete validation of a ResourceRegistration.
+// This includes both self-contained validation (duplicate claimingResources)
+// and cluster-wide validation (resourceType uniqueness).
 func (v *ResourceRegistrationValidator) Validate(registration *quotav1alpha1.ResourceRegistration) field.ErrorList {
 	var allErrs field.ErrorList
 
 	if errs := v.validateClaimingResourcesDuplicates(registration); len(errs) > 0 {
+		allErrs = append(allErrs, errs...)
+	}
+
+	if errs := v.validateResourceTypeUniqueness(registration); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
 	}
 
@@ -47,6 +57,20 @@ func (v *ResourceRegistrationValidator) validateClaimingResourcesDuplicates(regi
 			))
 		}
 		seen[key] = i
+	}
+
+	return allErrs
+}
+
+// validateResourceTypeUniqueness checks that the resourceType is not already registered.
+func (v *ResourceRegistrationValidator) validateResourceTypeUniqueness(registration *quotav1alpha1.ResourceRegistration) field.ErrorList {
+	var allErrs field.ErrorList
+
+	if v.resourceTypeValidator.IsResourceTypeRegistered(registration.Spec.ResourceType) {
+		allErrs = append(allErrs, field.Duplicate(
+			field.NewPath("spec", "resourceType"),
+			fmt.Sprintf("resource type '%s' is already registered", registration.Spec.ResourceType),
+		))
 	}
 
 	return allErrs

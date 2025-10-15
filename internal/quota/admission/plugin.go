@@ -16,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/admission/initializer"
 	"k8s.io/apiserver/pkg/endpoints/request"
@@ -142,9 +141,9 @@ func (p *ResourceQuotaEnforcementPlugin) initializeEngines() {
 
 	p.templateEngine = engine.NewTemplateEngine(celEngine, p.logger.WithName("template"))
 	p.policyEngine = engine.NewPolicyEngine(p.dynamicClient, p.logger)
-	p.resourceClaimValidator = validation.NewResourceClaimValidator(p.dynamicClient, p.resourceTypeValidator)
-	p.resourceRegistrationValidator = validation.NewResourceRegistrationValidator()
 	p.resourceTypeValidator = validation.NewResourceTypeValidator(p.dynamicClient)
+	p.resourceClaimValidator = validation.NewResourceClaimValidator(p.dynamicClient, p.resourceTypeValidator)
+	p.resourceRegistrationValidator = validation.NewResourceRegistrationValidator(p.resourceTypeValidator)
 
 	go func() {
 		if err := p.policyEngine.Start(context.Background()); err != nil {
@@ -789,49 +788,6 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceRegistration(ctx contex
 			registration.Name,
 			validationErrs,
 		))
-	}
-
-	// Check if resourceType already exists across all registrations
-	gvr := schema.GroupVersionResource{
-		Group:    "quota.miloapis.com",
-		Version:  "v1alpha1",
-		Resource: "resourceregistrations",
-	}
-
-	list, err := p.dynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "Failed to list ResourceRegistrations")
-		return fmt.Errorf("failed to list ResourceRegistrations: %w", err)
-	}
-
-	for _, item := range list.Items {
-		existing := &quotav1alpha1.ResourceRegistration{}
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(item.Object, existing); err != nil {
-			p.logger.V(4).Info("Failed to convert existing registration", "error", err)
-			continue
-		}
-
-		if existing.Spec.ResourceType == registration.Spec.ResourceType &&
-			existing.Name != registration.Name {
-			span.SetAttributes(
-				attribute.String("validation.status", "failed"),
-				attribute.String("duplicate.name", existing.Name),
-			)
-			span.SetStatus(codes.Error, "Duplicate resourceType found")
-
-			return admission.NewForbidden(attrs, errors.NewInvalid(
-				quotav1alpha1.GroupVersion.WithKind("ResourceRegistration").GroupKind(),
-				registration.Name,
-				field.ErrorList{
-					field.Duplicate(
-						field.NewPath("spec", "resourceType"),
-						fmt.Sprintf("resource type '%s' is already registered by '%s'",
-							registration.Spec.ResourceType, existing.Name),
-					),
-				},
-			))
-		}
 	}
 
 	span.SetAttributes(attribute.String("validation.status", "passed"))
