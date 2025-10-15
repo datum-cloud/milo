@@ -45,6 +45,7 @@ import (
 	"go.miloapis.com/milo/internal/apiserver/admission/initializer"
 	sessionsbackend "go.miloapis.com/milo/internal/apiserver/identity/sessions"
 	identitystorage "go.miloapis.com/milo/internal/apiserver/storage/identity"
+	admissionquota "go.miloapis.com/milo/internal/quota/admission"
 	identityapi "go.miloapis.com/milo/pkg/apis/identity"
 	identityopenapi "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
@@ -220,6 +221,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		)
 	}
 	c.APIExtensions = apiExtensions
+
+	// Add readiness check for quota validator to ensure cache is synced before serving traffic
+	kubeAPIs.Generic.AddReadyzChecks(admissionquota.ReadinessCheck())
 
 	// TODO(jreese) create an admission plugin that will prohibit the creation of
 	// a Secret with a type of `kubernetes.io/service-account-token`

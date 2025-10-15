@@ -45,8 +45,8 @@ func (t *testResourceTypeValidator) IsClaimingResourceAllowed(ctx context.Contex
 	return true, []string{fmt.Sprintf("%s/%s", claimingAPIGroup, claimingKind)}, nil
 }
 
-func (t *testResourceTypeValidator) IsReady() bool {
-	// Test mock is always ready
+func (t *testResourceTypeValidator) HasSynced() bool {
+	// Test mock is always synced
 	return true
 }
 
@@ -799,13 +799,13 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 
 			// Create plugin
 			plugin := &ResourceQuotaEnforcementPlugin{
-				Handler:                  admission.NewHandler(admission.Create),
-				dynamicClient:            fakeDynamicClient,
-				resourceTypeValidator:    mockValidator,
-				resourceClaimValidator:   resourceClaimValidator,
-				config:                DefaultAdmissionPluginConfig(),
-				logger:                logger.WithName("plugin"),
-				watchManager:          &testWatchManager{behavior: "grant"}, // Use mock that grants immediately
+				Handler:                admission.NewHandler(admission.Create),
+				dynamicClient:          fakeDynamicClient,
+				resourceTypeValidator:  mockValidator,
+				resourceClaimValidator: resourceClaimValidator,
+				config:                 DefaultAdmissionPluginConfig(),
+				logger:                 logger.WithName("plugin"),
+				watchManager:           &testWatchManager{behavior: "grant"}, // Use mock that grants immediately
 			}
 
 			// Convert ResourceClaim to unstructured for admission attributes

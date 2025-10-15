@@ -61,14 +61,14 @@ func init() {
 // via automatic ResourceClaim creation and quota validation.
 type ResourceQuotaEnforcementPlugin struct {
 	*admission.Handler
-	dynamicClient            dynamic.Interface
-	policyEngine             engine.PolicyEngine
-	templateEngine           engine.TemplateEngine
-	resourceClaimValidator   validation.ResourceClaimValidator
-	resourceTypeValidator    validation.ResourceTypeValidator
-	watchManager          ClaimWatchManager
-	config                *AdmissionPluginConfig
-	logger                logr.Logger
+	dynamicClient          dynamic.Interface
+	policyEngine           engine.PolicyEngine
+	templateEngine         engine.TemplateEngine
+	resourceClaimValidator validation.ResourceClaimValidator
+	resourceTypeValidator  validation.ResourceTypeValidator
+	watchManager           ClaimWatchManager
+	config                 *AdmissionPluginConfig
+	logger                 logr.Logger
 }
 
 // Ensure ResourceQuotaEnforcementPlugin implements the required initializer interfaces
@@ -679,12 +679,9 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceClaimFields(ctx context
 
 	// Validate that the claiming resource (ResourceRef) is allowed to claim these resources
 	if claim.Spec.ResourceRef.Kind != "" && claim.Spec.ResourceRef.Name != "" {
-		if err := p.resourceClaimValidator.ValidateResourceClaimAgainstRegistrations(ctx, claim); err != nil {
-			errs = append(errs, field.Invalid(
-				resourceRefPath,
-				fmt.Sprintf("%s/%s", claim.Spec.ResourceRef.APIGroup, claim.Spec.ResourceRef.Kind),
-				err.Error(),
-			))
+		if validationErrs := p.resourceClaimValidator.ValidateResourceClaimAgainstRegistrations(ctx, claim); len(validationErrs) > 0 {
+			// Append all validation errors from the resource claim validator
+			errs = append(errs, validationErrs...)
 		}
 	}
 
