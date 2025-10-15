@@ -81,7 +81,7 @@ func (r *AllowanceBucketController) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// Try to grant pending claims by reserving capacity
-	if err := r.processPendingGrants(ctx, &bucket); err != nil {
+	if err := r.processPendingClaims(ctx, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed processing pending grants: %w", err)
 	}
 
@@ -261,10 +261,10 @@ func (r *AllowanceBucketController) isResourceGrantActive(grant *quotav1alpha1.R
 	return apimeta.IsStatusConditionTrue(grant.Status.Conditions, quotav1alpha1.ResourceGrantActive)
 }
 
-// processPendingGrants attempts to grant pending requests that reference this bucket.
+// processPendingClaims attempts to grant pending requests that reference this bucket.
 // For each eligible claim, it evaluates individual requests that match this bucket,
 // reserves capacity, then marks specific request allocations as Granted/Denied.
-func (r *AllowanceBucketController) processPendingGrants(ctx context.Context, bucket *quotav1alpha1.AllowanceBucket) error {
+func (r *AllowanceBucketController) processPendingClaims(ctx context.Context, bucket *quotav1alpha1.AllowanceBucket) error {
 	logger := log.FromContext(ctx)
 	var claims quotav1alpha1.ResourceClaimList
 	if err := r.List(ctx, &claims, client.InNamespace(bucket.Namespace)); err != nil {
