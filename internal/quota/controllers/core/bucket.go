@@ -229,7 +229,7 @@ func (r *AllowanceBucketController) ensureBucketFromClaims(ctx context.Context, 
 	}
 	for _, claim := range claims.Items {
 		for _, request := range claim.Spec.Requests {
-			name := GenerateAllowanceBucketName(claim.Namespace, request.ResourceType, claim.Spec.ConsumerRef)
+			name := generateAllowanceBucketName(claim.Namespace, request.ResourceType, claim.Spec.ConsumerRef)
 			if name == req.Name {
 				// create bucket
 				bucket := &quotav1alpha1.AllowanceBucket{
@@ -404,13 +404,10 @@ func (r *AllowanceBucketController) updateResourceClaimAllocation(ctx context.Co
 	return nil
 }
 
-// GenerateAllowanceBucketName creates a deterministic name for an AllowanceBucket.
-func GenerateAllowanceBucketName(namespace, resourceType string, ownerRef quotav1alpha1.ConsumerRef) string {
-	// Why: using namespace|resourceType|owner yields stable, per-owner buckets and
-	// avoids cross-owner collisions. The name is truncated to remain DNS-safe.
+// generateAllowanceBucketName creates a deterministic name for an AllowanceBucket.
+func generateAllowanceBucketName(namespace, resourceType string, ownerRef quotav1alpha1.ConsumerRef) string {
 	input := fmt.Sprintf("%s%s%s%s", namespace, resourceType, ownerRef.Kind, ownerRef.Name)
-	hash := sha256.Sum256([]byte(input))
-	return fmt.Sprintf("bucket-%x", hash)[:19]
+	return fmt.Sprintf("bucket-%x", sha256.Sum256([]byte(input)))
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -500,7 +497,7 @@ func (r *AllowanceBucketController) enqueueAffectedBuckets(ctx context.Context, 
 	case *quotav1alpha1.ResourceClaim:
 		// For each request in the claim, find matching buckets
 		for _, request := range o.Spec.Requests {
-			bucketName := GenerateAllowanceBucketName(o.Namespace, request.ResourceType, o.Spec.ConsumerRef)
+			bucketName := generateAllowanceBucketName(o.Namespace, request.ResourceType, o.Spec.ConsumerRef)
 			requests = append(requests, reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      bucketName,
