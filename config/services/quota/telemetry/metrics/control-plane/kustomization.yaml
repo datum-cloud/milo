@@ -8,8 +8,6 @@ configMapGenerator:
   - name: milo-quota-resourceregistrations-metrics
     options:
       labels:
-        custom-resource-metrics-config: "true"
-        app.kubernetes.io/component: quota-metrics
         quota.miloapis.com/resource-type: resourceregistrations
     files:
       - config.yaml=resourceregistrations.yaml
@@ -17,8 +15,6 @@ configMapGenerator:
   - name: milo-quota-resourcegrants-metrics
     options:
       labels:
-        custom-resource-metrics-config: "true"
-        app.kubernetes.io/component: quota-metrics
         quota.miloapis.com/resource-type: resourcegrants
     files:
       - config.yaml=resourcegrants.yaml
@@ -26,8 +22,6 @@ configMapGenerator:
   - name: milo-quota-resourceclaims-metrics
     options:
       labels:
-        custom-resource-metrics-config: "true"
-        app.kubernetes.io/component: quota-metrics
         quota.miloapis.com/resource-type: resourceclaims
     files:
       - config.yaml=resourceclaims.yaml
@@ -35,8 +29,6 @@ configMapGenerator:
   - name: milo-quota-allowancebuckets-metrics
     options:
       labels:
-        custom-resource-metrics-config: "true"
-        app.kubernetes.io/component: quota-metrics
         quota.miloapis.com/resource-type: allowancebuckets
     files:
       - config.yaml=allowancebuckets.yaml
@@ -44,8 +36,6 @@ configMapGenerator:
   - name: milo-quota-claimcreationpolicies-metrics
     options:
       labels:
-        custom-resource-metrics-config: "true"
-        app.kubernetes.io/component: quota-metrics
         quota.miloapis.com/resource-type: claimcreationpolicies
     files:
       - config.yaml=claimcreationpolicies.yaml
@@ -53,8 +43,6 @@ configMapGenerator:
   - name: milo-quota-grantcreationpolicies-metrics
     options:
       labels:
-        custom-resource-metrics-config: "true"
-        app.kubernetes.io/component: quota-metrics
         quota.miloapis.com/resource-type: grantcreationpolicies
     files:
       - config.yaml=grantcreationpolicies.yaml
@@ -64,3 +52,5 @@ generatorOptions:
   labels:
     app.kubernetes.io/part-of: milo
     app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/component: quota-metrics
+    telemetry.datumapis.com/core-resource-metrics-config: "true"
