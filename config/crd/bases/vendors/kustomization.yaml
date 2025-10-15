@@ -1,0 +1,4 @@
+resources:
+- vendors.miloapis.com_vendors.yaml
+- vendors.miloapis.com_vendortypedefinitions.yaml
+- vendors.miloapis.com_vendorverifications.yaml

@@ -1,0 +1,169 @@
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: llc
+  annotations:
+    kubernetes.io/display-name: "Limited Liability Company (LLC)"
+spec:
+  code: "llc"
+  displayName: "Limited Liability Company (LLC)"
+  description: "A business structure that combines the pass-through taxation of a partnership or sole proprietorship with the limited liability of a corporation"
+  enabled: true
+  category: "business"
+  requiresBusinessFields: true
+  requiresTaxVerification: true
+  validCountries: ["US"]
+  requiredTaxDocuments: ["W-9", "W-8BEN"]
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: s-corp
+  annotations:
+    kubernetes.io/display-name: "S Corporation"
+spec:
+  code: "s-corp"
+  displayName: "S Corporation"
+  description: "A special type of corporation that passes corporate income, losses, deductions, and credits through to shareholders for federal tax purposes"
+  enabled: true
+  category: "business"
+  requiresBusinessFields: true
+  requiresTaxVerification: true
+  validCountries: ["US"]
+  requiredTaxDocuments: ["W-9"]
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: c-corp
+  annotations:
+    kubernetes.io/display-name: "C Corporation"
+spec:
+  code: "c-corp"
+  displayName: "C Corporation"
+  description: "A legal structure for a corporation in which the owners, or shareholders, are taxed separately from the entity"
+  enabled: true
+  category: "business"
+  requiresBusinessFields: true
+  requiresTaxVerification: true
+  validCountries: ["US"]
+  requiredTaxDocuments: ["W-9"]
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: partnership
+  annotations:
+    kubernetes.io/display-name: "Partnership"
+spec:
+  code: "partnership"
+  displayName: "Partnership"
+  description: "A business structure in which two or more individuals manage and operate a business in accordance with the terms and objectives set out in a Partnership Deed"
+  enabled: true
+  category: "business"
+  requiresBusinessFields: true
+  requiresTaxVerification: true
+  validCountries: ["US"]
+  requiredTaxDocuments: ["W-9"]
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: sole-proprietorship
+  annotations:
+    kubernetes.io/display-name: "Sole Proprietorship"
+spec:
+  code: "sole-proprietorship"
+  displayName: "Sole Proprietorship"
+  description: "A business structure in which an individual and their company are considered a single entity for tax and liability purposes"
+  enabled: true
+  category: "business"
+  requiresBusinessFields: false
+  requiresTaxVerification: true
+  validCountries: ["US"]
+  requiredTaxDocuments: ["W-9"]
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: nonprofit
+  annotations:
+    kubernetes.io/display-name: "Non-Profit Corporation"
+spec:
+  code: "nonprofit"
+  displayName: "Non-Profit Corporation"
+  description: "A corporation that has been granted tax-exempt status by the IRS because it furthers a social cause and provides a public benefit"
+  enabled: true
+  category: "nonprofit"
+  requiresBusinessFields: true
+  requiresTaxVerification: true
+  validCountries: ["US"]
+  requiredTaxDocuments: ["W-9"]
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: individual
+  annotations:
+    kubernetes.io/display-name: "Individual"
+spec:
+  code: "individual"
+  displayName: "Individual"
+  description: "An individual person providing services or goods"
+  enabled: true
+  category: "individual"
+  requiresBusinessFields: false
+  requiresTaxVerification: true
+  validCountries: []
+  requiredTaxDocuments: ["W-9"]
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: ltd
+  annotations:
+    kubernetes.io/display-name: "Limited Company (Ltd.)"
+spec:
+  code: "ltd"
+  displayName: "Limited Company (Ltd.)"
+  description: "A private limited company, common in the UK and other Commonwealth countries"
+  enabled: true
+  category: "international"
+  requiresBusinessFields: true
+  requiresTaxVerification: true
+  validCountries: ["GB", "AU", "CA", "NZ"]
+  requiredTaxDocuments: ["W-8BEN"]
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: gmbh
+  annotations:
+    kubernetes.io/display-name: "GmbH"
+spec:
+  code: "gmbh"
+  displayName: "Gesellschaft mit beschränkter Haftung (GmbH)"
+  description: "A type of legal entity in Germany, Austria, and Switzerland"
+  enabled: true
+  category: "international"
+  requiresBusinessFields: true
+  requiresTaxVerification: true
+  validCountries: ["DE", "AT", "CH"]
+  requiredTaxDocuments: ["W-8BEN"]
+---
+apiVersion: vendors.miloapis.com/v1alpha1
+kind: VendorTypeDefinition
+metadata:
+  name: other
+  annotations:
+    kubernetes.io/display-name: "Other"
+spec:
+  code: "other"
+  displayName: "Other"
+  description: "Other business structure not listed above"
+  enabled: true
+  category: "other"
+  requiresBusinessFields: false
+  requiresTaxVerification: true
+  validCountries: []
+  requiredTaxDocuments: ["W-9"]
