@@ -125,6 +125,19 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		log.Error(err, "Failed to get Organization Display Name")
 		return ctrl.Result{}, fmt.Errorf("failed to get Organization Display Name: %w", err)
 	}
+	// Get the display name of the User who invited the user in the invitation
+	inviterDisplayName, err := r.getReferencedInviterUserDisplayName(ctx, ui.Spec.InvitedBy)
+	if err != nil {
+		log.Error(err, "Failed to get Inviter Display Name")
+		return ctrl.Result{}, fmt.Errorf("failed to get Inviter Display Name: %w", err)
+	}
+	// Update the UserInvitation status with the organization and inviter user information
+	ui.Status.Organization = iamv1alpha1.UserInvitationOrganizationStatus{
+		DisplayName: organizationDisplayName,
+	}
+	ui.Status.InviterUser = iamv1alpha1.UserInvitationUserStatus{
+		DisplayName: inviterDisplayName,
+	}
 
 	// Check that the UserInvitation is not expired
 	// Expiration is checked in the validationwebhook, but we check here in case some UserInvitation got
@@ -145,7 +158,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Send an email to the invitee user to accept the invitation
 	// It is possible that the invitee User is not created yet, so we send the email anyway.
-	if err := r.createInvitationEmail(ctx, ui.DeepCopy(), organizationDisplayName); err != nil {
+	if err := r.createInvitationEmail(ctx, ui.DeepCopy()); err != nil {
 		log.Error(err, "Failed to send invitation email to user", "userInvitation", ui.GetName())
 		return ctrl.Result{}, fmt.Errorf("failed to send invitation email to user: %w", err)
 	}
@@ -247,11 +260,6 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			log.Error(err, "Failed to create policy binding with %s role", role, "userInvitation", ui.GetName())
 			return ctrl.Result{}, fmt.Errorf("failed to create policy binding with %s role: %w", role, err)
 		}
-	}
-
-	// Update the UserInvitation status with the organization information
-	ui.Status.Organization = iamv1alpha1.UserInvitationOrganizationStatus{
-		DisplayName: organizationDisplayName,
 	}
 
 	// Update the UserInvitation status
@@ -573,7 +581,7 @@ var userCreateOnlyPredicate = predicate.Funcs{
 
 // createInvitationEmail creates an email to the invitee user to accept the invitation.
 // This is an idempotent operation.
-func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui *iamv1alpha1.UserInvitation, organizationDisplayName string) error {
+func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui *iamv1alpha1.UserInvitation) error {
 	log := logf.FromContext(ctx).WithName("userinvitation-create-invitation-email")
 	log.Info("Creating invitation email to user", "userInvitation", ui.GetName())
 
@@ -589,18 +597,10 @@ func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui
 		return fmt.Errorf("failed to check existing Email: %w", err)
 	}
 
-	// Build variables required by the template
-	// UserName
-	username := strings.TrimSpace(ui.Spec.GivenName + " " + ui.Spec.FamilyName)
-	if username == "" {
-		username = ui.Name
-	}
-
 	variables := []notificationv1alpha1.EmailVariable{
-
 		{
 			Name:  "OrganizationDisplayName",
-			Value: organizationDisplayName,
+			Value: ui.Status.Organization.DisplayName,
 		},
 		{
 			Name:  "UserInvitationName",
@@ -608,7 +608,7 @@ func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui
 		},
 		{
 			Name:  "InviterDisplayName",
-			Value: username,
+			Value: ui.Status.InviterUser.DisplayName,
 		},
 	}
 
@@ -673,20 +673,19 @@ func (r *UserInvitationController) getInviteeUser(ctx context.Context, email str
 	return &users.Items[0], nil
 }
 
-func (r *UserInvitationController) getInviterUser(ctx context.Context, email string) (*iamv1alpha1.User, error) {
-	log := logf.FromContext(ctx).WithName("userinvitation-get-inviter-user")
-	log.Info("Getting Inviter User by email", "email", email)
+// getReferencedInviterUserDisplayName gets the display name of the user who invited the user in the invitation.
+func (r *UserInvitationController) getReferencedInviterUserDisplayName(ctx context.Context, inviterUserRef iamv1alpha1.UserReference) (string, error) {
+	user := &iamv1alpha1.User{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: inviterUserRef.Name}, user); err != nil {
+		return "", fmt.Errorf("failed to get inviterUser: %w", err)
+	}
 
-	users, err := r.getUsersByEmail(ctx, email)
-	if err != nil {
-		log.Error(err, "Failed to get Inviter User by email")
-		return nil, fmt.Errorf("failed to get Inviter User by email: %w", err)
+	displayName := strings.TrimSpace(user.Spec.GivenName + " " + user.Spec.FamilyName)
+	if displayName == "" {
+		displayName = user.Name
 	}
-	if len(users.Items) == 0 {
-		log.Info("Inviter User not found.")
-		return nil, fmt.Errorf("inviter user %s not found", email)
-	}
-	return &users.Items[0], nil
+
+	return displayName, nil
 }
 
 // getOrganizationDisplayName gets the display name of the Organization referenced by the UserInvitation.

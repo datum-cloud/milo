@@ -102,11 +102,22 @@ type UserInvitationStatus struct {
 	// Organization contains information about the organization in the invitation.
 	// +kubebuilder:validation:Optional
 	Organization UserInvitationOrganizationStatus `json:"organization,omitempty"`
+
+	// InviterUser contains information about the user who invited the user in the invitation.
+	// +kubebuilder:validation:Optional
+	InviterUser UserInvitationUserStatus `json:"inviterUser,omitempty"`
 }
 
 // UserInvitationOrganizationStatus contains information about the organization in the invitation.
 type UserInvitationOrganizationStatus struct {
 	// DisplayName is the display name of the organization in the invitation.
+	// +kubebuilder:validation:Optional
+	DisplayName string `json:"displayName,omitempty"`
+}
+
+// UserInvitationInviterUserStatus contains information about the user who invited the user in the invitation.
+type UserInvitationUserStatus struct {
+	// DisplayName is the display name of the user who invited the user in the invitation.
 	// +kubebuilder:validation:Optional
 	DisplayName string `json:"displayName,omitempty"`
 }
