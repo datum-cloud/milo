@@ -197,9 +197,6 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 				}
 			}
 			if matchingRequest == nil {
-				logger.Error(nil, "No matching request found for allocation",
-					"claimName", claim.Name,
-					"resourceType", allocation.ResourceType)
 				continue
 			}
 
