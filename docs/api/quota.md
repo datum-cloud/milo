@@ -3749,6 +3749,16 @@ Examples:
         </td>
         <td>true</td>
       </tr><tr>
+        <td><b><a href="#resourceregistrationspecclaimingresourcesindex">claimingResources</a></b></td>
+        <td>[]object</td>
+        <td>
+          ClaimingResources specifies which resource types can create ResourceClaims for this registration.
+Only resources listed here can trigger quota consumption for this resource type.
+At least one claiming resource must be specified.
+Maximum 20 entries.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
         <td><b><a href="#resourceregistrationspecconsumertype">consumerType</a></b></td>
         <td>object</td>
         <td>
@@ -3831,23 +3841,6 @@ Examples:
         </td>
         <td>true</td>
       </tr><tr>
-        <td><b><a href="#resourceregistrationspecclaimingresourcesindex">claimingResources</a></b></td>
-        <td>[]object</td>
-        <td>
-          ClaimingResources specifies which resource types can create ResourceClaims for this registration.
-Only resources listed here can trigger quota consumption for this resource type.
-Empty list means no resources can claim quota (administrators must create claims manually).
-Maximum 20 entries.
-
-The quota system monitors these resource types for automatic owner reference creation.
-Uses unversioned references (APIGroup + Kind) to survive API version changes.
-
-Security consideration: Only include resource types that should consume this quota.
-For example, when registering **Projects**, only include **Project** as a claiming resource
-to prevent other resource types from consuming **Project** quota.<br/>
-        </td>
-        <td>false</td>
-      </tr><tr>
         <td><b>description</b></td>
         <td>string</td>
         <td>
@@ -3859,6 +3852,54 @@ Examples:
 - "Projects created within Organizations"
 - "CPU millicores allocated to workloads"
 - "Storage bytes claimed by volume requests"<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### ResourceRegistration.spec.claimingResources[index]
+<sup><sup>[↩ Parent](#resourceregistrationspec)</sup></sup>
+
+
+
+ClaimingResource identifies a resource type that can create **ResourceClaims**
+for this registration. Uses unversioned references to remain valid across API version changes.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>kind</b></td>
+        <td>string</td>
+        <td>
+          Kind specifies the resource type that can create **ResourceClaims** for this registration.
+Must match an existing resource type. Maximum 63 characters.
+
+Examples:
+- `Project` (**Project** resource creating claims for **Project** quota)
+- `User` (**User** resource creating claims for **User** quota)
+- `Organization` (**Organization** resource creating claims for **Organization** quota)<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>apiGroup</b></td>
+        <td>string</td>
+        <td>
+          APIGroup specifies the API group of the resource that can create claims.
+Use empty string for Kubernetes core resources (**Secret**, **ConfigMap**, etc.).
+Use full group name for custom resources.
+
+Examples:
+- `""` (core resources like **Secret**, **ConfigMap**)
+- `resourcemanager.miloapis.com` (custom resource group)
+- `iam.miloapis.com` (Milo IAM resources)<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -3915,54 +3956,6 @@ Examples:
 - **User** (receives resource quotas within projects)<br/>
         </td>
         <td>true</td>
-      </tr></tbody>
-</table>
-
-
-### ResourceRegistration.spec.claimingResources[index]
-<sup><sup>[↩ Parent](#resourceregistrationspec)</sup></sup>
-
-
-
-ClaimingResource identifies a resource type that can create **ResourceClaims**
-for this registration. Uses unversioned references to remain valid across API version changes.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>kind</b></td>
-        <td>string</td>
-        <td>
-          Kind specifies the resource type that can create **ResourceClaims** for this registration.
-Must match an existing resource type. Maximum 63 characters.
-
-Examples:
-- `Project` (**Project** resource creating claims for **Project** quota)
-- `User` (**User** resource creating claims for **User** quota)
-- `Organization` (**Organization** resource creating claims for **Organization** quota)<br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
-        <td><b>apiGroup</b></td>
-        <td>string</td>
-        <td>
-          APIGroup specifies the API group of the resource that can create claims.
-Use empty string for Kubernetes core resources (**Secret**, **ConfigMap**, etc.).
-Use full group name for custom resources.
-
-Examples:
-- `""` (core resources like **Secret**, **ConfigMap**)
-- `resourcemanager.miloapis.com` (custom resource group)
-- `iam.miloapis.com` (Milo IAM resources)<br/>
-        </td>
-        <td>false</td>
       </tr></tbody>
 </table>
 
