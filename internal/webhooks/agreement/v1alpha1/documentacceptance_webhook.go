@@ -17,6 +17,7 @@ import (
 	agreementv1alpha1 "go.miloapis.com/milo/pkg/apis/agreement/v1alpha1"
 	documentationv1alpha1 "go.miloapis.com/milo/pkg/apis/documentation/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 )
 
 var daLog = logf.Log.WithName("agreement-resource").WithName("documentacceptance")
@@ -68,12 +69,35 @@ func (r *DocumentAcceptanceValidator) ValidateCreate(ctx context.Context, obj ru
 	}
 
 	// Validate expected subject kind
+	daSubjectRef := da.Spec.SubjectRef
 	daSubjRefKind := &documentationv1alpha1.DocumentRevisionExpectedSubjectKind{
 		APIGroup: da.Spec.SubjectRef.APIGroup,
 		Kind:     da.Spec.SubjectRef.Kind,
 	}
 	if !slices.Contains(documentRevision.Spec.ExpectedSubjectKinds, *daSubjRefKind) {
 		errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef"), da.Spec.SubjectRef, "subjectRef must be one of the expected subject kinds"))
+	} else {
+		// If the expected kind is validated, validate the subject reference
+		if daSubjRefKind.APIGroup == "resourcemanager.miloapis.com" {
+			var subjectObj client.Object
+			switch daSubjRefKind.Kind {
+			case "Organization":
+				subjectObj = &resourcemanagerv1alpha1.Organization{}
+			default:
+				// Should never happen, but just in case
+				errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef", "kind"), daSubjRefKind.Kind, "missing backend validation for kind"))
+			}
+			if err := r.Client.Get(ctx, client.ObjectKey{Name: daSubjectRef.Name, Namespace: daSubjectRef.Namespace}, subjectObj); err != nil {
+				if errors.IsNotFound(err) {
+					errs = append(errs, field.NotFound(field.NewPath("spec", "subjectRef", "name"), daSubjectRef.Name))
+				} else {
+					daLog.Error(err, "failed to get subject reference", "namespace", daSubjectRef.Namespace, "name", daSubjectRef.Name)
+					return nil, errors.NewInternalError(err)
+				}
+			}
+		} else {
+			errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef", "apiGroup"), daSubjRefKind.APIGroup, "missing backend validation for apiGroup"))
+		}
 	}
 
 	// Validate expected accepter kind
@@ -84,25 +108,29 @@ func (r *DocumentAcceptanceValidator) ValidateCreate(ctx context.Context, obj ru
 	}
 	if !slices.Contains(documentRevision.Spec.ExpectedAccepterKinds, *daAccepterKind) {
 		errs = append(errs, field.Invalid(field.NewPath("spec", "accepterRef"), daAccepterRef, "accepterRef must be one of the expected accepter kinds"))
-	}
-
-	// Validate accepter reference
-	var accepterObj client.Object
-	switch daAccepterRef.Kind {
-	case "User":
-		accepterObj = &iamv1alpha1.User{}
-	case "MachineAccount":
-		accepterObj = &iamv1alpha1.MachineAccount{}
-	default:
-		// Should never happen, but just in case
-		errs = append(errs, field.Invalid(field.NewPath("spec", "accepterRef", "kind"), daAccepterRef.Kind, "missing backend validation for kind"))
-	}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: daAccepterRef.Name, Namespace: daAccepterRef.Namespace}, accepterObj); err != nil {
-		if errors.IsNotFound(err) {
-			errs = append(errs, field.NotFound(field.NewPath("spec", "accepterRef", "name"), daAccepterRef.Name))
+	} else {
+		// If the expected kind is validated, validate the accepter reference
+		if daAccepterRef.APIGroup == "iam.miloapis.com" {
+			var accepterObj client.Object
+			switch daAccepterRef.Kind {
+			case "User":
+				accepterObj = &iamv1alpha1.User{}
+			case "MachineAccount":
+				accepterObj = &iamv1alpha1.MachineAccount{}
+			default:
+				// Should never happen, but just in case
+				errs = append(errs, field.Invalid(field.NewPath("spec", "accepterRef", "kind"), daAccepterRef.Kind, "missing backend validation for kind"))
+			}
+			if err := r.Client.Get(ctx, client.ObjectKey{Name: daAccepterRef.Name, Namespace: daAccepterRef.Namespace}, accepterObj); err != nil {
+				if errors.IsNotFound(err) {
+					errs = append(errs, field.NotFound(field.NewPath("spec", "accepterRef", "name"), daAccepterRef.Name))
+				} else {
+					daLog.Error(err, "failed to get accepter", "namespace", daAccepterRef.Namespace, "name", daAccepterRef.Name)
+					return nil, errors.NewInternalError(err)
+				}
+			}
 		} else {
-			daLog.Error(err, "failed to get accepter", "namespace", daAccepterRef.Namespace, "name", daAccepterRef.Name)
-			return nil, errors.NewInternalError(err)
+			errs = append(errs, field.Invalid(field.NewPath("spec", "accepterRef", "apiGroup"), daAccepterRef.APIGroup, "missing backend validation for apiGroup"))
 		}
 	}
 

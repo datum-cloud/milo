@@ -14,6 +14,7 @@ import (
 	agreementv1alpha1 "go.miloapis.com/milo/pkg/apis/agreement/v1alpha1"
 	documentationv1alpha1 "go.miloapis.com/milo/pkg/apis/documentation/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 )
 
 func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
@@ -22,6 +23,7 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 	_ = agreementv1alpha1.AddToScheme(scheme)
 	_ = documentationv1alpha1.AddToScheme(scheme)
 	_ = iamv1alpha1.AddToScheme(scheme)
+	_ = resourcemanagerv1alpha1.AddToScheme(scheme)
 
 	now := metav1.Now()
 
@@ -53,6 +55,15 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 			Name: "alice",
 		},
 		Spec: iamv1alpha1.UserSpec{Email: "alice@example.com"},
+	}
+
+	baseOrg := &resourcemanagerv1alpha1.Organization{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "acme",
+		},
+		Spec: resourcemanagerv1alpha1.OrganizationSpec{
+			Type: "Standard",
+		},
 	}
 
 	validAcceptance := &agreementv1alpha1.DocumentAcceptance{
@@ -89,19 +100,19 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 	}{
 		{
 			name:      "valid acceptance",
-			objects:   []runtime.Object{baseRevision.DeepCopy(), baseUser.DeepCopy()},
+			objects:   []runtime.Object{baseRevision.DeepCopy(), baseUser.DeepCopy(), baseOrg.DeepCopy()},
 			da:        validAcceptance.DeepCopy(),
 			wantError: false,
 		},
 		{
 			name:      "document revision not found",
-			objects:   []runtime.Object{baseUser.DeepCopy()},
+			objects:   []runtime.Object{baseUser.DeepCopy(), baseOrg.DeepCopy()},
 			da:        validAcceptance.DeepCopy(),
 			wantError: true,
 		},
 		{
 			name:    "version mismatch",
-			objects: []runtime.Object{baseRevision.DeepCopy(), baseUser.DeepCopy()},
+			objects: []runtime.Object{baseRevision.DeepCopy(), baseUser.DeepCopy(), baseOrg.DeepCopy()},
 			da: func() *agreementv1alpha1.DocumentAcceptance {
 				v := validAcceptance.DeepCopy()
 				v.Spec.DocumentRevisionRef.Version = "v0.9.0"
@@ -111,7 +122,7 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 		},
 		{
 			name:    "unexpected subject kind",
-			objects: []runtime.Object{baseRevision.DeepCopy(), baseUser.DeepCopy()},
+			objects: []runtime.Object{baseRevision.DeepCopy(), baseUser.DeepCopy(), baseOrg.DeepCopy()},
 			da: func() *agreementv1alpha1.DocumentAcceptance {
 				v := validAcceptance.DeepCopy()
 				v.Spec.SubjectRef.Kind = "Project"
@@ -121,7 +132,7 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 		},
 		{
 			name:    "unexpected accepter kind",
-			objects: []runtime.Object{baseRevision.DeepCopy(), baseUser.DeepCopy()},
+			objects: []runtime.Object{baseRevision.DeepCopy(), baseUser.DeepCopy(), baseOrg.DeepCopy()},
 			da: func() *agreementv1alpha1.DocumentAcceptance {
 				v := validAcceptance.DeepCopy()
 				v.Spec.AccepterRef.Kind = "MachineAccount"
@@ -131,7 +142,7 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 		},
 		{
 			name:      "accepter object not found",
-			objects:   []runtime.Object{baseRevision.DeepCopy()},
+			objects:   []runtime.Object{baseRevision.DeepCopy(), baseOrg.DeepCopy()},
 			da:        validAcceptance.DeepCopy(),
 			wantError: true,
 		},
