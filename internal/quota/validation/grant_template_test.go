@@ -29,8 +29,8 @@ func (m *MockResourceTypeValidator) IsClaimingResourceAllowed(ctx context.Contex
 	return false, nil, fmt.Errorf("resource type '%s' is not registered", resourceType)
 }
 
-func (m *MockResourceTypeValidator) IsReady() bool {
-	// Mock is always ready for testing
+func (m *MockResourceTypeValidator) HasSynced() bool {
+	// Mock is always synced for testing
 	return true
 }
 
