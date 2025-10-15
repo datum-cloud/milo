@@ -34,6 +34,11 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
+const (
+	// resourceClaimConsumerRefIndex is the field index name for ResourceClaim.Spec.ConsumerRef
+	resourceClaimConsumerRefIndex = "spec.consumerRef"
+)
+
 // AllowanceBucketController reconciles AllowanceBucket objects and maintains
 // aggregated quota (Limit/Allocated/Available). It is the single writer for
 // bucket objects; other controllers are read-only.
@@ -152,11 +157,11 @@ func (r *AllowanceBucketController) updateLimitsFromGrants(ctx context.Context, 
 // updateUsageFromClaims calculates the total allocated usage from ResourceClaims
 // based on individual request allocations that have been granted.
 func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, bucket *quotav1alpha1.AllowanceBucket) error {
-	logger := log.FromContext(ctx)
-
-	// Find all ResourceClaims that use this bucket
+	// Find all ResourceClaims cluster-wide that reference this bucket's consumer
 	var claims quotav1alpha1.ResourceClaimList
-	if err := r.List(ctx, &claims, client.InNamespace(bucket.Namespace)); err != nil {
+	if err := r.List(ctx, &claims,
+		client.MatchingFields{resourceClaimConsumerRefIndex: consumerRefKey(bucket.Spec.ConsumerRef)},
+	); err != nil {
 		return fmt.Errorf("failed to list ResourceClaims: %w", err)
 	}
 
@@ -164,17 +169,8 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 	var claimCount int32
 
 	for _, claim := range claims.Items {
-		// Owner must match
-		if claim.Spec.ConsumerRef.Kind != bucket.Spec.ConsumerRef.Kind ||
-			claim.Spec.ConsumerRef.Name != bucket.Spec.ConsumerRef.Name {
-			logger.V(1).Info("Claim consumer does not match bucket consumer, skipping",
-				"claimName", claim.Name,
-				"claimConsumer", claim.Spec.ConsumerRef.Kind+"/"+claim.Spec.ConsumerRef.Name,
-				"bucketConsumer", bucket.Spec.ConsumerRef.Kind+"/"+bucket.Spec.ConsumerRef.Name)
-			continue
-		}
-
 		// Track whether this claim has any granted allocations for this bucket
+		// (consumer ref already filtered by field selector)
 		hasGrantedAllocation := false
 
 		// Check allocations for granted requests that match this bucket
@@ -221,7 +217,7 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 // It returns true if a bucket was created, false if no referencing claim was found.
 func (r *AllowanceBucketController) ensureBucketFromClaims(ctx context.Context, req ctrl.Request) error {
 	var claims quotav1alpha1.ResourceClaimList
-	if err := r.List(ctx, &claims, client.InNamespace(req.Namespace)); err != nil {
+	if err := r.List(ctx, &claims); err != nil {
 		return fmt.Errorf("failed to list ResourceClaims: %w", err)
 	}
 	for _, claim := range claims.Items {
@@ -264,7 +260,9 @@ func (r *AllowanceBucketController) isResourceGrantActive(grant *quotav1alpha1.R
 func (r *AllowanceBucketController) processPendingClaims(ctx context.Context, bucket *quotav1alpha1.AllowanceBucket) error {
 	logger := log.FromContext(ctx)
 	var claims quotav1alpha1.ResourceClaimList
-	if err := r.List(ctx, &claims, client.InNamespace(bucket.Namespace)); err != nil {
+	if err := r.List(ctx, &claims,
+		client.MatchingFields{resourceClaimConsumerRefIndex: consumerRefKey(bucket.Spec.ConsumerRef)},
+	); err != nil {
 		return fmt.Errorf("failed to list ResourceClaims: %w", err)
 	}
 
@@ -274,13 +272,6 @@ func (r *AllowanceBucketController) processPendingClaims(ctx context.Context, bu
 	fieldManagerName := fmt.Sprintf("allowance-bucket-%s", bucket.Name)
 
 	for _, claim := range claims.Items {
-
-		// Owner must match
-		if claim.Spec.ConsumerRef.Kind != bucket.Spec.ConsumerRef.Kind ||
-			claim.Spec.ConsumerRef.Name != bucket.Spec.ConsumerRef.Name {
-			continue
-		}
-
 		// Process each request that matches this bucket
 		for _, request := range claim.Spec.Requests {
 			// Skip if request doesn't match this bucket
@@ -407,8 +398,27 @@ func generateAllowanceBucketName(namespace, resourceType string, ownerRef quotav
 	return fmt.Sprintf("bucket-%x", sha256.Sum256([]byte(input)))
 }
 
+// consumerRefKey generates a consistent field index key for a ConsumerRef.
+// This key is used to efficiently query ResourceClaims by their consumer reference.
+func consumerRefKey(ref quotav1alpha1.ConsumerRef) string {
+	return fmt.Sprintf("%s/%s/%s/%s", ref.APIGroup, ref.Kind, ref.Namespace, ref.Name)
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *AllowanceBucketController) SetupWithManager(mgr ctrl.Manager) error {
+	// Set up field index for efficient ResourceClaim queries by ConsumerRef
+	if err := mgr.GetFieldIndexer().IndexField(
+		context.Background(),
+		&quotav1alpha1.ResourceClaim{},
+		resourceClaimConsumerRefIndex,
+		func(obj client.Object) []string {
+			claim := obj.(*quotav1alpha1.ResourceClaim)
+			return []string{consumerRefKey(claim.Spec.ConsumerRef)}
+		},
+	); err != nil {
+		return fmt.Errorf("failed to set up field index for ResourceClaim.Spec.ConsumerRef: %w", err)
+	}
+
 	// Watch buckets directly; react to grants/claims that change aggregates.
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&quotav1alpha1.AllowanceBucket{}).
