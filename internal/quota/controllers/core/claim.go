@@ -124,27 +124,14 @@ func (r *ResourceClaimController) updateOverallClaimConditionFromAllocations(ctx
 func (r *ResourceClaimController) updateOverallClaimCondition(ctx context.Context, claim *quotav1alpha1.ResourceClaim,
 	status metav1.ConditionStatus, reason, message string) error {
 
-	logger := log.FromContext(ctx)
-
-	// Check if condition needs updating
-	existingCondition := apimeta.FindStatusCondition(claim.Status.Conditions, quotav1alpha1.ResourceClaimGranted)
-	if existingCondition != nil &&
-		existingCondition.Status == status &&
-		existingCondition.Reason == reason &&
-		existingCondition.Message == message {
-		// No change needed
-		logger.V(2).Info("Overall claim condition unchanged, skipping update",
-			"claimName", claim.Name, "status", status, "reason", reason)
+	changed := apimeta.SetStatusCondition(&claim.Status.Conditions, metav1.Condition{
+		Type:    quotav1alpha1.ResourceClaimGranted,
+		Status:  status,
+		Reason:  reason,
+		Message: message,
+	})
+	if !changed {
 		return nil
-	}
-
-	// Create condition update
-	condition := metav1.Condition{
-		Type:               quotav1alpha1.ResourceClaimGranted,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		LastTransitionTime: metav1.Now(),
 	}
 
 	// Create minimal claim object for Server Side Apply
@@ -159,7 +146,7 @@ func (r *ResourceClaimController) updateOverallClaimCondition(ctx context.Contex
 		},
 		Status: quotav1alpha1.ResourceClaimStatus{
 			ObservedGeneration: claim.Generation,
-			Conditions:         []metav1.Condition{condition},
+			Conditions:         claim.Status.Conditions,
 		},
 	}
 
