@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -89,8 +90,7 @@ func (r *AllowanceBucketController) Reconcile(ctx context.Context, req ctrl.Requ
 	bucket.Status.Available = max(0, bucket.Status.Limit-bucket.Status.Allocated)
 
 	// Update last reconciliation time
-	now := metav1.Now()
-	bucket.Status.LastReconciliation = &now
+	bucket.Status.LastReconciliation = ptr.To(metav1.Now())
 
 	// Update status (Kubernetes API server efficiently handles no-op updates)
 	if err := r.Status().Update(ctx, &bucket); err != nil {
