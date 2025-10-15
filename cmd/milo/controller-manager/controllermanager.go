@@ -74,6 +74,7 @@ import (
 
 	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
+	documentationcontroller "go.miloapis.com/milo/internal/controllers/documentation"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
 	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
@@ -503,6 +504,22 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			documentCtrl := documentationcontroller.DocumentController{
+				Client: ctrl.GetClient(),
+			}
+			if err := documentCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up document controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			documentRevisionCtrl := documentationcontroller.DocumentRevisionController{
+				Client: ctrl.GetClient(),
+			}
+			if err := documentRevisionCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up document revision controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
