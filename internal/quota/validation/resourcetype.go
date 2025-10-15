@@ -21,8 +21,8 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
-// claimingPermissions represents the claiming rules for a specific resource type
-type claimingPermissions struct {
+// claimingRules represents the claiming rules for a specific resource type
+type claimingRules struct {
 	resourceType      string
 	consumerType      quotav1alpha1.ConsumerType
 	claimingResources []quotav1alpha1.ClaimingResource
@@ -37,6 +37,10 @@ type ResourceTypeValidator interface {
 	// This performs a cached lookup and validates claiming permissions without exposing the method on the API type.
 	// Returns allowed status and detailed error message information for user-friendly feedback.
 	IsClaimingResourceAllowed(ctx context.Context, resourceType string, consumerRef quotav1alpha1.ConsumerRef, claimingAPIGroup, claimingKind string) (bool, []string, error)
+
+	// HasSynced returns true if the validator's cache has been synced with the API server.
+	// This can be used for readiness checks to ensure the validator is ready before serving traffic.
+	HasSynced() bool
 }
 
 // resourceTypeValidator implements ResourceTypeValidator using a shared informer for caching.
@@ -47,12 +51,20 @@ type resourceTypeValidator struct {
 
 	// Cache for fast lookups
 	cacheMutex sync.RWMutex
-	cache      map[string]*claimingPermissions // resourceType -> claiming permissions
+	cache      map[string]*claimingRules // resourceType -> claiming rules
+
+	// Sync state tracking for readiness checks
+	syncMutex sync.RWMutex
+	synced    bool
 }
 
 // NewResourceTypeValidator creates a new ResourceTypeValidator with async initialization.
 // This is the recommended approach as it prevents blocking during startup.
 // The validator will return immediately and sync in the background.
+//
+// The validator will retry indefinitely with exponential backoff (max 30s) until successful.
+// This design prevents API server crash loops when the validator is created before the API
+// server is fully started, which is necessary for admission plugin initialization.
 func NewResourceTypeValidator(dynamicClient dynamic.Interface) ResourceTypeValidator {
 	logger := log.Log.WithName("resource-type-validator")
 	logger.Info("Creating ResourceTypeValidator with delayed start")
@@ -61,7 +73,8 @@ func NewResourceTypeValidator(dynamicClient dynamic.Interface) ResourceTypeValid
 		logger:        logger,
 		dynamicClient: dynamicClient,
 		informer:      nil, // Will be initialized later
-		cache:         make(map[string]*claimingPermissions),
+		cache:         make(map[string]*claimingRules),
+		synced:        false,
 	}
 
 	// Start initialization in background with infinite retry
@@ -90,12 +103,26 @@ func NewResourceTypeValidator(dynamicClient dynamic.Interface) ResourceTypeValid
 
 			// Success! Stop retrying
 			logger.Info("ResourceTypeValidator cache synced successfully", "attempt", attempt)
+
+			// Mark as synced for readiness checks
+			validator.syncMutex.Lock()
+			validator.synced = true
+			validator.syncMutex.Unlock()
+
 			break
 		}
 	}()
 
 	logger.Info("ResourceTypeValidator created, will initialize when API server is ready")
 	return validator
+}
+
+// HasSynced returns true if the validator's cache has been synced with the API server.
+// This method is safe for concurrent use and can be used in readiness checks.
+func (v *resourceTypeValidator) HasSynced() bool {
+	v.syncMutex.RLock()
+	defer v.syncMutex.RUnlock()
+	return v.synced
 }
 
 // tryInitializeInformer attempts to create and sync the informer, returning an error if it fails
@@ -195,28 +222,28 @@ func (v *resourceTypeValidator) IsClaimingResourceAllowed(ctx context.Context, r
 	v.cacheMutex.RLock()
 	defer v.cacheMutex.RUnlock()
 
-	permissions, exists := v.cache[resourceType]
+	rules, exists := v.cache[resourceType]
 	if !exists {
 		return false, nil, fmt.Errorf("no ResourceRegistration found for resource type %s", resourceType)
 	}
 
 	// Verify this registration is for the correct consumer type
-	if permissions.consumerType.APIGroup != consumerRef.APIGroup ||
-		permissions.consumerType.Kind != consumerRef.Kind {
+	if rules.consumerType.APIGroup != consumerRef.APIGroup ||
+		rules.consumerType.Kind != consumerRef.Kind {
 		return false, nil, fmt.Errorf("consumer type mismatch for resource type %s: expected %s/%s, got %s/%s",
 			resourceType,
 			consumerRef.APIGroup, consumerRef.Kind,
-			permissions.consumerType.APIGroup, permissions.consumerType.Kind)
+			rules.consumerType.APIGroup, rules.consumerType.Kind)
 	}
 
-	if len(permissions.claimingResources) == 0 {
+	if len(rules.claimingResources) == 0 {
 		// When not specified, deny by default for security
 		return false, nil, nil // No allowed resources configured
 	}
 
 	// Build allowed list for error messages
 	var allowedList []string
-	for _, allowedResource := range permissions.claimingResources {
+	for _, allowedResource := range rules.claimingResources {
 		if allowedResource.APIGroup == "" {
 			allowedList = append(allowedList, fmt.Sprintf("core/%s", allowedResource.Kind))
 		} else {
@@ -304,15 +331,15 @@ func (v *resourceTypeValidator) updateCacheForRegistration(reg *quotav1alpha1.Re
 	defer v.cacheMutex.Unlock()
 
 	if isActive {
-		permissions := &claimingPermissions{
+		rules := &claimingRules{
 			resourceType:      resourceType,
 			consumerType:      reg.Spec.ConsumerType,
 			claimingResources: make([]quotav1alpha1.ClaimingResource, len(reg.Spec.ClaimingResources)),
 			registrationName:  reg.Name,
 		}
-		copy(permissions.claimingResources, reg.Spec.ClaimingResources)
+		copy(rules.claimingResources, reg.Spec.ClaimingResources)
 
-		v.cache[resourceType] = permissions
+		v.cache[resourceType] = rules
 		v.logger.V(1).Info("Updated active ResourceRegistration in cache",
 			"resourceType", resourceType,
 			"consumerType", fmt.Sprintf("%s/%s", reg.Spec.ConsumerType.APIGroup, reg.Spec.ConsumerType.Kind))
