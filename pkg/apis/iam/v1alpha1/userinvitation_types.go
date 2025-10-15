@@ -98,6 +98,17 @@ type UserInvitationStatus struct {
 	// +kubebuilder:default={{type: "Unknown", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Organization contains information about the organization in the invitation.
+	// +kubebuilder:validation:Optional
+	Organization UserInvitationOrganizationStatus `json:"organization,omitempty"`
+}
+
+// UserInvitationOrganizationStatus contains information about the organization in the invitation.
+type UserInvitationOrganizationStatus struct {
+	// DisplayName is the display name of the organization in the invitation.
+	// +kubebuilder:validation:Optional
+	DisplayName string `json:"displayName,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

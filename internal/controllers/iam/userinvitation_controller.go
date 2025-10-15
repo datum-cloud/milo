@@ -119,6 +119,13 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	// Get the display name of the Organization referenced by the UserInvitation
+	organizationDisplayName, err := r.getReferencedOrganizationDisplayName(ctx, ui.Spec.OrganizationRef)
+	if err != nil {
+		log.Error(err, "Failed to get Organization Display Name")
+		return ctrl.Result{}, fmt.Errorf("failed to get Organization Display Name: %w", err)
+	}
+
 	// Check that the UserInvitation is not expired
 	// Expiration is checked in the validationwebhook, but we check here in case some UserInvitation got
 	// stuck in the controller loop for a long time, and we want to prevent giving roles to a user that is no longer valid.
@@ -138,7 +145,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Send an email to the invitee user to accept the invitation
 	// It is possible that the invitee User is not created yet, so we send the email anyway.
-	if err := r.createInvitationEmail(ctx, ui.DeepCopy()); err != nil {
+	if err := r.createInvitationEmail(ctx, ui.DeepCopy(), organizationDisplayName); err != nil {
 		log.Error(err, "Failed to send invitation email to user", "userInvitation", ui.GetName())
 		return ctrl.Result{}, fmt.Errorf("failed to send invitation email to user: %w", err)
 	}
@@ -240,6 +247,11 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			log.Error(err, "Failed to create policy binding with %s role", role, "userInvitation", ui.GetName())
 			return ctrl.Result{}, fmt.Errorf("failed to create policy binding with %s role: %w", role, err)
 		}
+	}
+
+	// Update the UserInvitation status with the organization information
+	ui.Status.Organization = iamv1alpha1.UserInvitationOrganizationStatus{
+		DisplayName: organizationDisplayName,
 	}
 
 	// Update the UserInvitation status
@@ -561,7 +573,7 @@ var userCreateOnlyPredicate = predicate.Funcs{
 
 // createInvitationEmail creates an email to the invitee user to accept the invitation.
 // This is an idempotent operation.
-func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui *iamv1alpha1.UserInvitation) error {
+func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui *iamv1alpha1.UserInvitation, organizationDisplayName string) error {
 	log := logf.FromContext(ctx).WithName("userinvitation-create-invitation-email")
 	log.Info("Creating invitation email to user", "userInvitation", ui.GetName())
 
@@ -582,17 +594,6 @@ func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui
 	username := strings.TrimSpace(ui.Spec.GivenName + " " + ui.Spec.FamilyName)
 	if username == "" {
 		username = ui.Name
-	}
-
-	// OrganizationDisplayName: fetch Organization resource to get display name
-	org := &resourcemanagerv1alpha1.Organization{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: ui.Spec.OrganizationRef.Name}, org); err != nil {
-		log.Info("Failed to get Organization", "organization", ui.Spec.OrganizationRef.Name)
-		return fmt.Errorf("failed to get Organization: %w", err)
-	}
-	organizationDisplayName := org.Annotations["kubernetes.io/display-name"]
-	if organizationDisplayName == "" {
-		organizationDisplayName = org.Name
 	}
 
 	variables := []notificationv1alpha1.EmailVariable{
@@ -686,6 +687,21 @@ func (r *UserInvitationController) getInviterUser(ctx context.Context, email str
 		return nil, fmt.Errorf("inviter user %s not found", email)
 	}
 	return &users.Items[0], nil
+}
+
+// getOrganizationDisplayName gets the display name of the Organization referenced by the UserInvitation.
+func (r *UserInvitationController) getReferencedOrganizationDisplayName(ctx context.Context, organizationRef resourcemanagerv1alpha1.OrganizationReference) (string, error) {
+	// OrganizationDisplayName: fetch Organization resource to get display name
+	org := &resourcemanagerv1alpha1.Organization{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: organizationRef.Name}, org); err != nil {
+		return "", fmt.Errorf("failed to get Organization: %w", err)
+	}
+	organizationDisplayName := org.Annotations["kubernetes.io/display-name"]
+	if organizationDisplayName == "" {
+		organizationDisplayName = org.Name
+	}
+
+	return organizationDisplayName, nil
 }
 
 // getDeterministicEmailName generates a deterministic name for the Email resource to create based on the UserInvitation.

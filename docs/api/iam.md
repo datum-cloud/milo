@@ -2355,6 +2355,13 @@ UserInvitationStatus defines the observed state of UserInvitation
             <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for control plane to reconcile reason:Unknown status:Unknown type:Unknown]]<br/>
         </td>
         <td>false</td>
+      </tr><tr>
+        <td><b><a href="#userinvitationstatusorganization">organization</a></b></td>
+        <td>object</td>
+        <td>
+          Organization contains information about the organization in the invitation.<br/>
+        </td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -2430,6 +2437,33 @@ with respect to the current state of the instance.<br/>
           <br/>
             <i>Format</i>: int64<br/>
             <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### UserInvitation.status.organization
+<sup><sup>[↩ Parent](#userinvitationstatus)</sup></sup>
+
+
+
+Organization contains information about the organization in the invitation.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>displayName</b></td>
+        <td>string</td>
+        <td>
+          DisplayName is the display name of the organization in the invitation.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
