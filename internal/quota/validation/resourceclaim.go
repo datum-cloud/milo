@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/dynamic"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
@@ -14,7 +15,8 @@ import (
 type ResourceClaimValidator interface {
 	// ValidateResourceClaimAgainstRegistrations validates that a ResourceClaim's
 	// ResourceRef is allowed to claim each of the requested resource types.
-	ValidateResourceClaimAgainstRegistrations(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error
+	// Returns a field.ErrorList for structured error reporting, consistent with Kubernetes conventions.
+	ValidateResourceClaimAgainstRegistrations(ctx context.Context, claim *quotav1alpha1.ResourceClaim) field.ErrorList
 }
 
 // resourceClaimValidator implements ResourceClaimValidator using dynamic client for resource access
@@ -35,22 +37,32 @@ func NewResourceClaimValidator(dynamicClient dynamic.Interface, resourceTypeVali
 
 // ValidateResourceClaimAgainstRegistrations validates that the ResourceClaim's
 // ResourceRef is allowed to claim each of the requested resource types.
-func (v *resourceClaimValidator) ValidateResourceClaimAgainstRegistrations(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
+// Returns a field.ErrorList containing all validation errors found.
+func (v *resourceClaimValidator) ValidateResourceClaimAgainstRegistrations(ctx context.Context, claim *quotav1alpha1.ResourceClaim) field.ErrorList {
+	var allErrs field.ErrorList
+
 	// Get the resource type that's claiming (from ResourceRef)
 	claimingResource := claim.Spec.ResourceRef
+	specPath := field.NewPath("spec")
 
 	// For each request in the claim, verify it's allowed
-	for _, request := range claim.Spec.Requests {
+	for i, request := range claim.Spec.Requests {
+		requestPath := specPath.Child("requests").Index(i)
+		resourceTypePath := requestPath.Child("resourceType")
+
 		// Validate that the resource type is registered and active using the cached validator
 		if err := v.resourceTypeValidator.ValidateResourceType(ctx, request.ResourceType); err != nil {
-			return err // This provides user-friendly error messages about registration
+			allErrs = append(allErrs, field.Invalid(resourceTypePath, request.ResourceType, err.Error()))
+			continue // Skip further validation for this request
 		}
 
 		// Check if the claiming resource is allowed using the cached validator
 		allowed, allowedList, err := v.resourceTypeValidator.IsClaimingResourceAllowed(ctx, request.ResourceType, claim.Spec.ConsumerRef, claimingResource.APIGroup, claimingResource.Kind)
 		if err != nil {
-			return fmt.Errorf("failed to check claiming resource permission for %s: %w", request.ResourceType, err)
+			allErrs = append(allErrs, field.InternalError(resourceTypePath, fmt.Errorf("failed to check claiming resource permission: %w", err)))
+			continue
 		}
+
 		if !allowed {
 			// Build helpful error message
 			claimingResourceStr := claimingResource.Kind
@@ -58,17 +70,18 @@ func (v *resourceClaimValidator) ValidateResourceClaimAgainstRegistrations(ctx c
 				claimingResourceStr = fmt.Sprintf("%s/%s", claimingResource.APIGroup, claimingResource.Kind)
 			}
 
+			var errMsg string
 			if len(allowedList) == 0 {
-				return fmt.Errorf("resource type %s is not allowed to claim quota for %s. No ClaimingResources configured",
+				errMsg = fmt.Sprintf("resource type %s is not allowed to claim quota for %s. No ClaimingResources configured",
 					claimingResourceStr, request.ResourceType)
+			} else {
+				errMsg = fmt.Sprintf("resource type %s is not allowed to claim quota for %s. Allowed claiming resources: [%s]",
+					claimingResourceStr, request.ResourceType, strings.Join(allowedList, ", "))
 			}
 
-			return fmt.Errorf("resource type %s is not allowed to claim quota for %s. Allowed claiming resources: [%s]",
-				claimingResourceStr, request.ResourceType, strings.Join(allowedList, ", "))
+			allErrs = append(allErrs, field.Forbidden(resourceTypePath, errMsg))
 		}
 	}
 
-	return nil
+	return allErrs
 }
-
-
