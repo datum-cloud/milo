@@ -6,12 +6,7 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
-func TestClaimTemplateValidator_ValidateClaimTemplate(t *testing.T) {
-	validator, err := NewClaimTemplateValidator()
-	if err != nil {
-		t.Fatalf("Failed to create validator: %v", err)
-	}
-
+func TestValidateClaimTemplate(t *testing.T) {
 	tests := []struct {
 		name        string
 		template    quotav1alpha1.ResourceClaimTemplate
@@ -288,7 +283,7 @@ func TestClaimTemplateValidator_ValidateClaimTemplate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errs := validator.ValidateClaimTemplate(tt.template)
+			errs := validateClaimTemplate(tt.template)
 			if tt.expectError && len(errs) == 0 {
 				t.Errorf("Expected error for template, but got none. %s", tt.description)
 			}

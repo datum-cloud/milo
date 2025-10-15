@@ -8,7 +8,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
-
 func TestCELExpressionParsing(t *testing.T) {
 
 	tests := []struct {

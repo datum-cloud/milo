@@ -87,21 +87,11 @@ func (v *GrantTemplateValidator) ValidateSpecTemplate(ctx context.Context, spec 
 		allErrs = append(allErrs, errs...)
 	}
 
-	if len(spec.Allowances) == 0 {
-		allErrs = append(allErrs, field.Required(fldPath.Child("allowances"), "at least one allowance must be specified"))
-	}
 	for i, allowance := range spec.Allowances {
 		ifldPath := fldPath.Child("allowances").Index(i)
-		if allowance.ResourceType == "" {
-			allErrs = append(allErrs, field.Required(ifldPath.Child("resourceType"), "resource type cannot be empty"))
-		}
 
 		if err := v.resourceTypeValidator.ValidateResourceType(ctx, allowance.ResourceType); err != nil {
 			allErrs = append(allErrs, field.Invalid(ifldPath.Child("resourceType"), allowance.ResourceType, fmt.Sprintf("resource type validation failed: %v", err)))
-		}
-
-		if errs := v.ValidateAllowanceTemplate(allowance, ifldPath); len(errs) > 0 {
-			allErrs = append(allErrs, errs...)
 		}
 	}
 
@@ -142,35 +132,6 @@ func (v *GrantTemplateValidator) ValidateConsumerRefTemplate(consumerRef quotav1
 	// For ConsumerRef, we allow templates that start with variables since they reference existing resources
 	if errs := v.ValidateConsumerRefNameTemplate(consumerRef.Name, fldPath.Child("name")); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
-	}
-
-	return allErrs
-}
-
-func (v *GrantTemplateValidator) ValidateAllowanceTemplate(allowance quotav1alpha1.Allowance, fldPath *field.Path) field.ErrorList {
-	var allErrs field.ErrorList
-
-	if allowance.ResourceType == "" {
-		allErrs = append(allErrs, field.Required(fldPath.Child("resourceType"), "resource type cannot be empty"))
-	}
-	if len(allowance.Buckets) == 0 {
-		allErrs = append(allErrs, field.Required(fldPath.Child("buckets"), "at least one bucket must be specified"))
-	}
-
-	for i, bucket := range allowance.Buckets {
-		if errs := v.ValidateBucketTemplate(bucket, fldPath.Child("buckets").Index(i)); len(errs) > 0 {
-			allErrs = append(allErrs, errs...)
-		}
-	}
-
-	return allErrs
-}
-
-func (v *GrantTemplateValidator) ValidateBucketTemplate(bucket quotav1alpha1.Bucket, fldPath *field.Path) field.ErrorList {
-	var allErrs field.ErrorList
-
-	if bucket.Amount < 0 {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("amount"), bucket.Amount, "amount cannot be negative"))
 	}
 
 	return allErrs
