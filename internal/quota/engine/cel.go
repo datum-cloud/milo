@@ -12,6 +12,18 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
+const (
+	// runtimeCostLimit sets the maximum allowed runtime cost for CEL expression
+	// evaluation. This prevents malicious or poorly-written expressions from
+	// consuming excessive CPU resources.
+	//
+	// The limit matches Kubernetes' runtime CEL cost budget which specifies the
+	// actual cost limit per CEL validation call.
+	//
+	// Reference: https://github.com/kubernetes/apiserver/blob/v0.32.9/pkg/apis/cel/config.go#L26
+	runtimeCostLimit = 1000000
+)
+
 // CELEngine provides CEL expression evaluation capabilities for quota operations.
 // It combines compile-time validation with runtime evaluation and program caching.
 type CELEngine interface {
@@ -98,8 +110,13 @@ func (e *celEngine) EvaluateTemplateExpression(expression string, variables map[
 	}
 
 	// Evaluate with provided variables
-	result, _, err := program.Eval(variables)
+	result, details, err := program.Eval(variables)
 	if err != nil {
+		// Check if this was a cost limit error and include cost information in error
+		if details != nil && details.ActualCost() != nil {
+			actualCost := *details.ActualCost()
+			return "", fmt.Errorf("evaluation failed (cost: %d, limit: %d): %w", actualCost, runtimeCostLimit, err)
+		}
 		return "", fmt.Errorf("evaluation failed: %w", err)
 	}
 
@@ -124,8 +141,13 @@ func (e *celEngine) evaluateCondition(expression string, objData map[string]inte
 		"trigger": objData,
 	}
 
-	result, _, err := program.Eval(vars)
+	result, details, err := program.Eval(vars)
 	if err != nil {
+		// Check if this was a cost limit error and include cost information in error
+		if details != nil && details.ActualCost() != nil {
+			actualCost := *details.ActualCost()
+			return false, fmt.Errorf("evaluation failed (cost: %d, limit: %d): %w", actualCost, runtimeCostLimit, err)
+		}
 		return false, fmt.Errorf("evaluation failed: %w", err)
 	}
 
@@ -156,8 +178,11 @@ func (e *celEngine) getOrCompileProgram(expression string) (cel.Program, error) 
 		return nil, fmt.Errorf("type check error: %w", issues.Err())
 	}
 
-	// Create program with optimizations
-	program, err := e.env.Program(checked, cel.EvalOptions(cel.OptOptimize))
+	// Create program with optimizations and cost tracking enabled
+	// OptTrackCost enables runtime cost tracking to prevent runaway expressions
+	program, err := e.env.Program(checked,
+		cel.EvalOptions(cel.OptOptimize, cel.OptTrackCost),
+		cel.CostLimit(runtimeCostLimit))
 	if err != nil {
 		return nil, fmt.Errorf("program creation failed: %w", err)
 	}
