@@ -83,6 +83,7 @@ import (
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
+	agreementv1alpha1 "go.miloapis.com/milo/pkg/apis/agreement/v1alpha1"
 	documentationv1alpha1 "go.miloapis.com/milo/pkg/apis/documentation/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
@@ -133,6 +134,7 @@ func init() {
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(documentationv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(apiregistrationv1.AddToScheme(Scheme))
+	utilruntime.Must(agreementv1alpha1.AddToScheme(Scheme))
 }
 
 const (
