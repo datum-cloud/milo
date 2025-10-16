@@ -49,6 +49,8 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Namespaced
+// +kubebuilder:selectablefield:JSONPath=".spec.contactRef.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.contactGroupRef.name"
 type ContactGroupMembership struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
