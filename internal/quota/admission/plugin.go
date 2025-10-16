@@ -65,6 +65,9 @@ type ResourceQuotaEnforcementPlugin struct {
 	templateEngine                engine.TemplateEngine
 	resourceClaimValidator        validation.ResourceClaimValidator
 	resourceRegistrationValidator *validation.ResourceRegistrationValidator
+	claimCreationPolicyValidator  *validation.ClaimCreationPolicyValidator
+	grantCreationPolicyValidator  *validation.GrantCreationPolicyValidator
+	resourceGrantValidator        *validation.ResourceGrantValidator
 
 	// The plugin uses the resource type validator to prevent the apiserver from
 	// being marked ready until the resource type's cache has been synced.
@@ -122,7 +125,18 @@ func (p *ResourceQuotaEnforcementPlugin) ValidateInitialization() error {
 	if p.resourceClaimValidator == nil {
 		return fmt.Errorf("resource claim validator not initialized")
 	}
-
+	if p.resourceRegistrationValidator == nil {
+		return fmt.Errorf("resource registration validator not initialized")
+	}
+	if p.claimCreationPolicyValidator == nil {
+		return fmt.Errorf("claim creation policy validator not initialized")
+	}
+	if p.grantCreationPolicyValidator == nil {
+		return fmt.Errorf("grant creation policy validator not initialized")
+	}
+	if p.resourceGrantValidator == nil {
+		return fmt.Errorf("resource grant validator not initialized")
+	}
 	if p.watchManager == nil {
 		return fmt.Errorf("watch manager not initialized")
 	}
@@ -144,6 +158,23 @@ func (p *ResourceQuotaEnforcementPlugin) initializeEngines() {
 	p.resourceTypeValidator = validation.NewResourceTypeValidator(p.dynamicClient)
 	p.resourceClaimValidator = validation.NewResourceClaimValidator(p.dynamicClient, p.resourceTypeValidator)
 	p.resourceRegistrationValidator = validation.NewResourceRegistrationValidator(p.resourceTypeValidator)
+
+	// Initialize policy validators for admission-time validation
+	celValidator, err := validation.NewCELValidator()
+	if err != nil {
+		p.logger.Error(err, "Failed to create CEL validator")
+		return
+	}
+
+	grantTemplateValidator, err := validation.NewGrantTemplateValidator(p.resourceTypeValidator)
+	if err != nil {
+		p.logger.Error(err, "Failed to create grant template validator")
+		return
+	}
+
+	p.claimCreationPolicyValidator = validation.NewClaimCreationPolicyValidator(p.resourceTypeValidator)
+	p.grantCreationPolicyValidator = validation.NewGrantCreationPolicyValidator(celValidator, grantTemplateValidator)
+	p.resourceGrantValidator = validation.NewResourceGrantValidator(p.resourceTypeValidator)
 
 	go func() {
 		if err := p.policyEngine.Start(context.Background()); err != nil {
@@ -190,6 +221,12 @@ func (p *ResourceQuotaEnforcementPlugin) Validate(ctx context.Context, attrs adm
 			return p.validateResourceClaim(ctx, attrs)
 		case "ResourceRegistration":
 			return p.validateResourceRegistration(ctx, attrs)
+		case "ClaimCreationPolicy":
+			return p.validateClaimCreationPolicy(ctx, attrs)
+		case "GrantCreationPolicy":
+			return p.validateGrantCreationPolicy(ctx, attrs)
+		case "ResourceGrant":
+			return p.validateResourceGrant(ctx, attrs)
 		}
 	}
 
@@ -786,6 +823,214 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceRegistration(ctx contex
 		return admission.NewForbidden(attrs, errors.NewInvalid(
 			quotav1alpha1.GroupVersion.WithKind("ResourceRegistration").GroupKind(),
 			registration.Name,
+			validationErrs,
+		))
+	}
+
+	span.SetAttributes(attribute.String("validation.status", "passed"))
+	return nil
+}
+
+// validateClaimCreationPolicy validates ClaimCreationPolicy objects for template syntax and resource types.
+func (p *ResourceQuotaEnforcementPlugin) validateClaimCreationPolicy(ctx context.Context, attrs admission.Attributes) error {
+	ctx, span := p.startSpan(ctx, "quota.admission.ClaimCreationPolicyValidation",
+		trace.WithAttributes(
+			attribute.String("operation", string(attrs.GetOperation())),
+			attribute.String("policy.name", attrs.GetName()),
+			attribute.String("policy.namespace", attrs.GetNamespace()),
+			attribute.String("user.name", attrs.GetUserInfo().GetName()),
+		))
+	defer span.End()
+
+	// Only validate on CREATE - updates can be handled by CEL immutability rules
+	if attrs.GetOperation() != admission.Create {
+		span.SetAttributes(attribute.String("validation.status", "skipped"))
+		return nil
+	}
+
+	obj := attrs.GetObject()
+	if obj == nil {
+		return nil
+	}
+
+	// Convert to ClaimCreationPolicy
+	policy, ok := obj.(*quotav1alpha1.ClaimCreationPolicy)
+	if !ok {
+		// Try to convert from unstructured
+		unstructuredObj, ok := obj.(*unstructured.Unstructured)
+		if !ok {
+			p.logger.V(3).Info("Could not convert object to ClaimCreationPolicy", "type", fmt.Sprintf("%T", obj))
+			return nil
+		}
+
+		policyBytes, err := unstructuredObj.MarshalJSON()
+		if err != nil {
+			return fmt.Errorf("failed to marshal unstructured object: %w", err)
+		}
+
+		policy = &quotav1alpha1.ClaimCreationPolicy{}
+		if err := json.Unmarshal(policyBytes, policy); err != nil {
+			return fmt.Errorf("failed to unmarshal to ClaimCreationPolicy: %w", err)
+		}
+	}
+
+	span.SetAttributes(
+		attribute.String("policy.name", policy.Name),
+		attribute.String("policy.namespace", policy.Namespace),
+	)
+
+	// Validate the ClaimCreationPolicy
+	if validationErrs := p.claimCreationPolicyValidator.Validate(ctx, policy); len(validationErrs) > 0 {
+		span.SetAttributes(attribute.String("validation.status", "failed"))
+		span.SetStatus(codes.Error, "ClaimCreationPolicy validation failed")
+
+		p.logger.Info("ClaimCreationPolicy validation failed",
+			"name", policy.Name,
+			"namespace", policy.Namespace,
+			"errors", validationErrs)
+
+		return admission.NewForbidden(attrs, errors.NewInvalid(
+			quotav1alpha1.GroupVersion.WithKind("ClaimCreationPolicy").GroupKind(),
+			policy.Name,
+			validationErrs,
+		))
+	}
+
+	span.SetAttributes(attribute.String("validation.status", "passed"))
+	return nil
+}
+
+// validateGrantCreationPolicy validates GrantCreationPolicy objects for CEL expressions and template syntax.
+func (p *ResourceQuotaEnforcementPlugin) validateGrantCreationPolicy(ctx context.Context, attrs admission.Attributes) error {
+	ctx, span := p.startSpan(ctx, "quota.admission.GrantCreationPolicyValidation",
+		trace.WithAttributes(
+			attribute.String("operation", string(attrs.GetOperation())),
+			attribute.String("policy.name", attrs.GetName()),
+			attribute.String("policy.namespace", attrs.GetNamespace()),
+			attribute.String("user.name", attrs.GetUserInfo().GetName()),
+		))
+	defer span.End()
+
+	// Only validate on CREATE - updates can be handled by CEL immutability rules
+	if attrs.GetOperation() != admission.Create {
+		span.SetAttributes(attribute.String("validation.status", "skipped"))
+		return nil
+	}
+
+	obj := attrs.GetObject()
+	if obj == nil {
+		return nil
+	}
+
+	// Convert to GrantCreationPolicy
+	policy, ok := obj.(*quotav1alpha1.GrantCreationPolicy)
+	if !ok {
+		// Try to convert from unstructured
+		unstructuredObj, ok := obj.(*unstructured.Unstructured)
+		if !ok {
+			p.logger.V(3).Info("Could not convert object to GrantCreationPolicy", "type", fmt.Sprintf("%T", obj))
+			return nil
+		}
+
+		policyBytes, err := unstructuredObj.MarshalJSON()
+		if err != nil {
+			return fmt.Errorf("failed to marshal unstructured object: %w", err)
+		}
+
+		policy = &quotav1alpha1.GrantCreationPolicy{}
+		if err := json.Unmarshal(policyBytes, policy); err != nil {
+			return fmt.Errorf("failed to unmarshal to GrantCreationPolicy: %w", err)
+		}
+	}
+
+	span.SetAttributes(
+		attribute.String("policy.name", policy.Name),
+		attribute.String("policy.namespace", policy.Namespace),
+	)
+
+	// Validate the GrantCreationPolicy
+	if validationErrs := p.grantCreationPolicyValidator.Validate(ctx, policy); len(validationErrs) > 0 {
+		span.SetAttributes(attribute.String("validation.status", "failed"))
+		span.SetStatus(codes.Error, "GrantCreationPolicy validation failed")
+
+		p.logger.Info("GrantCreationPolicy validation failed",
+			"name", policy.Name,
+			"namespace", policy.Namespace,
+			"errors", validationErrs)
+
+		return admission.NewForbidden(attrs, errors.NewInvalid(
+			quotav1alpha1.GroupVersion.WithKind("GrantCreationPolicy").GroupKind(),
+			policy.Name,
+			validationErrs,
+		))
+	}
+
+	span.SetAttributes(attribute.String("validation.status", "passed"))
+	return nil
+}
+
+// validateResourceGrant validates ResourceGrant objects for resource type validity.
+func (p *ResourceQuotaEnforcementPlugin) validateResourceGrant(ctx context.Context, attrs admission.Attributes) error {
+	ctx, span := p.startSpan(ctx, "quota.admission.ResourceGrantValidation",
+		trace.WithAttributes(
+			attribute.String("operation", string(attrs.GetOperation())),
+			attribute.String("grant.name", attrs.GetName()),
+			attribute.String("grant.namespace", attrs.GetNamespace()),
+			attribute.String("user.name", attrs.GetUserInfo().GetName()),
+		))
+	defer span.End()
+
+	// Only validate on CREATE - updates can be handled by CEL immutability rules
+	if attrs.GetOperation() != admission.Create {
+		span.SetAttributes(attribute.String("validation.status", "skipped"))
+		return nil
+	}
+
+	obj := attrs.GetObject()
+	if obj == nil {
+		return nil
+	}
+
+	// Convert to ResourceGrant
+	grant, ok := obj.(*quotav1alpha1.ResourceGrant)
+	if !ok {
+		// Try to convert from unstructured
+		unstructuredObj, ok := obj.(*unstructured.Unstructured)
+		if !ok {
+			p.logger.V(3).Info("Could not convert object to ResourceGrant", "type", fmt.Sprintf("%T", obj))
+			return nil
+		}
+
+		grantBytes, err := unstructuredObj.MarshalJSON()
+		if err != nil {
+			return fmt.Errorf("failed to marshal unstructured object: %w", err)
+		}
+
+		grant = &quotav1alpha1.ResourceGrant{}
+		if err := json.Unmarshal(grantBytes, grant); err != nil {
+			return fmt.Errorf("failed to unmarshal to ResourceGrant: %w", err)
+		}
+	}
+
+	span.SetAttributes(
+		attribute.String("grant.name", grant.Name),
+		attribute.String("grant.namespace", grant.Namespace),
+		attribute.Int("grant.allowances_count", len(grant.Spec.Allowances)),
+	)
+
+	// Validate the ResourceGrant
+	if validationErrs := p.resourceGrantValidator.Validate(ctx, grant); len(validationErrs) > 0 {
+		span.SetAttributes(attribute.String("validation.status", "failed"))
+		span.SetStatus(codes.Error, "ResourceGrant validation failed")
+
+		p.logger.Info("ResourceGrant validation failed",
+			"name", grant.Name,
+			"namespace", grant.Namespace,
+			"errors", validationErrs)
+
+		return admission.NewForbidden(attrs, errors.NewInvalid(
+			quotav1alpha1.GroupVersion.WithKind("ResourceGrant").GroupKind(),
+			grant.Name,
 			validationErrs,
 		))
 	}
