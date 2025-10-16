@@ -13,6 +13,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -145,7 +146,7 @@ func (r *ClaimCreationPolicyReconciler) enqueueAffectedPolicies(ctx context.Cont
 	// List all ClaimCreationPolicies
 	var policyList quotav1alpha1.ClaimCreationPolicyList
 	if err := r.List(ctx, &policyList); err != nil {
-		// Log error but don't block - policies will be revalidated on their regular schedule
+		klog.V(1).ErrorS(err, "failed to list claim creation policies when enqueuing affected policies")
 		return nil
 	}
 
