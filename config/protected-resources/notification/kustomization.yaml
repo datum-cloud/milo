@@ -9,3 +9,6 @@ resources:
   - contactgroup.yaml
   - contactgroupmembership.yaml
   - contactgroupmembershipremoval.yaml
+  - document.yaml
+  - documentrevision.yaml
+  - documentacceptance.yaml

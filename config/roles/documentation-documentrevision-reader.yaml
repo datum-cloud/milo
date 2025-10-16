@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: documentation-documentrevision-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - documentation.miloapis.com/documentrevisions.get
+    - documentation.miloapis.com/documentrevisions.list
+    - documentation.miloapis.com/documentrevisions.watch

@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: agreement-documentacceptance-reader
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - agreement.miloapis.com/documentacceptances.get
+    - agreement.miloapis.com/documentacceptances.list
+    - agreement.miloapis.com/documentacceptances.watch
