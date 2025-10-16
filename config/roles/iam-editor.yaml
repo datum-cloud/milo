@@ -5,7 +5,7 @@ metadata:
 spec:
   launchStage: Beta
   inheritedRoles:
-    - name: iam-reader
+    - name: iam-viewer
   includedPermissions:
     - iam.miloapis.com/groups.create
     - iam.miloapis.com/groups.update
