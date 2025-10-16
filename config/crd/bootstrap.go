@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,16 +23,6 @@ import (
 
 //go:embed bases/**/*.yaml
 var crdFS embed.FS
-
-// installOrder defines dependency relationships between API groups.
-// resourcemanager must be first because other groups reference Organizations/Projects.
-var installOrder = []string{
-	"resourcemanager.miloapis.com",
-	"iam.miloapis.com",
-	"quota.miloapis.com",
-	"infrastructure.miloapis.com",
-	"notification.miloapis.com",
-}
 
 // Bootstrap installs embedded CRDs into the Milo API server.
 // Infrastructure CRDs are filtered out as they belong in the infrastructure cluster.
@@ -53,13 +42,11 @@ func Bootstrap(ctx context.Context, client apiextensionsclient.Interface) error 
 
 	logger.Info("Starting CRD bootstrap", "count", len(crdFiles), "total", len(allCRDFiles), "filtered", len(allCRDFiles)-len(crdFiles))
 
-	sortedFiles := sortByInstallOrder(crdFiles)
-
 	// Parallel installation improves startup time significantly.
 	wg := sync.WaitGroup{}
-	bootstrapErrChan := make(chan error, len(sortedFiles))
+	bootstrapErrChan := make(chan error, len(crdFiles))
 
-	for _, crdFile := range sortedFiles {
+	for _, crdFile := range crdFiles {
 		wg.Add(1)
 		go func(filename string) {
 			defer wg.Done()
@@ -76,7 +63,6 @@ func Bootstrap(ctx context.Context, client apiextensionsclient.Interface) error 
 	wg.Wait()
 	close(bootstrapErrChan)
 
-	// Collect all errors
 	var bootstrapErrors []error
 	for err := range bootstrapErrChan {
 		if err != nil {
@@ -88,7 +74,7 @@ func Bootstrap(ctx context.Context, client apiextensionsclient.Interface) error 
 		return fmt.Errorf("failed to bootstrap CRDs: %w", err)
 	}
 
-	logger.Info("Successfully bootstrapped all CRDs", "count", len(sortedFiles))
+	logger.Info("Successfully bootstrapped all CRDs", "count", len(crdFiles))
 	return nil
 }
 
@@ -137,45 +123,6 @@ func filterInfrastructureCRDs(files []string) []string {
 		}
 	}
 	return filtered
-}
-
-func sortByInstallOrder(files []string) []string {
-	priority := make(map[string]int)
-	for i, group := range installOrder {
-		priority[group] = i
-	}
-
-	sort.SliceStable(files, func(i, j int) bool {
-		groupI := extractAPIGroup(files[i])
-		groupJ := extractAPIGroup(files[j])
-
-		priI, okI := priority[groupI]
-		priJ, okJ := priority[groupJ]
-
-		if okI && okJ {
-			return priI < priJ
-		}
-
-		if okI {
-			return true
-		}
-		if okJ {
-			return false
-		}
-
-		return groupI < groupJ
-	})
-
-	return files
-}
-
-func extractAPIGroup(filename string) string {
-	base := filepath.Base(filename)
-	parts := strings.SplitN(base, "_", 2)
-	if len(parts) > 0 {
-		return parts[0]
-	}
-	return ""
 }
 
 // installCRD loads and installs a single CRD.
