@@ -1,0 +1,13 @@
+# Example Organization for testing Slack notifications
+# Deploy this to verify the integration is working
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: test-slack-notification
+  annotations:
+    kubernetes.io/display-name: "Test Organization for Slack Notifications"
+  labels:
+    environment: test
+    purpose: slack-notification-test
+spec:
+  type: Standard

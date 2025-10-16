@@ -1,0 +1,74 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Sensor
+metadata:
+  name: milo-organization-slack-notifier
+spec:
+  dependencies:
+    - name: organization-created
+      eventSourceName: milo-organization-events
+      eventName: milo-organizations
+  triggers:
+    - template:
+        name: slack-notification
+        http:
+          # Replace with slack webhook URL
+          url: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXX"
+          method: POST
+          headers:
+            Content-Type: application/json
+          # Build the Slack Block Kit payload
+          payload:
+            - src:
+                dependencyName: organization-created
+                dataTemplate: |
+                  [
+                    {
+                      "type": "header",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "🏦 New Organization Created"
+                      }
+                    },
+                    {{- if .Input.body.metadata.annotations }}
+                    {{- if index .Input.body.metadata.annotations "kubernetes.io/display-name" }}
+                    {
+                      "type": "section",
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": "*Display Name:* {{ index .Input.body.metadata.annotations "kubernetes.io/display-name" }}"
+                      }
+                    },
+                    {{- end }}
+                    {{- end }}
+                    {
+                      "type": "section",
+                      "fields": [
+                        {
+                          "type": "mrkdwn",
+                          "text": "*Name:* {{ .Input.body.metadata.name }}"
+                        },
+                        {
+                          "type": "mrkdwn",
+                          "text": "*Type:* {{ .Input.body.spec.type }}"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "divider"
+                    },
+                    {
+                      "type": "actions",
+                      "elements": [
+                        {
+                          "type": "button",
+                          "text": {
+                            "type": "plain_text",
+                            "text": "View in Portal"
+                          },
+                          "url": "https://staff.datum.net/customers/organizations/{{ .Input.body.metadata.name }}",
+                          "style": "primary"
+                        }
+                      ]
+                    }
+                  ]
+              dest: blocks

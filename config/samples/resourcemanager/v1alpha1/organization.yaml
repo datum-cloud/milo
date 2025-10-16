@@ -2,5 +2,7 @@ apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: Organization
 metadata:
   name: datum
+  annotations:
+    kubernetes.io/display-name: Datum Technology, Inc.
 spec:
   type: Standard
