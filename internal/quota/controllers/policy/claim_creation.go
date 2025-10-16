@@ -13,6 +13,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -84,11 +85,11 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 // validateResourceTypes validates that all resource types in the policy correspond to active ResourceRegistrations.
 func (r *ClaimCreationPolicyReconciler) validateResourceTypes(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy) error {
 	// Validate each unique resource type using the shared validator
-	seen := make(map[string]bool)
+	seen := sets.New[string]()
 	for _, requestTemplate := range policy.Spec.Target.ResourceClaimTemplate.Spec.Requests {
 		resourceType := requestTemplate.ResourceType
-		if !seen[resourceType] {
-			seen[resourceType] = true
+		if !seen.Has(resourceType) {
+			seen.Insert(resourceType)
 			if err := r.ResourceTypeValidator.ValidateResourceType(ctx, resourceType); err != nil {
 				return err
 			}
