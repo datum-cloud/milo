@@ -107,16 +107,16 @@ tasks:
         echo "⏳ Waiting for etcd pod to be ready..."
         task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/component=etcd -n milo-system --timeout=180s
 
-        # Wait for API server to be ready (required for CRD installation)
-        # API server must be running before we can install custom resources
         echo "⏳ Waiting for API server to be ready..."
         task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-apiserver -n milo-system --timeout=180s
 
-        # Install CRDs into Milo API server (defines custom resource schemas)
-        # Controller manager needs these CRDs to watch and reconcile custom resources
-        echo "📋 Installing core control plane CRDs into Milo API server..."
-        task kubectl -- apply -k config/crd/overlays/core-control-plane/
-        task kubectl -- wait --for=condition=Established customresourcedefinitions --all
+        echo "✅ Verifying CRDs were bootstrapped..."
+        CRD_COUNT=$(task kubectl -- get crd --no-headers 2>/dev/null | grep miloapis | wc -l || echo "0")
+        if [ "$CRD_COUNT" -eq "0" ]; then
+          echo "⚠️  Warning: No Milo CRDs found - checking API server logs..."
+        else
+          echo "✓ Found $CRD_COUNT Milo CRDs bootstrapped by API server"
+        fi
 
         # Step 6b: Install infrastructure control plane CRDs into Milo API server
         # This includes ProjectControlPlanes needed by the controller manager
@@ -124,17 +124,11 @@ tasks:
         task test-infra:kubectl -- apply -k config/crd/overlays/infra-control-plane/
         task test-infra:kubectl -- wait --for=condition=Established customresourcedefinitions projectcontrolplanes.infrastructure.miloapis.com
 
-        # Step 7: Verify CRDs are properly installed (sanity check)
-        echo "✅ Verifying CRDs are installed..."
-        CRD_COUNT=$(task kubectl -- get crd --no-headers | grep miloapis | wc -l || echo "0")
-        echo "Installed $CRD_COUNT Milo CRDs in API server"
-
-        # Step 7b: Create test users in Milo API server
+        # Create test users in Milo API server
         echo "👤 Creating test users in Milo API server..."
         task kubectl -- apply -f config/overlays/test-infra/resources/test-users.yaml
 
-        # Step 8: Wait for controller manager (now that CRDs exist for it to reconcile)
-        # Controller manager can only start successfully after CRDs are available
+        # Wait for controller manager to be ready
         echo "⏳ Waiting for controller manager to be ready..."
         task test-infra:kubectl -- wait --for=condition=Ready pod -l app.kubernetes.io/name=milo-controller-manager -n milo-system --timeout=120s
 

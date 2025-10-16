@@ -6,14 +6,18 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 	"go.miloapis.com/milo/internal/apiserver/admission/plugin/namespace/lifecycle"
+	crd "go.miloapis.com/milo/config/crd"
 	projectstorage "go.miloapis.com/milo/internal/apiserver/storage/project"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // ← add / keep this
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -296,4 +300,38 @@ func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregat
 	}
 
 	return aggregatorServer, nil
+}
+
+// bootstrapCRDsHook installs all embedded CRDs into the cluster as a post-start hook.
+// This is called after the API server starts but before readiness checks pass.
+// This follows KCP's pattern of bootstrapping CRDs with polling retry.
+func bootstrapCRDsHook(hookCtx genericapiserver.PostStartHookContext, loopbackConfig *rest.Config) error {
+	logger := klog.FromContext(hookCtx).WithName("bootstrap-crds")
+
+	// Create apiextensions client from loopback config
+	extClient, err := apiextensionsclient.NewForConfig(loopbackConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create apiextensions client: %w", err)
+	}
+
+	logger.Info("Starting CRD bootstrap from embedded filesystem")
+
+	// Use polling with retry in case the apiextensions server isn't fully ready yet.
+	// Post-start hooks run after the server starts listening but before readiness.
+	// The embedded Context in PostStartHookContext is cancelled when the server stops.
+	err = wait.PollUntilContextCancel(hookCtx, time.Second, true, func(ctx context.Context) (bool, error) {
+		if err := crd.Bootstrap(ctx, extClient); err != nil {
+			logger.Error(err, "failed to bootstrap CRDs, retrying")
+			return false, nil // keep retrying
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		logger.Error(err, "failed to bootstrap CRDs")
+		return nil // don't fail the server start, just log the error
+	}
+
+	logger.Info("CRD bootstrap completed successfully")
+	return nil
 }
