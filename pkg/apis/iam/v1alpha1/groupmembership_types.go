@@ -52,7 +52,8 @@ type GroupMembershipStatus struct {
 // +kubebuilder:printcolumn:name="Group",type="string",JSONPath=".spec.groupRef.name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-
+// +kubebuilder:selectablefield:JSONPath=".spec.groupRef.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.userRef.name"
 // GroupMembership is the Schema for the groupmemberships API
 type GroupMembership struct {
 	metav1.TypeMeta   `json:",inline"`

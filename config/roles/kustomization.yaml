@@ -4,7 +4,7 @@ kind: Component
 resources:
   - owner.yaml
   - project-manager.yaml
-  - iam-reader.yaml
+  - iam-viewer.yaml
   - iam-editor.yaml
   - iam-admin.yaml
   - resourcemanager-reader.yaml
@@ -55,3 +55,7 @@ resources:
   - agreement-documentacceptance-reader.yaml
   - agreement-documentacceptance-editor.yaml
   - agreement-documentacceptance-admin.yaml
+  - organization-viewer.yaml
+  - organization-admin.yaml
+  - project-viewer.yaml
+  - project-admin.yaml
