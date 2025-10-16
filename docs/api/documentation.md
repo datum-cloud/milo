@@ -269,16 +269,20 @@ DocumentRevisionExpectedSubjectKind is the kind of the resource that is expected
     </thead>
     <tbody><tr>
         <td><b>apiGroup</b></td>
-        <td>string</td>
+        <td>enum</td>
         <td>
           APIGroup is the group for the resource being referenced.<br/>
+          <br/>
+            <i>Enum</i>: resourcemanager.miloapis.com<br/>
         </td>
         <td>true</td>
       </tr><tr>
         <td><b>kind</b></td>
-        <td>string</td>
+        <td>enum</td>
         <td>
           Kind is the type of resource being referenced.<br/>
+          <br/>
+            <i>Enum</i>: Organization<br/>
         </td>
         <td>true</td>
       </tr></tbody>

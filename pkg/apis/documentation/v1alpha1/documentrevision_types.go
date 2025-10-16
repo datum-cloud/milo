@@ -42,10 +42,12 @@ type DocumentRevisionContent struct {
 type DocumentRevisionExpectedSubjectKind struct {
 	// APIGroup is the group for the resource being referenced.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=resourcemanager.miloapis.com
 	APIGroup string `json:"apiGroup"`
 
 	// Kind is the type of resource being referenced.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Organization
 	Kind string `json:"kind"`
 }
 
