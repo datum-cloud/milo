@@ -77,8 +77,7 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 			"ready", apimeta.IsStatusConditionTrue(policy.Status.Conditions, quotav1alpha1.ClaimCreationPolicyReady))
 	}
 
-	// Requeue after a reasonable interval for periodic validation
-	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
+	return ctrl.Result{}, nil
 }
 
 // validateResourceTypes validates that all resource types in the policy correspond to active ResourceRegistrations.
