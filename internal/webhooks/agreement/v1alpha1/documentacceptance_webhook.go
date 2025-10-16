@@ -22,9 +22,28 @@ import (
 
 var daLog = logf.Log.WithName("agreement-resource").WithName("documentacceptance")
 
+// daIndexKey is the key used to index DocumentAcceptance by .spec.documentRevisionRef and .spec.subjectRef
+const daIndexKey = "agreement.miloapis.com/documentacceptance-index"
+
+// buildDaIndexKey returns the composite key used for indexing DocumentAcceptance by .spec.documentRevisionRef and .spec.subjectRef
+func buildDaIndexKey(da agreementv1alpha1.DocumentAcceptance) string {
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s",
+		da.Spec.DocumentRevisionRef.Name, da.Spec.DocumentRevisionRef.Namespace, da.Spec.DocumentRevisionRef.Version,
+		da.Spec.SubjectRef.Name, da.Spec.SubjectRef.Namespace, da.Spec.SubjectRef.APIGroup, da.Spec.SubjectRef.Kind)
+}
+
 // SetupDocumentAcceptanceWebhooksWithManager sets up the webhooks for the DocumentAcceptance resource.
 func SetupDocumentAcceptanceWebhooksWithManager(mgr ctrl.Manager) error {
 	daLog.Info("Setting up agreement.miloapis.com documentacceptance webhooks")
+
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(),
+		&agreementv1alpha1.DocumentAcceptance{}, daIndexKey,
+		func(obj client.Object) []string {
+			da := obj.(*agreementv1alpha1.DocumentAcceptance)
+			return []string{buildDaIndexKey(*da)}
+		}); err != nil {
+		return fmt.Errorf("failed to set field index on DocumentAcceptance by .spec.documentRevisionRef and .spec.subjectRef: %w", err)
+	}
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&agreementv1alpha1.DocumentAcceptance{}).
@@ -49,6 +68,20 @@ func (r *DocumentAcceptanceValidator) ValidateCreate(ctx context.Context, obj ru
 	daLog.Info("Validating DocumentAcceptance", "name", da.Name)
 
 	var errs field.ErrorList
+
+	// Check if DocumentAcceptance already exists
+	existing := &agreementv1alpha1.DocumentAcceptanceList{}
+	if err := r.Client.List(ctx, existing,
+		client.MatchingFields{daIndexKey: buildDaIndexKey(*da)}); err != nil {
+		return nil, errors.NewInternalError(err)
+	}
+	if len(existing.Items) > 0 {
+		errs = append(errs, field.Duplicate(
+			field.NewPath("spec"),
+			"a DocumentAcceptance with the same documentRevisionRef and subjectRef already exists",
+		))
+		return nil, errors.NewInvalid(agreementv1alpha1.SchemeGroupVersion.WithKind("DocumentAcceptance").GroupKind(), da.Name, errs)
+	}
 
 	// Referenced DocumentRevision must exist
 	documentRevision := &documentationv1alpha1.DocumentRevision{}

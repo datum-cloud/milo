@@ -5,10 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"regexp"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	agreementv1alpha1 "go.miloapis.com/milo/pkg/apis/agreement/v1alpha1"
@@ -97,6 +100,7 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 		objects   []runtime.Object
 		da        *agreementv1alpha1.DocumentAcceptance
 		wantError bool
+		errRegex  string
 	}{
 		{
 			name:      "valid acceptance",
@@ -109,6 +113,7 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 			objects:   []runtime.Object{baseUser.DeepCopy(), baseOrg.DeepCopy()},
 			da:        validAcceptance.DeepCopy(),
 			wantError: true,
+			errRegex:  "spec.documentRevisionRef",
 		},
 		{
 			name:    "version mismatch",
@@ -119,6 +124,7 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 				return v
 			}(),
 			wantError: true,
+			errRegex:  "spec.documentRevisionRef.version",
 		},
 		{
 			name:    "unexpected subject kind",
@@ -129,6 +135,7 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 				return v
 			}(),
 			wantError: true,
+			errRegex:  "spec.subjectRef",
 		},
 		{
 			name:    "unexpected accepter kind",
@@ -139,18 +146,47 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 				return v
 			}(),
 			wantError: true,
+			errRegex:  "spec.accepterRef",
+		},
+		{
+			name: "duplicate acceptance",
+			objects: func() []runtime.Object {
+				existing := validAcceptance.DeepCopy()
+				existing.ObjectMeta = metav1.ObjectMeta{ // ensure distinct name but same spec
+					Name:      "tos-acceptance-existing",
+					Namespace: "default",
+				}
+				return []runtime.Object{baseRevision.DeepCopy(), baseUser.DeepCopy(), baseOrg.DeepCopy(), existing}
+			}(),
+			da: func() *agreementv1alpha1.DocumentAcceptance {
+				dup := validAcceptance.DeepCopy()
+				dup.ObjectMeta = metav1.ObjectMeta{
+					Name:      "tos-acceptance-dup",
+					Namespace: "default",
+				}
+				return dup
+			}(),
+			wantError: true,
+			errRegex:  "same documentRevisionRef and subjectRef already exists",
 		},
 		{
 			name:      "accepter object not found",
 			objects:   []runtime.Object{baseRevision.DeepCopy(), baseOrg.DeepCopy()},
 			da:        validAcceptance.DeepCopy(),
 			wantError: true,
+			errRegex:  "spec.accepterRef.name",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tt.objects...).Build()
+			builder := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tt.objects...)
+			// register the same index defined in production code
+			builder = builder.WithIndex(&agreementv1alpha1.DocumentAcceptance{}, daIndexKey, func(obj client.Object) []string {
+				da := obj.(*agreementv1alpha1.DocumentAcceptance)
+				return []string{buildDaIndexKey(*da)}
+			})
+			c := builder.Build()
 			v := &DocumentAcceptanceValidator{Client: c}
 			_, err := v.ValidateCreate(context.TODO(), tt.da)
 			if tt.wantError {
@@ -159,6 +195,11 @@ func TestDocumentAcceptanceValidator_ValidateCreate(t *testing.T) {
 				}
 				if !apierrors.IsInvalid(err) {
 					t.Fatalf("expected admission invalid error, got %v", err)
+				}
+				if tt.errRegex != "" {
+					if !regexp.MustCompile(tt.errRegex).MatchString(err.Error()) {
+						t.Fatalf("error message %q did not match %q", err.Error(), tt.errRegex)
+					}
 				}
 			} else {
 				if err != nil {
