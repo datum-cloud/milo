@@ -17,6 +17,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - apiregistration.k8s.io
   resources:
   - apiservices
@@ -135,6 +143,46 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - quota.miloapis.com
+  resources:
+  - allowancebuckets
+  - claimcreationpolicies
+  - grantcreationpolicies
+  - resourceclaims
+  - resourcegrants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - quota.miloapis.com
+  resources:
+  - allowancebuckets/status
+  - claimcreationpolicies/status
+  - grantcreationpolicies/status
+  - resourceclaims/status
+  - resourcegrants/status
+  - resourceregistrations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - quota.miloapis.com
+  resources:
+  - resourceregistrations
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - resourcemanager.miloapis.com
