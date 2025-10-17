@@ -10,12 +10,12 @@ import (
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.miloapis.com/milo/internal/informer"
@@ -342,7 +342,7 @@ func (r *GrantCreationController) createOrUpdateGrant(
 		if apierrors.IsNotFound(err) {
 			// Owner references are only valid within the same cluster.
 			if policy.Spec.Target.ParentContext == nil {
-				if err := r.setOwnerReference(grant, triggerObj); err != nil {
+				if err := controllerutil.SetControllerReference(triggerObj, grant, r.Scheme); err != nil {
 					return fmt.Errorf("failed to set owner reference: %w", err)
 				}
 			}
@@ -447,20 +447,4 @@ type ParentContextSpec struct {
 	Kind string
 	// Name is the resolved name of the parent context resource.
 	Name string
-}
-
-// setOwnerReference establishes garbage collection by linking grant to trigger.
-// Only valid when both resources are in the same cluster.
-func (r *GrantCreationController) setOwnerReference(grant *quotav1alpha1.ResourceGrant, triggerObj *unstructured.Unstructured) error {
-	controller := true
-	ownerRef := metav1.OwnerReference{
-		APIVersion: triggerObj.GetAPIVersion(),
-		Kind:       triggerObj.GetKind(),
-		Name:       triggerObj.GetName(),
-		UID:        triggerObj.GetUID(),
-		Controller: &controller,
-	}
-
-	grant.SetOwnerReferences([]metav1.OwnerReference{ownerRef})
-	return nil
 }
