@@ -13,6 +13,8 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -77,18 +79,17 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 			"ready", apimeta.IsStatusConditionTrue(policy.Status.Conditions, quotav1alpha1.ClaimCreationPolicyReady))
 	}
 
-	// Requeue after a reasonable interval for periodic validation
-	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
+	return ctrl.Result{}, nil
 }
 
 // validateResourceTypes validates that all resource types in the policy correspond to active ResourceRegistrations.
 func (r *ClaimCreationPolicyReconciler) validateResourceTypes(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy) error {
 	// Validate each unique resource type using the shared validator
-	seen := make(map[string]bool)
+	seen := sets.New[string]()
 	for _, requestTemplate := range policy.Spec.Target.ResourceClaimTemplate.Spec.Requests {
 		resourceType := requestTemplate.ResourceType
-		if !seen[resourceType] {
-			seen[resourceType] = true
+		if !seen.Has(resourceType) {
+			seen.Insert(resourceType)
 			if err := r.ResourceTypeValidator.ValidateResourceType(ctx, resourceType); err != nil {
 				return err
 			}
@@ -146,7 +147,7 @@ func (r *ClaimCreationPolicyReconciler) enqueueAffectedPolicies(ctx context.Cont
 	// List all ClaimCreationPolicies
 	var policyList quotav1alpha1.ClaimCreationPolicyList
 	if err := r.List(ctx, &policyList); err != nil {
-		// Log error but don't block - policies will be revalidated on their regular schedule
+		klog.V(1).ErrorS(err, "failed to list claim creation policies when enqueuing affected policies")
 		return nil
 	}
 
