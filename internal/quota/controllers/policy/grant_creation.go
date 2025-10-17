@@ -78,8 +78,7 @@ func (r *GrantCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 			"ready", apimeta.IsStatusConditionTrue(policy.Status.Conditions, quotav1alpha1.GrantCreationPolicyReady))
 	}
 
-	// Requeue after a reasonable interval for periodic validation
-	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
+	return ctrl.Result{}, nil
 }
 
 // validatePolicy performs comprehensive validation of the GrantCreationPolicy.
