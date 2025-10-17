@@ -165,6 +165,9 @@ spec:
                 type: string
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.contactRef.name
+    - jsonPath: .spec.contactGroupRef.name
     served: true
     storage: true
     subresources:
