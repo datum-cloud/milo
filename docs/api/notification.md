@@ -898,7 +898,7 @@ Subject is a reference to the subject of the contact.
         <td>
           APIGroup is the group for the resource being referenced.<br/>
           <br/>
-            <i>Enum</i>: iam.miloapis.com, resourcemanager.miloapis.com<br/>
+            <i>Enum</i>: iam.miloapis.com<br/>
         </td>
         <td>true</td>
       </tr><tr>
@@ -907,7 +907,7 @@ Subject is a reference to the subject of the contact.
         <td>
           Kind is the type of resource being referenced.<br/>
           <br/>
-            <i>Enum</i>: User, Organization, Project<br/>
+            <i>Enum</i>: User<br/>
         </td>
         <td>true</td>
       </tr><tr>
