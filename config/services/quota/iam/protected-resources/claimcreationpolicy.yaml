@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: quota.miloapis.com-claimcreationpolicy
+spec:
+  serviceRef:
+    name: "quota.miloapis.com"
+  kind: ClaimCreationPolicy
+  plural: claimcreationpolicies
+  singular: claimcreationpolicy
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
