@@ -13,10 +13,8 @@ import (
 
 // ResourceClaimValidator provides validation capabilities for ResourceClaim objects.
 type ResourceClaimValidator interface {
-	// ValidateResourceClaimAgainstRegistrations validates that a ResourceClaim's
-	// ResourceRef is allowed to claim each of the requested resource types.
-	// Returns a field.ErrorList for structured error reporting, consistent with Kubernetes conventions.
-	ValidateResourceClaimAgainstRegistrations(ctx context.Context, claim *quotav1alpha1.ResourceClaim) field.ErrorList
+	// Validate performs complete validation of a ResourceClaim including field validation and claiming permissions.
+	Validate(ctx context.Context, claim *quotav1alpha1.ResourceClaim) field.ErrorList
 }
 
 // resourceClaimValidator implements ResourceClaimValidator using dynamic client for resource access
@@ -35,53 +33,114 @@ func NewResourceClaimValidator(dynamicClient dynamic.Interface, resourceTypeVali
 	}
 }
 
-// ValidateResourceClaimAgainstRegistrations validates that the ResourceClaim's
-// ResourceRef is allowed to claim each of the requested resource types.
-// Returns a field.ErrorList containing all validation errors found.
-func (v *resourceClaimValidator) ValidateResourceClaimAgainstRegistrations(ctx context.Context, claim *quotav1alpha1.ResourceClaim) field.ErrorList {
-	var allErrs field.ErrorList
+// Validate performs complete validation of a ResourceClaim including field validation and claiming rules.
+func (v *resourceClaimValidator) Validate(ctx context.Context, claim *quotav1alpha1.ResourceClaim) field.ErrorList {
+	var errs field.ErrorList
+	resourceRefPath := field.NewPath("spec", "resourceRef")
 
-	// Get the resource type that's claiming (from ResourceRef)
-	claimingResource := claim.Spec.ResourceRef
-	specPath := field.NewPath("spec")
+	if requestErrs := v.validateResourceRequests(ctx, claim); len(requestErrs) > 0 {
+		errs = append(errs, requestErrs...)
+	}
 
-	// For each request in the claim, verify it's allowed
+	if claim.Spec.ResourceRef.Kind == "" {
+		errs = append(errs, field.Required(resourceRefPath.Child("kind"), "resourceRef.kind is required"))
+	}
+	if claim.Spec.ResourceRef.Name == "" {
+		errs = append(errs, field.Required(resourceRefPath.Child("name"), "resourceRef.name is required"))
+	}
+
+	return errs
+}
+
+// validateResourceRequests validates all resource requests including field validation,
+// duplicates, resource type registration, and claiming rules (when resourceRef is complete).
+func (v *resourceClaimValidator) validateResourceRequests(ctx context.Context, claim *quotav1alpha1.ResourceClaim) field.ErrorList {
+	var errs field.ErrorList
+	requestsPath := field.NewPath("spec", "requests")
+	seenResourceTypes := make(map[string]int)
+	resourceRefComplete := claim.Spec.ResourceRef.Kind != "" && claim.Spec.ResourceRef.Name != ""
+
 	for i, request := range claim.Spec.Requests {
-		requestPath := specPath.Child("requests").Index(i)
-		resourceTypePath := requestPath.Child("resourceType")
+		requestPath := requestsPath.Index(i)
 
-		// Validate that the resource type is registered and active using the cached validator
-		if err := v.resourceTypeValidator.ValidateResourceType(ctx, request.ResourceType); err != nil {
-			allErrs = append(allErrs, field.Invalid(resourceTypePath, request.ResourceType, err.Error()))
-			continue // Skip further validation for this request
-		}
-
-		// Check if the claiming resource is allowed using the cached validator
-		allowed, allowedList, err := v.resourceTypeValidator.IsClaimingResourceAllowed(ctx, request.ResourceType, claim.Spec.ConsumerRef, claimingResource.APIGroup, claimingResource.Kind)
-		if err != nil {
-			allErrs = append(allErrs, field.InternalError(resourceTypePath, fmt.Errorf("failed to check claiming resource permission: %w", err)))
+		if request.ResourceType == "" {
+			errs = append(errs, field.Required(requestPath.Child("resourceType"), "resource type is required"))
 			continue
 		}
 
-		if !allowed {
-			// Build helpful error message
-			claimingResourceStr := claimingResource.Kind
-			if claimingResource.APIGroup != "" {
-				claimingResourceStr = fmt.Sprintf("%s/%s", claimingResource.APIGroup, claimingResource.Kind)
-			}
+		if firstIndex, exists := seenResourceTypes[request.ResourceType]; exists {
+			errs = append(errs, field.Duplicate(
+				requestPath.Child("resourceType"),
+				fmt.Sprintf("resource type '%s' is already specified in request %d", request.ResourceType, firstIndex)),
+			)
+		} else {
+			seenResourceTypes[request.ResourceType] = i
+		}
 
-			var errMsg string
-			if len(allowedList) == 0 {
-				errMsg = fmt.Sprintf("resource type %s is not allowed to claim quota for %s. No ClaimingResources configured",
-					claimingResourceStr, request.ResourceType)
-			} else {
-				errMsg = fmt.Sprintf("resource type %s is not allowed to claim quota for %s. Allowed claiming resources: [%s]",
-					claimingResourceStr, request.ResourceType, strings.Join(allowedList, ", "))
-			}
+		if err := v.resourceTypeValidator.ValidateResourceType(ctx, request.ResourceType); err != nil {
+			errs = append(errs, field.Invalid(
+				requestPath.Child("resourceType"),
+				request.ResourceType,
+				err.Error(),
+			))
+		}
 
-			allErrs = append(allErrs, field.Forbidden(resourceTypePath, errMsg))
+		if request.Amount <= 0 {
+			errs = append(errs, field.Invalid(requestPath.Child("amount"), request.Amount, "amount must be greater than 0"))
+		}
+
+		if resourceRefComplete {
+			if claimingErr := v.validateClaimingRulesForRequest(ctx, claim, request, requestPath); claimingErr != nil {
+				errs = append(errs, claimingErr)
+			}
 		}
 	}
 
-	return allErrs
+	return errs
+}
+
+// validateClaimingRulesForRequest validates that the claim's resourceRef satisfies
+// the claiming rules defined in the ResourceRegistration for the requested resource type.
+func (v *resourceClaimValidator) validateClaimingRulesForRequest(
+	ctx context.Context,
+	claim *quotav1alpha1.ResourceClaim,
+	request quotav1alpha1.ResourceRequest,
+	requestPath *field.Path,
+) *field.Error {
+	allowed, allowedList, err := v.resourceTypeValidator.IsClaimingResourceAllowed(
+		ctx,
+		request.ResourceType,
+		claim.Spec.ConsumerRef,
+		claim.Spec.ResourceRef.APIGroup,
+		claim.Spec.ResourceRef.Kind,
+	)
+	if err != nil {
+		return field.InternalError(
+			requestPath.Child("resourceType"),
+			fmt.Errorf("failed to check claiming rules for %s: %w", request.ResourceType, err),
+		)
+	}
+
+	if !allowed {
+		claimingResourceStr := claim.Spec.ResourceRef.Kind
+		if claim.Spec.ResourceRef.APIGroup != "" {
+			claimingResourceStr = fmt.Sprintf("%s/%s", claim.Spec.ResourceRef.APIGroup, claim.Spec.ResourceRef.Kind)
+		}
+
+		var message string
+		if len(allowedList) == 0 {
+			message = fmt.Sprintf("resource type %s does not satisfy claiming rules for %s. No claimingResources configured in ResourceRegistration",
+				claimingResourceStr, request.ResourceType)
+		} else {
+			message = fmt.Sprintf("resource type %s does not satisfy claiming rules for %s. Allowed claiming resources: [%s]",
+				claimingResourceStr, request.ResourceType, strings.Join(allowedList, ", "))
+		}
+
+		return field.Forbidden(
+			requestPath.Child("resourceType"),
+			message,
+		)
+	}
+
+	return nil
 }

@@ -29,10 +29,11 @@ func (m *MockResourceTypeValidator) IsClaimingResourceAllowed(ctx context.Contex
 	return false, nil, fmt.Errorf("resource type '%s' is not registered", resourceType)
 }
 
-func (m *MockResourceTypeValidator) HasSynced() bool {
-	// Mock is always synced for testing
-	return true
+func (m *MockResourceTypeValidator) IsResourceTypeRegistered(resourceType string) bool {
+	return false
 }
+
+func (m *MockResourceTypeValidator) HasSynced() bool { return true }
 
 func TestValidateLabelKey(t *testing.T) {
 	validator, err := NewGrantTemplateValidator(&MockResourceTypeValidator{

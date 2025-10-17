@@ -13,7 +13,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,10 +31,8 @@ import (
 type ClaimCreationPolicyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	// ClaimTemplateValidator validates claim metadata templates for syntax and basic constraints.
-	ClaimTemplateValidator *validation.ClaimTemplateValidator
-	// ResourceTypeValidator validates resource types against ResourceRegistrations.
-	ResourceTypeValidator validation.ResourceTypeValidator
+	// PolicyValidator validates ClaimCreationPolicy resources.
+	PolicyValidator *validation.ClaimCreationPolicyValidator
 }
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=claimcreationpolicies,verbs=get;list;watch;create;update;patch;delete
@@ -62,11 +60,11 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	// Store original status to detect changes
 	originalStatus := policy.Status.DeepCopy()
 
-	// Validate full policy (templates and resource types)
-	validationErr := r.validatePolicy(ctx, &policy)
+	// Validate the policy
+	validationErrs := r.PolicyValidator.Validate(ctx, &policy)
 
 	// Update policy status based on validation results
-	r.updatePolicyStatus(&policy, validationErr)
+	r.updatePolicyStatus(&policy, validationErrs)
 
 	// Update status if it has changed
 	if !equality.Semantic.DeepEqual(&policy.Status, originalStatus) {
@@ -82,33 +80,17 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	return ctrl.Result{}, nil
 }
 
-// validateResourceTypes validates that all resource types in the policy correspond to active ResourceRegistrations.
-func (r *ClaimCreationPolicyReconciler) validateResourceTypes(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy) error {
-	// Validate each unique resource type using the shared validator
-	seen := sets.New[string]()
-	for _, requestTemplate := range policy.Spec.Target.ResourceClaimTemplate.Spec.Requests {
-		resourceType := requestTemplate.ResourceType
-		if !seen.Has(resourceType) {
-			seen.Insert(resourceType)
-			if err := r.ResourceTypeValidator.ValidateResourceType(ctx, resourceType); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 // updatePolicyStatus updates the policy status conditions based on validation results.
-func (r *ClaimCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1.ClaimCreationPolicy, validationErr error) {
+func (r *ClaimCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1.ClaimCreationPolicy, validationErrs field.ErrorList) {
 	now := metav1.NewTime(time.Now())
 
-	if validationErr != nil {
-		// Validation failed
+	if len(validationErrs) > 0 {
+		// Validation failed - format errors with field paths
 		apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
 			Type:               quotav1alpha1.ClaimCreationPolicyReady,
 			Status:             metav1.ConditionFalse,
 			Reason:             quotav1alpha1.ClaimCreationPolicyValidationFailedReason,
-			Message:            validationErr.Error(),
+			Message:            validationErrs.ToAggregate().Error(),
 			LastTransitionTime: now,
 		})
 		return
@@ -178,19 +160,4 @@ func (r *ClaimCreationPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error
 		)).
 		Named("claim-creation-policy").
 		Complete(r)
-}
-
-// validatePolicy performs validation of templates and resource types.
-func (r *ClaimCreationPolicyReconciler) validatePolicy(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy) error {
-	// Validate claim template structure and template syntax
-	if r.ClaimTemplateValidator != nil {
-		if err := r.ClaimTemplateValidator.ValidateClaimTemplate(policy.Spec.Target.ResourceClaimTemplate); err != nil {
-			return fmt.Errorf("claim template validation failed: %v", err)
-		}
-	}
-	// Validate resource types against ResourceRegistrations
-	if err := r.validateResourceTypes(ctx, policy); err != nil {
-		return err
-	}
-	return nil
 }

@@ -179,4 +179,3 @@ func validateTemplateOrLiteral(str string, allowedVariables []string, allowEmpty
 
 	return allErrs
 }
-

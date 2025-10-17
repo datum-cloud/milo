@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/admission/initializer"
 	"k8s.io/apiserver/pkg/endpoints/request"
@@ -60,14 +59,23 @@ func init() {
 // via automatic ResourceClaim creation and quota validation.
 type ResourceQuotaEnforcementPlugin struct {
 	*admission.Handler
-	dynamicClient          dynamic.Interface
-	policyEngine           engine.PolicyEngine
-	templateEngine         engine.TemplateEngine
-	resourceClaimValidator validation.ResourceClaimValidator
-	resourceTypeValidator  validation.ResourceTypeValidator
-	watchManager           ClaimWatchManager
-	config                 *AdmissionPluginConfig
-	logger                 logr.Logger
+	dynamicClient                 dynamic.Interface
+	policyEngine                  engine.PolicyEngine
+	templateEngine                engine.TemplateEngine
+	resourceClaimValidator        validation.ResourceClaimValidator
+	resourceRegistrationValidator *validation.ResourceRegistrationValidator
+	claimCreationPolicyValidator  *validation.ClaimCreationPolicyValidator
+	grantCreationPolicyValidator  *validation.GrantCreationPolicyValidator
+	resourceGrantValidator        *validation.ResourceGrantValidator
+
+	// The plugin uses the resource type validator to prevent the apiserver from
+	// being marked ready until the resource type's cache has been synced.
+	resourceTypeValidator validation.ResourceTypeValidator
+
+	watchManager ClaimWatchManager
+	config       *AdmissionPluginConfig
+
+	logger logr.Logger
 }
 
 // Ensure ResourceQuotaEnforcementPlugin implements the required initializer interfaces
@@ -116,8 +124,18 @@ func (p *ResourceQuotaEnforcementPlugin) ValidateInitialization() error {
 	if p.resourceClaimValidator == nil {
 		return fmt.Errorf("resource claim validator not initialized")
 	}
-	// ResourceTypeValidator is optional and may initialize asynchronously
-	// It will provide optimized validation when ready, but isn't required
+	if p.resourceRegistrationValidator == nil {
+		return fmt.Errorf("resource registration validator not initialized")
+	}
+	if p.claimCreationPolicyValidator == nil {
+		return fmt.Errorf("claim creation policy validator not initialized")
+	}
+	if p.grantCreationPolicyValidator == nil {
+		return fmt.Errorf("grant creation policy validator not initialized")
+	}
+	if p.resourceGrantValidator == nil {
+		return fmt.Errorf("resource grant validator not initialized")
+	}
 	if p.watchManager == nil {
 		return fmt.Errorf("watch manager not initialized")
 	}
@@ -128,28 +146,35 @@ func (p *ResourceQuotaEnforcementPlugin) ValidateInitialization() error {
 func (p *ResourceQuotaEnforcementPlugin) initializeEngines() {
 	p.logger.V(2).Info("Initializing engines for admission plugin")
 
-	// Create CEL engine
 	celEngine, err := engine.NewCELEngine()
 	if err != nil {
 		p.logger.Error(err, "Failed to create CEL engine")
 		return
 	}
 
-	// Create template engine
 	p.templateEngine = engine.NewTemplateEngine(celEngine, p.logger.WithName("template"))
-
-	// Create policy engine for admission plugin use
 	p.policyEngine = engine.NewPolicyEngine(p.dynamicClient, p.logger)
-
-	// Create shared ResourceTypeValidator using async initialization
-	// This won't block admission plugin startup and will sync in the background
 	p.resourceTypeValidator = validation.NewResourceTypeValidator(p.dynamicClient)
-	p.logger.V(2).Info("ResourceTypeValidator created, will sync in background")
-
-	// Create resource claim validator with shared ResourceTypeValidator
 	p.resourceClaimValidator = validation.NewResourceClaimValidator(p.dynamicClient, p.resourceTypeValidator)
+	p.resourceRegistrationValidator = validation.NewResourceRegistrationValidator(p.resourceTypeValidator)
 
-	// Start policy engine in background
+	// Initialize policy validators for admission-time validation
+	celValidator, err := validation.NewCELValidator()
+	if err != nil {
+		p.logger.Error(err, "Failed to create CEL validator")
+		return
+	}
+
+	grantTemplateValidator, err := validation.NewGrantTemplateValidator(p.resourceTypeValidator)
+	if err != nil {
+		p.logger.Error(err, "Failed to create grant template validator")
+		return
+	}
+
+	p.claimCreationPolicyValidator = validation.NewClaimCreationPolicyValidator(p.resourceTypeValidator)
+	p.grantCreationPolicyValidator = validation.NewGrantCreationPolicyValidator(celValidator, grantTemplateValidator)
+	p.resourceGrantValidator = validation.NewResourceGrantValidator(p.resourceTypeValidator)
+
 	go func() {
 		if err := p.policyEngine.Start(context.Background()); err != nil {
 			p.logger.Error(err, "Failed to start policy engine")
@@ -195,6 +220,12 @@ func (p *ResourceQuotaEnforcementPlugin) Validate(ctx context.Context, attrs adm
 			return p.validateResourceClaim(ctx, attrs)
 		case "ResourceRegistration":
 			return p.validateResourceRegistration(ctx, attrs)
+		case "ClaimCreationPolicy":
+			return p.validateClaimCreationPolicy(ctx, attrs)
+		case "GrantCreationPolicy":
+			return p.validateGrantCreationPolicy(ctx, attrs)
+		case "ResourceGrant":
+			return p.validateResourceGrant(ctx, attrs)
 		}
 	}
 
@@ -587,7 +618,8 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceClaim(ctx context.Conte
 	)
 
 	// Validate the resource claim using field-based validation
-	if errs := p.validateResourceClaimFields(ctx, claim); len(errs) > 0 {
+	// Validate the ResourceClaim using the complete validator
+	if errs := p.resourceClaimValidator.Validate(ctx, claim); len(errs) > 0 {
 		span.SetAttributes(
 			attribute.String("validation.status", "failed"),
 			attribute.Int("validation.error_count", len(errs)),
@@ -606,60 +638,6 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceClaim(ctx context.Conte
 	span.SetAttributes(attribute.String("validation.status", "passed"))
 
 	return nil
-}
-
-// validateResourceClaimFields performs field-based validation of ResourceClaim
-func (p *ResourceQuotaEnforcementPlugin) validateResourceClaimFields(ctx context.Context, claim *quotav1alpha1.ResourceClaim) field.ErrorList {
-	var errs field.ErrorList
-	requestsPath := field.NewPath("spec", "requests")
-	resourceRefPath := field.NewPath("spec", "resourceRef")
-
-	// Track resource types to detect duplicates
-	seenResourceTypes := make(map[string]int)
-
-	// Validate each request
-	for i, request := range claim.Spec.Requests {
-		requestPath := requestsPath.Index(i)
-
-		// Validate resource type is not empty
-		if request.ResourceType == "" {
-			errs = append(errs, field.Required(requestPath.Child("resourceType"), "resource type is required"))
-			continue
-		}
-
-		// Check for duplicate resource types
-		if firstIndex, exists := seenResourceTypes[request.ResourceType]; exists {
-			errs = append(errs, field.Duplicate(
-				requestPath.Child("resourceType"),
-				fmt.Sprintf("resource type '%s' is already specified in request %d", request.ResourceType, firstIndex)),
-			)
-		} else {
-			seenResourceTypes[request.ResourceType] = i
-		}
-
-		// Validate amount is positive
-		if request.Amount <= 0 {
-			errs = append(errs, field.Invalid(requestPath.Child("amount"), request.Amount, "amount must be greater than 0"))
-		}
-	}
-
-	// Validate that resourceRef is provided (required for actual ResourceClaim objects)
-	if claim.Spec.ResourceRef.Kind == "" {
-		errs = append(errs, field.Required(resourceRefPath.Child("kind"), "resourceRef.kind is required"))
-	}
-	if claim.Spec.ResourceRef.Name == "" {
-		errs = append(errs, field.Required(resourceRefPath.Child("name"), "resourceRef.name is required"))
-	}
-
-	// Validate that the claiming resource (ResourceRef) is allowed to claim these resources
-	if claim.Spec.ResourceRef.Kind != "" && claim.Spec.ResourceRef.Name != "" {
-		if validationErrs := p.resourceClaimValidator.ValidateResourceClaimAgainstRegistrations(ctx, claim); len(validationErrs) > 0 {
-			// Append all validation errors from the resource claim validator
-			errs = append(errs, validationErrs...)
-		}
-	}
-
-	return errs
 }
 
 // startSpan safely starts a span using the tracer provider from the context
@@ -776,83 +754,181 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceRegistration(ctx contex
 		attribute.String("registration.resourceType", registration.Spec.ResourceType),
 	)
 
-	// Validate claimingResources for duplicates (moved from CEL due to cost limits)
-	if err := p.validateClaimingResourcesDuplicates(registration); err != nil {
+	// Validate the ResourceRegistration
+	if validationErrs := p.resourceRegistrationValidator.Validate(registration); len(validationErrs) > 0 {
 		span.SetAttributes(attribute.String("validation.status", "failed"))
-		span.SetStatus(codes.Error, "ClaimingResources validation failed")
-		return admission.NewForbidden(attrs, err)
-	}
+		span.SetStatus(codes.Error, "ResourceRegistration validation failed")
 
-	// Check if resourceType already exists across all registrations
-	gvr := schema.GroupVersionResource{
-		Group:    "quota.miloapis.com",
-		Version:  "v1alpha1",
-		Resource: "resourceregistrations",
-	}
-
-	list, err := p.dynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "Failed to list ResourceRegistrations")
-		return fmt.Errorf("failed to list ResourceRegistrations: %w", err)
-	}
-
-	for _, item := range list.Items {
-		existing := &quotav1alpha1.ResourceRegistration{}
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(item.Object, existing); err != nil {
-			p.logger.V(4).Info("Failed to convert existing registration", "error", err)
-			continue
-		}
-
-		if existing.Spec.ResourceType == registration.Spec.ResourceType &&
-			existing.Name != registration.Name {
-			span.SetAttributes(
-				attribute.String("validation.status", "failed"),
-				attribute.String("duplicate.name", existing.Name),
-			)
-			span.SetStatus(codes.Error, "Duplicate resourceType found")
-
-			return admission.NewForbidden(attrs, errors.NewInvalid(
-				quotav1alpha1.GroupVersion.WithKind("ResourceRegistration").GroupKind(),
-				registration.Name,
-				field.ErrorList{
-					field.Duplicate(
-						field.NewPath("spec", "resourceType"),
-						fmt.Sprintf("resource type '%s' is already registered by '%s'",
-							registration.Spec.ResourceType, existing.Name),
-					),
-				},
-			))
-		}
+		return admission.NewForbidden(attrs, errors.NewInvalid(
+			quotav1alpha1.GroupVersion.WithKind("ResourceRegistration").GroupKind(),
+			registration.Name,
+			validationErrs,
+		))
 	}
 
 	span.SetAttributes(attribute.String("validation.status", "passed"))
 	return nil
 }
 
-// validateClaimingResourcesDuplicates validates that claimingResources array doesn't contain duplicates.
-// This validation was moved from CEL due to cost limits with nested loops.
-func (p *ResourceQuotaEnforcementPlugin) validateClaimingResourcesDuplicates(registration *quotav1alpha1.ResourceRegistration) error {
-	if len(registration.Spec.ClaimingResources) <= 1 {
-		return nil // No duplicates possible with 0 or 1 items
+// validateClaimCreationPolicy validates ClaimCreationPolicy objects for template syntax and resource types.
+func (p *ResourceQuotaEnforcementPlugin) validateClaimCreationPolicy(ctx context.Context, attrs admission.Attributes) error {
+	ctx, span := p.startSpan(ctx, "quota.admission.ClaimCreationPolicyValidation",
+		trace.WithAttributes(
+			attribute.String("operation", string(attrs.GetOperation())),
+			attribute.String("policy.name", attrs.GetName()),
+			attribute.String("policy.namespace", attrs.GetNamespace()),
+			attribute.String("user.name", attrs.GetUserInfo().GetName()),
+		))
+	defer span.End()
+
+	// Only validate on CREATE - updates can be handled by CEL immutability rules
+	if attrs.GetOperation() != admission.Create {
+		span.SetAttributes(attribute.String("validation.status", "skipped"))
+		return nil
 	}
 
-	seen := make(map[string]int)
-	for i, cr := range registration.Spec.ClaimingResources {
-		key := fmt.Sprintf("%s/%s", cr.APIGroup, cr.Kind)
-		if firstIndex, exists := seen[key]; exists {
-			return errors.NewInvalid(
-				quotav1alpha1.GroupVersion.WithKind("ResourceRegistration").GroupKind(),
-				registration.Name,
-				field.ErrorList{
-					field.Duplicate(
-						field.NewPath("spec", "claimingResources").Index(i),
-						fmt.Sprintf("duplicate claiming resource '%s' (first occurrence at index %d)", key, firstIndex),
-					),
-				},
-			)
-		}
-		seen[key] = i
+	obj := attrs.GetObject()
+	if obj == nil {
+		return nil
 	}
+
+	// Convert to ClaimCreationPolicy
+	policy, ok := obj.(*quotav1alpha1.ClaimCreationPolicy)
+	if !ok {
+		return fmt.Errorf("expected ClaimCreationPolicy, got %T", obj)
+	}
+
+	span.SetAttributes(
+		attribute.String("policy.name", policy.Name),
+		attribute.String("policy.namespace", policy.Namespace),
+	)
+
+	// Validate the ClaimCreationPolicy
+	if validationErrs := p.claimCreationPolicyValidator.Validate(ctx, policy); len(validationErrs) > 0 {
+		span.SetAttributes(attribute.String("validation.status", "failed"))
+		span.SetStatus(codes.Error, "ClaimCreationPolicy validation failed")
+
+		p.logger.Info("ClaimCreationPolicy validation failed",
+			"name", policy.Name,
+			"namespace", policy.Namespace,
+			"errors", validationErrs)
+
+		return admission.NewForbidden(attrs, errors.NewInvalid(
+			quotav1alpha1.GroupVersion.WithKind("ClaimCreationPolicy").GroupKind(),
+			policy.Name,
+			validationErrs,
+		))
+	}
+
+	span.SetAttributes(attribute.String("validation.status", "passed"))
+	return nil
+}
+
+// validateGrantCreationPolicy validates GrantCreationPolicy objects for CEL expressions and template syntax.
+func (p *ResourceQuotaEnforcementPlugin) validateGrantCreationPolicy(ctx context.Context, attrs admission.Attributes) error {
+	ctx, span := p.startSpan(ctx, "quota.admission.GrantCreationPolicyValidation",
+		trace.WithAttributes(
+			attribute.String("operation", string(attrs.GetOperation())),
+			attribute.String("policy.name", attrs.GetName()),
+			attribute.String("policy.namespace", attrs.GetNamespace()),
+			attribute.String("user.name", attrs.GetUserInfo().GetName()),
+		))
+	defer span.End()
+
+	// Only validate on CREATE - updates can be handled by CEL immutability rules
+	if attrs.GetOperation() != admission.Create {
+		span.SetAttributes(attribute.String("validation.status", "skipped"))
+		return nil
+	}
+
+	obj := attrs.GetObject()
+	if obj == nil {
+		return nil
+	}
+
+	// Convert to GrantCreationPolicy
+	policy, ok := obj.(*quotav1alpha1.GrantCreationPolicy)
+	if !ok {
+		return fmt.Errorf("expected GrantCreationPolicy, got %T", obj)
+	}
+
+	span.SetAttributes(
+		attribute.String("policy.name", policy.Name),
+		attribute.String("policy.namespace", policy.Namespace),
+	)
+
+	// Validate the GrantCreationPolicy
+	if validationErrs := p.grantCreationPolicyValidator.Validate(ctx, policy); len(validationErrs) > 0 {
+		span.SetAttributes(attribute.String("validation.status", "failed"))
+		span.SetStatus(codes.Error, "GrantCreationPolicy validation failed")
+
+		p.logger.Info("GrantCreationPolicy validation failed",
+			"name", policy.Name,
+			"namespace", policy.Namespace,
+			"errors", validationErrs)
+
+		return admission.NewForbidden(attrs, errors.NewInvalid(
+			quotav1alpha1.GroupVersion.WithKind("GrantCreationPolicy").GroupKind(),
+			policy.Name,
+			validationErrs,
+		))
+	}
+
+	span.SetAttributes(attribute.String("validation.status", "passed"))
+	return nil
+}
+
+// validateResourceGrant validates ResourceGrant objects for resource type validity.
+func (p *ResourceQuotaEnforcementPlugin) validateResourceGrant(ctx context.Context, attrs admission.Attributes) error {
+	ctx, span := p.startSpan(ctx, "quota.admission.ResourceGrantValidation",
+		trace.WithAttributes(
+			attribute.String("operation", string(attrs.GetOperation())),
+			attribute.String("grant.name", attrs.GetName()),
+			attribute.String("grant.namespace", attrs.GetNamespace()),
+			attribute.String("user.name", attrs.GetUserInfo().GetName()),
+		))
+	defer span.End()
+
+	// Only validate on CREATE - updates can be handled by CEL immutability rules
+	if attrs.GetOperation() != admission.Create {
+		span.SetAttributes(attribute.String("validation.status", "skipped"))
+		return nil
+	}
+
+	obj := attrs.GetObject()
+	if obj == nil {
+		return nil
+	}
+
+	// Convert to ResourceGrant
+	grant, ok := obj.(*quotav1alpha1.ResourceGrant)
+	if !ok {
+		return fmt.Errorf("expected ResourceGrant, got %T", obj)
+	}
+
+	span.SetAttributes(
+		attribute.String("grant.name", grant.Name),
+		attribute.String("grant.namespace", grant.Namespace),
+		attribute.Int("grant.allowances_count", len(grant.Spec.Allowances)),
+	)
+
+	// Validate the ResourceGrant
+	if validationErrs := p.resourceGrantValidator.Validate(ctx, grant); len(validationErrs) > 0 {
+		span.SetAttributes(attribute.String("validation.status", "failed"))
+		span.SetStatus(codes.Error, "ResourceGrant validation failed")
+
+		p.logger.Info("ResourceGrant validation failed",
+			"name", grant.Name,
+			"namespace", grant.Namespace,
+			"errors", validationErrs)
+
+		return admission.NewForbidden(attrs, errors.NewInvalid(
+			quotav1alpha1.GroupVersion.WithKind("ResourceGrant").GroupKind(),
+			grant.Name,
+			validationErrs,
+		))
+	}
+
+	span.SetAttributes(attribute.String("validation.status", "passed"))
 	return nil
 }

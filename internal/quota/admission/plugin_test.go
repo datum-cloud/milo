@@ -45,10 +45,11 @@ func (t *testResourceTypeValidator) IsClaimingResourceAllowed(ctx context.Contex
 	return true, []string{fmt.Sprintf("%s/%s", claimingAPIGroup, claimingKind)}, nil
 }
 
-func (t *testResourceTypeValidator) HasSynced() bool {
-	// Test mock is always synced
-	return true
+func (t *testResourceTypeValidator) IsResourceTypeRegistered(resourceType string) bool {
+	return false
 }
+
+func (t *testResourceTypeValidator) HasSynced() bool { return true }
 
 func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 	tests := []struct {
@@ -892,6 +893,12 @@ func TestResourceQuotaEnforcementPlugin_InitializationValidation(t *testing.T) {
 				}
 				plugin.resourceTypeValidator = mockValidator
 				plugin.resourceClaimValidator = validation.NewResourceClaimValidator(fakeDynamicClient, mockValidator)
+				plugin.resourceRegistrationValidator = validation.NewResourceRegistrationValidator(mockValidator)
+				plugin.claimCreationPolicyValidator = validation.NewClaimCreationPolicyValidator(mockValidator)
+				celValidator, _ := validation.NewCELValidator()
+				grantTemplateValidator, _ := validation.NewGrantTemplateValidator(mockValidator)
+				plugin.grantCreationPolicyValidator = validation.NewGrantCreationPolicyValidator(celValidator, grantTemplateValidator)
+				plugin.resourceGrantValidator = validation.NewResourceGrantValidator(mockValidator)
 
 				// Initialize mock watch manager for test
 				plugin.watchManager = &testWatchManager{behavior: "grant"}

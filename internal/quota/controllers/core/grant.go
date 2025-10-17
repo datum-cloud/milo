@@ -29,8 +29,8 @@ import (
 type ResourceGrantController struct {
 	client.Client
 	Scheme *runtime.Scheme
-	// ResourceTypeValidator validates resource types against ResourceRegistrations.
-	ResourceTypeValidator validation.ResourceTypeValidator
+	// GrantValidator validates ResourceGrant resources.
+	GrantValidator *validation.ResourceGrantValidator
 }
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
@@ -67,10 +67,10 @@ func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context,
 	// Always update the observed generation in the status to match the current generation of the spec.
 	grant.Status.ObservedGeneration = grant.Generation
 
-	// Validate that all required registrations exist before marking the grant as active
-	if err := r.validateResourceRegistrationsForGrant(ctx, grant); err != nil {
-		logger.Info("ResourceGrant validation failed", "error", err)
-		return r.setValidationFailedCondition(ctx, grant, err)
+	// Validate the ResourceGrant
+	if validationErrs := r.GrantValidator.Validate(ctx, grant); len(validationErrs) > 0 {
+		logger.Info("ResourceGrant validation failed", "errors", validationErrs.ToAggregate())
+		return r.setValidationFailedCondition(ctx, grant, validationErrs.ToAggregate())
 	}
 
 	// Set active condition
@@ -124,23 +124,6 @@ func (r *ResourceGrantController) updateStatusIfChanged(ctx context.Context, gra
 		}
 	}
 
-	return nil
-}
-
-// validateResourceRegistrationsForGrant validates that all resource types in the grant
-// have corresponding registrations.
-func (r *ResourceGrantController) validateResourceRegistrationsForGrant(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
-	// Validate each unique resource type using the shared validator
-	seen := make(map[string]bool)
-	for _, allowance := range grant.Spec.Allowances {
-		resourceType := allowance.ResourceType
-		if !seen[resourceType] {
-			seen[resourceType] = true
-			if err := r.ResourceTypeValidator.ValidateResourceType(ctx, resourceType); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }
 

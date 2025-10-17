@@ -29,7 +29,13 @@ func SetupQuotaControllers(mgr ctrl.Manager, dynamicClient dynamic.Interface, lo
 	sharedResourceTypeValidator := validation.NewResourceTypeValidator(dynamicClient)
 	logger.Info("Shared ResourceTypeValidator created, will sync in background")
 
-	// Create shared CEL engine (used by multiple controllers)
+	// Create shared CEL validator for policy validation
+	celValidator, err := validation.NewCELValidator()
+	if err != nil {
+		return fmt.Errorf("failed to create CEL validator: %w", err)
+	}
+
+	// Create CEL engine for runtime evaluation (used by grant creation controller)
 	celEngine, err := engine.NewCELEngine()
 	if err != nil {
 		return fmt.Errorf("failed to create CEL engine: %w", err)
@@ -47,9 +53,10 @@ func SetupQuotaControllers(mgr ctrl.Manager, dynamicClient dynamic.Interface, lo
 
 	// 2. ResourceGrant controller (depends on ResourceRegistrations)
 	logger.V(1).Info("Setting up ResourceGrant controller")
+	grantValidator := validation.NewResourceGrantValidator(sharedResourceTypeValidator)
 	if err := (&core.ResourceGrantController{
-		Client:                mgr.GetClient(),
-		ResourceTypeValidator: sharedResourceTypeValidator,
+		Client:         mgr.GetClient(),
+		GrantValidator: grantValidator,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("failed to setup ResourceGrantController: %w", err)
 	}
@@ -73,26 +80,26 @@ func SetupQuotaControllers(mgr ctrl.Manager, dynamicClient dynamic.Interface, lo
 
 	// 5. ClaimCreationPolicy controller (policy validation)
 	logger.V(1).Info("Setting up ClaimCreationPolicy controller")
+	claimCreationPolicyValidator := validation.NewClaimCreationPolicyValidator(sharedResourceTypeValidator)
 	if err := (&policy.ClaimCreationPolicyReconciler{
-		Client:                 mgr.GetClient(),
-		Scheme:                 mgr.GetScheme(),
-		ClaimTemplateValidator: &validation.ClaimTemplateValidator{},
-		ResourceTypeValidator:  sharedResourceTypeValidator,
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		PolicyValidator: claimCreationPolicyValidator,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("failed to setup ClaimCreationPolicyReconciler: %w", err)
 	}
 
 	// 6. GrantCreationPolicy controller (policy validation)
 	logger.V(1).Info("Setting up GrantCreationPolicy controller")
-	templateValidator, err := validation.NewGrantTemplateValidator(sharedResourceTypeValidator)
+	grantTemplateValidator, err := validation.NewGrantTemplateValidator(sharedResourceTypeValidator)
 	if err != nil {
 		return fmt.Errorf("failed to create GrantTemplateValidator: %w", err)
 	}
+	grantCreationPolicyValidator := validation.NewGrantCreationPolicyValidator(celValidator, grantTemplateValidator)
 	if err := (&policy.GrantCreationPolicyReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		CELValidator:      celEngine,
-		TemplateValidator: templateValidator,
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		PolicyValidator: grantCreationPolicyValidator,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("failed to setup GrantCreationPolicyReconciler: %w", err)
 	}

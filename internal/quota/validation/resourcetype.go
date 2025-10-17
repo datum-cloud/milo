@@ -38,6 +38,9 @@ type ResourceTypeValidator interface {
 	// Returns allowed status and detailed error message information for user-friendly feedback.
 	IsClaimingResourceAllowed(ctx context.Context, resourceType string, consumerRef quotav1alpha1.ConsumerRef, claimingAPIGroup, claimingKind string) (bool, []string, error)
 
+	// IsResourceTypeRegistered checks if a resourceType is already registered.
+	IsResourceTypeRegistered(resourceType string) bool
+
 	// HasSynced returns true if the validator's cache has been synced with the API server.
 	// This can be used for readiness checks to ensure the validator is ready before serving traffic.
 	HasSynced() bool
@@ -215,6 +218,14 @@ func (v *resourceTypeValidator) ValidateResourceType(ctx context.Context, resour
 	}
 
 	return nil
+}
+
+func (v *resourceTypeValidator) IsResourceTypeRegistered(resourceType string) bool {
+	v.cacheMutex.RLock()
+	defer v.cacheMutex.RUnlock()
+
+	_, exists := v.cache[resourceType]
+	return exists
 }
 
 // IsClaimingResourceAllowed checks if the given resource type is allowed to claim quota for the specified resource type.

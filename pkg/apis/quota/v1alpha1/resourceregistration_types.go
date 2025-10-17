@@ -141,19 +141,13 @@ type ResourceRegistrationSpec struct {
 
 	// ClaimingResources specifies which resource types can create ResourceClaims for this registration.
 	// Only resources listed here can trigger quota consumption for this resource type.
-	// Empty list means no resources can claim quota (administrators must create claims manually).
+	// At least one claiming resource must be specified.
 	// Maximum 20 entries.
 	//
-	// The quota system monitors these resource types for automatic owner reference creation.
-	// Uses unversioned references (APIGroup + Kind) to survive API version changes.
-	//
-	// Security consideration: Only include resource types that should consume this quota.
-	// For example, when registering **Projects**, only include **Project** as a claiming resource
-	// to prevent other resource types from consuming **Project** quota.
-	//
-	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=20
-	ClaimingResources []ClaimingResource `json:"claimingResources,omitempty"`
+	ClaimingResources []ClaimingResource `json:"claimingResources"`
 }
 
 // ClaimingResource identifies a resource type that can create **ResourceClaims**

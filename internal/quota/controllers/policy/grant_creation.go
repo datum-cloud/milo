@@ -13,13 +13,13 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"go.miloapis.com/milo/internal/quota/engine"
 	"go.miloapis.com/milo/internal/quota/validation"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
@@ -31,10 +31,8 @@ type GrantCreationPolicyReconciler struct {
 	client.Client
 	// Scheme is the runtime scheme for object serialization.
 	Scheme *runtime.Scheme
-	// CELValidator validates CEL expressions in policy conditions.
-	CELValidator engine.CELEngine
-	// TemplateValidator validates grant template structure and resource types.
-	TemplateValidator *validation.GrantTemplateValidator
+	// PolicyValidator validates GrantCreationPolicy resources.
+	PolicyValidator *validation.GrantCreationPolicyValidator
 }
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=grantcreationpolicies,verbs=get;list;watch;create;update;patch;delete
@@ -60,11 +58,11 @@ func (r *GrantCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	// Store original status to detect changes
 	originalStatus := policy.Status.DeepCopy()
 
-	// Perform comprehensive validation
-	validationErr := r.validatePolicy(ctx, &policy)
+	// Validate the policy
+	validationErrs := r.PolicyValidator.Validate(ctx, &policy)
 
 	// Update policy status based on validation results
-	r.updatePolicyStatus(&policy, validationErr)
+	r.updatePolicyStatus(&policy, validationErrs)
 
 	// Update status if it has changed
 	if !equality.Semantic.DeepEqual(&policy.Status, originalStatus) {
@@ -81,48 +79,17 @@ func (r *GrantCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	return ctrl.Result{}, nil
 }
 
-// validatePolicy performs comprehensive validation of the GrantCreationPolicy.
-func (r *GrantCreationPolicyReconciler) validatePolicy(ctx context.Context, policy *quotav1alpha1.GrantCreationPolicy) error {
-	logger := log.FromContext(ctx)
-
-	// Skip validation if policy is disabled
-	if policy.Spec.Disabled != nil && *policy.Spec.Disabled {
-		logger.V(2).Info("Policy is disabled, skipping validation", "policy", policy.Name)
-		return nil
-	}
-
-	// Validate CEL expressions in trigger constraints
-	if err := r.CELValidator.ValidateConstraints(policy.Spec.Trigger.Constraints); err != nil {
-		return fmt.Errorf("trigger constraint validation failed: %w", err)
-	}
-
-	// Validate parent context name expression if specified
-	if policy.Spec.Target.ParentContext != nil {
-		if err := r.CELValidator.ValidateTemplateExpression(policy.Spec.Target.ParentContext.NameExpression); err != nil {
-			return fmt.Errorf("parent context name expression validation failed: %w", err)
-		}
-	}
-
-	// Validate grant template structure (including resource type validation)
-	if err := r.TemplateValidator.ValidateGrantTemplate(ctx, policy.Spec.Target.ResourceGrantTemplate); err != nil {
-		return fmt.Errorf("grant template validation failed: %v", err)
-	}
-
-	logger.V(2).Info("Policy validation passed", "policy", policy.Name)
-	return nil
-}
-
 // updatePolicyStatus updates the policy status conditions based on validation results.
-func (r *GrantCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1.GrantCreationPolicy, validationErr error) {
+func (r *GrantCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1.GrantCreationPolicy, validationErrs field.ErrorList) {
 	now := metav1.NewTime(time.Now())
 
-	if validationErr != nil {
-		// Validation failed
+	if len(validationErrs) > 0 {
+		// Validation failed - format errors with field paths
 		apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
 			Type:               quotav1alpha1.GrantCreationPolicyReady,
 			Status:             metav1.ConditionFalse,
 			Reason:             quotav1alpha1.GrantCreationPolicyValidationFailedReason,
-			Message:            validationErr.Error(),
+			Message:            validationErrs.ToAggregate().Error(),
 			LastTransitionTime: now,
 		})
 
