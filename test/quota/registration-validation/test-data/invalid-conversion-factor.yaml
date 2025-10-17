@@ -1,0 +1,15 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-invalid-conversion
+spec:
+  consumerType:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Allocation"
+  resourceType: "test.validation.miloapis.com/storage"
+  description: "Invalid conversion factor test"
+  baseUnit: "bytes"
+  displayUnit: "gigabytes"
+  # Invalid unitConversionFactor - must be >= 1
+  unitConversionFactor: 0

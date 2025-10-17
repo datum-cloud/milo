@@ -1,0 +1,31 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: auto-grant-grant-policy-test-org
+  namespace: milo-system
+  labels:
+    quota.miloapis.com/auto-created: "true"
+    quota.miloapis.com/policy: "test-organization-grant-policy"
+    test.miloapis.com/scenario: "grant-creation-policy"
+  annotations:
+    quota.miloapis.com/description: "Auto-generated grant for grant-policy-test-org"
+  ownerReferences:
+    - apiVersion: resourcemanager.miloapis.com/v1alpha1
+      kind: Organization
+      name: grant-policy-test-org
+      controller: true
+spec:
+  consumerRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: grant-policy-test-org
+  allowances:
+    - resourceType: "test.grantpolicy.miloapis.com/projects"
+      buckets:
+        - amount: 5
+status:
+  conditions:
+    - type: Active
+      status: "True"
+      reason: GrantActive
+      message: ResourceGrant is active

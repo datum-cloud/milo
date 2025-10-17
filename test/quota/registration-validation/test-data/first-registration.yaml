@@ -1,0 +1,17 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-first-registration
+spec:
+  consumerType:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  resourceType: "test.validation.miloapis.com/unique-resource"
+  description: "First registration with unique resourceType"
+  baseUnit: "resource"
+  displayUnit: "resources"
+  unitConversionFactor: 1
+  claimingResources:
+    - apiGroup: test.miloapis.com
+      kind: TestResource

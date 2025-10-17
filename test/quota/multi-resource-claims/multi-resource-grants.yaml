@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceGrant
+  metadata:
+    name: multi-multi-test-multi-resource-org-user-grant
+    namespace: milo-system
+    labels:
+      test.miloapis.com/quota: "multi-resource"
+      test.miloapis.com/scenario: "multi-resource-claims"
+  spec:
+    consumerRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: multi-test-multi-resource-org
+    allowances:
+      - resourceType: "resourcemanager.miloapis.com/users"
+        buckets:
+          - amount: 15
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceGrant
+  metadata:
+    name: multi-multi-test-multi-resource-org-cluster-grant
+    namespace: milo-system
+    labels:
+      test.miloapis.com/quota: "multi-resource"
+      test.miloapis.com/scenario: "multi-resource-claims"
+  spec:
+    consumerRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: multi-test-multi-resource-org
+    allowances:
+      - resourceType: "infrastructure.miloapis.com/clusters"
+        buckets:
+          - amount: 3
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceGrant
+  metadata:
+    name: multi-multi-test-multi-resource-org-project-grant
+    namespace: milo-system
+    labels:
+      test.miloapis.com/quota: "multi-resource"
+      test.miloapis.com/scenario: "multi-resource-claims"
+  spec:
+    consumerRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: multi-test-multi-resource-org
+    allowances:
+      - resourceType: "test.miloapis.com/projects/subresource"
+        buckets:
+          - amount: 5

@@ -22,6 +22,9 @@ dev-temp/
 
 # Configuration and manifests
 config/
+# Exception: CRD bootstrap package needs to be included for embedded CRDs
+!config/crd/bootstrap.go
+!config/crd/bases/
 Taskfile.yaml
 Taskfile.yml
 docker-compose.yaml

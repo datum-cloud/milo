@@ -1,0 +1,19 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: edge-test-projects-per-org
+  labels:
+    test.miloapis.com/quota: "true"
+spec:
+  consumerType:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  resourceType: "test.miloapis.com/edgeprojects"
+  description: "Edge case test quota for maximum edge projects per organization"
+  baseUnit: "EdgeProject"
+  displayUnit: "Edge Projects"
+  unitConversionFactor: 1
+  claimingResources:
+    - apiGroup: test.miloapis.com
+      kind: EdgeProject

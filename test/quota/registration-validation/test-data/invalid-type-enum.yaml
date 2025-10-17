@@ -1,0 +1,15 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-invalid-enum
+spec:
+  consumerType:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  # Invalid type - must be Entity or Allocation
+  type: "InvalidType"
+  resourceType: "test.validation.miloapis.com/resources"
+  description: "Invalid enum test"
+  baseUnit: "unit"
+  displayUnit: "units"
+  unitConversionFactor: 1

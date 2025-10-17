@@ -1,0 +1,24 @@
+# This assertion verifies that ResourceClaims for successfully created projects
+# have been automatically cleaned up (garbage collected) when the projects were deleted.
+# If any claims are found, it indicates the ownership controller is not properly
+# setting owner references on ResourceClaims.
+
+# We expect NO ResourceClaims for the successful projects (they should be auto-deleted)
+apiVersion: v1
+kind: List
+items:
+# Assert that there are no ResourceClaims for core-test-basic-project-1
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceClaim
+  metadata:
+    namespace: milo-system
+    annotations:
+      quota.miloapis.com/resource-name: core-test-basic-project-1
+
+# Assert that there are no ResourceClaims for core-test-basic-project-2
+- apiVersion: quota.miloapis.com/v1alpha1
+  kind: ResourceClaim
+  metadata:
+    namespace: milo-system
+    annotations:
+      quota.miloapis.com/resource-name: core-test-basic-project-2

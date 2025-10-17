@@ -7,15 +7,11 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/quota/v1/generic"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/controller-manager/controller"
 	"k8s.io/kubernetes/cmd/kube-controller-manager/names"
-	pkgcontroller "k8s.io/kubernetes/pkg/controller"
-	resourcequotacontroller "k8s.io/kubernetes/pkg/controller/resourcequota"
-	quotainstall "k8s.io/kubernetes/pkg/quota/v1/install"
 
 	gccontroller "go.miloapis.com/milo/internal/controllers/garbagecollector"
 	namespacecontroller "go.miloapis.com/milo/internal/controllers/namespace"
@@ -145,43 +141,4 @@ func startGarbageCollectorController(ctx context.Context, controllerContext Cont
 	go prov.Run(ctx)
 
 	return gc, true, nil
-}
-
-func newResourceQuotaControllerDescriptor() *ControllerDescriptor {
-	return &ControllerDescriptor{
-		name:     names.ResourceQuotaController,
-		aliases:  []string{"resourcequota"},
-		initFunc: startResourceQuotaController,
-	}
-}
-
-func startResourceQuotaController(ctx context.Context, controllerContext ControllerContext, controllerName string) (controller.Interface, bool, error) {
-	resourceQuotaControllerClient := controllerContext.ClientBuilder.ClientOrDie("resourcequota-controller")
-	resourceQuotaControllerDiscoveryClient := controllerContext.ClientBuilder.DiscoveryClientOrDie("resourcequota-controller")
-	discoveryFunc := resourceQuotaControllerDiscoveryClient.ServerPreferredNamespacedResources
-	listerFuncForResource := generic.ListerFuncForResourceFunc(controllerContext.InformerFactory.ForResource)
-	quotaConfiguration := quotainstall.NewQuotaConfigurationForControllers(listerFuncForResource)
-
-	resourceQuotaControllerOptions := &resourcequotacontroller.ControllerOptions{
-		QuotaClient:               resourceQuotaControllerClient.CoreV1(),
-		ResourceQuotaInformer:     controllerContext.InformerFactory.Core().V1().ResourceQuotas(),
-		ResyncPeriod:              pkgcontroller.StaticResyncPeriodFunc(controllerContext.ComponentConfig.ResourceQuotaController.ResourceQuotaSyncPeriod.Duration),
-		InformerFactory:           controllerContext.ObjectOrMetadataInformerFactory,
-		ReplenishmentResyncPeriod: controllerContext.ResyncPeriod,
-		DiscoveryFunc:             discoveryFunc,
-		IgnoredResourcesFunc:      quotaConfiguration.IgnoredResources,
-		InformersStarted:          controllerContext.InformersStarted,
-		Registry:                  generic.NewRegistry(quotaConfiguration.Evaluators()),
-		UpdateFilter:              quotainstall.DefaultUpdateFilter(),
-	}
-	resourceQuotaController, err := resourcequotacontroller.NewController(ctx, resourceQuotaControllerOptions)
-	if err != nil {
-		return nil, false, err
-	}
-	go resourceQuotaController.Run(ctx, int(controllerContext.ComponentConfig.ResourceQuotaController.ConcurrentResourceQuotaSyncs))
-
-	// Periodically the quota controller to detect new resource types
-	go resourceQuotaController.Sync(ctx, discoveryFunc, 30*time.Second)
-
-	return nil, true, nil
 }

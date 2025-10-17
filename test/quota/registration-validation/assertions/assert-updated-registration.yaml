@@ -1,0 +1,26 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-immutable-registration
+spec:
+  consumerType:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  # These immutable fields should NOT have changed
+  resourceType: "test.immutable.miloapis.com/original"
+  # These mutable fields should have updated values
+  description: "Updated description - this is allowed"
+  baseUnit: "thing"
+  displayUnit: "things"
+  unitConversionFactor: 1000
+  claimingResources:
+    - apiGroup: test.miloapis.com
+      kind: TestItem
+    - apiGroup: test.miloapis.com
+      kind: AnotherTestItem
+status:
+  conditions:
+    - type: Active
+      status: 'True'
+      reason: RegistrationActive
