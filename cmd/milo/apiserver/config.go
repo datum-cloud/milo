@@ -226,6 +226,12 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	// Add readiness check for quota validator to ensure cache is synced before serving traffic
 	kubeAPIs.Generic.AddReadyzChecks(admissionquota.ReadinessCheck())
 
+	// Add post-start hook to bootstrap CRDs from embedded filesystem
+	// This installs all CRDs EXCEPT infrastructure.miloapis.com group, which should remain in the infrastructure cluster
+	kubeAPIs.Generic.AddPostStartHookOrDie("bootstrap-crds", func(ctx server.PostStartHookContext) error {
+		return bootstrapCRDsHook(ctx, kubeAPIs.Generic.LoopbackClientConfig)
+	})
+
 	// TODO(jreese) create an admission plugin that will prohibit the creation of
 	// a Secret with a type of `kubernetes.io/service-account-token`
 	c.APIExtensions.GenericConfig.DisabledPostStartHooks.Insert("start-legacy-token-tracking-controller")
