@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/mail"
 	"reflect"
@@ -19,6 +20,7 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 
+	admissionv1 "k8s.io/api/admission/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -56,6 +58,25 @@ func (m *ContactMutator) Default(ctx context.Context, obj runtime.Object) error 
 		return errors.NewInternalError(fmt.Errorf("failed to cast object to Contact"))
 	}
 	contactLog.Info("Defaulting Contact", "name", contact.Name)
+
+	// Detect if this is an update and SubjectRef changed so that we have to adjust ownerReferences
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		contactLog.Error(err, "failed to get admission request from context", "name", contact.GetName())
+		return errors.NewInternalError(fmt.Errorf("failed to get admission request from context: %w", err))
+	}
+
+	if req.Operation == admissionv1.Update && len(req.OldObject.Raw) > 0 {
+		var oldContact notificationv1alpha1.Contact
+		if err := json.Unmarshal(req.OldObject.Raw, &oldContact); err != nil {
+			contactLog.Error(err, "failed to unmarshal old object", "name", contact.GetName())
+			return errors.NewInternalError(fmt.Errorf("failed to unmarshal old contact object: %w", err))
+		}
+		if !reflect.DeepEqual(oldContact.Spec.SubjectRef, contact.Spec.SubjectRef) {
+			// SubjectRef changed: remove all existing owner references.
+			contact.SetOwnerReferences(nil)
+		}
+	}
 
 	if contact.Spec.SubjectRef != nil {
 		if contact.Spec.SubjectRef.APIGroup == "iam.miloapis.com" {
@@ -200,11 +221,6 @@ func (v *ContactValidator) ValidateUpdate(ctx context.Context, oldObj, newObj ru
 		return nil, errors.NewInternalError(fmt.Errorf("failed to cast object(s) to Contact"))
 	}
 	errs := field.ErrorList{}
-
-	// If the SubjectRef changed, reject the update.
-	if !reflect.DeepEqual(contactNew.Spec.SubjectRef, contactOld.Spec.SubjectRef) {
-		errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef"), contactNew.Spec.SubjectRef, "subjectRef is immutable and cannot be updated"))
-	}
 
 	// Validate Email format
 	if contactNew.Spec.Email != contactOld.Spec.Email {
