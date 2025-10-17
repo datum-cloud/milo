@@ -1,0 +1,13 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: user-1001-multi-membership
+  namespace: organization-multi-test-multi-resource-org
+  labels:
+    test.miloapis.com/quota: "multi-resource"
+    test.miloapis.com/scenario: "multi-resource-claims"
+spec:
+  organizationRef:
+    name: multi-test-multi-resource-org
+  userRef:
+    name: "1001"

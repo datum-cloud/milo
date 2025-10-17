@@ -1,0 +1,12 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: edge-test-quota-enforcement-org
+  annotations:
+    kubernetes.io/display-name: "Test Quota Enforcement Organization"
+    kubernetes.io/description: "Organization for testing quota limit enforcement"
+  labels:
+    test.miloapis.com/quota: "enforcement"
+    test.miloapis.com/scenario: "quota-enforcement"
+spec:
+  type: Standard

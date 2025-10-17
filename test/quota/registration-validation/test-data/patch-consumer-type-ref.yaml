@@ -1,0 +1,9 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-immutable-registration
+spec:
+  # Attempting to change immutable consumerType field
+  consumerType:
+    apiGroup: iam.miloapis.com
+    kind: User

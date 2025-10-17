@@ -1,0 +1,19 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: auto-grant-grant-policy-test-org
+  namespace: milo-system
+  labels:
+    quota.miloapis.com/auto-created: "true"
+    quota.miloapis.com/policy: "test-organization-grant-policy"
+    test.miloapis.com/scenario: "grant-creation-policy"
+spec:
+  consumerRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: grant-policy-test-org
+  allowances:
+    - resourceType: "test.grantpolicy.miloapis.com/projects"
+      buckets:
+        # Amount stays the same since templates can't be used in amount field
+        - amount: 5

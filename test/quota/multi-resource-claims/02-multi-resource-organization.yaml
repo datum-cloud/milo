@@ -1,0 +1,12 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: multi-test-multi-resource-org
+  annotations:
+    kubernetes.io/display-name: "Test Multi-Resource Quota Organization"
+    kubernetes.io/description: "Organization for testing multi-resource quota enforcement"
+  labels:
+    test.miloapis.com/quota: "multi-resource"
+    test.miloapis.com/scenario: "multi-resource-claims"
+spec:
+  type: Standard
