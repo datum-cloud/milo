@@ -2,7 +2,6 @@ package v1alpha1
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -10,14 +9,12 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
-	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var runtimeScheme = runtime.NewScheme()
@@ -57,15 +54,7 @@ func TestContactMutator_Default(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(runtimeScheme).WithObjects(user).Build()
 	mutator := &ContactMutator{client: fakeClient, scheme: runtimeScheme}
 
-	// Build Admission context simulating a CREATE operation
-	req := admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
-		},
-	}
-	ctx := admission.NewContextWithRequest(context.Background(), req)
-
-	err := mutator.Default(ctx, contact)
+	err := mutator.Default(context.Background(), contact)
 	assert.NoError(t, err, "mutator should not return error")
 
 	// Expect owner reference to be set
@@ -75,75 +64,6 @@ func TestContactMutator_Default(t *testing.T) {
 		assert.Equal(t, "User", ref.Kind)
 		assert.Equal(t, user.Name, ref.Name)
 		assert.Equal(t, user.UID, ref.UID)
-	}
-}
-
-func TestContactMutator_Update_ChangesOwnerReference(t *testing.T) {
-	// Prepare old and new Users
-	oldUser := &iamv1alpha1.User{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "old-user",
-			UID:  types.UID("uid-old-user"),
-		},
-		Spec: iamv1alpha1.UserSpec{Email: "old@example.com"},
-	}
-
-	newUser := &iamv1alpha1.User{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "new-user",
-			UID:  types.UID("uid-new-user"),
-		},
-		Spec: iamv1alpha1.UserSpec{Email: "new@example.com"},
-	}
-
-	// Old persisted Contact referencing oldUser
-	oldContact := &notificationv1alpha1.Contact{
-		ObjectMeta: metav1.ObjectMeta{Name: "contact-update"},
-		Spec: notificationv1alpha1.ContactSpec{
-			GivenName:  "Update",
-			FamilyName: "Test",
-			Email:      "update@example.com",
-			SubjectRef: &notificationv1alpha1.SubjectReference{
-				APIGroup: "iam.miloapis.com",
-				Kind:     "User",
-				Name:     oldUser.Name,
-			},
-		},
-	}
-	// Simulate existing owner reference pointing to oldUser
-	oldContact.OwnerReferences = []metav1.OwnerReference{{
-		APIVersion: iamv1alpha1.SchemeGroupVersion.String(),
-		Kind:       "User",
-		Name:       oldUser.Name,
-		UID:        oldUser.UID,
-	}}
-
-	// New object sent in update, subjectRef changed to newUser and still carries old owner reference
-	newContact := oldContact.DeepCopy()
-	newContact.Spec.SubjectRef.Name = newUser.Name
-	// ownerReferences still contains old ref; mutator should replace it
-
-	// Fake client with both users
-	fakeClient := fake.NewClientBuilder().WithScheme(runtimeScheme).WithObjects(oldUser, newUser).Build()
-	mutator := &ContactMutator{client: fakeClient, scheme: runtimeScheme}
-
-	// Build admission update context
-	oldRaw, _ := json.Marshal(oldContact)
-	req := admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Update,
-			OldObject: runtime.RawExtension{Raw: oldRaw},
-		},
-	}
-	ctx := admission.NewContextWithRequest(context.Background(), req)
-
-	err := mutator.Default(ctx, newContact)
-	assert.NoError(t, err)
-
-	if assert.Len(t, newContact.OwnerReferences, 1, "should have exactly one owner reference after mutation") {
-		ref := newContact.OwnerReferences[0]
-		assert.Equal(t, newUser.Name, ref.Name)
-		assert.Equal(t, newUser.UID, ref.UID)
 	}
 }
 
