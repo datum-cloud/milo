@@ -2,3 +2,5 @@ resources:
 - ../../bases/iam/
 - ../../bases/resourcemanager/
 - ../../bases/notification/
+- ../../bases/agreement/
+- ../../bases/documentation/

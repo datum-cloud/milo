@@ -26,7 +26,9 @@ func SetupUserInvitationWebhooksWithManager(mgr ctrl.Manager, systemNamespace st
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.UserInvitation{}).
-		WithDefaulter(&UserInvitationMutator{}).
+		WithDefaulter(&UserInvitationMutator{
+			client: mgr.GetClient(),
+		}).
 		WithValidator(&UserInvitationValidator{
 			client:          mgr.GetClient(),
 			systemNamespace: systemNamespace,
@@ -37,7 +39,9 @@ func SetupUserInvitationWebhooksWithManager(mgr ctrl.Manager, systemNamespace st
 // +kubebuilder:webhook:path=/mutate-iam-miloapis-com-v1alpha1-userinvitation,mutating=true,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=userinvitations,verbs=create,versions=v1alpha1,name=muserinvitation.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // UserInvitationMutator sets default values for UserInvitation resources.
-type UserInvitationMutator struct{}
+type UserInvitationMutator struct {
+	client client.Client
+}
 
 // Default sets the InvitedBy field to the requesting user if not already set.
 func (m *UserInvitationMutator) Default(ctx context.Context, obj runtime.Object) error {
@@ -52,8 +56,14 @@ func (m *UserInvitationMutator) Default(ctx context.Context, obj runtime.Object)
 		return fmt.Errorf("failed to get request from context: %w", err)
 	}
 
+	inviterUser := &iamv1alpha1.User{}
+	if err := m.client.Get(ctx, client.ObjectKey{Name: string(req.UserInfo.UID)}, inviterUser); err != nil {
+		userinvitationlog.Error(err, "failed to get user '%s' from iam.miloapis.com API", string(req.UserInfo.UID))
+		return errors.NewInternalError(fmt.Errorf("failed to get user '%s' from iam.miloapis.com API: %w", string(req.UserInfo.UID), err))
+	}
+
 	ui.Spec.InvitedBy = iamv1alpha1.UserReference{
-		Name: req.UserInfo.Username,
+		Name: inviterUser.Name,
 	}
 
 	return nil

@@ -32,6 +32,23 @@ rules:
   - patch
   - update
 - apiGroups:
+  - documentation.miloapis.com
+  resources:
+  - documentrevisions
+  - documents
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - documentation.miloapis.com
+  resources:
+  - documentrevisions/status
+  - documents/status
+  verbs:
+  - patch
+  - update
+- apiGroups:
   - gateway.networking.k8s.io
   resources:
   - gatewayclasses
