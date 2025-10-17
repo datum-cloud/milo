@@ -2,7 +2,6 @@ package admission
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -330,13 +329,16 @@ func (p *ResourceQuotaEnforcementPlugin) lookupPolicyForResource(ctx context.Con
 
 // processResourceWithPolicy handles resource creation when a policy is found and enabled
 func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.Context, attrs admission.Attributes, policy *quotav1alpha1.ClaimCreationPolicy, gvk schema.GroupVersionKind) error {
-	// Convert the object to unstructured for easier access
-	obj, err := p.convertToUnstructured(attrs.GetObject())
+	// Convert the resource being created to unstructured for CEL evaluation.
+	// The CEL engine requires map[string]interface{} (unstructured.Object) to evaluate
+	// trigger conditions against arbitrary resource types.
+	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(attrs.GetObject())
 	if err != nil {
 		p.logger.Error(err, "Failed to convert object to unstructured")
 		warning.AddWarning(ctx, "", fmt.Sprintf("Failed to process object for ResourceClaim creation: %v", err))
 		return nil // Don't block resource creation
 	}
+	obj := &unstructured.Unstructured{Object: unstructuredMap}
 
 	// Build evaluation context
 	evalContext := p.buildEvaluationContext(attrs, obj)
@@ -490,23 +492,11 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 		Resource: "resourceclaims",
 	}
 
-	// Convert ResourceClaim to unstructured
-	claimBytes, err := json.Marshal(claim)
+	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(claim)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to marshal ResourceClaim: %w", err)
+		return "", "", fmt.Errorf("failed to convert ResourceClaim to unstructured: %w", err)
 	}
-
-	var unstructuredClaim map[string]interface{}
-	if err := json.Unmarshal(claimBytes, &unstructuredClaim); err != nil {
-		return "", "", fmt.Errorf("failed to unmarshal ResourceClaim to unstructured: %w", err)
-	}
-
-	unstructuredObj := &unstructured.Unstructured{Object: unstructuredClaim}
-	unstructuredObj.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "quota.miloapis.com",
-		Version: "v1alpha1",
-		Kind:    "ResourceClaim",
-	})
+	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
 
 	// Create the ResourceClaim using dynamic client
 	createdClaim, err := p.dynamicClient.Resource(gvr).Namespace(claim.Namespace).Create(ctx, unstructuredObj, metav1.CreateOptions{})
@@ -618,23 +608,7 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceClaim(ctx context.Conte
 
 	claim, ok := obj.(*quotav1alpha1.ResourceClaim)
 	if !ok {
-		// Try to convert from unstructured
-		unstructuredObj, ok := obj.(*unstructured.Unstructured)
-		if !ok {
-			p.logger.V(3).Info("Could not convert object to ResourceClaim", "type", fmt.Sprintf("%T", obj))
-			return nil
-		}
-
-		// Convert unstructured to ResourceClaim
-		claimBytes, err := unstructuredObj.MarshalJSON()
-		if err != nil {
-			return fmt.Errorf("failed to marshal unstructured object: %w", err)
-		}
-
-		claim = &quotav1alpha1.ResourceClaim{}
-		if err := json.Unmarshal(claimBytes, claim); err != nil {
-			return fmt.Errorf("failed to unmarshal to ResourceClaim: %w", err)
-		}
+		return fmt.Errorf("expected ResourceClaim, got %T", obj)
 	}
 
 	span.SetAttributes(
@@ -672,26 +646,6 @@ func (p *ResourceQuotaEnforcementPlugin) startSpan(ctx context.Context, name str
 	tracerProvider := trace.SpanFromContext(ctx).TracerProvider()
 	tracer := tracerProvider.Tracer("go.miloapis.com/milo/admission/quota")
 	return tracer.Start(ctx, name, opts...)
-}
-
-// convertToUnstructured converts a runtime.Object to *unstructured.Unstructured.
-func (p *ResourceQuotaEnforcementPlugin) convertToUnstructured(obj runtime.Object) (*unstructured.Unstructured, error) {
-	if obj == nil {
-		return nil, fmt.Errorf("object is nil")
-	}
-
-	// If already unstructured, return as-is
-	if u, ok := obj.(*unstructured.Unstructured); ok {
-		return u, nil
-	}
-
-	// Convert to unstructured
-	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert to unstructured: %w", err)
-	}
-
-	return &unstructured.Unstructured{Object: unstructuredMap}, nil
 }
 
 // buildEvaluationContext creates an EvaluationContext from admission attributes.
@@ -792,22 +746,7 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceRegistration(ctx contex
 	// Convert to ResourceRegistration
 	registration, ok := obj.(*quotav1alpha1.ResourceRegistration)
 	if !ok {
-		// Try to convert from unstructured
-		unstructuredObj, ok := obj.(*unstructured.Unstructured)
-		if !ok {
-			p.logger.V(3).Info("Could not convert object to ResourceRegistration", "type", fmt.Sprintf("%T", obj))
-			return nil
-		}
-
-		registrationBytes, err := unstructuredObj.MarshalJSON()
-		if err != nil {
-			return fmt.Errorf("failed to marshal unstructured object: %w", err)
-		}
-
-		registration = &quotav1alpha1.ResourceRegistration{}
-		if err := json.Unmarshal(registrationBytes, registration); err != nil {
-			return fmt.Errorf("failed to unmarshal to ResourceRegistration: %w", err)
-		}
+		return fmt.Errorf("expected ResourceRegistration, got %T", obj)
 	}
 
 	span.SetAttributes(
@@ -856,22 +795,7 @@ func (p *ResourceQuotaEnforcementPlugin) validateClaimCreationPolicy(ctx context
 	// Convert to ClaimCreationPolicy
 	policy, ok := obj.(*quotav1alpha1.ClaimCreationPolicy)
 	if !ok {
-		// Try to convert from unstructured
-		unstructuredObj, ok := obj.(*unstructured.Unstructured)
-		if !ok {
-			p.logger.V(3).Info("Could not convert object to ClaimCreationPolicy", "type", fmt.Sprintf("%T", obj))
-			return nil
-		}
-
-		policyBytes, err := unstructuredObj.MarshalJSON()
-		if err != nil {
-			return fmt.Errorf("failed to marshal unstructured object: %w", err)
-		}
-
-		policy = &quotav1alpha1.ClaimCreationPolicy{}
-		if err := json.Unmarshal(policyBytes, policy); err != nil {
-			return fmt.Errorf("failed to unmarshal to ClaimCreationPolicy: %w", err)
-		}
+		return fmt.Errorf("expected ClaimCreationPolicy, got %T", obj)
 	}
 
 	span.SetAttributes(
@@ -925,22 +849,7 @@ func (p *ResourceQuotaEnforcementPlugin) validateGrantCreationPolicy(ctx context
 	// Convert to GrantCreationPolicy
 	policy, ok := obj.(*quotav1alpha1.GrantCreationPolicy)
 	if !ok {
-		// Try to convert from unstructured
-		unstructuredObj, ok := obj.(*unstructured.Unstructured)
-		if !ok {
-			p.logger.V(3).Info("Could not convert object to GrantCreationPolicy", "type", fmt.Sprintf("%T", obj))
-			return nil
-		}
-
-		policyBytes, err := unstructuredObj.MarshalJSON()
-		if err != nil {
-			return fmt.Errorf("failed to marshal unstructured object: %w", err)
-		}
-
-		policy = &quotav1alpha1.GrantCreationPolicy{}
-		if err := json.Unmarshal(policyBytes, policy); err != nil {
-			return fmt.Errorf("failed to unmarshal to GrantCreationPolicy: %w", err)
-		}
+		return fmt.Errorf("expected GrantCreationPolicy, got %T", obj)
 	}
 
 	span.SetAttributes(
@@ -994,22 +903,7 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceGrant(ctx context.Conte
 	// Convert to ResourceGrant
 	grant, ok := obj.(*quotav1alpha1.ResourceGrant)
 	if !ok {
-		// Try to convert from unstructured
-		unstructuredObj, ok := obj.(*unstructured.Unstructured)
-		if !ok {
-			p.logger.V(3).Info("Could not convert object to ResourceGrant", "type", fmt.Sprintf("%T", obj))
-			return nil
-		}
-
-		grantBytes, err := unstructuredObj.MarshalJSON()
-		if err != nil {
-			return fmt.Errorf("failed to marshal unstructured object: %w", err)
-		}
-
-		grant = &quotav1alpha1.ResourceGrant{}
-		if err := json.Unmarshal(grantBytes, grant); err != nil {
-			return fmt.Errorf("failed to unmarshal to ResourceGrant: %w", err)
-		}
+		return fmt.Errorf("expected ResourceGrant, got %T", obj)
 	}
 
 	span.SetAttributes(

@@ -10,12 +10,12 @@ import (
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.miloapis.com/milo/internal/informer"
@@ -340,12 +340,12 @@ func (r *GrantCreationController) createOrUpdateGrant(
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			// Set owner reference to trigger object
-			if err := r.setOwnerReference(grant, triggerObj); err != nil {
-				return fmt.Errorf("failed to set owner reference: %w", err)
+			// Owner references are only valid within the same cluster.
+			if policy.Spec.Target.ParentContext == nil {
+				if err := controllerutil.SetControllerReference(triggerObj, grant, r.Scheme); err != nil {
+					return fmt.Errorf("failed to set owner reference: %w", err)
+				}
 			}
-
-			// Create new grant
 			logger.Info("Creating new ResourceGrant")
 			if err := targetClient.Create(ctx, grant); err != nil {
 				return fmt.Errorf("failed to create grant: %w", err)
@@ -447,21 +447,4 @@ type ParentContextSpec struct {
 	Kind string
 	// Name is the resolved name of the parent context resource.
 	Name string
-}
-
-// setOwnerReference sets an owner reference from the trigger object to the ResourceGrant.
-func (r *GrantCreationController) setOwnerReference(grant *quotav1alpha1.ResourceGrant, triggerObj *unstructured.Unstructured) error {
-	// Create owner reference
-	controller := true
-	ownerRef := metav1.OwnerReference{
-		APIVersion: triggerObj.GetAPIVersion(),
-		Kind:       triggerObj.GetKind(),
-		Name:       triggerObj.GetName(),
-		UID:        triggerObj.GetUID(),
-		Controller: &controller, // Set as controlling owner
-	}
-
-	// Add owner reference to grant
-	grant.SetOwnerReferences([]metav1.OwnerReference{ownerRef})
-	return nil
 }

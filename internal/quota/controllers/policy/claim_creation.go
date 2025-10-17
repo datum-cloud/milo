@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -76,8 +77,7 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 			"ready", apimeta.IsStatusConditionTrue(policy.Status.Conditions, quotav1alpha1.ClaimCreationPolicyReady))
 	}
 
-	// Requeue after a reasonable interval for periodic validation
-	return ctrl.Result{RequeueAfter: time.Minute * 10}, nil
+	return ctrl.Result{}, nil
 }
 
 // updatePolicyStatus updates the policy status conditions based on validation results.
@@ -129,7 +129,7 @@ func (r *ClaimCreationPolicyReconciler) enqueueAffectedPolicies(ctx context.Cont
 	// List all ClaimCreationPolicies
 	var policyList quotav1alpha1.ClaimCreationPolicyList
 	if err := r.List(ctx, &policyList); err != nil {
-		// Log error but don't block - policies will be revalidated on their regular schedule
+		klog.V(1).ErrorS(err, "failed to list claim creation policies when enqueuing affected policies")
 		return nil
 	}
 

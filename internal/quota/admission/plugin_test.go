@@ -493,7 +493,7 @@ func (e *testPolicyEngine) removePolicyForTest(policyName string) {
 
 type testAdmissionAttributes struct {
 	operation   admission.Operation
-	object      *unstructured.Unstructured
+	object      runtime.Object
 	gvk         schema.GroupVersionKind
 	name        string
 	namespace   string
@@ -809,17 +809,11 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 				watchManager:           &testWatchManager{behavior: "grant"}, // Use mock that grants immediately
 			}
 
-			// Convert ResourceClaim to unstructured for admission attributes
-			claimMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(tt.claim)
-			if err != nil {
-				t.Fatalf("Failed to convert claim to unstructured: %v", err)
-			}
-			unstructuredClaim := &unstructured.Unstructured{Object: claimMap}
-
 			// Create admission attributes for ResourceClaim
+			// In real operation, the API server passes typed objects to admission plugins
 			attrs := &testAdmissionAttributes{
 				operation: admission.Create,
-				object:    unstructuredClaim,
+				object:    tt.claim,
 				gvk: schema.GroupVersionKind{
 					Group:   "quota.miloapis.com",
 					Version: "v1alpha1",
@@ -834,7 +828,7 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 			}
 
 			// Call Validate
-			err = plugin.Validate(context.Background(), attrs, nil)
+			err := plugin.Validate(context.Background(), attrs, nil)
 
 			// Check results
 			if tt.expectError {
@@ -899,6 +893,12 @@ func TestResourceQuotaEnforcementPlugin_InitializationValidation(t *testing.T) {
 				}
 				plugin.resourceTypeValidator = mockValidator
 				plugin.resourceClaimValidator = validation.NewResourceClaimValidator(fakeDynamicClient, mockValidator)
+				plugin.resourceRegistrationValidator = validation.NewResourceRegistrationValidator(mockValidator)
+				plugin.claimCreationPolicyValidator = validation.NewClaimCreationPolicyValidator(mockValidator)
+				celValidator, _ := validation.NewCELValidator()
+				grantTemplateValidator, _ := validation.NewGrantTemplateValidator(mockValidator)
+				plugin.grantCreationPolicyValidator = validation.NewGrantCreationPolicyValidator(celValidator, grantTemplateValidator)
+				plugin.resourceGrantValidator = validation.NewResourceGrantValidator(mockValidator)
 
 				// Initialize mock watch manager for test
 				plugin.watchManager = &testWatchManager{behavior: "grant"}
