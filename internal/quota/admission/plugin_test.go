@@ -773,9 +773,16 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 			}
 			plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
 
+			// Convert typed ResourceClaim to unstructured (as CRDs are always unstructured in admission)
+			unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(tt.claim)
+			if err != nil {
+				t.Fatalf("Failed to convert claim to unstructured: %v", err)
+			}
+			unstructuredClaim := &unstructured.Unstructured{Object: unstructuredMap}
+
 			attrs := &testAdmissionAttributes{
 				operation: admission.Create,
-				object:    tt.claim,
+				object:    unstructuredClaim,
 				gvk: schema.GroupVersionKind{
 					Group:   "quota.miloapis.com",
 					Version: "v1alpha1",
@@ -789,7 +796,7 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 				dryRun: false,
 			}
 
-			err := plugin.Validate(context.Background(), attrs, nil)
+			err = plugin.Validate(context.Background(), attrs, nil)
 
 			if tt.expectError {
 				if err == nil {
