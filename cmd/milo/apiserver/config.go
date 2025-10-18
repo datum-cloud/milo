@@ -48,6 +48,7 @@ import (
 	admissionquota "go.miloapis.com/milo/internal/quota/admission"
 	identityapi "go.miloapis.com/milo/pkg/apis/identity"
 	identityopenapi "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
+	quotaapi "go.miloapis.com/milo/pkg/apis/quota"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 )
@@ -153,10 +154,12 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		Options: opts,
 	}
 
-	// Initialize Milo scheme with identity APIs and install into legacy scheme
+	// Initialize Milo scheme with identity and quota APIs and install into legacy scheme
 	miloScheme := runtime.NewScheme()
 	identityapi.Install(miloScheme)
 	identityapi.Install(legacyscheme.Scheme)
+	quotaapi.Install(miloScheme)
+	quotaapi.Install(legacyscheme.Scheme)
 
 	apiResourceConfigSource := controlplane.DefaultAPIResourceConfigSource()
 	apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("serviceaccounts"))

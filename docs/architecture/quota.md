@@ -26,15 +26,14 @@
 
 ## System Overview
 
-The Milo quota system provides real-time resource consumption control through a
-comprehensive framework that automates quota provisioning, enforces limits
-during resource creation, and maintains accurate usage tracking across
-distributed deployments.
+The Milo quota system controls resource consumption in real time. The system
+automates quota provisioning, enforces limits during resource creation, and
+tracks usage across distributed deployments.
 
 ### Purpose
 
-The quota system enables platform administrators to define resource consumption
-limits and automatically enforce them without manual intervention. It provides:
+Platform administrators define resource consumption limits through the quota
+system. The system enforces these limits without manual intervention and provides:
 
 - **Real-time Enforcement**: Blocks resource creation when quota limits are
   exceeded
@@ -46,8 +45,8 @@ limits and automatically enforce them without manual intervention. It provides:
 
 ### Design Principles
 
-- **Declarative Configuration**: All quota rules are defined through API
-  resources, enabling version control and reproducible deployments
+- **Declarative Configuration**: Define all quota rules through API resources,
+  enabling version control and reproducible deployments
 - **Event-Driven Architecture**: Components react to resource lifecycle events,
   ensuring quota decisions reflect real-time system state
 - **Separation of Concerns**: Clear boundaries between quota allocation
@@ -57,10 +56,10 @@ limits and automatically enforce them without manual intervention. It provides:
 
 ### Key Components
 
-The quota system consists of four main component types that work together:
+The quota system includes four main component types:
 
-- **Configuration**: ResourceRegistration defines which resource types can be
-  tracked and consumed by which entity types
+- **Configuration**: ResourceRegistration defines which resource types the
+  system tracks and which entity types consume them
 - **Automation**: GrantCreationPolicy and ClaimCreationPolicy automate quota
   allocation and enforcement based on resource lifecycle events
 - **Resources**: ResourceGrant allocates quota capacity, ResourceClaim requests
@@ -70,60 +69,53 @@ The quota system consists of four main component types that work together:
 
 ### Runtime Architecture
 
-The quota system uses an event-driven architecture built on informers, which
-provide efficient resource watching and caching:
+The quota system uses an event-driven architecture with different watching patterns optimized for each component:
 
-**Informers and Watches**:
-- Controllers use informers to watch API resources for changes (create, update,
-  delete events)
-- Each informer maintains a local cache that's automatically kept in sync with
-  the API server
-- Controllers react to events from informers rather than polling the API server
-- Multiple controllers can share informers to reduce API server load and memory
-  usage
-
-**Key Informer Usage Patterns**:
-
-*Controller Watches*:
-- AllowanceBucket Controller watches ResourceGrants and ResourceClaims to
-  maintain aggregated quota state
-- ResourceGrant Controller watches ResourceRegistrations to validate grant
-  configurations
-- Policy controllers watch trigger resources dynamically based on policy
-  specifications
+**Controller Watches**:
+- Controllers use standard Kubernetes informers for resource watching and caching
+- AllowanceBucket Controller watches ResourceGrants and ResourceClaims to maintain aggregated quota state
+- ResourceGrant Controller watches ResourceRegistrations to validate grant configurations
+- Policy controllers watch trigger resources dynamically based on policy specifications
 - All controllers use predicate filters to ignore irrelevant events
 
-*Admission Plugin Components*:
-- **ClaimWatchManager**: Maintains informers for ResourceClaims to track quota
-  decisions
-  - Creates temporary watches when admission requests create ResourceClaims
-  - Waits for claim status updates to allow/deny resource creation
-  - Cleans up watches after decisions are made or timeouts occur
-- **Policy Engine**: Caches ClaimCreationPolicies using informers for fast
-  lookup during admission
+**Admission Plugin - Stream-Based Watch Manager**:
 
-*Shared Components*:
-- **ResourceTypeValidator**: Uses informers to maintain a cache of all
-  registered resource types
-  - Shared across controllers and admission plugin to validate resource
-    references
+The admission plugin uses a **stream-based watch pattern** optimized for real-time, request-time enforcement:
+
+- **Direct Watch Streams**: No SharedInformer or cache; connects directly to Kubernetes watch API
+- **Fast Startup**: Begins watching from "now" using `Limit=0` LIST (1-10ms startup vs 10-500ms for informers)
+- **Minimal Memory**: Only tracks active waiters (~10KB per waiter) instead of full claim cache (~1-10MB)
+- **TTL-based Lifecycle**: Watch managers automatically start when needed and stop after 5 minutes of inactivity
+- **Dynamic Per-Project Watches**: Creates separate watch manager for each project control plane
+- **Infinite Retry**: Exponential backoff with jitter (100ms → 30s) for transient failures; never gives up
+- **Bookmark Resumption**: Uses Kubernetes watch bookmarks to resume efficiently after disconnects
+- **410 Gone Handling**: Restarts from current time when resourceVersion expires
+
+**Key Watch Manager Characteristics**:
+
+1. **Watch-Before-Claim Pattern**: Establishes watch stream before creating ResourceClaim, guaranteeing zero missed events
+2. **Deterministic Claim Naming**: Uses hash-based names allowing waiter pre-registration before claim exists
+3. **Stateless Operation**: No persistent cache; state is derived from active admission requests
+4. **Multi-Project Scalability**: O(active projects) instead of O(total projects) resource usage
+
+**Shared Components**:
+- **ResourceTypeValidator**: Uses informers to maintain a cache of all registered resource types
+  - Shared across controllers and admission plugin to validate resource references
   - Asynchronously initialized to prevent startup blocking
   - Provides efficient type checking without API calls
-- **Grant Creation Engine**: Watches resources specified in
-  GrantCreationPolicies
+- **Policy Engine**: Caches ClaimCreationPolicies using informers for fast lookup during admission
+- **Grant Creation Engine**: Watches resources specified in GrantCreationPolicies
   - Dynamically creates informers based on policy trigger specifications
   - Evaluates CEL expressions against cached resources
 
-This informer-based architecture ensures the quota system can handle high-scale
-operations with minimal API server load while maintaining real-time
-responsiveness.
+This hybrid architecture ensures controllers benefit from informer caching for background reconciliation while the admission plugin achieves minimal latency and resource usage for synchronous request-time enforcement.
 
 ## Core Concepts
 
 ### ResourceRegistration
 
-Defines which resource types can be tracked and establishes relationships
-between consumers and resources.
+ResourceRegistration defines which resource types the system tracks and
+establishes relationships between consumers and resources.
 
 ```yaml
 apiVersion: quota.miloapis.com/v1alpha1
@@ -143,14 +135,14 @@ spec:
 ```
 
 **Key Responsibilities:**
-- Resource type identity and measurement specifications
-- Consumer relationship definitions (Organizations consume Project quota)
-- Authorization for which resources can create claims
+- Define resource type identity and measurement specifications
+- Define consumer relationships (Organizations consume Project quota)
+- Authorize which resources can create claims
 
 ### ResourceGrant
 
-Allocates concrete quota capacity to specific consumers. Multiple grants for the
-same consumer and resource type are automatically aggregated.
+ResourceGrant allocates quota capacity to specific consumers. The system
+automatically aggregates multiple grants for the same consumer and resource type.
 
 ```yaml
 apiVersion: quota.miloapis.com/v1alpha1
@@ -169,15 +161,15 @@ spec:
 ```
 
 **Key Responsibilities:**
-- Capacity allocation to consumers
-- Multi-resource support in single grants
-- Source attribution for billing and reporting
+- Allocate capacity to consumers
+- Support multiple resources in single grants
+- Attribute sources for billing and reporting
 
 ### AllowanceBucket
 
-Central aggregation point that combines quota capacity from ResourceGrants and
-tracks consumption from ResourceClaims, providing real-time availability
-calculations.
+AllowanceBucket aggregates quota capacity from ResourceGrants and tracks
+consumption from ResourceClaims. The bucket calculates real-time quota
+availability.
 
 **Status Example:**
 ```yaml
@@ -193,15 +185,15 @@ status:
 ```
 
 **Key Responsibilities:**
-- Aggregates capacity from all active ResourceGrants
-- Tracks consumption from all granted ResourceClaims
-- Provides Available = Limit - Allocated for admission decisions
-- Created on-demand when first referenced
+- Aggregate capacity from all active ResourceGrants
+- Track consumption from all granted ResourceClaims
+- Calculate available quota (Available = Limit - Allocated) for admission decisions
+- Create buckets on-demand when first referenced
 
 ### ResourceClaim
 
-Requests quota allocation during resource creation, linking to triggering
-resources for lifecycle management.
+ResourceClaim requests quota allocation during resource creation and links to
+triggering resources for lifecycle management.
 
 ```yaml
 apiVersion: quota.miloapis.com/v1alpha1
@@ -223,16 +215,16 @@ spec:
 ```
 
 **Key Responsibilities:**
-- Quota requests during resource creation
-- Consumer identification and resource linking
-- Atomic all-or-nothing allocation for multi-resource requests
+- Request quota during resource creation
+- Identify consumers and link to resources
+- Ensure atomic all-or-nothing allocation for multi-resource requests
 
 ## Policy Automation
 
 ### GrantCreationPolicy
 
-Automates ResourceGrant creation based on resource lifecycle events, eliminating
-manual quota provisioning.
+GrantCreationPolicy automates ResourceGrant creation based on resource lifecycle
+events, eliminating manual quota provisioning.
 
 ```yaml
 apiVersion: quota.miloapis.com/v1alpha1
@@ -260,15 +252,15 @@ spec:
 ```
 
 **Capabilities:**
-- Watches any Kubernetes resource type for changes
-- CEL expressions for flexible trigger conditions
-- CEL based template expressions delineated by `{{ }}`
-- Cross-cluster grant creation via parent context resolution
+- Watch any Kubernetes resource type for changes
+- Use CEL expressions for flexible trigger conditions
+- Define templates with CEL expressions in `{{ }}` delimiters
+- Create grants across clusters via parent context resolution
 
 ### ClaimCreationPolicy
 
-Automates ResourceClaim creation during admission control, providing real-time
-quota enforcement.
+ClaimCreationPolicy automates ResourceClaim creation during admission control to
+enforce quota in real time.
 
 ```yaml
 apiVersion: quota.miloapis.com/v1alpha1
@@ -295,17 +287,17 @@ spec:
 ```
 
 **Capabilities:**
-- Integrates with Kubernetes admission controller framework
-- Creates claims during resource creation requests
-- Blocks resource creation when quota is exceeded
-- Automatic consumer resolution via parent context
+- Integrate with Kubernetes admission controller framework
+- Create claims during resource creation requests
+- Block resource creation when quota is exceeded
+- Resolve consumers automatically via parent context
 
 ## Data Flows
 
 ### Quota Provisioning Flow
 
-This flow shows how quota capacity is automatically allocated when new consumers
-are created in the system.
+This flow shows how the system allocates quota capacity when new consumers are
+created.
 
 ```mermaid
 sequenceDiagram
@@ -354,12 +346,12 @@ sequenceDiagram
 ```
 
 **Key Points:**
-- Trigger evaluation: Grant Creation Engine watches for resource changes and
+- **Trigger evaluation**: Grant Creation Engine watches for resource changes and
   evaluates CEL expressions
-- Template rendering: Grant templates use context from triggering resources
-- Validation: ResourceGrants are validated against ResourceRegistrations
-- Bucket creation: AllowanceBuckets are created on-demand when first
-  ResourceClaim references them
+- **Template rendering**: Grant templates use context from triggering resources
+- **Validation**: The system validates ResourceGrants against ResourceRegistrations
+- **Bucket creation**: The system creates AllowanceBuckets on-demand when the
+  first ResourceClaim references them
 
 ### Admission Control Flow
 
@@ -404,36 +396,50 @@ sequenceDiagram
     Plugin->>Plugin: 10. Evaluate trigger conditions
     Note over Plugin: trigger.spec.type == "application"<br/>CEL expression returns true
 
-    Plugin->>TE: 11. Render ResourceClaim template
+    Plugin->>Plugin: 11. Get/Create Watch Manager for project
+    Note over Plugin: Creates per-project watch manager with TTL<br/>Uses direct watch stream (not informer)<br/>Startup: 1-10ms with Limit=0 LIST
+
+    Plugin->>TE: 12. Render ResourceClaim template
     TE-->>Plugin: Rendered claim spec
 
-    Plugin->>API: 12. Create ResourceClaim
+    Plugin->>Plugin: 13. Generate deterministic claim name
+    Note over Plugin: Hash-based name: policy + resource GVK + name
+
+    Plugin->>Plugin: 14. Register waiter BEFORE creating claim
+    Note over Plugin: Watch-before-claim pattern prevents race<br/>Waiter registered, watch stream active
+
+    Plugin->>API: 15. Create ResourceClaim with predetermined name
     Note over API: Stores ResourceClaim<br/>Consumer: acme-corp (resolved)<br/>Request: 1 project<br/>ResourceRef: web-app project
 
-    Plugin->>API: 13. Watch ResourceClaim for decision
-    Note over Plugin: Waits for controllers to process claim
+    Note over Plugin: Watch manager receives events via direct watch stream<br/>Waiter already registered; guaranteed event delivery
 
     alt Claim Eventually Granted
-        Note over Plugin: ResourceClaim status:<br/>Granted=True condition observed
-        Plugin-->>Developer: 14a. Allow Project creation
+        Note over Plugin: ResourceClaim status:<br/>Granted=True condition observed via watch
+        Plugin-->>Developer: 16a. Allow Project creation
         Note over API: Project "web-app" created successfully
 
     else Claim Eventually Denied
-        Note over Plugin: ResourceClaim status:<br/>Granted=False condition observed
-        Plugin-->>Developer: 14b. Block Project creation (403 Forbidden)
+        Note over Plugin: ResourceClaim status:<br/>Granted=False condition observed via watch
+        Plugin-->>Developer: 16b. Block Project creation (403 Forbidden)
         Note over Developer: "Insufficient quota resources available"
     end
+
+    Note over Plugin: After 5 minutes of no activity,<br/>watch manager automatically stops (TTL expiration)
 ```
 
 **Key Points:**
-- Synchronous admission: The webhook blocks resource creation until
+- **Synchronous admission**: The webhook blocks resource creation until the
   ResourceClaim is processed
-- Policy lookup: Admission plugin maintains indexed ClaimCreationPolicies for
+- **Policy lookup**: Admission plugin maintains indexed ClaimCreationPolicies for
   fast lookup
-- Template context: Claim templates access triggering resource, user context,
-  and request information
-- Watch pattern: Admission plugin waits for ResourceClaim status updates via
-  shared informers
+- **Template context**: Claim templates access the triggering resource, user
+  context, and request information
+- **Watch-before-claim pattern**: The system establishes the watch stream and
+  registers the waiter before claim creation, guaranteeing zero missed events
+- **Direct watch streams**: No informer or cache overhead; minimal memory
+  footprint and fast startup (1-10ms)
+- **TTL-based lifecycle**: Watch managers clean up after 5 minutes of inactivity,
+  scaling resources with active projects
 
 ### Resource Claiming Flow
 
@@ -488,19 +494,19 @@ sequenceDiagram
 ```
 
 **Key Points:**
-- Asynchronous processing: Controllers process ResourceClaims independently of
-  admission
-- On-demand bucket creation: AllowanceBuckets created when first ResourceClaim
-  references them
-- Atomic decisions: All requests within a ResourceClaim must be satisfied, or
-  entire claim is denied
-- Controller separation: Bucket Controller makes quota decisions, ResourceClaim
-  Controller aggregates results
+- **Asynchronous processing**: Controllers process ResourceClaims independently
+  of admission
+- **On-demand bucket creation**: The system creates AllowanceBuckets when the
+  first ResourceClaim references them
+- **Atomic decisions**: All requests within a ResourceClaim must be satisfied, or
+  the system denies the entire claim
+- **Controller separation**: Bucket Controller makes quota decisions;
+  ResourceClaim Controller aggregates results
 
 ## Resource Cleanup
 
-When resources are deleted, the quota system automatically reclaims allocated
-quota through owner references and garbage collection:
+The quota system reclaims allocated quota through owner references and garbage
+collection when resources are deleted:
 
 **ResourceClaim Cleanup**:
 - ResourceClaims include owner references to their triggering resources (e.g.,
@@ -520,19 +526,26 @@ quota through owner references and garbage collection:
 - Any ResourceClaims that exceed the new reduced limits are marked as denied
 
 **AllowanceBucket Cleanup**:
-- AllowanceBuckets are automatically deleted when no active ResourceGrants or
+- The system deletes AllowanceBuckets when no active ResourceGrants or
   ResourceClaims reference them
-- This prevents resource accumulation and maintains a clean quota state
+- Automatic deletion prevents resource accumulation and maintains clean quota state
 
-The cleanup process ensures quota capacity is immediately reclaimed without manual intervention, maintaining accurate quota availability for future resource creation requests.
+The cleanup process reclaims quota capacity immediately without manual
+intervention, maintaining accurate quota availability for future resource
+creation requests.
 
 ## Operational Visibility
 
-The quota system provides comprehensive operational visibility through two complementary metric systems: kube-state-metrics for resource state tracking and application-level metrics for runtime behavior monitoring.
+The quota system provides operational visibility through two complementary metric
+systems: kube-state-metrics tracks resource state, and application-level metrics
+monitor runtime behavior.
 
 ### kube-state-metrics Integration
 
-The quota system integrates with [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) to expose resource state as Prometheus metrics. [Custom resource state metrics](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/customresourcestate-metrics.md) are configured for all quota resources, providing detailed visibility into quota configuration and status.
+The quota system integrates with [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics)
+to expose resource state as Prometheus metrics. [Custom resource state metrics](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/customresourcestate-metrics.md)
+configure all quota resources to provide visibility into quota configuration and
+status.
 
 **ResourceRegistration Metrics**:
 - `milo_quota_registration_info`: Registration metadata including consumer type, resource type, registration type, units
@@ -603,20 +616,62 @@ The quota system exposes application-level Prometheus metrics that provide visib
   - Labels: `result` (granted|denied|policy_disabled), `policy_name`, `policy_namespace`, `resource_group`, `resource_kind`
   - Use case: Track quota enforcement patterns and denial rates per policy
 
-*Watch Manager Performance*:
-- `milo_quota_waiters_current`: Current number of active ResourceClaim waiters
-  - Use case: Monitor concurrent admission requests and system load
-- `milo_quota_wait_register_total`: Total waiter registrations
-  - Use case: Track admission request volume over time
-- `milo_quota_wait_unregister_total`: Total waiter unregistrations
-  - Use case: Monitor waiter lifecycle completion
-- `milo_quota_wait_time_seconds`: Time from waiter registration to final result (histogram)
-  - Labels: `result` (granted|denied|timeout|not_found)
+*Watch Manager Lifecycle*:
+- `milo_quota_admission_watch_managers_created_total`: Total watch managers created
+  - Use case: Track watch manager creation rate across all projects
+- `milo_quota_admission_watch_managers_stopped_total`: Total watch managers stopped
+  - Use case: Monitor watch manager lifecycle and TTL expiration
+- `milo_quota_admission_watch_managers_active`: Current number of active watch managers
+  - Use case: Track system-wide watch manager count (scales with active projects)
+
+*Watch Stream Health*:
+- `milo_quota_admission_watch_streams_desired`: Total number of watch managers (desired streams)
+  - Use case: Expected number of active watch connections
+- `milo_quota_admission_watch_streams_connected`: Currently connected watch streams
+  - Use case: Monitor watch stream health (should equal desired)
+- `milo_quota_admission_watch_restarts_total`: Watch stream restarts
+  - Labels: `status_code` (e.g., "410", "500", "unknown")
+  - Use case: Detect API server instability or resourceVersion expiration (410 Gone)
+- `milo_quota_admission_watch_restart_duration_seconds`: Time to restart watch streams (histogram)
+  - Buckets: [0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10, 30, 60]
+  - Use case: Monitor watch recovery latency
+
+*Watch Stream Performance*:
+- `milo_quota_admission_watch_stream_lifetime_seconds`: Stream lifetime from connection to disconnect (histogram)
+  - Labels: `reason` (error|shutdown)
+  - Buckets: [1, 10, 30, 60, 300, 600, 1800, 3600, 7200, 14400, 28800, 86400]
+  - Use case: Calculate MTBF and detect flapping
+- `milo_quota_admission_watch_stream_max_uptime_seconds`: Maximum uptime across all streams (gauge)
+  - Use case: Monitor longest-running stream stability
+- `milo_quota_admission_watch_bookmark_max_age_seconds`: Maximum bookmark age (gauge)
+  - Use case: Detect bookmark staleness that could cause event loss on reconnect
+
+*Event Processing*:
+- `milo_quota_admission_watch_events_received_total`: Events received from watch streams
+  - Labels: `event_type` (Added|Modified|Deleted|Bookmark|Error)
+  - Use case: Monitor watch event volume and types
+- `milo_quota_admission_watch_events_processed_total`: Events processed by watch manager
+  - Labels: `result` (granted|denied|pending|ignored|error)
+  - Use case: Track claim processing outcomes
+
+*Waiter Management*:
+- `milo_quota_admission_waiter_registrations_total`: Total waiter registrations
+  - Use case: Track admission request volume
+- `milo_quota_admission_waiter_completions_total`: Waiter completions by result
+  - Labels: `result` (granted|denied|timeout|deleted|unregistered)
+  - Use case: Track admission outcomes and timeout frequency
+- `milo_quota_admission_waiters_current`: Current number of active claim waiters (gauge)
+  - Use case: Monitor concurrent admission request load
+- `milo_quota_admission_waiter_duration_seconds`: Waiter duration from registration to completion (histogram)
+  - Labels: `result` (granted|denied|timeout|deleted)
   - Buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60]
-  - Use case: Track admission latency and identify slow quota decisions
-- `milo_quota_informer_events_total`: ResourceClaim events observed by shared informer
-  - Labels: `type` (add|update|delete|unknown)
-  - Use case: Monitor informer activity and event processing rates
+  - Use case: Track admission latency by outcome
+
+*TTL Management*:
+- `milo_quota_admission_ttl_resets_total`: TTL countdown starts/resets
+  - Use case: Monitor watch manager activity patterns
+- `milo_quota_admission_ttl_expirations_total`: TTL expirations causing cleanup
+  - Use case: Track automatic watch manager garbage collection
 
 *Policy Engine Performance*:
 - `milo_quota_policy_informer_events_total`: ClaimCreationPolicy events observed by shared informer
@@ -627,22 +682,23 @@ The quota system exposes application-level Prometheus metrics that provide visib
 - `milo_quota_policies_active`: Current number of active ClaimCreationPolicy objects in cache
   - Use case: Track active policy count for capacity planning
 
-**Standard client-go Metrics** (Namespace: `workqueue`):
-- The quota system uses named workqueues that expose [standard client-go workqueue metrics](https://github.com/kubernetes/client-go/blob/master/util/workqueue/metrics.go):
-  - `workqueue_*{name="quota_admission_claim_watch"}`: Admission plugin watch manager metrics
-  - `workqueue_*{name="quota_policy_engine"}`: Policy engine workqueue metrics
-- Available metrics include: `depth`, `adds_total`, `latency_seconds`, `work_duration_seconds`, `unfinished_work_seconds`, `longest_running_processor_seconds`, `retries_total`
-
-**Metric Registration**: All quota system metrics are registered with the [Kubernetes legacy registry](https://pkg.go.dev/k8s.io/component-base/metrics/legacyregistry) (`k8s.io/component-base/metrics/legacyregistry`) during initialization, ensuring they appear on the apiserver `/metrics` endpoint alongside standard Kubernetes metrics.
+**Metric Registration**: All quota system metrics register with the [Kubernetes
+legacy registry](https://pkg.go.dev/k8s.io/component-base/metrics/legacyregistry)
+(`k8s.io/component-base/metrics/legacyregistry`) during initialization. This
+ensures metrics appear on the apiserver `/metrics` endpoint alongside standard
+Kubernetes metrics.
 
 **Implementation Locations**:
-- Admission Plugin: `/Users/scotwells/repos/datum-cloud/milo/internal/quota/admission/plugin.go:44-59`
-- Watch Manager: `/Users/scotwells/repos/datum-cloud/milo/internal/quota/admission/watch_manager.go:58-107`
-- Policy Engine: `/Users/scotwells/repos/datum-cloud/milo/internal/quota/engine/policy.go:26-62`
+- Admission Plugin: `internal/quota/admission/plugin.go`
+- Watch Manager: `internal/quota/admission/watch_manager.go`
+- Watch Metrics: `internal/quota/admission/watch_metrics.go`
 
 ### Monitoring and Alerting
 
-The quota system metrics support comprehensive monitoring through [Prometheus](https://prometheus.io/) and visualization through [Grafana](https://grafana.com/). The following sections provide [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/) queries for common operational scenarios.
+The quota system metrics support monitoring through [Prometheus](https://prometheus.io/)
+and visualization through [Grafana](https://grafana.com/). The following sections
+provide [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/)
+queries for common operational scenarios.
 
 **Key Monitoring Scenarios**:
 
@@ -652,12 +708,41 @@ The quota system metrics support comprehensive monitoring through [Prometheus](h
 (milo_quota_bucket_allocated / milo_quota_bucket_limit) > 0.9
 ```
 
+*Watch Manager Health*:
+```promql
+# Watch stream connectivity (should be ~1.0)
+milo_quota_admission_watch_streams_connected / milo_quota_admission_watch_streams_desired
+
+# High watch restart rate indicating instability
+rate(milo_quota_admission_watch_restarts_total[5m]) > 0.1
+
+# 410 Gone errors indicating resourceVersion expiration
+rate(milo_quota_admission_watch_restarts_total{status_code="410"}[5m])
+
+# Bookmark staleness (>5 minutes could cause event loss on restart)
+milo_quota_admission_watch_bookmark_max_age_seconds > 300
+
+# Watch manager churn (high TTL expiration rate)
+rate(milo_quota_admission_ttl_expirations_total[5m])
+
+# Watch stream flapping (short lifetimes indicating connection issues)
+histogram_quantile(0.50,
+  rate(milo_quota_admission_watch_stream_lifetime_seconds_bucket{reason="error"}[5m])
+) < 60
+```
+
 *Admission Performance*:
 ```promql
 # 95th percentile admission latency by result
 histogram_quantile(0.95,
-  rate(milo_quota_wait_time_seconds_bucket[5m])
+  rate(milo_quota_admission_waiter_duration_seconds_bucket[5m])
 ) by (result)
+
+# Timeout rate (should be near zero)
+rate(milo_quota_admission_waiter_completions_total{result="timeout"}[5m])
+
+# High waiter counts indicating system load
+milo_quota_admission_waiters_current > 100
 
 # High denial rates
 rate(milo_quota_admission_result_total{result="denied"}[5m])
@@ -667,9 +752,6 @@ rate(milo_quota_admission_result_total{result="denied"}[5m])
 ```promql
 # Stale AllowanceBuckets (not reconciled in 5 minutes)
 (time() - milo_quota_bucket_last_reconciliation_timestamp) > 300
-
-# High waiter counts indicating system load
-milo_quota_waiters_current > 100
 
 # Policy cache stability
 rate(milo_quota_policy_load_total[5m])
@@ -685,8 +767,10 @@ milo_quota_claim_policy_status_condition{type="Ready", status="False"}
 ```
 
 **Dashboard Recommendations**:
-- Quota utilization panels showing allocated vs limit per consumer
-- Admission latency histograms with breakdown by result type
-- Active waiter counts and policy cache size trends
-- Denial rate trends with policy and resource type breakdowns
-- Workqueue metrics for processing delay detection
+- **Quota Utilization**: Allocated vs limit per consumer, approaching capacity alerts
+- **Watch Manager Health**: Stream connectivity ratio, restart rates, TTL expiration trends
+- **Admission Latency**: Histograms by result type (granted/denied/timeout), p50/p95/p99 percentiles
+- **Watch Stream Stability**: Stream lifetime histograms, bookmark age, maximum uptime
+- **System Load**: Active waiter counts, active watch managers, policy cache size
+- **Denial Analysis**: Denial rate trends with policy and resource type breakdowns
+- **Event Processing**: Watch event volume by type, processing outcomes
