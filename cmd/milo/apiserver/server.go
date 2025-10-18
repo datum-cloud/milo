@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"go.miloapis.com/milo/internal/apiserver/admission/plugin/namespace/lifecycle"
 	crd "go.miloapis.com/milo/config/crd"
+	"go.miloapis.com/milo/internal/apiserver/admission/plugin/namespace/lifecycle"
 	projectstorage "go.miloapis.com/milo/internal/apiserver/storage/project"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"

@@ -17,15 +17,17 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"go.miloapis.com/milo/internal/quota/engine"
 	"go.miloapis.com/milo/internal/quota/validation"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
+	milorequest "go.miloapis.com/milo/pkg/request"
 )
 
-// testResourceTypeValidator provides deterministic behavior for tests
+// testResourceTypeValidator provides deterministic resource type validation for tests.
 type testResourceTypeValidator struct {
 	validResourceTypes map[string]bool
 }
@@ -41,7 +43,6 @@ func (t *testResourceTypeValidator) IsClaimingResourceAllowed(ctx context.Contex
 	if !t.validResourceTypes[resourceType] {
 		return false, nil, fmt.Errorf("no ResourceRegistration found for resource type %s", resourceType)
 	}
-	// For simplicity in tests, allow all claiming resources for valid resource types
 	return true, []string{fmt.Sprintf("%s/%s", claimingAPIGroup, claimingKind)}, nil
 }
 
@@ -171,7 +172,7 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 							Kind:       "Deployment",
 						},
 					},
-					Disabled: ptr.To(true), // Disabled
+					Disabled: ptr.To(true),
 					Target: quotav1alpha1.ClaimTargetSpec{
 						ResourceClaimTemplate: quotav1alpha1.ResourceClaimTemplate{
 							Metadata: quotav1alpha1.ObjectMetaTemplate{},
@@ -356,7 +357,7 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 			user: &user.DefaultInfo{
 				Name: "test-user",
 			},
-			operation:   admission.Update, // UPDATE operation should be skipped
+			operation:   admission.Update,
 			expectClaim: false,
 			expectError: false,
 		},
@@ -364,11 +365,9 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create fake dynamic client
 			scheme := runtime.NewScheme()
 			quotav1alpha1.AddToScheme(scheme)
 
-			// Convert policy to unstructured for dynamic client
 			var objects []runtime.Object
 			if tt.policy != nil {
 				unstructuredPolicy, err := runtime.DefaultUnstructuredConverter.ToUnstructured(tt.policy)
@@ -388,25 +387,20 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 				FakeDynamicClient: fake.NewSimpleDynamicClient(scheme, objects...),
 			}
 
-			// Create logger
 			logger := zap.New(zap.UseDevMode(true))
 
-			// Create CEL engine
 			celEngine, err := engine.NewCELEngine()
 			if err != nil {
 				t.Fatalf("Failed to create CEL engine: %v", err)
 			}
 
-			// Create policy engine
 			policyEngine := &testPolicyEngine{
 				policy: tt.policy,
 				gvk:    tt.gvk,
 			}
 
-			// Create template engine
 			templateEngine := engine.NewTemplateEngine(celEngine, logger.WithName("template"))
 
-			// Create plugin with mock watch manager that grants claims
 			plugin := &ResourceQuotaEnforcementPlugin{
 				Handler:        admission.NewHandler(admission.Create, admission.Update),
 				dynamicClient:  fakeDynamicClient,
@@ -414,10 +408,9 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 				templateEngine: templateEngine,
 				config:         DefaultAdmissionPluginConfig(),
 				logger:         logger.WithName("plugin"),
-				watchManager:   &testWatchManager{behavior: "grant"}, // Use mock that grants immediately
 			}
+			plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
 
-			// Create admission attributes
 			attrs := &testAdmissionAttributes{
 				operation: tt.operation,
 				object:    tt.obj,
@@ -428,17 +421,13 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 				dryRun:    tt.dryRun,
 			}
 
-			// Call Validate (not Admit)
 			err = plugin.Validate(context.Background(), attrs, nil)
 
-			// Check results - the plugin should never return errors (fail-open strategy)
 			if err != nil {
 				t.Errorf("Unexpected error (plugin should fail-open): %v", err)
 			}
 
-			// For enabled policies, check that ResourceClaim creation was attempted
 			if tt.expectClaim {
-				// Check if a CREATE action was performed on ResourceClaim
 				actions := fakeDynamicClient.Actions()
 				found := false
 				for _, action := range actions {
@@ -455,8 +444,6 @@ func TestResourceQuotaEnforcementPlugin_Validate(t *testing.T) {
 	}
 }
 
-// Test helper types
-
 type testPolicyEngine struct {
 	policy *quotav1alpha1.ClaimCreationPolicy
 	gvk    schema.GroupVersionKind
@@ -469,17 +456,10 @@ func (e *testPolicyEngine) GetPolicyForGVK(gvk schema.GroupVersionKind) (*quotav
 	return nil, nil
 }
 
-func (e *testPolicyEngine) Start(ctx context.Context) error {
-	// No-op for test implementation
-	return nil
-}
-
-func (e *testPolicyEngine) Close() {
-	// No-op for test implementation
-}
+func (e *testPolicyEngine) Start(ctx context.Context) error { return nil }
+func (e *testPolicyEngine) Close()                          {}
 
 func (e *testPolicyEngine) updatePolicyForTest(policy *quotav1alpha1.ClaimCreationPolicy) error {
-	// For testing, store the policy by GVK
 	gvk := policy.Spec.Trigger.Resource.GetGVK()
 	e.policy = policy
 	e.gvk = gvk
@@ -487,7 +467,6 @@ func (e *testPolicyEngine) updatePolicyForTest(policy *quotav1alpha1.ClaimCreati
 }
 
 func (e *testPolicyEngine) removePolicyForTest(policyName string) {
-	// For testing, just clear the stored policy
 	e.policy = nil
 }
 
@@ -523,9 +502,7 @@ func (a *testAdmissionAttributes) GetReinvocationContext() admission.Reinvocatio
 	return nil
 }
 
-// Note: Using k8s.io/utils/ptr for pointer utilities
-
-// fakeGrantingDynamicClient wraps the fake dynamic client and automatically grants ResourceClaims
+// fakeGrantingDynamicClient wraps fake.FakeDynamicClient to automatically grant ResourceClaims on create.
 type fakeGrantingDynamicClient struct {
 	*fake.FakeDynamicClient
 }
@@ -557,7 +534,6 @@ type fakeGrantingResource struct {
 }
 
 func (f *fakeGrantingResource) Create(ctx context.Context, obj *unstructured.Unstructured, options metav1.CreateOptions, subresources ...string) (*unstructured.Unstructured, error) {
-	// Simulate GenerateName behavior
 	if obj.GetName() == "" && obj.GetGenerateName() != "" {
 		obj.SetName(obj.GetGenerateName() + "test-123")
 	}
@@ -567,9 +543,7 @@ func (f *fakeGrantingResource) Create(ctx context.Context, obj *unstructured.Uns
 		return nil, err
 	}
 
-	// If this is a ResourceClaim, automatically set it to granted
 	if f.gvr.Resource == "resourceclaims" && f.gvr.Group == "quota.miloapis.com" {
-		// Add granted condition
 		conditions := []interface{}{
 			map[string]interface{}{
 				"type":    quotav1alpha1.ResourceClaimGranted,
@@ -586,11 +560,10 @@ func (f *fakeGrantingResource) Create(ctx context.Context, obj *unstructured.Uns
 }
 
 func (f *fakeGrantingResource) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	// Return a fake watcher that immediately signals the resource is granted
 	return &fakeGrantingWatcher{
 		gvr:       f.gvr,
 		namespace: f.namespace,
-		name:      opts.FieldSelector, // Should contain metadata.name=claim-name
+		name:      opts.FieldSelector,
 	}, nil
 }
 
@@ -601,9 +574,7 @@ type fakeGrantingWatcher struct {
 	sent      bool
 }
 
-func (f *fakeGrantingWatcher) Stop() {
-	// No-op
-}
+func (f *fakeGrantingWatcher) Stop() {}
 
 func (f *fakeGrantingWatcher) ResultChan() <-chan watch.Event {
 	ch := make(chan watch.Event, 1)
@@ -612,10 +583,8 @@ func (f *fakeGrantingWatcher) ResultChan() <-chan watch.Event {
 		defer close(ch)
 
 		if !f.sent {
-			// Send a granted event after a small delay
 			time.Sleep(100 * time.Millisecond)
 
-			// Create a fake ResourceClaim with granted status
 			claim := &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": f.gvr.GroupVersion().String(),
@@ -648,7 +617,6 @@ func (f *fakeGrantingWatcher) ResultChan() <-chan watch.Event {
 	return ch
 }
 
-// TestClaimCreationPlugin_ResourceClaimValidation tests direct ResourceClaim validation
 func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -701,7 +669,7 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 					},
 					Requests: []quotav1alpha1.ResourceRequest{
 						{
-							ResourceType: "", // Empty resource type
+							ResourceType: "",
 							Amount:       5,
 						},
 					},
@@ -732,7 +700,7 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 					Requests: []quotav1alpha1.ResourceRequest{
 						{
 							ResourceType: "apps/Deployment",
-							Amount:       -1, // Negative amount
+							Amount:       -1,
 						},
 					},
 					ResourceRef: quotav1alpha1.UnversionedObjectReference{
@@ -765,7 +733,7 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 							Amount:       3,
 						},
 						{
-							ResourceType: "apps/Deployment", // Duplicate
+							ResourceType: "apps/Deployment",
 							Amount:       2,
 						},
 					},
@@ -784,21 +752,17 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create fake dynamic client
 			scheme := runtime.NewScheme()
 			quotav1alpha1.AddToScheme(scheme)
 			fakeDynamicClient := fake.NewSimpleDynamicClient(scheme)
 
-			// Create logger
 			logger := zap.New(zap.UseDevMode(true))
 
-			// Create mock ResourceTypeValidator for deterministic test behavior
 			mockValidator := &testResourceTypeValidator{
-				validResourceTypes: make(map[string]bool), // Empty = no registered types
+				validResourceTypes: make(map[string]bool),
 			}
 			resourceClaimValidator := validation.NewResourceClaimValidator(fakeDynamicClient, mockValidator)
 
-			// Create plugin
 			plugin := &ResourceQuotaEnforcementPlugin{
 				Handler:                admission.NewHandler(admission.Create),
 				dynamicClient:          fakeDynamicClient,
@@ -806,11 +770,9 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 				resourceClaimValidator: resourceClaimValidator,
 				config:                 DefaultAdmissionPluginConfig(),
 				logger:                 logger.WithName("plugin"),
-				watchManager:           &testWatchManager{behavior: "grant"}, // Use mock that grants immediately
 			}
+			plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
 
-			// Create admission attributes for ResourceClaim
-			// In real operation, the API server passes typed objects to admission plugins
 			attrs := &testAdmissionAttributes{
 				operation: admission.Create,
 				object:    tt.claim,
@@ -827,10 +789,8 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 				dryRun: false,
 			}
 
-			// Call Validate
 			err := plugin.Validate(context.Background(), attrs, nil)
 
-			// Check results
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -846,7 +806,6 @@ func TestResourceQuotaEnforcementPlugin_ResourceClaimValidation(t *testing.T) {
 	}
 }
 
-// TestClaimCreationPlugin_InitializationValidation tests plugin initialization
 func TestResourceQuotaEnforcementPlugin_InitializationValidation(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -859,9 +818,8 @@ func TestResourceQuotaEnforcementPlugin_InitializationValidation(t *testing.T) {
 			setupPlugin: func() *ResourceQuotaEnforcementPlugin {
 				return &ResourceQuotaEnforcementPlugin{
 					Handler: admission.NewHandler(admission.Create),
-					// dynamicClient is nil
-					config: DefaultAdmissionPluginConfig(),
-					logger: zap.New(zap.UseDevMode(true)).WithName("plugin"),
+					config:  DefaultAdmissionPluginConfig(),
+					logger:  zap.New(zap.UseDevMode(true)).WithName("plugin"),
 				}
 			},
 			expectError:    true,
@@ -882,12 +840,10 @@ func TestResourceQuotaEnforcementPlugin_InitializationValidation(t *testing.T) {
 					logger:        logger.WithName("plugin"),
 				}
 
-				// Initialize engines manually for test
 				celEngine, _ := engine.NewCELEngine()
 				plugin.templateEngine = engine.NewTemplateEngine(celEngine, logger.WithName("template"))
 				plugin.policyEngine = &testPolicyEngine{}
 
-				// Initialize validation engine with mock for tests
 				mockValidator := &testResourceTypeValidator{
 					validResourceTypes: make(map[string]bool),
 				}
@@ -900,8 +856,7 @@ func TestResourceQuotaEnforcementPlugin_InitializationValidation(t *testing.T) {
 				plugin.grantCreationPolicyValidator = validation.NewGrantCreationPolicyValidator(celValidator, grantTemplateValidator)
 				plugin.resourceGrantValidator = validation.NewResourceGrantValidator(mockValidator)
 
-				// Initialize mock watch manager for test
-				plugin.watchManager = &testWatchManager{behavior: "grant"}
+				plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
 
 				return plugin
 			},
@@ -929,28 +884,22 @@ func TestResourceQuotaEnforcementPlugin_InitializationValidation(t *testing.T) {
 	}
 }
 
-// TestClaimCreationPlugin_PolicyEngineFailure tests behavior when policy engine fails
 func TestResourceQuotaEnforcementPlugin_PolicyEngineFailure(t *testing.T) {
-	// Create failing policy engine
 	failingPolicyEngine := &failingPolicyEngine{
 		err: errors.New("policy engine failure"),
 	}
 
-	// Create fake dynamic client
 	scheme := runtime.NewScheme()
 	quotav1alpha1.AddToScheme(scheme)
 	fakeDynamicClient := fake.NewSimpleDynamicClient(scheme)
 
-	// Create logger
 	logger := zap.New(zap.UseDevMode(true))
 
-	// Create CEL engine
 	celEngine, err := engine.NewCELEngine()
 	if err != nil {
 		t.Fatalf("Failed to create CEL engine: %v", err)
 	}
 
-	// Create plugin with failing policy engine
 	plugin := &ResourceQuotaEnforcementPlugin{
 		Handler:        admission.NewHandler(admission.Create),
 		dynamicClient:  fakeDynamicClient,
@@ -958,10 +907,9 @@ func TestResourceQuotaEnforcementPlugin_PolicyEngineFailure(t *testing.T) {
 		templateEngine: engine.NewTemplateEngine(celEngine, logger.WithName("template")),
 		config:         DefaultAdmissionPluginConfig(),
 		logger:         logger.WithName("plugin"),
-		watchManager:   &testWatchManager{behavior: "grant"}, // Use mock that grants immediately
 	}
+	plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
 
-	// Create test object
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
@@ -973,7 +921,6 @@ func TestResourceQuotaEnforcementPlugin_PolicyEngineFailure(t *testing.T) {
 		},
 	}
 
-	// Create admission attributes
 	attrs := &testAdmissionAttributes{
 		operation: admission.Create,
 		object:    obj,
@@ -990,7 +937,6 @@ func TestResourceQuotaEnforcementPlugin_PolicyEngineFailure(t *testing.T) {
 		dryRun: false,
 	}
 
-	// Call Validate - should return error when policy engine fails
 	err = plugin.Validate(context.Background(), attrs, nil)
 	if err == nil {
 		t.Error("Expected error when policy engine fails, but got none")
@@ -1000,11 +946,10 @@ func TestResourceQuotaEnforcementPlugin_PolicyEngineFailure(t *testing.T) {
 	}
 }
 
-// TestClaimWaitScenarios tests different claim waiting scenarios
 func TestClaimWaitScenarios(t *testing.T) {
 	tests := []struct {
 		name          string
-		claimBehavior string // "granted", "denied", "timeout", "deleted"
+		claimBehavior string
 		expectError   bool
 		errorSubstr   string
 	}{
@@ -1023,7 +968,6 @@ func TestClaimWaitScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create fake dynamic client with specific behavior
 			scheme := runtime.NewScheme()
 			quotav1alpha1.AddToScheme(scheme)
 
@@ -1041,16 +985,13 @@ func TestClaimWaitScenarios(t *testing.T) {
 				fakeDynamicClient = fake.NewSimpleDynamicClient(scheme)
 			}
 
-			// Create logger
 			logger := zap.New(zap.UseDevMode(true))
 
-			// Create CEL engine
 			celEngine, err := engine.NewCELEngine()
 			if err != nil {
 				t.Fatalf("Failed to create CEL engine: %v", err)
 			}
 
-			// Create policy that will create claims
 			policy := &quotav1alpha1.ClaimCreationPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-policy",
@@ -1097,16 +1038,6 @@ func TestClaimWaitScenarios(t *testing.T) {
 				},
 			}
 
-			// Create plugin with appropriate watch manager
-			var watchManager ClaimWatchManager
-			if tt.claimBehavior == "granted" {
-				watchManager = &testWatchManager{behavior: "grant"}
-			} else if tt.claimBehavior == "denied" {
-				watchManager = &testWatchManager{behavior: "deny"}
-			} else {
-				watchManager = &testWatchManager{behavior: "timeout"}
-			}
-
 			plugin := &ResourceQuotaEnforcementPlugin{
 				Handler:       admission.NewHandler(admission.Create),
 				dynamicClient: fakeDynamicClient,
@@ -1121,10 +1052,18 @@ func TestClaimWaitScenarios(t *testing.T) {
 				templateEngine: engine.NewTemplateEngine(celEngine, logger.WithName("template")),
 				config:         DefaultAdmissionPluginConfig(),
 				logger:         logger.WithName("plugin"),
-				watchManager:   watchManager,
 			}
 
-			// Create test object
+			var watchManager ClaimWatchManager
+			if tt.claimBehavior == "granted" {
+				watchManager = &testWatchManager{behavior: "grant"}
+			} else if tt.claimBehavior == "denied" {
+				watchManager = &testWatchManager{behavior: "deny"}
+			} else {
+				watchManager = &testWatchManager{behavior: "timeout"}
+			}
+			plugin.watchManagers.Store("", watchManager)
+
 			obj := &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -1136,7 +1075,6 @@ func TestClaimWaitScenarios(t *testing.T) {
 				},
 			}
 
-			// Create admission attributes
 			attrs := &testAdmissionAttributes{
 				operation: admission.Create,
 				object:    obj,
@@ -1153,10 +1091,8 @@ func TestClaimWaitScenarios(t *testing.T) {
 				dryRun: false,
 			}
 
-			// Call Validate
 			err = plugin.Validate(context.Background(), attrs, nil)
 
-			// Check results
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -1172,8 +1108,6 @@ func TestClaimWaitScenarios(t *testing.T) {
 	}
 }
 
-// Helper types for testing different scenarios
-
 type failingPolicyEngine struct {
 	err error
 }
@@ -1182,16 +1116,10 @@ func (e *failingPolicyEngine) GetPolicyForGVK(gvk schema.GroupVersionKind) (*quo
 	return nil, e.err
 }
 
-func (e *failingPolicyEngine) Start(ctx context.Context) error {
-	// No-op for test implementation
-	return nil
-}
+func (e *failingPolicyEngine) Start(ctx context.Context) error { return nil }
+func (e *failingPolicyEngine) Close()                          {}
 
-func (e *failingPolicyEngine) Close() {
-	// No-op for test implementation
-}
-
-// fakeDenyingDynamicClient wraps the fake dynamic client and automatically denies ResourceClaims
+// fakeDenyingDynamicClient wraps fake.FakeDynamicClient to automatically deny ResourceClaims on create.
 type fakeDenyingDynamicClient struct {
 	*fake.FakeDynamicClient
 }
@@ -1223,7 +1151,6 @@ type fakeDenyingResource struct {
 }
 
 func (f *fakeDenyingResource) Create(ctx context.Context, obj *unstructured.Unstructured, options metav1.CreateOptions, subresources ...string) (*unstructured.Unstructured, error) {
-	// Simulate GenerateName behavior
 	if obj.GetName() == "" && obj.GetGenerateName() != "" {
 		obj.SetName(obj.GetGenerateName() + "test-456")
 	}
@@ -1233,9 +1160,7 @@ func (f *fakeDenyingResource) Create(ctx context.Context, obj *unstructured.Unst
 		return nil, err
 	}
 
-	// If this is a ResourceClaim, automatically set it to denied
 	if f.gvr.Resource == "resourceclaims" && f.gvr.Group == "quota.miloapis.com" {
-		// Add denied condition
 		conditions := []interface{}{
 			map[string]interface{}{
 				"type":    quotav1alpha1.ResourceClaimGranted,
@@ -1252,7 +1177,6 @@ func (f *fakeDenyingResource) Create(ctx context.Context, obj *unstructured.Unst
 }
 
 func (f *fakeDenyingResource) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	// Return a fake watcher that immediately signals the resource is denied
 	return &fakeDenyingWatcher{
 		gvr:       f.gvr,
 		namespace: f.namespace,
@@ -1267,9 +1191,7 @@ type fakeDenyingWatcher struct {
 	sent      bool
 }
 
-func (f *fakeDenyingWatcher) Stop() {
-	// No-op
-}
+func (f *fakeDenyingWatcher) Stop() {}
 
 func (f *fakeDenyingWatcher) ResultChan() <-chan watch.Event {
 	ch := make(chan watch.Event, 1)
@@ -1278,10 +1200,8 @@ func (f *fakeDenyingWatcher) ResultChan() <-chan watch.Event {
 		defer close(ch)
 
 		if !f.sent {
-			// Send a denied event after a small delay
 			time.Sleep(100 * time.Millisecond)
 
-			// Create a fake ResourceClaim with denied status
 			claim := &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": f.gvr.GroupVersion().String(),
@@ -1314,7 +1234,6 @@ func (f *fakeDenyingWatcher) ResultChan() <-chan watch.Event {
 	return ch
 }
 
-// Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (substr == "" ||
 		func() bool {
@@ -1327,9 +1246,8 @@ func contains(s, substr string) bool {
 		}())
 }
 
-// testWatchManager is a mock watch manager for testing
 type testWatchManager struct {
-	behavior string // "grant", "deny", "timeout"
+	behavior string
 }
 
 func (m *testWatchManager) RegisterClaimWaiter(ctx context.Context, claimName, namespace string, timeout time.Duration) (<-chan ClaimResult, context.CancelFunc, error) {
@@ -1337,14 +1255,12 @@ func (m *testWatchManager) RegisterClaimWaiter(ctx context.Context, claimName, n
 	cancel := func() {}
 
 	go func() {
-		time.Sleep(10 * time.Millisecond) // Small delay to simulate async behavior
+		time.Sleep(10 * time.Millisecond)
 		switch m.behavior {
 		case "grant":
 			resultChan <- ClaimResult{Granted: true, Reason: "test granted"}
 		case "deny":
 			resultChan <- ClaimResult{Granted: false, Reason: "quota exceeded", Error: fmt.Errorf("ResourceClaim was denied: quota exceeded")}
-		case "timeout":
-			// Don't send anything, let it timeout
 		}
 		close(resultChan)
 	}()
@@ -1355,3 +1271,177 @@ func (m *testWatchManager) RegisterClaimWaiter(ctx context.Context, claimName, n
 func (m *testWatchManager) UnregisterClaimWaiter(claimName, namespace string) {}
 func (m *testWatchManager) Start(ctx context.Context) error                   { return nil }
 func (m *testWatchManager) Stop()                                             {}
+
+func TestProjectContextExtraction(t *testing.T) {
+	tests := []struct {
+		name           string
+		projectID      string
+		wantProjectID  string
+		wantHasProject bool
+	}{
+		{
+			name:           "with project context",
+			projectID:      "test-project",
+			wantProjectID:  "test-project",
+			wantHasProject: true,
+		},
+		{
+			name:           "without project context (root)",
+			projectID:      "",
+			wantProjectID:  "",
+			wantHasProject: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tt.projectID != "" {
+				ctx = milorequest.WithProject(ctx, tt.projectID)
+			}
+
+			gotProjectID, gotHasProject := milorequest.ProjectID(ctx)
+
+			if gotProjectID != tt.wantProjectID {
+				t.Errorf("ProjectID() = %v, want %v", gotProjectID, tt.wantProjectID)
+			}
+			if gotHasProject != tt.wantHasProject {
+				t.Errorf("ProjectID() hasProject = %v, want %v", gotHasProject, tt.wantHasProject)
+			}
+		})
+	}
+}
+
+func TestGetClientForContext(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := quotav1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+
+	fakeDynamicClient := fake.NewSimpleDynamicClient(scheme)
+
+	plugin := &ResourceQuotaEnforcementPlugin{
+		Handler:       admission.NewHandler(admission.Create),
+		dynamicClient: fakeDynamicClient,
+		logger:        zap.New(zap.UseDevMode(true)),
+	}
+
+	tests := []struct {
+		name             string
+		projectID        string
+		wantRootClient   bool
+		wantError        bool
+		setupLoopbackCfg bool
+	}{
+		{
+			name:             "root context returns root client",
+			projectID:        "",
+			wantRootClient:   true,
+			wantError:        false,
+			setupLoopbackCfg: false,
+		},
+		{
+			name:             "project context without loopback config returns error",
+			projectID:        "test-project",
+			wantRootClient:   false,
+			wantError:        true,
+			setupLoopbackCfg: false,
+		},
+		{
+			name:             "project context with loopback config creates project client",
+			projectID:        "test-project",
+			wantRootClient:   false,
+			wantError:        false,
+			setupLoopbackCfg: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupLoopbackCfg {
+				cfg := &rest.Config{
+					Host: "http://localhost:8080",
+				}
+				plugin.SetLoopbackConfig(cfg)
+			}
+
+			ctx := context.Background()
+			if tt.projectID != "" {
+				ctx = milorequest.WithProject(ctx, tt.projectID)
+			}
+
+			client, err := plugin.getClient(ctx)
+
+			if tt.wantError {
+				if err == nil {
+					t.Error("getClient() expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("getClient() unexpected error = %v", err)
+				return
+			}
+
+			if client == nil {
+				t.Error("getClient() returned nil client")
+				return
+			}
+
+			if tt.wantRootClient {
+				if client != fakeDynamicClient {
+					t.Error("getClient() root context did not return root client")
+				}
+			} else if client == fakeDynamicClient {
+				t.Error("getClient() project context returned root client")
+			}
+		})
+	}
+}
+
+func TestProjectClientCaching(t *testing.T) {
+	plugin := &ResourceQuotaEnforcementPlugin{
+		Handler: admission.NewHandler(admission.Create),
+		logger:  zap.New(zap.UseDevMode(true)),
+	}
+
+	cfg := &rest.Config{
+		Host: "http://localhost:8080",
+	}
+	plugin.SetLoopbackConfig(cfg)
+
+	projectID := "test-project"
+
+	client1, err := plugin.getProjectClient(projectID)
+	if err != nil {
+		t.Fatalf("getProjectClient() error = %v", err)
+	}
+	if client1 == nil {
+		t.Fatal("getProjectClient() returned nil client")
+	}
+
+	client2, err := plugin.getProjectClient(projectID)
+	if err != nil {
+		t.Fatalf("getProjectClient() error = %v", err)
+	}
+	if client2 == nil {
+		t.Fatal("getProjectClient() returned nil client")
+	}
+
+	if client1 != client2 {
+		t.Error("getProjectClient() did not return cached client on second call")
+	}
+
+	client3, err := plugin.getProjectClient("different-project")
+	if err != nil {
+		t.Fatalf("getProjectClient() error = %v", err)
+	}
+	if client3 == nil {
+		t.Fatal("getProjectClient() returned nil client")
+	}
+
+	if client1 == client3 {
+		t.Error("getProjectClient() returned same client for different project")
+	}
+}
