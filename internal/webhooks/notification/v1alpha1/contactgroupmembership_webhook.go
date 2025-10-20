@@ -112,10 +112,13 @@ func (v *ContactGroupMembershipValidator) ValidateCreate(ctx context.Context, ob
 	// Check that cgm namespace is the same as the contact namespace for contacts that are related
 	// to the resourcemanager.miloapis.com API group
 	if contact.Spec.SubjectRef != nil {
-		if contact.Spec.SubjectRef.APIGroup == "resourcemanager.miloapis.com" {
+		switch contact.Spec.SubjectRef.APIGroup {
+		case "resourcemanager.miloapis.com":
 			if cgm.Namespace != contact.Namespace {
 				errs = append(errs, field.Invalid(field.NewPath("spec"), cgm.Spec, "namespace must be the same as the contact namespace for contacts that are related to the resourcemanager.miloapis.com API group"))
 			}
+		default:
+			return nil, errors.NewInternalError(fmt.Errorf("server does not handle SubjectRef APIGroup %s", contact.Spec.SubjectRef.APIGroup))
 		}
 	}
 
