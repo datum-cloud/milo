@@ -50,7 +50,8 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 	var errs field.ErrorList
 
 	// Ensure Contact exists
-	if err := v.Client.Get(ctx, client.ObjectKey{Namespace: removal.Spec.ContactRef.Namespace, Name: removal.Spec.ContactRef.Name}, &notificationv1alpha1.Contact{}); err != nil {
+	contact := &notificationv1alpha1.Contact{}
+	if err := v.Client.Get(ctx, client.ObjectKey{Namespace: removal.Spec.ContactRef.Namespace, Name: removal.Spec.ContactRef.Name}, contact); err != nil {
 		if errors.IsNotFound(err) {
 			errs = append(errs, field.NotFound(field.NewPath("spec", "contactRef", "name"), removal.Spec.ContactRef.Name))
 		} else {
@@ -77,6 +78,19 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 	}
 	if len(existing.Items) > 0 {
 		errs = append(errs, field.Duplicate(field.NewPath("spec"), fmt.Sprintf("membership removal already exists in ContactGroupMembershipRemoval %s", existing.Items[0].Name)))
+	}
+
+	// Check that cgmr namespace is the same as the contact namespace for contacts that are related
+	// to the resourcemanager.miloapis.com API group
+	if contact.Spec.SubjectRef != nil {
+		switch contact.Spec.SubjectRef.APIGroup {
+		case "resourcemanager.miloapis.com":
+			if removal.Namespace != contact.Namespace {
+				errs = append(errs, field.Invalid(field.NewPath("spec"), removal.Spec, "namespace must be the same as the contact namespace for contacts that are related to the resourcemanager.miloapis.com API group"))
+			}
+		default:
+			return nil, errors.NewInternalError(fmt.Errorf("server does not handle SubjectRef APIGroup %s", contact.Spec.SubjectRef.APIGroup))
+		}
 	}
 
 	if len(errs) > 0 {
