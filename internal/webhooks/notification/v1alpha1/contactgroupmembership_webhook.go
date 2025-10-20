@@ -109,6 +109,16 @@ func (v *ContactGroupMembershipValidator) ValidateCreate(ctx context.Context, ob
 		errs = append(errs, field.Invalid(field.NewPath("spec"), cgm.Spec, fmt.Sprintf("cannot create membership as a ContactGroupMembershipRemoval %s already exists", existingRemovals.Items[0].Name)))
 	}
 
+	// Check that cgm namespace is the same as the contact namespace for contacts that are related
+	// to the resourcemanager.miloapis.com API group
+	if contact.Spec.SubjectRef != nil {
+		if contact.Spec.SubjectRef.APIGroup == "resourcemanager.miloapis.com" {
+			if cgm.Namespace != contact.Namespace {
+				errs = append(errs, field.Invalid(field.NewPath("spec"), cgm.Spec, "namespace must be the same as the contact namespace for contacts that are related to the resourcemanager.miloapis.com API group"))
+			}
+		}
+	}
+
 	if len(errs) > 0 {
 		return nil, errors.NewInvalid(notificationv1alpha1.SchemeGroupVersion.WithKind("ContactGroupMembership").GroupKind(), cgm.Name, errs)
 	}

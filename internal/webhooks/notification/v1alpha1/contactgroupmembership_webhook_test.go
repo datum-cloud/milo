@@ -104,6 +104,45 @@ func TestContactGroupMembershipValidator(t *testing.T) {
 			expectError:   true,
 			errorContains: "not found",
 		},
+		"subjectref same namespace": {
+			newObj: &notificationv1alpha1.ContactGroupMembership{
+				ObjectMeta: metav1.ObjectMeta{Name: "m6", Namespace: "default"},
+				Spec: notificationv1alpha1.ContactGroupMembershipSpec{
+					ContactRef:      notificationv1alpha1.ContactReference{Name: "c-sub", Namespace: "default"},
+					ContactGroupRef: notificationv1alpha1.ContactGroupReference{Name: "g-sub", Namespace: "default"},
+				},
+			},
+			seedObjects: []client.Object{
+				&notificationv1alpha1.Contact{
+					ObjectMeta: metav1.ObjectMeta{Name: "c-sub", Namespace: "default"},
+					Spec: notificationv1alpha1.ContactSpec{
+						SubjectRef: &notificationv1alpha1.SubjectReference{APIGroup: "resourcemanager.miloapis.com", Kind: "Project", Name: "proj1"},
+					},
+				},
+				&notificationv1alpha1.ContactGroup{ObjectMeta: metav1.ObjectMeta{Name: "g-sub", Namespace: "default"}},
+			},
+			expectError: false,
+		},
+		"subjectref namespace mismatch": {
+			newObj: &notificationv1alpha1.ContactGroupMembership{
+				ObjectMeta: metav1.ObjectMeta{Name: "m7", Namespace: "other"},
+				Spec: notificationv1alpha1.ContactGroupMembershipSpec{
+					ContactRef:      notificationv1alpha1.ContactReference{Name: "c-sub", Namespace: "default"},
+					ContactGroupRef: notificationv1alpha1.ContactGroupReference{Name: "g-sub", Namespace: "other"},
+				},
+			},
+			seedObjects: []client.Object{
+				&notificationv1alpha1.Contact{
+					ObjectMeta: metav1.ObjectMeta{Name: "c-sub", Namespace: "default"},
+					Spec: notificationv1alpha1.ContactSpec{
+						SubjectRef: &notificationv1alpha1.SubjectReference{APIGroup: "resourcemanager.miloapis.com", Kind: "Project", Name: "proj1"},
+					},
+				},
+				&notificationv1alpha1.ContactGroup{ObjectMeta: metav1.ObjectMeta{Name: "g-sub", Namespace: "other"}},
+			},
+			expectError:   true,
+			errorContains: "namespace must be the same",
+		},
 	}
 
 	for name, tt := range tests {
