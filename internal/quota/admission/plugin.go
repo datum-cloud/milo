@@ -442,14 +442,10 @@ func (p *ResourceQuotaEnforcementPlugin) lookupPolicyForResource(ctx context.Con
 // processResourceWithPolicy creates a ResourceClaim and blocks until quota is granted or denied.
 // Waiter registration precedes claim creation to prevent race conditions with watch events.
 func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.Context, attrs admission.Attributes, policy *quotav1alpha1.ClaimCreationPolicy, gvk schema.GroupVersionKind) error {
-	// CEL engine requires unstructured format for evaluating trigger conditions
-	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(attrs.GetObject())
-	if err != nil {
-		p.logger.Error(err, "Failed to convert object to unstructured")
-		warning.AddWarning(ctx, "", fmt.Sprintf("Failed to process object for ResourceClaim creation: %v", err))
-		return nil // Don't block resource creation
+	obj, ok := attrs.GetObject().(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("expected unstructured type for quota admission plugin")
 	}
-	obj := &unstructured.Unstructured{Object: unstructuredMap}
 
 	// Build evaluation context
 	evalContext := p.buildEvaluationContext(attrs, obj)
