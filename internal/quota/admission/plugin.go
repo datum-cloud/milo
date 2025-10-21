@@ -441,16 +441,35 @@ func (p *ResourceQuotaEnforcementPlugin) lookupPolicyForResource(ctx context.Con
 // processResourceWithPolicy creates a ResourceClaim and blocks until quota is granted or denied.
 // Waiter registration precedes claim creation to prevent race conditions with watch events.
 func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.Context, attrs admission.Attributes, policy *quotav1alpha1.ClaimCreationPolicy, gvk schema.GroupVersionKind) error {
-	obj, ok := attrs.GetObject().(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("expected unstructured type for quota admission plugin")
+	// Get the object - it may be structured (native k8s types) or unstructured (CRDs)
+	obj := attrs.GetObject()
+	if obj == nil {
+		return fmt.Errorf("admission object is nil")
+	}
+
+	// Convert to unstructured if needed
+	var unstructuredObj *unstructured.Unstructured
+	var err error
+
+	switch v := obj.(type) {
+	case *unstructured.Unstructured:
+		// Already unstructured (CRDs from apiextensions-apiserver)
+		unstructuredObj = v
+	default:
+		// Structured type (native k8s types like Secret, ConfigMap, etc.)
+		// Convert to unstructured for consistent processing
+		unstructuredMap, convErr := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		if convErr != nil {
+			return fmt.Errorf("failed to convert %T to unstructured: %w", obj, convErr)
+		}
+		unstructuredObj = &unstructured.Unstructured{Object: unstructuredMap}
 	}
 
 	// Build evaluation context
-	evalContext := p.buildEvaluationContext(attrs, obj)
+	evalContext := p.buildEvaluationContext(attrs, unstructuredObj)
 
 	// Evaluate trigger constraints to determine if this resource should trigger the policy
-	constraintsMet, err := p.templateEngine.EvaluateConditions(policy.Spec.Trigger.Constraints, obj)
+	constraintsMet, err := p.templateEngine.EvaluateConditions(policy.Spec.Trigger.Constraints, unstructuredObj)
 	if err != nil {
 		p.logger.Error(err, "Failed to evaluate policy constraints",
 			"policy", policy.Name,
@@ -657,8 +676,8 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 	claim.Spec.ResourceRef = quotav1alpha1.UnversionedObjectReference{
 		APIGroup:  evalContext.GVK.Group,
 		Kind:      evalContext.GVK.Kind,
-		Name:      evalContext.Object.GetName(),
-		Namespace: evalContext.Object.GetNamespace(),
+		Name:      claimName,
+		Namespace: namespace,
 	}
 
 	if claim.Labels == nil {
@@ -873,7 +892,6 @@ func (p *ResourceQuotaEnforcementPlugin) determineClaimName(
 		strings.ToLower(evalContext.GVK.Kind))
 	return names.SimpleNameGenerator.GenerateName(baseName), nil
 }
-
 
 // validateResourceRegistration validates ResourceRegistration objects for cross-resource duplicates.
 func (p *ResourceQuotaEnforcementPlugin) validateResourceRegistration(ctx context.Context, attrs admission.Attributes) error {
