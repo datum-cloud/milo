@@ -26,4 +26,6 @@ jobs:
     with:
       bundle-name: ghcr.io/datum-cloud/milo-kustomize
       bundle-path: config
+      image-overlays: config/apiserver,config/controller-manager/base
+      image-name: ghcr.io/datum-cloud/milo
     secrets: inherit
