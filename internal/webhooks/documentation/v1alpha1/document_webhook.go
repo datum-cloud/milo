@@ -29,7 +29,7 @@ func SetupDocumentWebhooksWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-documentation-miloapis-com-v1alpha1-documentation,mutating=false,failurePolicy=fail,sideEffects=None,groups=documentation.miloapis.com,resources=documents,verbs=delete,versions=v1alpha1,name=vdocument.documentation.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/validate-documentation-miloapis-com-v1alpha1-document,mutating=false,failurePolicy=fail,sideEffects=None,groups=documentation.miloapis.com,resources=documents,verbs=delete,versions=v1alpha1,name=vdocument.documentation.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 type DocumentValidator struct {
 	Client client.Client

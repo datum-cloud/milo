@@ -74,6 +74,7 @@ import (
 
 	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
+	documentationcontroller "go.miloapis.com/milo/internal/controllers/documentation"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
 	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
@@ -82,6 +83,7 @@ import (
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
+	agreementv1alpha1 "go.miloapis.com/milo/pkg/apis/agreement/v1alpha1"
 	documentationv1alpha1 "go.miloapis.com/milo/pkg/apis/documentation/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
@@ -132,6 +134,7 @@ func init() {
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(documentationv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(apiregistrationv1.AddToScheme(Scheme))
+	utilruntime.Must(agreementv1alpha1.AddToScheme(Scheme))
 }
 
 const (
@@ -503,6 +506,22 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			documentCtrl := documentationcontroller.DocumentController{
+				Client: ctrl.GetClient(),
+			}
+			if err := documentCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up document controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			documentRevisionCtrl := documentationcontroller.DocumentRevisionController{
+				Client: ctrl.GetClient(),
+			}
+			if err := documentRevisionCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up document revision controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
