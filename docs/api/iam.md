@@ -16,6 +16,10 @@ Resource Types:
 
 - [MachineAccount](#machineaccount)
 
+- [PlatformAccessApproval](#platformaccessapproval)
+
+- [PlatformInvitation](#platforminvitation)
+
 - [PolicyBinding](#policybinding)
 
 - [ProtectedResource](#protectedresource)
@@ -857,6 +861,590 @@ with respect to the current state of the instance.<br/>
           <br/>
             <i>Format</i>: int64<br/>
             <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+## PlatformAccessApproval
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+
+
+
+
+
+PlatformAccessApproval is the Schema for the platformaccessapprovals API.
+It represents a platform access approval for a user. Once the platform access approval is created, an email will be sent to the user.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+      <td><b>apiVersion</b></td>
+      <td>string</td>
+      <td>iam.miloapis.com/v1alpha1</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b>kind</b></td>
+      <td>string</td>
+      <td>PlatformAccessApproval</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#objectmeta-v1-meta">metadata</a></b></td>
+      <td>object</td>
+      <td>Refer to the Kubernetes API documentation for the fields of the `metadata` field.</td>
+      <td>true</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessapprovalspec">spec</a></b></td>
+        <td>object</td>
+        <td>
+          PlatformAccessApprovalSpec defines the desired state of PlatformAccessApproval.<br/>
+          <br/>
+            <i>Validations</i>:<li>self == oldSelf: spec is immutable</li>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessapprovalstatus">status</a></b></td>
+        <td>object</td>
+        <td>
+          <br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessApproval.spec
+<sup><sup>[↩ Parent](#platformaccessapproval)</sup></sup>
+
+
+
+PlatformAccessApprovalSpec defines the desired state of PlatformAccessApproval.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#platformaccessapprovalspecsubjectref">subjectRef</a></b></td>
+        <td>object</td>
+        <td>
+          SubjectRef is the reference to the subject being approved.<br/>
+          <br/>
+            <i>Validations</i>:<li>(has(self.email) && !has(self.userRef)) || (!has(self.email) && has(self.userRef)): Exactly one of email or userRef must be specified</li>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessapprovalspecapproverref">approverRef</a></b></td>
+        <td>object</td>
+        <td>
+          ApproverRef is the reference to the approver being approved.
+If not specified, the approval was made by the system.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessApproval.spec.subjectRef
+<sup><sup>[↩ Parent](#platformaccessapprovalspec)</sup></sup>
+
+
+
+SubjectRef is the reference to the subject being approved.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>email</b></td>
+        <td>string</td>
+        <td>
+          Email is the email of the user being approved.
+Use Email to approve an email address that is not associated with a created user. (e.g. when using PlatformInvitation)
+UserRef and Email are mutually exclusive. Exactly one of them must be specified.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessapprovalspecsubjectrefuserref">userRef</a></b></td>
+        <td>object</td>
+        <td>
+          UserRef is the reference to the user being approved.
+UserRef and Email are mutually exclusive. Exactly one of them must be specified.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessApproval.spec.subjectRef.userRef
+<sup><sup>[↩ Parent](#platformaccessapprovalspecsubjectref)</sup></sup>
+
+
+
+UserRef is the reference to the user being approved.
+UserRef and Email are mutually exclusive. Exactly one of them must be specified.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the User being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessApproval.spec.approverRef
+<sup><sup>[↩ Parent](#platformaccessapprovalspec)</sup></sup>
+
+
+
+ApproverRef is the reference to the approver being approved.
+If not specified, the approval was made by the system.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the User being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessApproval.status
+<sup><sup>[↩ Parent](#platformaccessapproval)</sup></sup>
+
+
+
+
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#platformaccessapprovalstatusconditionsindex">conditions</a></b></td>
+        <td>[]object</td>
+        <td>
+          Conditions provide conditions that represent the current status of the PlatformAccessApproval.<br/>
+          <br/>
+            <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Platform access approval reconciliation is pending reason:ReconcilePending status:Unknown type:Ready]]<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessApproval.status.conditions[index]
+<sup><sup>[↩ Parent](#platformaccessapprovalstatus)</sup></sup>
+
+
+
+Condition contains details for one aspect of the current state of this API Resource.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>lastTransitionTime</b></td>
+        <td>string</td>
+        <td>
+          lastTransitionTime is the last time the condition transitioned from one status to another.
+This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>message</b></td>
+        <td>string</td>
+        <td>
+          message is a human readable message indicating details about the transition.
+This may be an empty string.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>reason</b></td>
+        <td>string</td>
+        <td>
+          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+Producers of specific condition types may define expected values and meanings for this field,
+and whether the values are considered a guaranteed API.
+The value should be a CamelCase string.
+This field may not be empty.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>status</b></td>
+        <td>enum</td>
+        <td>
+          status of the condition, one of True, False, Unknown.<br/>
+          <br/>
+            <i>Enum</i>: True, False, Unknown<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>type</b></td>
+        <td>string</td>
+        <td>
+          type of condition in CamelCase or in foo.example.com/CamelCase.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>observedGeneration</b></td>
+        <td>integer</td>
+        <td>
+          observedGeneration represents the .metadata.generation that the condition was set based upon.
+For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+with respect to the current state of the instance.<br/>
+          <br/>
+            <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+## PlatformInvitation
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+
+
+
+
+
+PlatformInvitation is the Schema for the platforminvitations API
+It represents a platform invitation for a user. Once the platform invitation is created, an email will be sent to the user to invite them to the platform.
+The invited user will have access to the platform after they create an account using the asociated email.
+It represents a platform invitation for a user.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+      <td><b>apiVersion</b></td>
+      <td>string</td>
+      <td>iam.miloapis.com/v1alpha1</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b>kind</b></td>
+      <td>string</td>
+      <td>PlatformInvitation</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#objectmeta-v1-meta">metadata</a></b></td>
+      <td>object</td>
+      <td>Refer to the Kubernetes API documentation for the fields of the `metadata` field.</td>
+      <td>true</td>
+      </tr><tr>
+        <td><b><a href="#platforminvitationspec">spec</a></b></td>
+        <td>object</td>
+        <td>
+          PlatformInvitationSpec defines the desired state of PlatformInvitation.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platforminvitationstatus">status</a></b></td>
+        <td>object</td>
+        <td>
+          PlatformInvitationStatus defines the observed state of PlatformInvitation.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformInvitation.spec
+<sup><sup>[↩ Parent](#platforminvitation)</sup></sup>
+
+
+
+PlatformInvitationSpec defines the desired state of PlatformInvitation.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>email</b></td>
+        <td>string</td>
+        <td>
+          The email of the user being invited.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: email type is immutable</li>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>familyName</b></td>
+        <td>string</td>
+        <td>
+          The family name of the user being invited.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>givenName</b></td>
+        <td>string</td>
+        <td>
+          The given name of the user being invited.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platforminvitationspecinvitedby">invitedBy</a></b></td>
+        <td>object</td>
+        <td>
+          The user who created the platform invitation. A mutation webhook will default this field to the user who made the request.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: invitedBy type is immutable</li>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>scheduleAt</b></td>
+        <td>string</td>
+        <td>
+          The schedule at which the platform invitation will be sent.
+It can only be updated before the platform invitation is sent.<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformInvitation.spec.invitedBy
+<sup><sup>[↩ Parent](#platforminvitationspec)</sup></sup>
+
+
+
+The user who created the platform invitation. A mutation webhook will default this field to the user who made the request.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the User being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformInvitation.status
+<sup><sup>[↩ Parent](#platforminvitation)</sup></sup>
+
+
+
+PlatformInvitationStatus defines the observed state of PlatformInvitation.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#platforminvitationstatusconditionsindex">conditions</a></b></td>
+        <td>[]object</td>
+        <td>
+          Conditions provide conditions that represent the current status of the PlatformInvitation.<br/>
+          <br/>
+            <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Platform invitation reconciliation is pending reason:ReconcilePending status:Unknown type:Ready]]<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platforminvitationstatusemail">email</a></b></td>
+        <td>object</td>
+        <td>
+          The email resource that was created for the platform invitation.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformInvitation.status.conditions[index]
+<sup><sup>[↩ Parent](#platforminvitationstatus)</sup></sup>
+
+
+
+Condition contains details for one aspect of the current state of this API Resource.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>lastTransitionTime</b></td>
+        <td>string</td>
+        <td>
+          lastTransitionTime is the last time the condition transitioned from one status to another.
+This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>message</b></td>
+        <td>string</td>
+        <td>
+          message is a human readable message indicating details about the transition.
+This may be an empty string.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>reason</b></td>
+        <td>string</td>
+        <td>
+          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+Producers of specific condition types may define expected values and meanings for this field,
+and whether the values are considered a guaranteed API.
+The value should be a CamelCase string.
+This field may not be empty.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>status</b></td>
+        <td>enum</td>
+        <td>
+          status of the condition, one of True, False, Unknown.<br/>
+          <br/>
+            <i>Enum</i>: True, False, Unknown<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>type</b></td>
+        <td>string</td>
+        <td>
+          type of condition in CamelCase or in foo.example.com/CamelCase.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>observedGeneration</b></td>
+        <td>integer</td>
+        <td>
+          observedGeneration represents the .metadata.generation that the condition was set based upon.
+For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+with respect to the current state of the instance.<br/>
+          <br/>
+            <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformInvitation.status.email
+<sup><sup>[↩ Parent](#platforminvitationstatus)</sup></sup>
+
+
+
+The email resource that was created for the platform invitation.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          The name of the email resource that was created for the platform invitation.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>namespace</b></td>
+        <td>string</td>
+        <td>
+          The namespace of the email resource that was created for the platform invitation.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
