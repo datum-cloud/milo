@@ -492,7 +492,7 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		"resourceName", attrs.GetName())
 
 	// Create the ResourceClaim and wait for it to be granted
-	if err := p.createAndWaitForResourceClaim(ctx, policy, evalContext); err != nil {
+	if err := p.createAndWaitForResourceClaim(ctx, attrs, policy, evalContext); err != nil {
 		// ResourceClaim creation or granting failed - block the resource creation
 
 		// Record denied admission decision with full context
@@ -525,7 +525,7 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 
 // createAndWaitForResourceClaim creates a ResourceClaim and blocks until the claim is resolved.
 // The waiter is registered before claim creation to prevent missed events.
-func (p *ResourceQuotaEnforcementPlugin) createAndWaitForResourceClaim(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy, evalContext *EvaluationContext) error {
+func (p *ResourceQuotaEnforcementPlugin) createAndWaitForResourceClaim(ctx context.Context, attrs admission.Attributes, policy *quotav1alpha1.ClaimCreationPolicy, evalContext *EvaluationContext) error {
 	ctx, span := p.startSpan(ctx, "quota.admission.ResourceQuotaEnforcement.createAndWaitForResourceClaim",
 		trace.WithAttributes(
 			attribute.String("policy.name", policy.Name),
@@ -576,7 +576,7 @@ func (p *ResourceQuotaEnforcementPlugin) createAndWaitForResourceClaim(ctx conte
 		"namespace", namespace,
 		"timeout", timeout)
 
-	err = p.createResourceClaim(ctx, policy, evalContext, claimName, namespace)
+	err = p.createResourceClaim(ctx, attrs, policy, evalContext, claimName, namespace)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "Failed to create ResourceClaim")
@@ -652,7 +652,7 @@ func (p *ResourceQuotaEnforcementPlugin) getClaimNamespace(policy *quotav1alpha1
 
 // createResourceClaim creates a ResourceClaim with the specified name and namespace.
 // The claim name must be predetermined to allow waiter registration before creation.
-func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy, evalContext *EvaluationContext, claimName, namespace string) error {
+func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context, attrs admission.Attributes, policy *quotav1alpha1.ClaimCreationPolicy, evalContext *EvaluationContext, claimName, namespace string) error {
 	ctx, span := p.startSpan(ctx, "quota.admission.ResourceQuotaEnforcement.createResourceClaim",
 		trace.WithAttributes(
 			attribute.String("policy.name", policy.Name),
@@ -675,8 +675,8 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 	claim.Spec.ResourceRef = quotav1alpha1.UnversionedObjectReference{
 		APIGroup:  evalContext.GVK.Group,
 		Kind:      evalContext.GVK.Kind,
-		Name:      claimName,
-		Namespace: namespace,
+		Name:      attrs.GetName(),
+		Namespace: attrs.GetNamespace(),
 	}
 
 	// Derive consumer from project context when template doesn't specify one
