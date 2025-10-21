@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: milo-system
+
+resources:
+  - eventsource-milo-kubeconfig.yaml
+  - eventsource.yaml
+  - sensor.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: milo-organization-notifications
+      app.kubernetes.io/part-of: argo-events
+      app.kubernetes.io/component: notifications
+    includeTemplates: true
+    includeSelectors: true

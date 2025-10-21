@@ -590,7 +590,7 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 		Spec:       iamv1alpha1.UserSpec{Email: "test@example.com"},
 	}
 
-	inviter := &iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "inviter", UID: types.UID("inviter-uid")}, Spec: iamv1alpha1.UserSpec{Email: "inviter@example.com"}}
+	inviter := &iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "inviter", UID: types.UID("inviter-uid")}, Spec: iamv1alpha1.UserSpec{GivenName: "John", FamilyName: "Doe", Email: "inviter@example.com"}}
 
 	ui := &iamv1alpha1.UserInvitation{
 		ObjectMeta: metav1.ObjectMeta{Name: "inv", Namespace: "default", UID: types.UID("ui-uid")},
@@ -604,7 +604,7 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	}
 
 	org := &resourcemanagerv1alpha1.Organization{
-		ObjectMeta: metav1.ObjectMeta{Name: "org", UID: types.UID("org-uid")},
+		ObjectMeta: metav1.ObjectMeta{Name: "org", UID: types.UID("org-uid"), Annotations: map[string]string{"kubernetes.io/display-name": "Organization Display Name"}},
 	}
 
 	// Invitation-related role needed so that controller grants access to accept invitation.
@@ -654,6 +654,15 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 		t.Fatalf("Ready condition should not be true before acceptance")
 	}
 
+	// Verify organization display name is set
+	if afterFirst.Status.Organization.DisplayName != "Organization Display Name" {
+		t.Fatalf("expected organization display name to be Organization Display Name, got %s", afterFirst.Status.Organization.DisplayName)
+	}
+	// Verify inviter user display name is set
+	if afterFirst.Status.InviterUser.DisplayName != "John Doe" {
+		t.Fatalf("expected inviter user display name to be John Doe, got %s", afterFirst.Status.InviterUser.DisplayName)
+	}
+
 	// Ensure organization role PolicyBinding does NOT exist yet
 	orgRoleRef := ui.Spec.Roles[0]
 	pbOrgName := getDeterministicRoleName(&orgRoleRef, *ui)
@@ -684,6 +693,15 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
 	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
 		t.Fatalf("Ready condition should be true after acceptance")
+	}
+
+	// Verify organization display name is set
+	if final.Status.Organization.DisplayName != "Organization Display Name" {
+		t.Fatalf("expected organization display name to be Test Org, got %s", final.Status.Organization.DisplayName)
+	}
+	// Verify inviter user display name is set
+	if final.Status.InviterUser.DisplayName != "John Doe" {
+		t.Fatalf("expected inviter user display name to be John Doe, got %s", final.Status.InviterUser.DisplayName)
 	}
 }
 
@@ -808,6 +826,10 @@ func TestUserInvitationController_createInvitationEmail(t *testing.T) {
 			Roles:           []iamv1alpha1.RoleReference{{Name: "org-admin", Namespace: "milo-system"}},
 		},
 	}
+
+	// Populate status fields required by createInvitationEmail
+	ui.Status.Organization.DisplayName = "Test Org"
+	ui.Status.InviterUser.DisplayName = "Invite E"
 
 	template := &notificationv1alpha1.EmailTemplate{ObjectMeta: metav1.ObjectMeta{Name: "template"}}
 
