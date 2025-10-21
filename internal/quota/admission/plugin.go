@@ -60,18 +60,10 @@ func init() {
 	legacyregistry.MustRegister(admissionResultTotal)
 }
 
-// ResourceQuotaEnforcementPlugin implements admission.Interface for resource quota enforcement
-// via automatic ResourceClaim creation and quota validation.
+// ResourceQuotaEnforcementPlugin enforces quota by creating ResourceClaims for applicable resources.
 //
-// Object Type Handling:
-// Quota resources are CRDs, which are always decoded as *unstructured.Unstructured by the
-// apiextensions-apiserver (see vendor/k8s.io/apiextensions-apiserver/pkg/apiserver/customresource_handler.go).
-// The CRD handler uses an unstructuredCreator that hardcodes creation of unstructured objects,
-// regardless of any scheme registration.
-//
-// Validation functions convert unstructured objects to typed structs using
-// runtime.DefaultUnstructuredConverter for type-safe validation. This is the only way to handle
-// CRD objects in admission plugins.
+// CRDs are always decoded as *unstructured.Unstructured by apiextensions-apiserver regardless
+// of scheme registration. Validation converts to typed structs via runtime.DefaultUnstructuredConverter.
 type ResourceQuotaEnforcementPlugin struct {
 	*admission.Handler
 	dynamicClient                 dynamic.Interface
@@ -211,7 +203,6 @@ func (p *ResourceQuotaEnforcementPlugin) getClient(ctx context.Context) (dynamic
 }
 
 // getProjectClient creates or retrieves a cached client for a project's virtual control plane.
-// Uses rest.Config.Host with a URL path to route to the project's control plane endpoint.
 func (p *ResourceQuotaEnforcementPlugin) getProjectClient(projectID string) (dynamic.Interface, error) {
 	if cached, ok := p.projectClients.Load(projectID); ok {
 		return cached.(dynamic.Interface), nil
@@ -223,17 +214,12 @@ func (p *ResourceQuotaEnforcementPlugin) getProjectClient(projectID string) (dyn
 
 	cfg := rest.CopyConfig(p.loopbackConfig)
 
-	// The Host field can include a URL path, which will be prepended to all API requests.
-	// This eliminates the need for a custom RoundTripper.
-	// Example: "http://localhost:8080/apis/resourcemanager.miloapis.com/v1alpha1/projects/proj-123/control-plane"
+	// Host field supports URL paths to route requests to project control planes
 	projectPath := fmt.Sprintf("/apis/resourcemanager.miloapis.com/v1alpha1/projects/%s/control-plane", projectID)
 
-	// If Host is already a URL, append the path. Otherwise, construct the full URL.
 	if strings.HasPrefix(cfg.Host, "http://") || strings.HasPrefix(cfg.Host, "https://") {
 		cfg.Host = cfg.Host + projectPath
 	} else {
-		// If Host is just host:port, we need to construct a URL
-		// Note: this assumes the original config's scheme (http/https)
 		cfg.Host = cfg.Host + projectPath
 	}
 
@@ -247,9 +233,7 @@ func (p *ResourceQuotaEnforcementPlugin) getProjectClient(projectID string) (dyn
 	return actual.(dynamic.Interface), nil
 }
 
-// getWatchManager returns a watch manager scoped to the request's project context.
-// Blocks until the watch manager is started and ready to accept waiter registrations.
-// Creates watch managers with TTL-based lifecycle management.
+// getWatchManager returns a project-scoped watch manager, blocking until ready.
 func (p *ResourceQuotaEnforcementPlugin) getWatchManager(ctx context.Context) (ClaimWatchManager, error) {
 	projectID, _ := milorequest.ProjectID(ctx)
 
@@ -273,10 +257,8 @@ func (p *ResourceQuotaEnforcementPlugin) getWatchManager(ctx context.Context) (C
 		logger = logger.WithValues("project", projectID)
 	}
 
-	// Create watch manager
 	wm := NewWatchManager(client, logger, projectID)
 
-	// Set TTL expiration callback to remove from cache
 	if wmWithCallback, ok := wm.(*watchManager); ok {
 		wmWithCallback.SetTTLExpiredCallback(func() {
 			p.logger.Info("Watch manager TTL expired, removing from cache",
@@ -285,11 +267,7 @@ func (p *ResourceQuotaEnforcementPlugin) getWatchManager(ctx context.Context) (C
 		})
 	}
 
-	// Start watch manager with a dedicated startup timeout (independent of admission context).
-	// This prevents admission request timeouts from prematurely failing watch manager creation.
-	// The startupCtx is used only for establishing the initial watch connection; the watch
-	// manager's ongoing operation uses context.Background() for its full lifecycle.
-	// Use a generous timeout to handle API server startup and high load scenarios.
+	// Dedicated timeout prevents admission request timeout from affecting watch manager startup
 	startupTimeout := 30 * time.Second
 	startupCtx, startupCancel := context.WithTimeout(context.Background(), startupTimeout)
 	defer startupCancel()
@@ -299,7 +277,6 @@ func (p *ResourceQuotaEnforcementPlugin) getWatchManager(ctx context.Context) (C
 		startChan <- wm.Start(startupCtx)
 	}()
 
-	// Wait for startup to complete or startup timeout (not admission context timeout)
 	select {
 	case err := <-startChan:
 		if err != nil {
@@ -462,17 +439,10 @@ func (p *ResourceQuotaEnforcementPlugin) lookupPolicyForResource(ctx context.Con
 	return policy, nil
 }
 
-// processResourceWithPolicy handles resource creation when a policy is found and enabled.
-// Steps:
-// 1. Ensure watch manager exists
-// 2. Generate deterministic claim name
-// 3. Register waiter (before claim exists)
-// 4. Create claim with predetermined name
-// 5. Wait for claim result
+// processResourceWithPolicy creates a ResourceClaim and blocks until quota is granted or denied.
+// Waiter registration precedes claim creation to prevent race conditions with watch events.
 func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.Context, attrs admission.Attributes, policy *quotav1alpha1.ClaimCreationPolicy, gvk schema.GroupVersionKind) error {
-	// Convert the resource being created to unstructured for CEL evaluation.
-	// The CEL engine requires map[string]interface{} (unstructured.Object) to evaluate
-	// trigger conditions against arbitrary resource types.
+	// CEL engine requires unstructured format for evaluating trigger conditions
 	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(attrs.GetObject())
 	if err != nil {
 		p.logger.Error(err, "Failed to convert object to unstructured")

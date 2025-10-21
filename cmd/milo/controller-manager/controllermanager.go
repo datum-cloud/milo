@@ -490,8 +490,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			// Setup all quota controllers using the registry
-			// Create a dedicated config for dynamic client with even higher rate limits for quota operations
+			// Higher rate limits required for cross-cluster quota operations
 			quotaDynamicConfig := *ctrlConfig
 			quotaDynamicConfig.QPS = 500
 			quotaDynamicConfig.Burst = 1000
