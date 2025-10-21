@@ -17,9 +17,12 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	mcbuilder "sigs.k8s.io/multicluster-runtime/pkg/builder"
+	mccontext "sigs.k8s.io/multicluster-runtime/pkg/context"
+	mchandler "sigs.k8s.io/multicluster-runtime/pkg/handler"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 
 	"go.miloapis.com/milo/internal/quota/validation"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
@@ -29,8 +32,8 @@ import (
 // Its sole responsibility is to validate the policy and set the Ready status condition.
 // The PolicyEngine (used only by the admission plugin) watches for policies with Ready=True.
 type ClaimCreationPolicyReconciler struct {
-	client.Client
-	Scheme *runtime.Scheme
+	Scheme  *runtime.Scheme
+	Manager mcmanager.Manager
 	// PolicyValidator validates ClaimCreationPolicy resources.
 	PolicyValidator *validation.ClaimCreationPolicyValidator
 }
@@ -42,13 +45,24 @@ type ClaimCreationPolicyReconciler struct {
 // Reconcile reconciles a ClaimCreationPolicy object by validating it and setting its Ready status.
 // The controller's sole responsibility is validation - the PolicyEngine (in the admission plugin)
 // watches for policies with Ready=True status condition.
-func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// This controller only runs in the core control plane where policies are defined.
+func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	if req.ClusterName != "" {
+		logger = logger.WithValues("cluster", req.ClusterName)
+		ctx = log.IntoContext(ctx, logger)
+	}
+
+	cluster, err := r.Manager.GetCluster(ctx, req.ClusterName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster %q: %w", req.ClusterName, err)
+	}
+	clusterClient := cluster.GetClient()
 
 	var policy quotav1alpha1.ClaimCreationPolicy
 	logger.V(1).Info("Reconciling ClaimCreationPolicy", "name", req.Name)
 
-	if err := r.Get(ctx, req.NamespacedName, &policy); err != nil {
+	if err := clusterClient.Get(ctx, req.NamespacedName, &policy); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("ClaimCreationPolicy was deleted", "name", req.Name)
 			// Policy was deleted - nothing to do (PolicyEngine will handle via watch)
@@ -69,7 +83,7 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	// Update status if it has changed
 	if !equality.Semantic.DeepEqual(&policy.Status, originalStatus) {
 		policy.Status.ObservedGeneration = policy.Generation
-		if err := r.Status().Update(ctx, &policy); err != nil {
+		if err := clusterClient.Status().Update(ctx, &policy); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update ClaimCreationPolicy status: %w", err)
 		}
 		logger.V(1).Info("Updated ClaimCreationPolicy status",
@@ -120,27 +134,38 @@ func (r *ClaimCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1
 
 // enqueueAffectedPolicies finds all ClaimCreationPolicies that reference a ResourceRegistration
 // and enqueues them for reconciliation when the registration changes.
-func (r *ClaimCreationPolicyReconciler) enqueueAffectedPolicies(ctx context.Context, obj client.Object) []reconcile.Request {
+func (r *ClaimCreationPolicyReconciler) enqueueAffectedPolicies(ctx context.Context, obj client.Object) []mcreconcile.Request {
 	registration, ok := obj.(*quotav1alpha1.ResourceRegistration)
 	if !ok {
 		return nil
 	}
 
+	clusterName, _ := mccontext.ClusterFrom(ctx)
+
+	cluster, err := r.Manager.GetCluster(ctx, clusterName)
+	if err != nil {
+		klog.V(1).ErrorS(err, "failed to get cluster client when enqueuing affected policies", "clusterName", clusterName)
+		return nil
+	}
+	clusterClient := cluster.GetClient()
+
 	// List all ClaimCreationPolicies
 	var policyList quotav1alpha1.ClaimCreationPolicyList
-	if err := r.List(ctx, &policyList); err != nil {
+	if err := clusterClient.List(ctx, &policyList); err != nil {
 		klog.V(1).ErrorS(err, "failed to list claim creation policies when enqueuing affected policies")
 		return nil
 	}
 
-	var requests []reconcile.Request
+	var requests []mcreconcile.Request
 	// Find policies that reference this resource type
 	for _, policy := range policyList.Items {
 		for _, request := range policy.Spec.Target.ResourceClaimTemplate.Spec.Requests {
 			if request.ResourceType == registration.Spec.ResourceType {
 				// This policy references the changed ResourceRegistration - trigger reconciliation
-				requests = append(requests, reconcile.Request{
-					NamespacedName: client.ObjectKeyFromObject(&policy),
+				requests = append(requests, mcreconcile.Request{
+					Request: ctrl.Request{
+						NamespacedName: client.ObjectKeyFromObject(&policy),
+					},
 				})
 				break // Only need to enqueue each policy once
 			}
@@ -151,13 +176,23 @@ func (r *ClaimCreationPolicyReconciler) enqueueAffectedPolicies(ctx context.Cont
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClaimCreationPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&quotav1alpha1.ClaimCreationPolicy{}).
+// ClaimCreationPolicies are centralized resources that only exist in the local cluster (Milo API server).
+func (r *ClaimCreationPolicyReconciler) SetupWithManager(mgr mcmanager.Manager) error {
+	return mcbuilder.ControllerManagedBy(mgr).
+		For(&quotav1alpha1.ClaimCreationPolicy{},
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true)).
 		// Watch ResourceRegistrations to revalidate policies when registrations change
-		Watches(&quotav1alpha1.ResourceRegistration{}, handler.EnqueueRequestsFromMapFunc(
-			r.enqueueAffectedPolicies,
-		)).
+		Watches(
+			&quotav1alpha1.ResourceRegistration{},
+			mchandler.TypedEnqueueRequestsFromMapFunc(
+				func(ctx context.Context, obj client.Object) []mcreconcile.Request {
+					return r.enqueueAffectedPolicies(ctx, obj)
+				},
+			),
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true),
+		).
 		Named("claim-creation-policy").
 		Complete(r)
 }

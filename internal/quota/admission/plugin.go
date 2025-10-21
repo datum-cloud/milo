@@ -648,17 +648,28 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 		return fmt.Errorf("failed to render ResourceClaim: %w", err)
 	}
 
-	// Override name and namespace with predetermined values for waiter registration.
+	// Use predetermined name/namespace to ensure waiter receives events
 	claim.Name = claimName
 	claim.Namespace = namespace
 	claim.GenerateName = ""
 
-	// Reference the resource that triggered this claim.
 	claim.Spec.ResourceRef = quotav1alpha1.UnversionedObjectReference{
 		APIGroup:  evalContext.GVK.Group,
 		Kind:      evalContext.GVK.Kind,
 		Name:      evalContext.Object.GetName(),
 		Namespace: evalContext.Object.GetNamespace(),
+	}
+
+	// Derive consumer from project context when template doesn't specify one
+	if claim.Spec.ConsumerRef.Kind == "" || claim.Spec.ConsumerRef.Name == "" {
+		projectID, ok := milorequest.ProjectID(ctx)
+		if ok && projectID != "" {
+			claim.Spec.ConsumerRef = quotav1alpha1.ConsumerRef{
+				APIGroup: "resourcemanager.miloapis.com",
+				Kind:     "Project",
+				Name:     projectID,
+			}
+		}
 	}
 
 	if claim.Labels == nil {
@@ -670,7 +681,12 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 
 	claim.Labels["quota.miloapis.com/auto-created"] = "true"
 	claim.Labels["quota.miloapis.com/policy"] = policy.Name
-	claim.Labels["quota.miloapis.com/gvk"] = fmt.Sprintf("%s.%s.%s", evalContext.GVK.Group, evalContext.GVK.Version, evalContext.GVK.Kind)
+	// Use "core" for empty group to match Kubernetes convention
+	group := evalContext.GVK.Group
+	if group == "" {
+		group = "core"
+	}
+	claim.Labels["quota.miloapis.com/gvk"] = fmt.Sprintf("%s.%s.%s", group, evalContext.GVK.Version, evalContext.GVK.Kind)
 
 	claim.Annotations["quota.miloapis.com/created-by"] = "claim-creation-plugin"
 	claim.Annotations["quota.miloapis.com/created-at"] = time.Now().Format(time.RFC3339)

@@ -15,18 +15,20 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	mcbuilder "sigs.k8s.io/multicluster-runtime/pkg/builder"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
 
 // ResourceRegistrationController reconciles ResourceRegistration objects.
 type ResourceRegistrationController struct {
-	client.Client
-	Scheme *runtime.Scheme
+	Scheme  *runtime.Scheme
+	Manager mcmanager.Manager
 }
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch;create;update;patch
@@ -40,14 +42,26 @@ type ResourceRegistrationController struct {
 // resource type being registered exists in the system overall.
 // Once a common service is created that tracks all existing resource types,
 // additional validation can be added.
-func (r *ResourceRegistrationController) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
+func (r *ResourceRegistrationController) Reconcile(ctx context.Context, req mcreconcile.Request) (_ ctrl.Result, err error) {
 	logger := log.FromContext(ctx)
+	// ResourceRegistrations only exist in the core control plane, but we log cluster for consistency
+	if req.ClusterName != "" {
+		logger = logger.WithValues("cluster", req.ClusterName)
+		ctx = log.IntoContext(ctx, logger)
+	}
+
+	// Get the cluster-specific client from the multicluster manager
+	cluster, err := r.Manager.GetCluster(ctx, req.ClusterName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster %q: %w", req.ClusterName, err)
+	}
+	clusterClient := cluster.GetClient()
 
 	// Fetch the ResourceRegistration
 	var registration quotav1alpha1.ResourceRegistration
-	if err := r.Get(ctx, types.NamespacedName{Name: req.Name}, &registration); err != nil {
+	if err := clusterClient.Get(ctx, req.NamespacedName, &registration); err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("ResourceRegistration not found")
+			logger.V(1).Info("ResourceRegistration not found")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get ResourceRegistration: %w", err)
@@ -59,11 +73,11 @@ func (r *ResourceRegistrationController) Reconcile(ctx context.Context, req ctrl
 	}
 
 	// Update status based on validation
-	return ctrl.Result{}, r.updateRegistrationStatus(ctx, &registration)
+	return ctrl.Result{}, r.updateRegistrationStatus(ctx, clusterClient, &registration)
 }
 
 // updateRegistrationStatus validates the registration and updates its status.
-func (r *ResourceRegistrationController) updateRegistrationStatus(ctx context.Context, registration *quotav1alpha1.ResourceRegistration) error {
+func (r *ResourceRegistrationController) updateRegistrationStatus(ctx context.Context, clusterClient client.Client, registration *quotav1alpha1.ResourceRegistration) error {
 	originalStatus := registration.Status.DeepCopy()
 
 	// Update observed generation
@@ -82,7 +96,7 @@ func (r *ResourceRegistrationController) updateRegistrationStatus(ctx context.Co
 	// Apply the updated condition to the status
 	apimeta.SetStatusCondition(&registration.Status.Conditions, *activeCondition)
 
-	return r.updateStatusIfChanged(ctx, registration, originalStatus)
+	return r.updateStatusIfChanged(ctx, clusterClient, registration, originalStatus)
 }
 
 // initializeActiveCondition gets or creates the active condition.
@@ -111,9 +125,9 @@ func (r *ResourceRegistrationController) setActiveCondition(condition *metav1.Co
 }
 
 // updateStatusIfChanged updates the status only if it has changed.
-func (r *ResourceRegistrationController) updateStatusIfChanged(ctx context.Context, registration *quotav1alpha1.ResourceRegistration, originalStatus *quotav1alpha1.ResourceRegistrationStatus) error {
+func (r *ResourceRegistrationController) updateStatusIfChanged(ctx context.Context, clusterClient client.Client, registration *quotav1alpha1.ResourceRegistration, originalStatus *quotav1alpha1.ResourceRegistrationStatus) error {
 	if !equality.Semantic.DeepEqual(originalStatus, &registration.Status) {
-		if err := r.Status().Update(ctx, registration); err != nil {
+		if err := clusterClient.Status().Update(ctx, registration); err != nil {
 			return fmt.Errorf("failed to update ResourceRegistration status: %w", err)
 		}
 	}
@@ -121,9 +135,12 @@ func (r *ResourceRegistrationController) updateStatusIfChanged(ctx context.Conte
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ResourceRegistrationController) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&quotav1alpha1.ResourceRegistration{}).
+// ResourceRegistrations are centralized resource type definitions that only exist in the local cluster (Milo API server).
+func (r *ResourceRegistrationController) SetupWithManager(mgr mcmanager.Manager) error {
+	return mcbuilder.ControllerManagedBy(mgr).
+		For(&quotav1alpha1.ResourceRegistration{},
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true)).
 		Named("resource-registration").
 		Complete(r)
 }

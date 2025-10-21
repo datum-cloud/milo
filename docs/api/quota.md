@@ -959,22 +959,6 @@ String fields support CEL expressions.
         </tr>
     </thead>
     <tbody><tr>
-        <td><b><a href="#claimcreationpolicyspectargetresourceclaimtemplatespecconsumerref">consumerRef</a></b></td>
-        <td>object</td>
-        <td>
-          ConsumerRef identifies the quota consumer making this claim. The consumer
-must match the ConsumerType defined in the ResourceRegistration for each
-requested resource type. The system validates this relationship during
-claim processing.
-
-Examples:
-
-  - Organization consuming Project quota
-  - Project consuming User quota
-  - Organization consuming storage quota<br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
         <td><b><a href="#claimcreationpolicyspectargetresourceclaimtemplatespecrequestsindex">requests</a></b></td>
         <td>[]object</td>
         <td>
@@ -986,6 +970,26 @@ The system processes all requests as a single atomic operation: either all
 requests are granted or all are denied.<br/>
         </td>
         <td>true</td>
+      </tr><tr>
+        <td><b><a href="#claimcreationpolicyspectargetresourceclaimtemplatespecconsumerref">consumerRef</a></b></td>
+        <td>object</td>
+        <td>
+          ConsumerRef identifies the quota consumer making this claim. The consumer
+must match the ConsumerType defined in the ResourceRegistration for each
+requested resource type. The system validates this relationship during
+claim processing.
+
+When creating ResourceClaims via ClaimCreationPolicy, this field can be
+omitted and the admission plugin will automatically fill it based on the
+authenticated user's context (organization or project).
+
+Examples:
+
+  - Organization consuming Project quota
+  - Project consuming User quota
+  - Organization consuming storage quota<br/>
+        </td>
+        <td>false</td>
       </tr><tr>
         <td><b><a href="#claimcreationpolicyspectargetresourceclaimtemplatespecresourceref">resourceRef</a></b></td>
         <td>object</td>
@@ -1009,6 +1013,69 @@ Examples:
 </table>
 
 
+### ClaimCreationPolicy.spec.target.resourceClaimTemplate.spec.requests[index]
+<sup><sup>[↩ Parent](#claimcreationpolicyspectargetresourceclaimtemplatespec)</sup></sup>
+
+
+
+ResourceRequest defines a single resource request within a ResourceClaim.
+Each request specifies a resource type and the amount of quota being claimed.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>amount</b></td>
+        <td>integer</td>
+        <td>
+          Amount specifies how much quota to claim for this resource type. Must be
+measured in the BaseUnit defined by the corresponding ResourceRegistration.
+Must be a positive integer (minimum value is 0, but 0 means no quota
+requested).
+
+For Entity registrations: Use 1 for single resource instances (1 Project, 1
+User) For Allocation registrations: Use actual capacity amounts (2048 for
+2048 MB, 1000 for 1000 millicores)
+
+Examples:
+
+  - 1 (claiming 1 Project)
+  - 2048 (claiming 2048 bytes of storage)
+  - 1000 (claiming 1000 CPU millicores)<br/>
+          <br/>
+            <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>resourceType</b></td>
+        <td>string</td>
+        <td>
+          ResourceType identifies the specific resource type being claimed. Must
+exactly match a ResourceRegistration.spec.resourceType that is currently
+active. The quota system validates this reference during claim processing.
+
+The format is defined by platform administrators when creating ResourceRegistrations.
+Service providers can use any identifier that makes sense for their quota system usage.
+
+Examples:
+
+  - "resourcemanager.miloapis.com/projects"
+  - "compute_cpu"
+  - "storage.volumes"
+  - "custom-service-quota"<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
 ### ClaimCreationPolicy.spec.target.resourceClaimTemplate.spec.consumerRef
 <sup><sup>[↩ Parent](#claimcreationpolicyspectargetresourceclaimtemplatespec)</sup></sup>
 
@@ -1018,6 +1085,10 @@ ConsumerRef identifies the quota consumer making this claim. The consumer
 must match the ConsumerType defined in the ResourceRegistration for each
 requested resource type. The system validates this relationship during
 claim processing.
+
+When creating ResourceClaims via ClaimCreationPolicy, this field can be
+omitted and the admission plugin will automatically fill it based on the
+authenticated user's context (organization or project).
 
 Examples:
 
@@ -1087,69 +1158,6 @@ Examples:
 - "project-web-app" (namespace for resources within a project)<br/>
         </td>
         <td>false</td>
-      </tr></tbody>
-</table>
-
-
-### ClaimCreationPolicy.spec.target.resourceClaimTemplate.spec.requests[index]
-<sup><sup>[↩ Parent](#claimcreationpolicyspectargetresourceclaimtemplatespec)</sup></sup>
-
-
-
-ResourceRequest defines a single resource request within a ResourceClaim.
-Each request specifies a resource type and the amount of quota being claimed.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>amount</b></td>
-        <td>integer</td>
-        <td>
-          Amount specifies how much quota to claim for this resource type. Must be
-measured in the BaseUnit defined by the corresponding ResourceRegistration.
-Must be a positive integer (minimum value is 0, but 0 means no quota
-requested).
-
-For Entity registrations: Use 1 for single resource instances (1 Project, 1
-User) For Allocation registrations: Use actual capacity amounts (2048 for
-2048 MB, 1000 for 1000 millicores)
-
-Examples:
-
-  - 1 (claiming 1 Project)
-  - 2048 (claiming 2048 bytes of storage)
-  - 1000 (claiming 1000 CPU millicores)<br/>
-          <br/>
-            <i>Format</i>: int64<br/>
-            <i>Minimum</i>: 0<br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
-        <td><b>resourceType</b></td>
-        <td>string</td>
-        <td>
-          ResourceType identifies the specific resource type being claimed. Must
-exactly match a ResourceRegistration.spec.resourceType that is currently
-active. The quota system validates this reference during claim processing.
-
-The format is defined by platform administrators when creating ResourceRegistrations.
-Service providers can use any identifier that makes sense for their quota system usage.
-
-Examples:
-
-  - "resourcemanager.miloapis.com/projects"
-  - "compute_cpu"
-  - "storage.volumes"
-  - "custom-service-quota"<br/>
-        </td>
-        <td>true</td>
       </tr></tbody>
 </table>
 
@@ -1293,7 +1301,8 @@ Resource specifies which resource type triggers this policy.
         <td><b>apiVersion</b></td>
         <td>string</td>
         <td>
-          APIVersion of the trigger resource in the format "group/version".<br/>
+          APIVersion of the trigger resource in the format "group/version" or "version" for core resources.
+Examples: "v1" for core resources like Secret, "resourcemanager.miloapis.com/v1alpha1" for custom resources.<br/>
         </td>
         <td>true</td>
       </tr><tr>
@@ -2564,22 +2573,6 @@ ResourceClaimSpec defines the desired state of ResourceClaim.
         </tr>
     </thead>
     <tbody><tr>
-        <td><b><a href="#resourceclaimspecconsumerref">consumerRef</a></b></td>
-        <td>object</td>
-        <td>
-          ConsumerRef identifies the quota consumer making this claim. The consumer
-must match the ConsumerType defined in the ResourceRegistration for each
-requested resource type. The system validates this relationship during
-claim processing.
-
-Examples:
-
-  - Organization consuming Project quota
-  - Project consuming User quota
-  - Organization consuming storage quota<br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
         <td><b><a href="#resourceclaimspecrequestsindex">requests</a></b></td>
         <td>[]object</td>
         <td>
@@ -2591,6 +2584,26 @@ The system processes all requests as a single atomic operation: either all
 requests are granted or all are denied.<br/>
         </td>
         <td>true</td>
+      </tr><tr>
+        <td><b><a href="#resourceclaimspecconsumerref">consumerRef</a></b></td>
+        <td>object</td>
+        <td>
+          ConsumerRef identifies the quota consumer making this claim. The consumer
+must match the ConsumerType defined in the ResourceRegistration for each
+requested resource type. The system validates this relationship during
+claim processing.
+
+When creating ResourceClaims via ClaimCreationPolicy, this field can be
+omitted and the admission plugin will automatically fill it based on the
+authenticated user's context (organization or project).
+
+Examples:
+
+  - Organization consuming Project quota
+  - Project consuming User quota
+  - Organization consuming storage quota<br/>
+        </td>
+        <td>false</td>
       </tr><tr>
         <td><b><a href="#resourceclaimspecresourceref">resourceRef</a></b></td>
         <td>object</td>
@@ -2614,6 +2627,69 @@ Examples:
 </table>
 
 
+### ResourceClaim.spec.requests[index]
+<sup><sup>[↩ Parent](#resourceclaimspec)</sup></sup>
+
+
+
+ResourceRequest defines a single resource request within a ResourceClaim.
+Each request specifies a resource type and the amount of quota being claimed.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>amount</b></td>
+        <td>integer</td>
+        <td>
+          Amount specifies how much quota to claim for this resource type. Must be
+measured in the BaseUnit defined by the corresponding ResourceRegistration.
+Must be a positive integer (minimum value is 0, but 0 means no quota
+requested).
+
+For Entity registrations: Use 1 for single resource instances (1 Project, 1
+User) For Allocation registrations: Use actual capacity amounts (2048 for
+2048 MB, 1000 for 1000 millicores)
+
+Examples:
+
+  - 1 (claiming 1 Project)
+  - 2048 (claiming 2048 bytes of storage)
+  - 1000 (claiming 1000 CPU millicores)<br/>
+          <br/>
+            <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>resourceType</b></td>
+        <td>string</td>
+        <td>
+          ResourceType identifies the specific resource type being claimed. Must
+exactly match a ResourceRegistration.spec.resourceType that is currently
+active. The quota system validates this reference during claim processing.
+
+The format is defined by platform administrators when creating ResourceRegistrations.
+Service providers can use any identifier that makes sense for their quota system usage.
+
+Examples:
+
+  - "resourcemanager.miloapis.com/projects"
+  - "compute_cpu"
+  - "storage.volumes"
+  - "custom-service-quota"<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
 ### ResourceClaim.spec.consumerRef
 <sup><sup>[↩ Parent](#resourceclaimspec)</sup></sup>
 
@@ -2623,6 +2699,10 @@ ConsumerRef identifies the quota consumer making this claim. The consumer
 must match the ConsumerType defined in the ResourceRegistration for each
 requested resource type. The system validates this relationship during
 claim processing.
+
+When creating ResourceClaims via ClaimCreationPolicy, this field can be
+omitted and the admission plugin will automatically fill it based on the
+authenticated user's context (organization or project).
 
 Examples:
 
@@ -2692,69 +2772,6 @@ Examples:
 - "project-web-app" (namespace for resources within a project)<br/>
         </td>
         <td>false</td>
-      </tr></tbody>
-</table>
-
-
-### ResourceClaim.spec.requests[index]
-<sup><sup>[↩ Parent](#resourceclaimspec)</sup></sup>
-
-
-
-ResourceRequest defines a single resource request within a ResourceClaim.
-Each request specifies a resource type and the amount of quota being claimed.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>amount</b></td>
-        <td>integer</td>
-        <td>
-          Amount specifies how much quota to claim for this resource type. Must be
-measured in the BaseUnit defined by the corresponding ResourceRegistration.
-Must be a positive integer (minimum value is 0, but 0 means no quota
-requested).
-
-For Entity registrations: Use 1 for single resource instances (1 Project, 1
-User) For Allocation registrations: Use actual capacity amounts (2048 for
-2048 MB, 1000 for 1000 millicores)
-
-Examples:
-
-  - 1 (claiming 1 Project)
-  - 2048 (claiming 2048 bytes of storage)
-  - 1000 (claiming 1000 CPU millicores)<br/>
-          <br/>
-            <i>Format</i>: int64<br/>
-            <i>Minimum</i>: 0<br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
-        <td><b>resourceType</b></td>
-        <td>string</td>
-        <td>
-          ResourceType identifies the specific resource type being claimed. Must
-exactly match a ResourceRegistration.spec.resourceType that is currently
-active. The quota system validates this reference during claim processing.
-
-The format is defined by platform administrators when creating ResourceRegistrations.
-Service providers can use any identifier that makes sense for their quota system usage.
-
-Examples:
-
-  - "resourcemanager.miloapis.com/projects"
-  - "compute_cpu"
-  - "storage.volumes"
-  - "custom-service-quota"<br/>
-        </td>
-        <td>true</td>
       </tr></tbody>
 </table>
 

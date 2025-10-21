@@ -14,12 +14,12 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	mcbuilder "sigs.k8s.io/multicluster-runtime/pkg/builder"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 
 	"go.miloapis.com/milo/internal/quota/validation"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
@@ -27,32 +27,40 @@ import (
 
 // ResourceGrantController reconciles a ResourceGrant object.
 type ResourceGrantController struct {
-	client.Client
-	Scheme *runtime.Scheme
-	// GrantValidator validates ResourceGrant resources.
-	GrantValidator *validation.ResourceGrantValidator
+	Scheme          *runtime.Scheme
+	Manager         mcmanager.Manager
+	GrantValidator  *validation.ResourceGrantValidator
 }
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
 
-// Reconcile manages the lifecycle of ResourceGrant objects.
-func (r *ResourceGrantController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// Reconcile manages the lifecycle of ResourceGrant objects across all control planes.
+func (r *ResourceGrantController) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	if req.ClusterName != "" {
+		logger = logger.WithValues("cluster", req.ClusterName)
+	}
+
+	cluster, err := r.Manager.GetCluster(ctx, req.ClusterName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster %q: %w", req.ClusterName, err)
+	}
+	clusterClient := cluster.GetClient()
 
 	// Fetch the ResourceGrant
 	var grant quotav1alpha1.ResourceGrant
-	if err := r.Get(ctx, req.NamespacedName, &grant); err != nil {
+	if err := clusterClient.Get(ctx, req.NamespacedName, &grant); err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("ResourceGrant not found")
+			logger.V(1).Info("ResourceGrant not found")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get ResourceGrant: %w", err)
 	}
 
 	// Update observed generation and conditions
-	if err := r.updateResourceGrantStatus(ctx, &grant); err != nil {
+	if err := r.updateResourceGrantStatus(ctx, clusterClient, &grant); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -60,7 +68,7 @@ func (r *ResourceGrantController) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 // updateResourceGrantStatus updates the status of the ResourceGrant.
-func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context, grant *quotav1alpha1.ResourceGrant) error {
+func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context, clusterClient client.Client, grant *quotav1alpha1.ResourceGrant) error {
 	logger := log.FromContext(ctx)
 	originalStatus := grant.Status.DeepCopy()
 
@@ -70,18 +78,18 @@ func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context,
 	// Validate the ResourceGrant
 	if validationErrs := r.GrantValidator.Validate(ctx, grant); len(validationErrs) > 0 {
 		logger.Info("ResourceGrant validation failed", "errors", validationErrs.ToAggregate())
-		return r.setValidationFailedCondition(ctx, grant, validationErrs.ToAggregate())
+		return r.setValidationFailedCondition(ctx, clusterClient, grant, validationErrs.ToAggregate())
 	}
 
 	// Set active condition
 	r.setActiveCondition(grant)
 
 	// Only update the status if it has changed
-	return r.updateStatusIfChanged(ctx, grant, originalStatus)
+	return r.updateStatusIfChanged(ctx, clusterClient, grant, originalStatus)
 }
 
 // setValidationFailedCondition sets the validation failed condition and updates status.
-func (r *ResourceGrantController) setValidationFailedCondition(ctx context.Context, grant *quotav1alpha1.ResourceGrant, validationErr error) error {
+func (r *ResourceGrantController) setValidationFailedCondition(ctx context.Context, clusterClient client.Client, grant *quotav1alpha1.ResourceGrant, validationErr error) error {
 	condition := metav1.Condition{
 		Type:    quotav1alpha1.ResourceGrantActive,
 		Status:  metav1.ConditionFalse,
@@ -90,7 +98,7 @@ func (r *ResourceGrantController) setValidationFailedCondition(ctx context.Conte
 	}
 	apimeta.SetStatusCondition(&grant.Status.Conditions, condition)
 
-	if err := r.Status().Update(ctx, grant); err != nil {
+	if err := clusterClient.Status().Update(ctx, grant); err != nil {
 		return fmt.Errorf("failed to update ResourceGrant status: %w", err)
 	}
 	return nil
@@ -109,7 +117,7 @@ func (r *ResourceGrantController) setActiveCondition(grant *quotav1alpha1.Resour
 }
 
 // updateStatusIfChanged updates the status only if it has changed.
-func (r *ResourceGrantController) updateStatusIfChanged(ctx context.Context, grant *quotav1alpha1.ResourceGrant, originalStatus *quotav1alpha1.ResourceGrantStatus) error {
+func (r *ResourceGrantController) updateStatusIfChanged(ctx context.Context, clusterClient client.Client, grant *quotav1alpha1.ResourceGrant, originalStatus *quotav1alpha1.ResourceGrantStatus) error {
 	activeCondition := apimeta.FindStatusCondition(grant.Status.Conditions, quotav1alpha1.ResourceGrantActive)
 	if activeCondition == nil {
 		return nil
@@ -119,7 +127,7 @@ func (r *ResourceGrantController) updateStatusIfChanged(ctx context.Context, gra
 	if !apimeta.IsStatusConditionPresentAndEqual(originalStatus.Conditions, quotav1alpha1.ResourceGrantActive, activeCondition.Status) ||
 		grant.Status.ObservedGeneration != originalStatus.ObservedGeneration {
 
-		if err := r.Status().Update(ctx, grant); err != nil {
+		if err := clusterClient.Status().Update(ctx, grant); err != nil {
 			return fmt.Errorf("failed to update ResourceGrant status: %w", err)
 		}
 	}
@@ -128,33 +136,15 @@ func (r *ResourceGrantController) updateStatusIfChanged(ctx context.Context, gra
 }
 
 // SetupWithManager sets up the controller with the Manager.
-// Watches ResourceRegistrations to trigger reconciliation when new resource types are registered.
-func (r *ResourceGrantController) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&quotav1alpha1.ResourceGrant{}).
-		Watches(
-			&quotav1alpha1.ResourceRegistration{},
-			// Trigger reconciliation of all ResourceGrants when ResourceRegistrations change
-			// This ensures ResourceGrants get re-validated when new resource types are registered
-			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
-				// List all ResourceGrants and enqueue them for reconciliation
-				var grants quotav1alpha1.ResourceGrantList
-				if err := r.List(ctx, &grants); err != nil {
-					// Log error but don't fail the watch setup
-					return nil
-				}
-
-				requests := make([]reconcile.Request, 0, len(grants.Items))
-				for _, grant := range grants.Items {
-					requests = append(requests, reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      grant.Name,
-							Namespace: grant.Namespace,
-						},
-					})
-				}
-				return requests
-			}),
+// ResourceGrants can exist in both the local cluster and project control planes for delegated quota management.
+//
+// Note: We don't watch ResourceRegistrations because the admission plugin validates that
+// all resource types are already registered before allowing grant creation.
+func (r *ResourceGrantController) SetupWithManager(mgr mcmanager.Manager) error {
+	return mcbuilder.ControllerManagedBy(mgr).
+		For(&quotav1alpha1.ResourceGrant{},
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true),
 		).
 		Named("resource-grant").
 		Complete(r)

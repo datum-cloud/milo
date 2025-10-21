@@ -16,9 +16,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	mcbuilder "sigs.k8s.io/multicluster-runtime/pkg/builder"
+	mccontext "sigs.k8s.io/multicluster-runtime/pkg/context"
+	mchandler "sigs.k8s.io/multicluster-runtime/pkg/handler"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 
 	"go.miloapis.com/milo/internal/quota/validation"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
@@ -28,9 +31,9 @@ import (
 // Its responsibility is to validate the policy and set the Ready status condition.
 // The PolicyEngine watches for policies with Ready=True to include them in grant creation.
 type GrantCreationPolicyReconciler struct {
-	client.Client
 	// Scheme is the runtime scheme for object serialization.
-	Scheme *runtime.Scheme
+	Scheme  *runtime.Scheme
+	Manager mcmanager.Manager
 	// PolicyValidator validates GrantCreationPolicy resources.
 	PolicyValidator *validation.GrantCreationPolicyValidator
 }
@@ -40,13 +43,24 @@ type GrantCreationPolicyReconciler struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
 
 // Reconcile reconciles a GrantCreationPolicy object by validating it and setting its Ready status.
-func (r *GrantCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// This controller only runs in the core control plane where policies are defined.
+func (r *GrantCreationPolicyReconciler) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	if req.ClusterName != "" {
+		logger = logger.WithValues("cluster", req.ClusterName)
+		ctx = log.IntoContext(ctx, logger)
+	}
+
+	cluster, err := r.Manager.GetCluster(ctx, req.ClusterName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster %q: %w", req.ClusterName, err)
+	}
+	clusterClient := cluster.GetClient()
 
 	var policy quotav1alpha1.GrantCreationPolicy
 	logger.V(1).Info("Reconciling GrantCreationPolicy", "name", req.Name)
 
-	if err := r.Get(ctx, req.NamespacedName, &policy); err != nil {
+	if err := clusterClient.Get(ctx, req.NamespacedName, &policy); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("GrantCreationPolicy was deleted", "name", req.Name)
 			// Policy was deleted - nothing to do (PolicyEngine will handle via watch)
@@ -68,7 +82,7 @@ func (r *GrantCreationPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	if !equality.Semantic.DeepEqual(&policy.Status, originalStatus) {
 		policy.Status.ObservedGeneration = policy.Generation
 
-		if err := r.Status().Update(ctx, &policy); err != nil {
+		if err := clusterClient.Status().Update(ctx, &policy); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update GrantCreationPolicy status: %w", err)
 		}
 		logger.V(1).Info("Updated GrantCreationPolicy status",
@@ -139,29 +153,40 @@ func (r *GrantCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1
 
 // enqueueAffectedPolicies finds all GrantCreationPolicies that reference a ResourceRegistration
 // and enqueues them for reconciliation when the registration changes.
-func (r *GrantCreationPolicyReconciler) enqueueAffectedPolicies(ctx context.Context, obj client.Object) []reconcile.Request {
+func (r *GrantCreationPolicyReconciler) enqueueAffectedPolicies(ctx context.Context, obj client.Object) []mcreconcile.Request {
 	registration, ok := obj.(*quotav1alpha1.ResourceRegistration)
 	if !ok {
 		return nil
 	}
 
+	clusterName, _ := mccontext.ClusterFrom(ctx)
+
+	cluster, err := r.Manager.GetCluster(ctx, clusterName)
+	if err != nil {
+		log.FromContext(ctx).Error(err, "Failed to get cluster client when enqueuing affected policies", "clusterName", clusterName)
+		return nil
+	}
+	clusterClient := cluster.GetClient()
+
 	// List all GrantCreationPolicies
 	var policyList quotav1alpha1.GrantCreationPolicyList
-	if err := r.List(ctx, &policyList); err != nil {
+	if err := clusterClient.List(ctx, &policyList); err != nil {
 		// Log error but don't block - policies will be revalidated on their regular schedule
 		log.FromContext(ctx).Error(err, "Failed to list GrantCreationPolicies for ResourceRegistration change",
 			"registration", registration.Name)
 		return nil
 	}
 
-	var requests []reconcile.Request
+	var requests []mcreconcile.Request
 	// Find policies that reference this resource type
 	for _, policy := range policyList.Items {
 		for _, allowance := range policy.Spec.Target.ResourceGrantTemplate.Spec.Allowances {
 			if allowance.ResourceType == registration.Spec.ResourceType {
 				// This policy references the changed ResourceRegistration - trigger reconciliation
-				requests = append(requests, reconcile.Request{
-					NamespacedName: client.ObjectKeyFromObject(&policy),
+				requests = append(requests, mcreconcile.Request{
+					Request: ctrl.Request{
+						NamespacedName: client.ObjectKeyFromObject(&policy),
+					},
 				})
 				break // Only need to enqueue each policy once
 			}
@@ -172,13 +197,22 @@ func (r *GrantCreationPolicyReconciler) enqueueAffectedPolicies(ctx context.Cont
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *GrantCreationPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&quotav1alpha1.GrantCreationPolicy{}).
+func (r *GrantCreationPolicyReconciler) SetupWithManager(mgr mcmanager.Manager) error {
+	return mcbuilder.ControllerManagedBy(mgr).
+		For(&quotav1alpha1.GrantCreationPolicy{},
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true)).
 		// Watch ResourceRegistrations to revalidate policies when registrations change
-		Watches(&quotav1alpha1.ResourceRegistration{}, handler.EnqueueRequestsFromMapFunc(
-			r.enqueueAffectedPolicies,
-		)).
+		Watches(
+			&quotav1alpha1.ResourceRegistration{},
+			mchandler.TypedEnqueueRequestsFromMapFunc(
+				func(ctx context.Context, obj client.Object) []mcreconcile.Request {
+					return r.enqueueAffectedPolicies(ctx, obj)
+				},
+			),
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true),
+		).
 		Named("grant-creation-policy").
 		Complete(r)
 }

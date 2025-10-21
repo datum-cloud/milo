@@ -15,10 +15,12 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	mcbuilder "sigs.k8s.io/multicluster-runtime/pkg/builder"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
@@ -26,8 +28,8 @@ import (
 // ResourceClaimController reconciles a ResourceClaim object and is
 // responsible for evaluating resource claims against available quota.
 type ResourceClaimController struct {
-	client.Client
-	Scheme *runtime.Scheme
+	Scheme  *runtime.Scheme
+	Manager mcmanager.Manager
 }
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceclaims,verbs=get;list;watch;create;update;patch;delete
@@ -35,14 +37,25 @@ type ResourceClaimController struct {
 
 // Reconcile reconciles a ResourceClaim object by updating the overall Granted condition
 // based on individual request allocations made by the AllowanceBucketController.
-func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
+// This controller watches ResourceClaims across all control planes.
+func (r *ResourceClaimController) Reconcile(ctx context.Context, req mcreconcile.Request) (_ ctrl.Result, err error) {
 	logger := log.FromContext(ctx)
+	if req.ClusterName != "" {
+		logger = logger.WithValues("cluster", req.ClusterName)
+		ctx = log.IntoContext(ctx, logger)
+	}
+
+	cluster, err := r.Manager.GetCluster(ctx, req.ClusterName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster %q: %w", req.ClusterName, err)
+	}
+	clusterClient := cluster.GetClient()
 
 	// Fetch the ResourceClaim
 	var claim quotav1alpha1.ResourceClaim
-	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &claim); err != nil {
+	if err := clusterClient.Get(ctx, req.NamespacedName, &claim); err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("ResourceClaim not found")
+			logger.V(1).Info("ResourceClaim not found")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get ResourceClaim: %w", err)
@@ -54,7 +67,7 @@ func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Update the overall claim condition based on individual request allocations
-	if err := r.updateOverallClaimConditionFromAllocations(ctx, &claim); err != nil {
+	if err := r.updateOverallClaimConditionFromAllocations(ctx, clusterClient, &claim); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update overall claim condition: %w", err)
 	}
 
@@ -63,7 +76,7 @@ func (r *ResourceClaimController) Reconcile(ctx context.Context, req ctrl.Reques
 
 // updateOverallClaimConditionFromAllocations updates the overall Granted condition
 // based on the status of individual request allocations.
-func (r *ResourceClaimController) updateOverallClaimConditionFromAllocations(ctx context.Context, claim *quotav1alpha1.ResourceClaim) error {
+func (r *ResourceClaimController) updateOverallClaimConditionFromAllocations(ctx context.Context, clusterClient client.Client, claim *quotav1alpha1.ResourceClaim) error {
 
 	// Initialize allocation map for tracking which requests have been processed
 	allocationMap := make(map[string]quotav1alpha1.ResourceClaimAllocationStatus)
@@ -117,11 +130,11 @@ func (r *ResourceClaimController) updateOverallClaimConditionFromAllocations(ctx
 		message = fmt.Sprintf("Awaiting capacity evaluation: %d granted, %d pending", grantedCount, pendingCount)
 	}
 
-	return r.updateOverallClaimCondition(ctx, claim, conditionStatus, reason, message)
+	return r.updateOverallClaimCondition(ctx, clusterClient, claim, conditionStatus, reason, message)
 }
 
 // updateOverallClaimCondition updates the overall Granted condition using Server Side Apply.
-func (r *ResourceClaimController) updateOverallClaimCondition(ctx context.Context, claim *quotav1alpha1.ResourceClaim,
+func (r *ResourceClaimController) updateOverallClaimCondition(ctx context.Context, clusterClient client.Client, claim *quotav1alpha1.ResourceClaim,
 	status metav1.ConditionStatus, reason, message string) error {
 
 	changed := apimeta.SetStatusCondition(&claim.Status.Conditions, metav1.Condition{
@@ -152,7 +165,7 @@ func (r *ResourceClaimController) updateOverallClaimCondition(ctx context.Contex
 
 	// Apply the patch using Server Side Apply with our field manager
 	fieldManagerName := "resource-claim-controller"
-	if err := r.Status().Patch(ctx, patchClaim, client.Apply, client.FieldOwner(fieldManagerName), client.ForceOwnership); err != nil {
+	if err := clusterClient.Status().Patch(ctx, patchClaim, client.Apply, client.FieldOwner(fieldManagerName), client.ForceOwnership); err != nil {
 		return fmt.Errorf("failed to apply overall claim condition: %w", err)
 	}
 
@@ -160,10 +173,12 @@ func (r *ResourceClaimController) updateOverallClaimCondition(ctx context.Contex
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ResourceClaimController) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		// Specify that this controller watches the ResourceClaim resource type as its primary resource.
-		For(&quotav1alpha1.ResourceClaim{}).
+// Watches ResourceClaims across all control planes (core and project control planes).
+func (r *ResourceClaimController) SetupWithManager(mgr mcmanager.Manager) error {
+	return mcbuilder.ControllerManagedBy(mgr).
+		For(&quotav1alpha1.ResourceClaim{},
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true)).
 		Named("resource-claim").
 		Complete(r)
 }

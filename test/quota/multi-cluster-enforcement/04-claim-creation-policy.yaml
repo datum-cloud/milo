@@ -1,0 +1,27 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: mc-test-secret-claim-policy
+  labels:
+    test.miloapis.com/quota: "multicluster"
+spec:
+  disabled: false
+  trigger:
+    resource:
+      apiVersion: "v1"
+      kind: "Secret"
+    # No constraints - trigger for all Secrets
+  target:
+    resourceClaimTemplate:
+      metadata:
+        # Use the namespace from the admission request, not from the trigger object
+        # The trigger object's metadata may not be fully populated during admission
+        namespace: "{{requestInfo.namespace}}"
+        labels:
+          quota.miloapis.com/test: "true"
+          test.miloapis.com/quota: "multicluster"
+      spec:
+        # consumerRef is auto-filled by the admission plugin from the project context
+        requests:
+          - resourceType: "test.multicluster.miloapis.com/secrets"
+            amount: 1
