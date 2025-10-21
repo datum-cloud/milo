@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: milo-organization-events
+spec:
+  # Template configures the event source pods that will be created
+  # These pods run on the infrastructure cluster but watch Milo's API
+  template:
+    container:
+      env:
+        - name: KUBECONFIG
+          value: /etc/milo/kubeconfig
+      volumeMounts:
+        - name: milo-kubeconfig
+          mountPath: /etc/milo
+          readOnly: true
+    volumes:
+      - name: milo-kubeconfig
+        secret:
+          secretName: eventsource-milo-kubeconfig
+  resource:
+    milo-organizations:
+      # Watch Organizations in the Milo control plane
+      group: resourcemanager.miloapis.com
+      version: v1alpha1
+      resource: organizations
+      # Watch for create events
+      eventTypes:
+        - ADD
