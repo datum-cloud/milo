@@ -16,6 +16,7 @@ import (
 
 	"github.com/blang/semver/v4"
 	"github.com/spf13/cobra"
+	agreementv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/agreement/v1alpha1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -77,9 +78,11 @@ import (
 	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
+	documentationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/documentation/v1alpha1"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
+	documentationv1alpha1 "go.miloapis.com/milo/pkg/apis/documentation/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
@@ -127,6 +130,7 @@ func init() {
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(documentationv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(apiregistrationv1.AddToScheme(Scheme))
 }
 
@@ -446,6 +450,18 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := notificationv1alpha1webhook.SetupContactGroupMembershipRemovalWebhooksWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up contactgroupmembershipremoval webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := documentationv1alpha1webhook.SetupDocumentWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up document webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := documentationv1alpha1webhook.SetupDocumentRevisionWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up document revision webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := agreementv1alpha1webhook.SetupDocumentAcceptanceWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up document acceptance webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

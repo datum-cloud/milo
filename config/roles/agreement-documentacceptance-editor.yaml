@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: agreement-documentacceptance-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: agreement-documentacceptance-reader
+  includedPermissions:
+    - agreement.miloapis.com/documentacceptances.create
+    - agreement.miloapis.com/documentacceptances.update
+    - agreement.miloapis.com/documentacceptances.patch
+    - agreement.miloapis.com/documentacceptances.delete

@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: documentation-document-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: documentation-document-reader
+  includedPermissions:
+    - documentation.miloapis.com/documents.create
+    - documentation.miloapis.com/documents.update
+    - documentation.miloapis.com/documents.patch
+    - documentation.miloapis.com/documents.delete

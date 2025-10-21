@@ -1,0 +1,23 @@
+apiVersion: documentation.miloapis.com/v1alpha1
+kind: DocumentRevision
+metadata:
+  name: sample-daocument-revision
+  namespace: default
+spec:
+  documentRef:
+    name: sample-document
+    namespace: default
+  version: v1.0.3
+  content:
+    format: markdown
+    data: |
+      # Terms of Service – v1.0.0
+      Welcome to Milo. This is the first published Terms of Service.
+  effectiveDate: "2025-01-01T00:00:00Z"
+  changesSummary: "Initial publication of the Terms of Service."
+  expectedSubjectKinds:
+    - apiGroup: resourcemanager.miloapis.com
+      kind: Project
+  expectedAccepterKinds:
+    - apiGroup: iam.miloapis.com
+      kind: User
