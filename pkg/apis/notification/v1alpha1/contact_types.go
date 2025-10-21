@@ -75,11 +75,11 @@ type ContactSpec struct {
 // +kubebuilder:validation:Type=object
 type SubjectReference struct {
 	// APIGroup is the group for the resource being referenced.
-	// +kubebuilder:validation:Enum=iam.miloapis.com;resourcemanager.miloapis.com
+	// +kubebuilder:validation:Enum=iam.miloapis.com
 	// +kubebuilder:validation:Required
 	APIGroup string `json:"apiGroup,omitempty"`
 	// Kind is the type of resource being referenced.
-	// +kubebuilder:validation:Enum=User;Organization;Project
+	// +kubebuilder:validation:Enum=User
 	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 	// Name is the name of resource being referenced.
