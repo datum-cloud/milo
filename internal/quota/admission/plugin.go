@@ -2,7 +2,6 @@ package admission
 
 import (
 	"context"
-	"crypto/md5"
 	"fmt"
 	"strings"
 	"sync"
@@ -868,101 +867,13 @@ func (p *ResourceQuotaEnforcementPlugin) determineClaimName(
 		return names.SimpleNameGenerator.GenerateName(claim.GenerateName), nil
 	}
 
-	// Neither name nor generateName - generate deterministic name as fallback
-	return p.generateClaimName(evalContext, policy), nil
-}
-
-// generateClaimName generates a deterministic name for a ResourceClaim.
-// Used as fallback when neither name nor generateName is specified in the template.
-// Format: {resource-name}-{kind}-claim-{hash}
-// Example: "my-project-project-claim-a1b2c3d4"
-func (p *ResourceQuotaEnforcementPlugin) generateClaimName(
-	evalContext *EvaluationContext,
-	policy *quotav1alpha1.ClaimCreationPolicy,
-) string {
-	// Build components for hash
-	components := []string{
-		policy.Name,
-		evalContext.GVK.Group,
-		evalContext.GVK.Kind,
-		evalContext.Object.GetNamespace(),
+	// Neither name nor generateName - generate base name from resource and kind
+	baseName := fmt.Sprintf("%s-%s-claim-",
 		evalContext.Object.GetName(),
-	}
-
-	hashInput := strings.Join(components, "/")
-	hash := fmt.Sprintf("%x", md5.Sum([]byte(hashInput)))
-	hashSuffix := hash[:8]
-
-	resourceName := sanitizeDNSLabel(evalContext.Object.GetName())
-	kind := strings.ToLower(evalContext.GVK.Kind)
-	name := fmt.Sprintf("%s-%s-claim-%s", resourceName, kind, hashSuffix)
-
-	return truncateToDNSLabel(name, 253)
+		strings.ToLower(evalContext.GVK.Kind))
+	return names.SimpleNameGenerator.GenerateName(baseName), nil
 }
 
-// sanitizeDNSLabel converts a string to a valid DNS label segment
-// DNS labels must be lowercase alphanumeric or hyphens, and cannot start/end with hyphen
-func sanitizeDNSLabel(s string) string {
-	if s == "" {
-		return "unnamed"
-	}
-
-	// Convert to lowercase
-	s = strings.ToLower(s)
-
-	// Replace invalid characters with hyphens
-	var result strings.Builder
-	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			result.WriteRune(r)
-		} else if r == '-' || r == '.' || r == '_' {
-			result.WriteRune('-')
-		}
-		// Skip all other characters
-	}
-
-	name := result.String()
-
-	// Trim leading/trailing hyphens
-	name = strings.Trim(name, "-")
-
-	// Ensure not empty after sanitization
-	if name == "" {
-		return "unnamed"
-	}
-
-	return name
-}
-
-// truncateToDNSLabel truncates a string to fit DNS label length requirements
-// while preserving the hash suffix for uniqueness
-func truncateToDNSLabel(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-
-	// Find the hash suffix (last 8 characters after last hyphen)
-	lastHyphen := strings.LastIndex(s, "-")
-	if lastHyphen > 0 && len(s)-lastHyphen <= 9 { // "-" + 8 char hash
-		hashSuffix := s[lastHyphen:] // Includes the hyphen
-		prefix := s[:lastHyphen]
-
-		// Truncate prefix to fit: maxLen - len(hashSuffix)
-		maxPrefixLen := maxLen - len(hashSuffix)
-		if len(prefix) > maxPrefixLen {
-			prefix = prefix[:maxPrefixLen]
-		}
-
-		// Trim trailing hyphens from truncated prefix
-		prefix = strings.TrimRight(prefix, "-")
-
-		return prefix + hashSuffix
-	}
-
-	// No hash suffix found, simple truncation
-	truncated := s[:maxLen]
-	return strings.TrimRight(truncated, "-")
-}
 
 // validateResourceRegistration validates ResourceRegistration objects for cross-resource duplicates.
 func (p *ResourceQuotaEnforcementPlugin) validateResourceRegistration(ctx context.Context, attrs admission.Attributes) error {
