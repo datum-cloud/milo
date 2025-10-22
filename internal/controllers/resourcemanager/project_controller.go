@@ -149,13 +149,6 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 	}
 
-	// Ensure per-project "milo-system" Namespace exists for quota system resources
-	if err := ensureMiloSystemNamespace(ctx, projCfg); err != nil {
-		logger.Error(err, "ensure milo-system namespace failed", "project", project.Name)
-		// Backoff and retry; don't mark Ready yet
-		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
-	}
-
 	// Ensure the project's GatewayClass exists
 	ok, err := hasGatewayClassCRD(ctx, projCfg)
 	if err != nil {
@@ -246,35 +239,6 @@ func ensureDefaultNamespace(ctx context.Context, cfg *rest.Config) error {
 			Name: metav1.NamespaceDefault,
 			Labels: map[string]string{
 				"miloapis.com/project-default": "true",
-			},
-		},
-	}
-	if _, err := cs.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-		return fmt.Errorf("create namespace %q: %w", ns.Name, err)
-	}
-	return nil
-}
-
-// ensureMiloSystemNamespace ensures the milo-system namespace exists in the project control plane.
-// This namespace is used by the quota system to store ResourceGrants and AllowanceBuckets.
-func ensureMiloSystemNamespace(ctx context.Context, cfg *rest.Config) error {
-	cs, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("build project client: %w", err)
-	}
-
-	// Quick GET first (cheap, idempotent)
-	if _, err := cs.CoreV1().Namespaces().Get(ctx, "milo-system", metav1.GetOptions{}); err == nil {
-		return nil
-	} else if !apierrors.IsNotFound(err) {
-		return fmt.Errorf("get namespace %q: %w", "milo-system", err)
-	}
-
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "milo-system",
-			Labels: map[string]string{
-				"miloapis.com/system": "true",
 			},
 		},
 	}
