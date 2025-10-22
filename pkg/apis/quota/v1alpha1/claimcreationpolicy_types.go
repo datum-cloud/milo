@@ -25,10 +25,11 @@ type ClaimCreationPolicySpec struct {
 
 // ClaimTriggerResource identifies the resource type that triggers this policy.
 type ClaimTriggerResource struct {
-	// APIVersion of the trigger resource in the format "group/version".
+	// APIVersion of the trigger resource in the format "group/version" or "version" for core resources.
+	// Examples: "v1" for core resources like Secret, "resourcemanager.miloapis.com/v1alpha1" for custom resources.
 	//
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/v[0-9]+((alpha|beta)[0-9]*)?$`
+	// +kubebuilder:validation:Pattern=`^(v[0-9]+((alpha|beta)[0-9]*)?|[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/v[0-9]+((alpha|beta)[0-9]*)?)$`
 	APIVersion string `json:"apiVersion"`
 	// Kind is the kind of the trigger resource.
 	//

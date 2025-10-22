@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -26,18 +27,13 @@ const (
 // ParentContextResolver manages REST configurations for target control planes
 // with minimal memory footprint for cross-cluster grant creation.
 type ParentContextResolver struct {
-	// clientCache maps parent context identifiers to clients
-	clientCache map[string]*CachedClient
-	// mu protects concurrent access to the cache
-	mu sync.RWMutex
-	// defaultClient is used when no parent context is specified
-	defaultClient client.Client
-	// baseRestConfig is the base REST config used to derive per-project clients
+	clientCache    map[string]*CachedClient
+	mu             sync.RWMutex
+	defaultClient  client.Client
 	baseRestConfig *rest.Config
-	// clientTTL is the TTL for cached clients
-	clientTTL time.Duration
-	// cleanupCancel cancels the background cleanup goroutine
-	cleanupCancel context.CancelFunc
+	scheme         *runtime.Scheme
+	clientTTL      time.Duration
+	cleanupCancel  context.CancelFunc
 }
 
 // CachedClient represents a cached client with TTL.
@@ -49,14 +45,13 @@ type CachedClient struct {
 
 // ParentContextResolverOptions configures the ParentContextResolver.
 type ParentContextResolverOptions struct {
-	// ClientTTL sets the TTL for cached clients (defaults to DefaultClientTTL)
 	ClientTTL time.Duration
 }
 
-// NewParentContextResolver creates a new ParentContextResolver with the given options.
-// The baseRestConfig is required for cross-cluster operations.
+// NewParentContextResolver creates a new ParentContextResolver.
+// Scheme must include all resource types for parent context creation.
 // Pass empty ParentContextResolverOptions{} for defaults.
-func NewParentContextResolver(defaultClient client.Client, baseRestConfig *rest.Config, opts ParentContextResolverOptions) *ParentContextResolver {
+func NewParentContextResolver(defaultClient client.Client, baseRestConfig *rest.Config, scheme *runtime.Scheme, opts ParentContextResolverOptions) *ParentContextResolver {
 	if opts.ClientTTL == 0 {
 		opts.ClientTTL = DefaultClientTTL
 	}
@@ -65,6 +60,7 @@ func NewParentContextResolver(defaultClient client.Client, baseRestConfig *rest.
 		clientCache:    make(map[string]*CachedClient),
 		defaultClient:  defaultClient,
 		baseRestConfig: baseRestConfig,
+		scheme:         scheme,
 		clientTTL:      opts.ClientTTL,
 	}
 
@@ -152,14 +148,14 @@ func (r *ParentContextResolver) createClientForParentContext(
 		return nil, fmt.Errorf("parent context validation failed: %w", err)
 	}
 
-	// Create REST config for the target cluster
 	cfg, err := r.createRestConfigForParent(parentContext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create REST config: %w", err)
 	}
 
-	// Create the client
-	targetClient, err := client.New(cfg, client.Options{})
+	targetClient, err := client.New(cfg, client.Options{
+		Scheme: r.scheme,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}

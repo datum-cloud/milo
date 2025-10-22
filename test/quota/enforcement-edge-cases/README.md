@@ -15,10 +15,10 @@ This test verifies:
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | [setup-base-infrastructure](#step-setup-base-infrastructure) | 0 | 2 | 0 | 0 | 0 |
 | 2 | [setup-claim-creation-policy](#step-setup-claim-creation-policy) | 0 | 2 | 0 | 0 | 0 |
-| 3 | [setup-quota-enforcement-organization](#step-setup-quota-enforcement-organization) | 0 | 4 | 0 | 0 | 0 |
+| 3 | [setup-quota-enforcement-organization](#step-setup-quota-enforcement-organization) | 0 | 2 | 0 | 0 | 0 |
 | 4 | [create-limited-resource-grant](#step-create-limited-resource-grant) | 0 | 2 | 0 | 0 | 0 |
 | 5 | [test-boundary-conditions](#step-test-boundary-conditions) | 0 | 2 | 0 | 0 | 0 |
-| 6 | [test-policy-validation](#step-test-policy-validation) | 0 | 2 | 0 | 0 | 0 |
+| 6 | [test-policy-validation](#step-test-policy-validation) | 0 | 1 | 0 | 0 | 0 |
 
 ### Step: `setup-base-infrastructure`
 
@@ -55,8 +55,6 @@ Create Organization, User, and OrganizationMembership for testing.
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | Create Organization |
 | 2 | `wait` | 0 | 0 | Wait for Organization namespace to be active |
-| 3 | `apply` | 0 | 0 | Create test User |
-| 4 | `apply` | 0 | 0 | Create OrganizationMembership |
 
 ### Step: `create-limited-resource-grant`
 
@@ -86,15 +84,14 @@ Zero and negative amounts should be prevented by API validation.
 ### Step: `test-policy-validation`
 
 Test that ClaimCreationPolicy validation catches invalid configurations.
-Policies referencing non-existent resources should fail validation.
+Policies referencing non-existent resources should be rejected at admission time.
 
 
 #### Try
 
 | # | Operation | Bindings | Outputs | Description |
 |:-:|---|:-:|:-:|---|
-| 1 | `apply` | 0 | 0 | Create policy with missing resource reference |
-| 2 | `wait` | 0 | 0 | Wait for policy to report validation failure |
+| 1 | `create` | 0 | 0 | Attempt to create policy with missing resource reference (should fail) |
 
 ---
 

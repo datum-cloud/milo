@@ -15,7 +15,7 @@ This test verifies:
 | # | Name | Bindings | Try | Catch | Finally | Cleanup |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | [setup-base-infrastructure](#step-setup-base-infrastructure) | 0 | 5 | 0 | 0 | 0 |
-| 2 | [setup-multi-resource-organization](#step-setup-multi-resource-organization) | 0 | 4 | 0 | 0 | 0 |
+| 2 | [setup-multi-resource-organization](#step-setup-multi-resource-organization) | 0 | 2 | 0 | 0 | 0 |
 | 3 | [setup-multi-resource-grants](#step-setup-multi-resource-grants) | 0 | 4 | 0 | 0 | 0 |
 | 4 | [multi-test-multi-resource-claim-success](#step-multi-test-multi-resource-claim-success) | 0 | 3 | 0 | 0 | 0 |
 | 5 | [multi-test-multi-resource-claim-partial-deny](#step-multi-test-multi-resource-claim-partial-deny) | 0 | 3 | 0 | 0 | 0 |
@@ -47,8 +47,6 @@ Create Organization with User and Membership for testing multi-resource claims.
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | *No description* |
 | 2 | `wait` | 0 | 0 | *No description* |
-| 3 | `apply` | 0 | 0 | *No description* |
-| 4 | `apply` | 0 | 0 | *No description* |
 
 ### Step: `setup-multi-resource-grants`
 

@@ -243,8 +243,9 @@ func (v *resourceTypeValidator) IsClaimingResourceAllowed(ctx context.Context, r
 		rules.consumerType.Kind != consumerRef.Kind {
 		return false, nil, fmt.Errorf("consumer type mismatch for resource type %s: expected %s/%s, got %s/%s",
 			resourceType,
+			rules.consumerType.APIGroup, rules.consumerType.Kind,
 			consumerRef.APIGroup, consumerRef.Kind,
-			rules.consumerType.APIGroup, rules.consumerType.Kind)
+		)
 	}
 
 	if len(rules.claimingResources) == 0 {

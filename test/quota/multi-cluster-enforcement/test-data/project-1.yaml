@@ -1,0 +1,10 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: mc-test-project-1
+  labels:
+    test.miloapis.com/quota: "multicluster"
+spec:
+  ownerRef:
+    kind: Organization
+    name: mc-test-org

@@ -51,14 +51,18 @@ type ResourceClaimSpec struct {
 	// requested resource type. The system validates this relationship during
 	// claim processing.
 	//
+	// When creating ResourceClaims via ClaimCreationPolicy, this field can be
+	// omitted and the admission plugin will automatically fill it based on the
+	// authenticated user's context (organization or project).
+	//
 	// Examples:
 	//
 	//   - Organization consuming Project quota
 	//   - Project consuming User quota
 	//   - Organization consuming storage quota
 	//
-	// +kubebuilder:validation:Required
-	ConsumerRef ConsumerRef `json:"consumerRef"`
+	// +kubebuilder:validation:Optional
+	ConsumerRef ConsumerRef `json:"consumerRef,omitempty"`
 
 	// Requests specifies the resource types and amounts being claimed from quota.
 	// Each resource type can appear only once in the requests array. Minimum 1

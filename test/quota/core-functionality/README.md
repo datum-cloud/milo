@@ -18,7 +18,7 @@ This test verifies:
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | [setup-base-infrastructure](#step-setup-base-infrastructure) | 0 | 3 | 0 | 0 | 0 |
 | 2 | [setup-claim-creation-policy](#step-setup-claim-creation-policy) | 0 | 2 | 0 | 0 | 0 |
-| 3 | [setup-basic-organization](#step-setup-basic-organization) | 0 | 5 | 0 | 0 | 0 |
+| 3 | [setup-basic-organization](#step-setup-basic-organization) | 0 | 3 | 0 | 0 | 0 |
 | 4 | [create-basic-resource-grant](#step-create-basic-resource-grant) | 0 | 2 | 0 | 0 | 0 |
 | 5 | [test-projects-within-quota](#step-test-projects-within-quota) | 0 | 4 | 0 | 0 | 0 |
 | 6 | [verify-resource-claims](#step-verify-resource-claims) | 0 | 1 | 0 | 0 | 0 |
@@ -66,9 +66,7 @@ The Organization will serve as the parent context for quota enforcement.
 |:-:|---|:-:|:-:|---|
 | 1 | `create` | 0 | 0 | Create test Organization |
 | 2 | `wait` | 0 | 0 | Wait for Organization namespace to be active |
-| 3 | `create` | 0 | 0 | Create test User |
-| 4 | `create` | 0 | 0 | Create OrganizationMembership linking User to Organization |
-| 5 | `assert` | 0 | 0 | Verify Organization was created successfully |
+| 3 | `assert` | 0 | 0 | Verify Organization was created successfully |
 
 ### Step: `create-basic-resource-grant`
 

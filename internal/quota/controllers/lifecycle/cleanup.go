@@ -12,6 +12,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	mcbuilder "sigs.k8s.io/multicluster-runtime/pkg/builder"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
@@ -19,20 +22,20 @@ import (
 // DeniedAutoClaimCleanupController automatically deletes denied ResourceClaims
 // that were created by the admission plugin, while leaving manually created claims untouched.
 type DeniedAutoClaimCleanupController struct {
-	client.Client
-	Scheme *runtime.Scheme
-	logger logr.Logger
+	Scheme  *runtime.Scheme
+	Manager mcmanager.Manager
+	logger  logr.Logger
 }
 
 // NewDeniedAutoClaimCleanupController creates a new DeniedAutoClaimCleanupController.
 func NewDeniedAutoClaimCleanupController(
-	client client.Client,
 	scheme *runtime.Scheme,
+	manager mcmanager.Manager,
 ) *DeniedAutoClaimCleanupController {
 	return &DeniedAutoClaimCleanupController{
-		Client: client,
-		Scheme: scheme,
-		logger: ctrl.Log.WithName("denied-autoclaim-cleanup"),
+		Scheme:  scheme,
+		Manager: manager,
+		logger:  ctrl.Log.WithName("denied-autoclaim-cleanup"),
 	}
 }
 
@@ -41,11 +44,22 @@ func NewDeniedAutoClaimCleanupController(
 // Reconcile processes ResourceClaims and deletes those that are:
 // 1. Auto-created by the admission plugin
 // 2. Denied (status.conditions[type=Granted,status=False,reason=QuotaExceeded])
-func (r *DeniedAutoClaimCleanupController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// This controller runs across all control planes to clean up denied claims wherever they exist.
+func (r *DeniedAutoClaimCleanupController) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("claim", req.Name, "namespace", req.Namespace)
+	if req.ClusterName != "" {
+		logger = logger.WithValues("cluster", req.ClusterName)
+		ctx = log.IntoContext(ctx, logger)
+	}
+
+	cluster, err := r.Manager.GetCluster(ctx, req.ClusterName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster %q: %w", req.ClusterName, err)
+	}
+	clusterClient := cluster.GetClient()
 
 	var claim quotav1alpha1.ResourceClaim
-	if err := r.Get(ctx, req.NamespacedName, &claim); err != nil {
+	if err := clusterClient.Get(ctx, req.NamespacedName, &claim); err != nil {
 		// Claim was deleted or doesn't exist - nothing to do
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -70,7 +84,7 @@ func (r *DeniedAutoClaimCleanupController) Reconcile(ctx context.Context, req ct
 		"resourceName", claim.Annotations["quota.miloapis.com/resource-name"],
 		"denialReason", r.getClaimDenialReason(&claim))
 
-	if err := r.Delete(ctx, &claim); err != nil {
+	if err := clusterClient.Delete(ctx, &claim); err != nil {
 		logger.Error(err, "Failed to delete denied auto-created ResourceClaim")
 		return ctrl.Result{}, fmt.Errorf("failed to delete denied auto-created ResourceClaim: %w", err)
 	}
@@ -113,9 +127,11 @@ func (r *DeniedAutoClaimCleanupController) getClaimDenialReason(claim *quotav1al
 }
 
 // SetupWithManager sets up the controller with the Manager and configures efficient filtering.
-func (r *DeniedAutoClaimCleanupController) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&quotav1alpha1.ResourceClaim{}).
+func (r *DeniedAutoClaimCleanupController) SetupWithManager(mgr mcmanager.Manager) error {
+	return mcbuilder.ControllerManagedBy(mgr).
+		For(&quotav1alpha1.ResourceClaim{},
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true)).
 		// Use predicate to filter at the watch level for efficiency
 		WithEventFilter(predicate.NewPredicateFuncs(func(obj client.Object) bool {
 			claim, ok := obj.(*quotav1alpha1.ResourceClaim)

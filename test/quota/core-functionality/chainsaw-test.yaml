@@ -85,12 +85,6 @@ spec:
               jsonPath:
                 path: '{.status.phase}'
                 value: Active
-        - description: Create test User
-          create:
-            file: 03-test-user.yaml
-        - description: Create OrganizationMembership linking User to Organization
-          create:
-            file: 04-basic-quota-membership.yaml
         - description: Verify Organization was created successfully
           assert:
             file: assertions/assert-organization.yaml
