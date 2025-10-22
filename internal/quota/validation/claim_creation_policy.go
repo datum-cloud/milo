@@ -36,8 +36,8 @@ func (v *ClaimCreationPolicyValidator) Validate(ctx context.Context, policy *quo
 		}
 	}
 
-	// Skip resource type validation during dry-run because it queries API server state
-	if !opts.DryRun {
+	// Skip resource type validation when configured because it queries API server state
+	if !opts.SkipAPIStateValidation {
 		if errs := v.validateResourceTypes(ctx, policy); len(errs) > 0 {
 			allErrs = append(allErrs, errs...)
 		}

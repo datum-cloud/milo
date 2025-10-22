@@ -500,7 +500,7 @@ func TestGrantTemplateValidator_ValidateGrantTemplate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errs := validator.ValidateGrantTemplate(context.Background(), tt.template, DefaultValidationOptions())
+			errs := validator.ValidateGrantTemplate(context.Background(), tt.template, ControllerValidationOptions())
 			if tt.expectError && len(errs) == 0 {
 				t.Errorf("Expected error for template, but got none. %s", tt.description)
 			}
