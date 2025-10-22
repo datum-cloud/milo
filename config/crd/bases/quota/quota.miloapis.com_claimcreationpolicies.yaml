@@ -309,6 +309,10 @@ spec:
                               requested resource type. The system validates this relationship during
                               claim processing.
 
+                              When creating ResourceClaims via ClaimCreationPolicy, this field can be
+                              omitted and the admission plugin will automatically fill it based on the
+                              authenticated user's context (organization or project).
+
                               Examples:
 
                                 - Organization consuming Project quota
@@ -475,7 +479,6 @@ spec:
                             - name
                             type: object
                         required:
-                        - consumerRef
                         - requests
                         type: object
                     required:
@@ -544,9 +547,10 @@ spec:
                       policy.
                     properties:
                       apiVersion:
-                        description: APIVersion of the trigger resource in the format
-                          "group/version".
-                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/v[0-9]+((alpha|beta)[0-9]*)?$
+                        description: |-
+                          APIVersion of the trigger resource in the format "group/version" or "version" for core resources.
+                          Examples: "v1" for core resources like Secret, "resourcemanager.miloapis.com/v1alpha1" for custom resources.
+                        pattern: ^(v[0-9]+((alpha|beta)[0-9]*)?|[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/v[0-9]+((alpha|beta)[0-9]*)?)$
                         type: string
                       kind:
                         description: Kind is the kind of the trigger resource.

@@ -78,10 +78,6 @@ spec:
               jsonPath:
                 path: '{.status.phase}'
                 value: Active
-        - apply:
-            file: 03-test-user.yaml
-        - apply:
-            file: 04-organization-membership.yaml
         - assert:
             file: assertions/assert-organization.yaml
 

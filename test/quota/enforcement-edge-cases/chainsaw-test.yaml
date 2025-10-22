@@ -76,12 +76,6 @@ spec:
               jsonPath:
                 path: '{.status.phase}'
                 value: Active
-        - description: Create test User
-          apply:
-            file: 03-test-user.yaml
-        - description: Create OrganizationMembership
-          apply:
-            file: 04-quota-enforcement-membership.yaml
 
     # Create resource grant with limited allowance
     - name: create-limited-resource-grant

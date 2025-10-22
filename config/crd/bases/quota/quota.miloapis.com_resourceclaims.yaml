@@ -155,6 +155,10 @@ spec:
                   requested resource type. The system validates this relationship during
                   claim processing.
 
+                  When creating ResourceClaims via ClaimCreationPolicy, this field can be
+                  omitted and the admission plugin will automatically fill it based on the
+                  authenticated user's context (organization or project).
+
                   Examples:
 
                     - Organization consuming Project quota
@@ -321,7 +325,6 @@ spec:
                 - name
                 type: object
             required:
-            - consumerRef
             - requests
             type: object
           status:

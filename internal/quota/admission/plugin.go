@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -18,8 +19,10 @@ import (
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/admission/initializer"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/apiserver/pkg/warning"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"k8s.io/component-base/metrics"
 	legacyregistry "k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
@@ -27,6 +30,7 @@ import (
 	"go.miloapis.com/milo/internal/quota/engine"
 	"go.miloapis.com/milo/internal/quota/validation"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
+	milorequest "go.miloapis.com/milo/pkg/request"
 )
 
 const (
@@ -55,11 +59,15 @@ func init() {
 	legacyregistry.MustRegister(admissionResultTotal)
 }
 
-// ResourceQuotaEnforcementPlugin implements admission.Interface for resource quota enforcement
-// via automatic ResourceClaim creation and quota validation.
+// ResourceQuotaEnforcementPlugin enforces quota by creating ResourceClaims for applicable resources.
+//
+// CRDs are always decoded as *unstructured.Unstructured by apiextensions-apiserver regardless
+// of scheme registration. Validation converts to typed structs via runtime.DefaultUnstructuredConverter.
 type ResourceQuotaEnforcementPlugin struct {
 	*admission.Handler
 	dynamicClient                 dynamic.Interface
+	loopbackConfig                *rest.Config
+	projectClients                sync.Map // map[string]dynamic.Interface (cached project clients)
 	policyEngine                  engine.PolicyEngine
 	templateEngine                engine.TemplateEngine
 	resourceClaimValidator        validation.ResourceClaimValidator
@@ -72,10 +80,9 @@ type ResourceQuotaEnforcementPlugin struct {
 	// being marked ready until the resource type's cache has been synced.
 	resourceTypeValidator validation.ResourceTypeValidator
 
-	watchManager ClaimWatchManager
-	config       *AdmissionPluginConfig
-
-	logger logr.Logger
+	watchManagers sync.Map // map[string]ClaimWatchManager (projectID -> watch manager, "" = root)
+	config        *AdmissionPluginConfig
+	logger        logr.Logger
 }
 
 // Ensure ResourceQuotaEnforcementPlugin implements the required initializer interfaces
@@ -103,11 +110,16 @@ func (p *ResourceQuotaEnforcementPlugin) SetDynamicClient(dynamicClient dynamic.
 	p.dynamicClient = dynamicClient
 	p.logger.V(2).Info("Dynamic client set", "plugin", PluginName)
 
-	// Initialize engines and watch manager now that we have the dynamic client
 	if dynamicClient != nil && p.policyEngine == nil {
 		p.initializeEngines()
-		p.initializeWatchManager()
 	}
+}
+
+// SetLoopbackConfig enables project virtualization by allowing dynamic client creation
+// for each project's control plane.
+func (p *ResourceQuotaEnforcementPlugin) SetLoopbackConfig(cfg *rest.Config) {
+	p.loopbackConfig = cfg
+	p.logger.V(2).Info("Loopback config injected", "plugin", PluginName)
 }
 
 // ValidateInitialization implements admission.InitializationValidator
@@ -136,9 +148,6 @@ func (p *ResourceQuotaEnforcementPlugin) ValidateInitialization() error {
 	if p.resourceGrantValidator == nil {
 		return fmt.Errorf("resource grant validator not initialized")
 	}
-	if p.watchManager == nil {
-		return fmt.Errorf("watch manager not initialized")
-	}
 	return nil
 }
 
@@ -158,7 +167,6 @@ func (p *ResourceQuotaEnforcementPlugin) initializeEngines() {
 	p.resourceClaimValidator = validation.NewResourceClaimValidator(p.dynamicClient, p.resourceTypeValidator)
 	p.resourceRegistrationValidator = validation.NewResourceRegistrationValidator(p.resourceTypeValidator)
 
-	// Initialize policy validators for admission-time validation
 	celValidator, err := validation.NewCELValidator()
 	if err != nil {
 		p.logger.Error(err, "Failed to create CEL validator")
@@ -184,25 +192,115 @@ func (p *ResourceQuotaEnforcementPlugin) initializeEngines() {
 	p.logger.V(2).Info("Engines initialized successfully")
 }
 
-// initializeWatchManager initializes the shared informer-based watch manager
-func (p *ResourceQuotaEnforcementPlugin) initializeWatchManager() {
-	// Create shared informer-based watch manager with automatic reconnection
-	p.watchManager = NewClaimWatchManager(p.dynamicClient, p.logger.WithName("watch-manager"))
+// getClient routes to infrastructure or project-scoped clients based on request context.
+func (p *ResourceQuotaEnforcementPlugin) getClient(ctx context.Context) (dynamic.Interface, error) {
+	projectID, ok := milorequest.ProjectID(ctx)
+	if !ok || projectID == "" {
+		return p.dynamicClient, nil
+	}
+	return p.getProjectClient(projectID)
+}
 
-	// Start the watch manager in the background
-	// Note: We use context.Background() here because the watch manager needs to outlive individual requests
-	go func() {
-		if err := p.watchManager.Start(context.Background()); err != nil {
-			p.logger.Error(err, "Failed to start shared informer watch manager")
-		} else {
-			p.logger.V(2).Info("Shared informer watch manager started successfully")
+// getProjectClient creates or retrieves a cached client for a project's virtual control plane.
+func (p *ResourceQuotaEnforcementPlugin) getProjectClient(projectID string) (dynamic.Interface, error) {
+	if cached, ok := p.projectClients.Load(projectID); ok {
+		return cached.(dynamic.Interface), nil
+	}
+
+	if p.loopbackConfig == nil {
+		return nil, fmt.Errorf("loopback config not initialized for project client creation")
+	}
+
+	cfg := rest.CopyConfig(p.loopbackConfig)
+
+	// Host field supports URL paths to route requests to project control planes
+	projectPath := fmt.Sprintf("/apis/resourcemanager.miloapis.com/v1alpha1/projects/%s/control-plane", projectID)
+
+	if strings.HasPrefix(cfg.Host, "http://") || strings.HasPrefix(cfg.Host, "https://") {
+		cfg.Host = cfg.Host + projectPath
+	} else {
+		cfg.Host = cfg.Host + projectPath
+	}
+
+	client, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project dynamic client for project %s: %w", projectID, err)
+	}
+
+	actual, _ := p.projectClients.LoadOrStore(projectID, client)
+	p.logger.V(3).Info("Created project-specific dynamic client", "project", projectID, "path", projectPath)
+	return actual.(dynamic.Interface), nil
+}
+
+// getWatchManager returns a project-scoped watch manager, blocking until ready.
+func (p *ResourceQuotaEnforcementPlugin) getWatchManager(ctx context.Context) (ClaimWatchManager, error) {
+	projectID, _ := milorequest.ProjectID(ctx)
+
+	if cached, ok := p.watchManagers.Load(projectID); ok {
+		return cached.(ClaimWatchManager), nil
+	}
+
+	var client dynamic.Interface
+	var err error
+	if projectID == "" {
+		client = p.dynamicClient
+	} else {
+		client, err = p.getProjectClient(projectID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get project client for watch manager: %w", err)
 		}
+	}
+
+	logger := p.logger.WithName("watch-manager")
+	if projectID != "" {
+		logger = logger.WithValues("project", projectID)
+	}
+
+	wm := NewWatchManager(client, logger, projectID)
+
+	if wmWithCallback, ok := wm.(*watchManager); ok {
+		wmWithCallback.SetTTLExpiredCallback(func() {
+			p.logger.Info("Watch manager TTL expired, removing from cache",
+				"project", projectID)
+			p.watchManagers.Delete(projectID)
+		})
+	}
+
+	// Dedicated timeout prevents admission request timeout from affecting watch manager startup
+	startupTimeout := 30 * time.Second
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), startupTimeout)
+	defer startupCancel()
+
+	startChan := make(chan error, 1)
+	go func() {
+		startChan <- wm.Start(startupCtx)
 	}()
+
+	select {
+	case err := <-startChan:
+		if err != nil {
+			return nil, fmt.Errorf("failed to start watch manager: %w", err)
+		}
+	case <-startupCtx.Done():
+		return nil, fmt.Errorf("watch manager startup timed out after %v: %w", startupTimeout, startupCtx.Err())
+	}
+
+	actual, _ := p.watchManagers.LoadOrStore(projectID, wm)
+	if projectID == "" {
+		p.logger.V(2).Info("Created and started watch manager")
+	} else {
+		p.logger.V(2).Info("Created and started watch manager",
+			"project", projectID)
+	}
+	return actual.(ClaimWatchManager), nil
 }
 
 // Validate implements admission.ValidationInterface and orchestrates the main admission flow
 func (p *ResourceQuotaEnforcementPlugin) Validate(ctx context.Context, attrs admission.Attributes, _ admission.ObjectInterfaces) error {
+	projectID, _ := milorequest.ProjectID(ctx)
+
 	p.logger.V(3).Info("ResourceQuotaEnforcement admission plugin triggered",
+		"project", projectID,
 		"operation", attrs.GetOperation(),
 		"resource.group", attrs.GetKind().Group,
 		"resource.version", attrs.GetKind().Version,
@@ -243,9 +341,11 @@ func (p *ResourceQuotaEnforcementPlugin) Validate(ctx context.Context, attrs adm
 	return p.handleResourceQuotaEnforcement(ctx, attrs)
 }
 
-// handleResourceQuotaEnforcement enforces resource quotas by creating and validating ResourceClaims
+// handleResourceQuotaEnforcement enforces resource quotas by creating and validating ResourceClaims.
 func (p *ResourceQuotaEnforcementPlugin) handleResourceQuotaEnforcement(ctx context.Context, attrs admission.Attributes) error {
-	ctx, span := p.startSpan(ctx, "quota.admission.ResourceQuotaEnforcement",
+	projectID, _ := milorequest.ProjectID(ctx)
+
+	spanAttrs := []trace.SpanStartOption{
 		trace.WithAttributes(
 			attribute.String("operation", string(attrs.GetOperation())),
 			attribute.String("resource.name", attrs.GetName()),
@@ -255,10 +355,21 @@ func (p *ResourceQuotaEnforcementPlugin) handleResourceQuotaEnforcement(ctx cont
 			attribute.String("resource.kind", attrs.GetKind().Kind),
 			attribute.String("user.name", attrs.GetUserInfo().GetName()),
 			attribute.Bool("dry_run", attrs.IsDryRun()),
+		),
+	}
+
+	// Include parent context attributes when executing in a project control plane.
+	if projectID != "" {
+		spanAttrs = append(spanAttrs, trace.WithAttributes(
+			attribute.String("parent.kind", "Project"),
+			attribute.String("parent.name", projectID),
+			attribute.String("parent.api_group", "resourcemanager.miloapis.com"),
 		))
+	}
+
+	ctx, span := p.startSpan(ctx, "quota.admission.ResourceQuotaEnforcement", spanAttrs...)
 	defer span.End()
 
-	// Get the GVK from admission attributes
 	gvk := schema.GroupVersionKind{
 		Group:   attrs.GetKind().Group,
 		Version: attrs.GetKind().Version,
@@ -327,24 +438,38 @@ func (p *ResourceQuotaEnforcementPlugin) lookupPolicyForResource(ctx context.Con
 	return policy, nil
 }
 
-// processResourceWithPolicy handles resource creation when a policy is found and enabled
+// processResourceWithPolicy creates a ResourceClaim and blocks until quota is granted or denied.
+// Waiter registration precedes claim creation to prevent race conditions with watch events.
 func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.Context, attrs admission.Attributes, policy *quotav1alpha1.ClaimCreationPolicy, gvk schema.GroupVersionKind) error {
-	// Convert the resource being created to unstructured for CEL evaluation.
-	// The CEL engine requires map[string]interface{} (unstructured.Object) to evaluate
-	// trigger conditions against arbitrary resource types.
-	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(attrs.GetObject())
-	if err != nil {
-		p.logger.Error(err, "Failed to convert object to unstructured")
-		warning.AddWarning(ctx, "", fmt.Sprintf("Failed to process object for ResourceClaim creation: %v", err))
-		return nil // Don't block resource creation
+	// Get the object - it may be structured (native k8s types) or unstructured (CRDs)
+	obj := attrs.GetObject()
+	if obj == nil {
+		return fmt.Errorf("admission object is nil")
 	}
-	obj := &unstructured.Unstructured{Object: unstructuredMap}
+
+	// Convert to unstructured if needed
+	var unstructuredObj *unstructured.Unstructured
+	var err error
+
+	switch v := obj.(type) {
+	case *unstructured.Unstructured:
+		// Already unstructured (CRDs from apiextensions-apiserver)
+		unstructuredObj = v
+	default:
+		// Structured type (native k8s types like Secret, ConfigMap, etc.)
+		// Convert to unstructured for consistent processing
+		unstructuredMap, convErr := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		if convErr != nil {
+			return fmt.Errorf("failed to convert %T to unstructured: %w", obj, convErr)
+		}
+		unstructuredObj = &unstructured.Unstructured{Object: unstructuredMap}
+	}
 
 	// Build evaluation context
-	evalContext := p.buildEvaluationContext(attrs, obj)
+	evalContext := p.buildEvaluationContext(attrs, unstructuredObj)
 
 	// Evaluate trigger constraints to determine if this resource should trigger the policy
-	constraintsMet, err := p.templateEngine.EvaluateConditions(policy.Spec.Trigger.Constraints, obj)
+	constraintsMet, err := p.templateEngine.EvaluateConditions(policy.Spec.Trigger.Constraints, unstructuredObj)
 	if err != nil {
 		p.logger.Error(err, "Failed to evaluate policy constraints",
 			"policy", policy.Name,
@@ -367,7 +492,7 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		"resourceName", attrs.GetName())
 
 	// Create the ResourceClaim and wait for it to be granted
-	if err := p.createAndWaitForResourceClaim(ctx, policy, evalContext); err != nil {
+	if err := p.createAndWaitForResourceClaim(ctx, attrs, policy, evalContext); err != nil {
 		// ResourceClaim creation or granting failed - block the resource creation
 
 		// Record denied admission decision with full context
@@ -398,8 +523,9 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 	return nil // Allow original resource creation only if claim is granted
 }
 
-// createAndWaitForResourceClaim creates a ResourceClaim and waits for it to be granted.
-func (p *ResourceQuotaEnforcementPlugin) createAndWaitForResourceClaim(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy, evalContext *EvaluationContext) error {
+// createAndWaitForResourceClaim creates a ResourceClaim and blocks until the claim is resolved.
+// The waiter is registered before claim creation to prevent missed events.
+func (p *ResourceQuotaEnforcementPlugin) createAndWaitForResourceClaim(ctx context.Context, attrs admission.Attributes, policy *quotav1alpha1.ClaimCreationPolicy, evalContext *EvaluationContext) error {
 	ctx, span := p.startSpan(ctx, "quota.admission.ResourceQuotaEnforcement.createAndWaitForResourceClaim",
 		trace.WithAttributes(
 			attribute.String("policy.name", policy.Name),
@@ -408,66 +534,163 @@ func (p *ResourceQuotaEnforcementPlugin) createAndWaitForResourceClaim(ctx conte
 		))
 	defer span.End()
 
-	claimName, namespace, err := p.createResourceClaim(ctx, policy, evalContext)
+	watchManager, err := p.getWatchManager(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "Failed to get watch manager")
+		return fmt.Errorf("failed to get watch manager: %w", err)
+	}
+
+	// Determine claim name (must be deterministic to pre-register waiter before claim creation).
+	claimName, err := p.determineClaimName(evalContext, policy)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "Failed to determine claim name")
+		return fmt.Errorf("failed to determine claim name: %w", err)
+	}
+	namespace := p.getClaimNamespace(policy, evalContext)
+
+	span.SetAttributes(
+		attribute.String("claim.name", claimName),
+		attribute.String("claim.namespace", namespace),
+	)
+
+	p.logger.V(2).Info("Determined claim name",
+		"claimName", claimName,
+		"namespace", namespace,
+		"policy", policy.Name,
+		"resourceName", evalContext.Object.GetName())
+
+	// Register waiter before claim exists to ensure watch stream catches the ADDED event.
+	timeout := p.config.WatchManager.DefaultTimeout
+	resultChan, cancelFunc, err := watchManager.RegisterClaimWaiter(ctx, claimName, namespace, timeout)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "Failed to register waiter")
+		return fmt.Errorf("failed to register waiter: %w", err)
+	}
+	defer cancelFunc()
+
+	p.logger.V(2).Info("Waiter registered before claim creation",
+		"claimName", claimName,
+		"namespace", namespace,
+		"timeout", timeout)
+
+	err = p.createResourceClaim(ctx, attrs, policy, evalContext, claimName, namespace)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "Failed to create ResourceClaim")
 		return fmt.Errorf("failed to create ResourceClaim: %w", err)
 	}
 
-	span.SetAttributes(
-		attribute.String("claim.name", claimName),
-		attribute.String("claim.namespace", namespace),
-	)
-	p.logger.V(2).Info("Creating waiter for resource claim",
+	p.logger.V(2).Info("ResourceClaim created with predetermined name",
 		"claimName", claimName,
-		"namespace", namespace,
-	)
+		"namespace", namespace)
 
-	err = p.waitForClaimGranted(ctx, claimName, namespace)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "ResourceClaim was not granted")
-		return err
+	// Wait for result from watch stream.
+	select {
+	case result, ok := <-resultChan:
+		if !ok {
+			span.SetStatus(codes.Error, "Result channel closed")
+			return fmt.Errorf("result channel closed unexpectedly")
+		}
+
+		// result.Error is only set for genuine errors (timeout, claim deleted)
+		// not for denials which use Granted=false
+		if result.Error != nil {
+			span.RecordError(result.Error)
+			span.SetStatus(codes.Error, "Wait failed")
+			return result.Error
+		}
+
+		if result.Granted {
+			span.SetAttributes(
+				attribute.String("claim.result", "granted"),
+			)
+			p.logger.V(2).Info("ResourceClaim granted",
+				"claimName", claimName,
+				"namespace", namespace)
+			return nil
+		} else {
+			span.SetAttributes(
+				attribute.String("claim.result", "denied"),
+				attribute.String("claim.denial_reason", result.Reason),
+			)
+			p.logger.Info("ResourceClaim denied",
+				"claimName", claimName,
+				"namespace", namespace,
+				"reason", result.Reason)
+			return fmt.Errorf("ResourceClaim was denied: %s", result.Reason)
+		}
+
+	case <-ctx.Done():
+		span.SetStatus(codes.Error, "Context cancelled")
+		watchManager.UnregisterClaimWaiter(claimName, namespace)
+		return ctx.Err()
 	}
-
-	span.SetAttributes(attribute.String("claim.status", "granted"))
-	return nil
 }
 
-// createResourceClaim creates a ResourceClaim based on the policy and context.
-// Returns the claim name and namespace for watching.
-func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy, evalContext *EvaluationContext) (string, string, error) {
+// getClaimNamespace determines the namespace for a ResourceClaim.
+// If the policy template specifies a namespace containing CEL expressions,
+// the template is rendered to evaluate those expressions. Otherwise, the
+// namespace from the triggering resource is used.
+func (p *ResourceQuotaEnforcementPlugin) getClaimNamespace(policy *quotav1alpha1.ClaimCreationPolicy, evalContext *EvaluationContext) string {
+	if policy.Spec.Target.ResourceClaimTemplate.Metadata.Namespace != "" {
+		engineContext := p.convertToEngineContext(evalContext)
+		claim, err := p.templateEngine.RenderClaim(policy, engineContext)
+		if err != nil {
+			p.logger.Error(err, "Failed to render claim template for namespace extraction, using literal value",
+				"policy", policy.Name,
+				"namespace", policy.Spec.Target.ResourceClaimTemplate.Metadata.Namespace)
+			return policy.Spec.Target.ResourceClaimTemplate.Metadata.Namespace
+		}
+		return claim.Namespace
+	}
+
+	return evalContext.Object.GetNamespace()
+}
+
+// createResourceClaim creates a ResourceClaim with the specified name and namespace.
+// The claim name must be predetermined to allow waiter registration before creation.
+func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context, attrs admission.Attributes, policy *quotav1alpha1.ClaimCreationPolicy, evalContext *EvaluationContext, claimName, namespace string) error {
 	ctx, span := p.startSpan(ctx, "quota.admission.ResourceQuotaEnforcement.createResourceClaim",
 		trace.WithAttributes(
 			attribute.String("policy.name", policy.Name),
-			attribute.String("resource.name", evalContext.Object.GetName()),
-			attribute.String("resource.namespace", evalContext.Object.GetNamespace()),
+			attribute.String("claim.name", claimName),
+			attribute.String("claim.namespace", namespace),
 		))
 	defer span.End()
 
-	// Render the complete ResourceClaim from the policy template
-	// Convert admission EvaluationContext to engine EvaluationContext
 	engineContext := p.convertToEngineContext(evalContext)
 	claim, err := p.templateEngine.RenderClaim(policy, engineContext)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to render ResourceClaim: %w", err)
+		return fmt.Errorf("failed to render ResourceClaim: %w", err)
 	}
 
-	// Populate the ResourceRef with the unversioned reference to the resource being created
+	// Use predetermined name/namespace to ensure waiter receives events
+	claim.Name = claimName
+	claim.Namespace = namespace
+	claim.GenerateName = ""
+
 	claim.Spec.ResourceRef = quotav1alpha1.UnversionedObjectReference{
 		APIGroup:  evalContext.GVK.Group,
 		Kind:      evalContext.GVK.Kind,
-		Name:      evalContext.Object.GetName(),
-		Namespace: evalContext.Object.GetNamespace(), // Will be empty for cluster-scoped resources
+		Name:      attrs.GetName(),
+		Namespace: attrs.GetNamespace(),
 	}
 
-	// Default GenerateName if neither name nor generateName provided
-	if strings.TrimSpace(claim.Name) == "" && strings.TrimSpace(claim.GenerateName) == "" {
-		claim.GenerateName = p.generateResourceClaimNamePrefix(evalContext)
+	// Derive consumer from project context when template doesn't specify one
+	if claim.Spec.ConsumerRef.Kind == "" || claim.Spec.ConsumerRef.Name == "" {
+		projectID, ok := milorequest.ProjectID(ctx)
+		if ok && projectID != "" {
+			claim.Spec.ConsumerRef = quotav1alpha1.ConsumerRef{
+				APIGroup: "resourcemanager.miloapis.com",
+				Kind:     "Project",
+				Name:     projectID,
+			}
+		}
 	}
 
-	// Add admission-specific labels and annotations
 	if claim.Labels == nil {
 		claim.Labels = make(map[string]string)
 	}
@@ -475,12 +698,15 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 		claim.Annotations = make(map[string]string)
 	}
 
-	// Add standard admission labels
 	claim.Labels["quota.miloapis.com/auto-created"] = "true"
 	claim.Labels["quota.miloapis.com/policy"] = policy.Name
-	claim.Labels["quota.miloapis.com/gvk"] = fmt.Sprintf("%s.%s.%s", evalContext.GVK.Group, evalContext.GVK.Version, evalContext.GVK.Kind)
+	// Use "core" for empty group to match Kubernetes convention
+	group := evalContext.GVK.Group
+	if group == "" {
+		group = "core"
+	}
+	claim.Labels["quota.miloapis.com/gvk"] = fmt.Sprintf("%s.%s.%s", group, evalContext.GVK.Version, evalContext.GVK.Kind)
 
-	// Add standard admission annotations
 	claim.Annotations["quota.miloapis.com/created-by"] = "claim-creation-plugin"
 	claim.Annotations["quota.miloapis.com/created-at"] = time.Now().Format(time.RFC3339)
 	claim.Annotations["quota.miloapis.com/resource-name"] = evalContext.Object.GetName()
@@ -494,91 +720,27 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 
 	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(claim)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to convert ResourceClaim to unstructured: %w", err)
+		return fmt.Errorf("failed to convert ResourceClaim to unstructured: %w", err)
 	}
 	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
 
-	// Create the ResourceClaim using dynamic client
-	createdClaim, err := p.dynamicClient.Resource(gvr).Namespace(claim.Namespace).Create(ctx, unstructuredObj, metav1.CreateOptions{})
+	client, err := p.getClient(ctx)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create ResourceClaim: %w", err)
+		return fmt.Errorf("failed to get client for context: %w", err)
 	}
 
-	// Get the generated name from the created ResourceClaim
-	claimName := createdClaim.GetName()
+	_, err = client.Resource(gvr).Namespace(namespace).Create(ctx, unstructuredObj, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create ResourceClaim: %w", err)
+	}
 
 	p.logger.V(2).Info("ResourceClaim created successfully",
 		"claimName", claimName,
-		"namespace", claim.Namespace,
+		"namespace", namespace,
 		"policy", policy.Name,
-		"resourceName", evalContext.Object.GetName(),
 	)
 
-	return claimName, claim.Namespace, nil
-}
-
-// waitForClaimGranted watches a ResourceClaim and waits for it to be granted or denied.
-func (p *ResourceQuotaEnforcementPlugin) waitForClaimGranted(ctx context.Context, claimName, namespace string) error {
-	ctx, span := p.startSpan(ctx, "quota.admission.ResourceQuotaEnforcement.waitForClaimGranted",
-		trace.WithAttributes(
-			attribute.String("claim.name", claimName),
-			attribute.String("claim.namespace", namespace),
-		))
-	defer span.End()
-
-	// Use configured timeout
-	timeout := p.config.WatchManager.DefaultTimeout
-	span.SetAttributes(attribute.String("watch.timeout", timeout.String()))
-
-	p.logger.V(2).Info("Registering with shared watch manager for ResourceClaim status",
-		"name", claimName, "namespace", namespace, "timeout", timeout)
-
-	// Wait for the claim to be granted or denied
-	resultChan, cancelFunc, err := p.watchManager.RegisterClaimWaiter(ctx, claimName, namespace, timeout)
-	if err != nil {
-		return fmt.Errorf("failed to wait for claim: %w", err)
-	}
-	defer cancelFunc()
-
-	select {
-	case result, ok := <-resultChan:
-		if !ok {
-			// Channel was closed, likely due to cancellation
-			span.SetStatus(codes.Error, "Watch was cancelled")
-			return fmt.Errorf("watch was cancelled")
-		}
-
-		if result.Error != nil {
-			span.RecordError(result.Error)
-			span.SetStatus(codes.Error, "Watch error")
-			return result.Error
-		}
-
-		if result.Granted {
-			span.SetAttributes(
-				attribute.String("claim.result", "granted"),
-				attribute.String("watch.method", "shared"),
-			)
-			p.logger.V(2).Info("ResourceClaim granted via shared watch manager",
-				"name", claimName, "namespace", namespace)
-			return nil
-		} else {
-			span.SetAttributes(
-				attribute.String("claim.result", "denied"),
-				attribute.String("claim.denial_reason", result.Reason),
-				attribute.String("watch.method", "shared"),
-			)
-			p.logger.Info("ResourceClaim denied via shared watch manager",
-				"name", claimName, "namespace", namespace, "reason", result.Reason)
-			return fmt.Errorf("ResourceClaim was denied: %s", result.Reason)
-		}
-
-	case <-ctx.Done():
-		// Request context was cancelled
-		span.SetStatus(codes.Error, "Context cancelled")
-		p.watchManager.UnregisterClaimWaiter(claimName, namespace)
-		return ctx.Err()
-	}
+	return nil
 }
 
 // validateResourceClaim validates ResourceClaim objects when they are created directly
@@ -606,9 +768,16 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceClaim(ctx context.Conte
 		return nil
 	}
 
-	claim, ok := obj.(*quotav1alpha1.ResourceClaim)
+	// CRDs always arrive as unstructured from the apiextensions-apiserver
+	unstructuredObj, ok := obj.(*unstructured.Unstructured)
 	if !ok {
-		return fmt.Errorf("expected ResourceClaim, got %T", obj)
+		return fmt.Errorf("expected unstructured.Unstructured for CRD, got %T", obj)
+	}
+
+	// Convert to typed struct for validation
+	claim := &quotav1alpha1.ResourceClaim{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, claim); err != nil {
+		return fmt.Errorf("failed to convert to ResourceClaim: %w", err)
 	}
 
 	span.SetAttributes(
@@ -709,16 +878,35 @@ func (p *ResourceQuotaEnforcementPlugin) convertToEngineContext(admissionCtx *Ev
 	}
 }
 
-// generateResourceClaimNamePrefix creates a name prefix for ResourceClaim GenerateName.
-func (p *ResourceQuotaEnforcementPlugin) generateResourceClaimNamePrefix(evalContext *EvaluationContext) string {
-	// Generate a descriptive prefix for GenerateName
-	// Kubernetes will append a random suffix to ensure uniqueness
-	resourceName := evalContext.Object.GetName()
-	kind := evalContext.GVK.Kind
+// determineClaimName determines the claim name.
+// Renders the template first, then uses the name if specified, or generates
+// a name using Kubernetes standard name generation for generateName.
+func (p *ResourceQuotaEnforcementPlugin) determineClaimName(
+	evalContext *EvaluationContext,
+	policy *quotav1alpha1.ClaimCreationPolicy,
+) (string, error) {
+	// Render template to get name/generateName after CEL evaluation
+	engineContext := p.convertToEngineContext(evalContext)
+	claim, err := p.templateEngine.RenderClaim(policy, engineContext)
+	if err != nil {
+		return "", fmt.Errorf("failed to render claim template: %w", err)
+	}
 
-	// Format: {resourceName}-{kind}-claim-
-	// The trailing dash is important for GenerateName
-	return fmt.Sprintf("%s-%s-claim-", resourceName, strings.ToLower(kind))
+	// If name is specified in template (after rendering), use it directly
+	if claim.Name != "" {
+		return claim.Name, nil
+	}
+
+	// If generateName is specified, use Kubernetes standard name generation
+	if claim.GenerateName != "" {
+		return names.SimpleNameGenerator.GenerateName(claim.GenerateName), nil
+	}
+
+	// Neither name nor generateName - generate base name from resource and kind
+	baseName := fmt.Sprintf("%s-%s-claim-",
+		evalContext.Object.GetName(),
+		strings.ToLower(evalContext.GVK.Kind))
+	return names.SimpleNameGenerator.GenerateName(baseName), nil
 }
 
 // validateResourceRegistration validates ResourceRegistration objects for cross-resource duplicates.
@@ -743,10 +931,16 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceRegistration(ctx contex
 		return nil
 	}
 
-	// Convert to ResourceRegistration
-	registration, ok := obj.(*quotav1alpha1.ResourceRegistration)
+	// CRDs always arrive as unstructured from the apiextensions-apiserver
+	unstructuredObj, ok := obj.(*unstructured.Unstructured)
 	if !ok {
-		return fmt.Errorf("expected ResourceRegistration, got %T", obj)
+		return fmt.Errorf("expected unstructured.Unstructured for CRD, got %T", obj)
+	}
+
+	// Convert to typed struct for validation
+	registration := &quotav1alpha1.ResourceRegistration{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, registration); err != nil {
+		return fmt.Errorf("failed to convert to ResourceRegistration: %w", err)
 	}
 
 	span.SetAttributes(
@@ -792,10 +986,16 @@ func (p *ResourceQuotaEnforcementPlugin) validateClaimCreationPolicy(ctx context
 		return nil
 	}
 
-	// Convert to ClaimCreationPolicy
-	policy, ok := obj.(*quotav1alpha1.ClaimCreationPolicy)
+	// CRDs always arrive as unstructured from the apiextensions-apiserver
+	unstructuredObj, ok := obj.(*unstructured.Unstructured)
 	if !ok {
-		return fmt.Errorf("expected ClaimCreationPolicy, got %T", obj)
+		return fmt.Errorf("expected unstructured.Unstructured for CRD, got %T", obj)
+	}
+
+	// Convert to typed struct for validation
+	policy := &quotav1alpha1.ClaimCreationPolicy{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, policy); err != nil {
+		return fmt.Errorf("failed to convert to ClaimCreationPolicy: %w", err)
 	}
 
 	span.SetAttributes(
@@ -846,10 +1046,16 @@ func (p *ResourceQuotaEnforcementPlugin) validateGrantCreationPolicy(ctx context
 		return nil
 	}
 
-	// Convert to GrantCreationPolicy
-	policy, ok := obj.(*quotav1alpha1.GrantCreationPolicy)
+	// CRDs always arrive as unstructured from the apiextensions-apiserver
+	unstructuredObj, ok := obj.(*unstructured.Unstructured)
 	if !ok {
-		return fmt.Errorf("expected GrantCreationPolicy, got %T", obj)
+		return fmt.Errorf("expected unstructured.Unstructured for CRD, got %T", obj)
+	}
+
+	// Convert to typed struct for validation
+	policy := &quotav1alpha1.GrantCreationPolicy{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, policy); err != nil {
+		return fmt.Errorf("failed to convert to GrantCreationPolicy: %w", err)
 	}
 
 	span.SetAttributes(
@@ -900,10 +1106,16 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceGrant(ctx context.Conte
 		return nil
 	}
 
-	// Convert to ResourceGrant
-	grant, ok := obj.(*quotav1alpha1.ResourceGrant)
+	// CRDs always arrive as unstructured from the apiextensions-apiserver
+	unstructuredObj, ok := obj.(*unstructured.Unstructured)
 	if !ok {
-		return fmt.Errorf("expected ResourceGrant, got %T", obj)
+		return fmt.Errorf("expected unstructured.Unstructured for CRD, got %T", obj)
+	}
+
+	// Convert to typed struct for validation
+	grant := &quotav1alpha1.ResourceGrant{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, grant); err != nil {
+		return fmt.Errorf("failed to convert to ResourceGrant: %w", err)
 	}
 
 	span.SetAttributes(

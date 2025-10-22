@@ -23,13 +23,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	mcbuilder "sigs.k8s.io/multicluster-runtime/pkg/builder"
+	mccontext "sigs.k8s.io/multicluster-runtime/pkg/context"
+	mchandler "sigs.k8s.io/multicluster-runtime/pkg/handler"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
@@ -43,8 +45,8 @@ const (
 // aggregated quota (Limit/Allocated/Available). It is the single writer for
 // bucket objects; other controllers are read-only.
 type AllowanceBucketController struct {
-	client.Client
-	Scheme *runtime.Scheme
+	Scheme  *runtime.Scheme
+	Manager mcmanager.Manager
 }
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=allowancebuckets,verbs=get;list;watch;create;update;patch;delete
@@ -54,18 +56,30 @@ type AllowanceBucketController struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceclaims/status,verbs=get;update;patch
 
 // Reconcile maintains AllowanceBucket limits and usage aggregates by watching
-// ResourceGrants and ResourceClaims.
-func (r *AllowanceBucketController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// ResourceGrants and ResourceClaims across all control planes.
+func (r *AllowanceBucketController) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+	if req.ClusterName != "" {
+		logger = logger.WithValues("cluster", req.ClusterName)
+		ctx = log.IntoContext(ctx, logger)
+	}
+
+	// Multicluster support enables quota enforcement across project control planes
+	cluster, err := r.Manager.GetCluster(ctx, req.ClusterName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster %q: %w", req.ClusterName, err)
+	}
+	clusterClient := cluster.GetClient()
+
 	// Get the AllowanceBucket
 	var bucket quotav1alpha1.AllowanceBucket
-	if err := r.Get(ctx, req.NamespacedName, &bucket); err != nil {
+	if err := clusterClient.Get(ctx, req.NamespacedName, &bucket); err != nil {
 		if apierrors.IsNotFound(err) {
-			// Single-writer: attempt to create the bucket if a claim references it
-			if err := r.ensureBucketFromClaims(ctx, req); err != nil {
+			// Single-writer pattern: create bucket on first claim reference
+			if err := r.ensureBucketFromClaims(ctx, clusterClient, req.NamespacedName); err != nil {
 				return ctrl.Result{}, err
 			}
-			// Return early. If an allowance bucket was created, the request has
-			// already been requeued and will be retried.
+			// Bucket creation triggers automatic requeue via watch event
 			return ctrl.Result{}, nil
 		} else {
 			return ctrl.Result{}, fmt.Errorf("failed to get AllowanceBucket: %w", err)
@@ -76,41 +90,41 @@ func (r *AllowanceBucketController) Reconcile(ctx context.Context, req ctrl.Requ
 	bucket.Status.ObservedGeneration = bucket.Generation
 
 	// Calculate limits from ResourceGrants
-	if err := r.updateLimitsFromGrants(ctx, &bucket); err != nil {
+	if err := r.updateLimitsFromGrants(ctx, clusterClient, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update limits from grants: %w", err)
 	}
 
 	// Calculate usage from ResourceClaims
-	if err := r.updateUsageFromClaims(ctx, &bucket); err != nil {
+	if err := r.updateUsageFromClaims(ctx, clusterClient, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update usage from claims: %w", err)
 	}
 
 	// Try to grant pending claims by reserving capacity
-	if err := r.processPendingClaims(ctx, &bucket); err != nil {
+	if err := r.processPendingClaims(ctx, clusterClient, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed processing pending grants: %w", err)
 	}
 
-	// Calculate available quota after any reservations
-	// Ensure Available is never negative (validation constraint)
+	// Enforce non-negative Available quota (validation constraint)
 	bucket.Status.Available = max(0, bucket.Status.Limit-bucket.Status.Allocated)
 
 	// Update last reconciliation time
 	bucket.Status.LastReconciliation = ptr.To(metav1.Now())
 
-	// Update status (Kubernetes API server efficiently handles no-op updates)
-	if err := r.Status().Update(ctx, &bucket); err != nil {
+	// API server handles no-op updates efficiently
+	if err := clusterClient.Status().Update(ctx, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update AllowanceBucket status: %w", err)
 	}
 
 	return ctrl.Result{}, nil
 }
 
-// updateLimitsFromGrants calculates the total limit from all applicable ResourceGrants.
-func (r *AllowanceBucketController) updateLimitsFromGrants(ctx context.Context, bucket *quotav1alpha1.AllowanceBucket) error {
+// updateLimitsFromGrants calculates total quota limits from active ResourceGrants.
+// Searches cluster-wide because buckets are centralized but grants may be distributed.
+func (r *AllowanceBucketController) updateLimitsFromGrants(ctx context.Context, clusterClient client.Client, bucket *quotav1alpha1.AllowanceBucket) error {
 
-	// List all ResourceGrants in the same namespace
+	// Centralized buckets require scanning all namespaces for grants
 	var grants quotav1alpha1.ResourceGrantList
-	if err := r.List(ctx, &grants, client.InNamespace(bucket.Namespace)); err != nil {
+	if err := clusterClient.List(ctx, &grants); err != nil {
 		return fmt.Errorf("failed to list ResourceGrants: %w", err)
 	}
 
@@ -156,10 +170,10 @@ func (r *AllowanceBucketController) updateLimitsFromGrants(ctx context.Context, 
 
 // updateUsageFromClaims calculates the total allocated usage from ResourceClaims
 // based on individual request allocations that have been granted.
-func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, bucket *quotav1alpha1.AllowanceBucket) error {
+func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, clusterClient client.Client, bucket *quotav1alpha1.AllowanceBucket) error {
 	// Find all ResourceClaims cluster-wide that reference this bucket's consumer
 	var claims quotav1alpha1.ResourceClaimList
-	if err := r.List(ctx, &claims,
+	if err := clusterClient.List(ctx, &claims,
 		client.MatchingFields{resourceClaimConsumerRefIndex: consumerRefKey(bucket.Spec.ConsumerRef)},
 	); err != nil {
 		return fmt.Errorf("failed to list ResourceClaims: %w", err)
@@ -215,20 +229,20 @@ func (r *AllowanceBucketController) updateUsageFromClaims(ctx context.Context, b
 
 // ensureBucketFromClaims creates the bucket spec from a referencing claim if found.
 // It returns true if a bucket was created, false if no referencing claim was found.
-func (r *AllowanceBucketController) ensureBucketFromClaims(ctx context.Context, req ctrl.Request) error {
+func (r *AllowanceBucketController) ensureBucketFromClaims(ctx context.Context, clusterClient client.Client, bucketKey types.NamespacedName) error {
 	var claims quotav1alpha1.ResourceClaimList
-	if err := r.List(ctx, &claims); err != nil {
+	if err := clusterClient.List(ctx, &claims); err != nil {
 		return fmt.Errorf("failed to list ResourceClaims: %w", err)
 	}
 	for _, claim := range claims.Items {
 		for _, request := range claim.Spec.Requests {
-			name := generateAllowanceBucketName(claim.Namespace, request.ResourceType, claim.Spec.ConsumerRef)
-			if name == req.Name {
+			name := generateAllowanceBucketName(request.ResourceType, claim.Spec.ConsumerRef)
+			if name == bucketKey.Name {
 				// create bucket
 				bucket := &quotav1alpha1.AllowanceBucket{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      req.Name,
-						Namespace: req.Namespace,
+						Name:      bucketKey.Name,
+						Namespace: bucketKey.Namespace,
 						Labels: map[string]string{
 							"quota.miloapis.com/consumer-kind": claim.Spec.ConsumerRef.Kind,
 							"quota.miloapis.com/consumer-name": claim.Spec.ConsumerRef.Name,
@@ -239,8 +253,8 @@ func (r *AllowanceBucketController) ensureBucketFromClaims(ctx context.Context, 
 						ResourceType: request.ResourceType,
 					},
 				}
-				if err := r.Create(ctx, bucket); err != nil && !apierrors.IsAlreadyExists(err) {
-					return fmt.Errorf("failed to create AllowanceBucket %s: %w", req.Name, err)
+				if err := clusterClient.Create(ctx, bucket); err != nil && !apierrors.IsAlreadyExists(err) {
+					return fmt.Errorf("failed to create AllowanceBucket %s: %w", bucketKey.Name, err)
 				}
 				return nil
 			}
@@ -257,10 +271,10 @@ func (r *AllowanceBucketController) isResourceGrantActive(grant *quotav1alpha1.R
 // processPendingClaims attempts to grant pending requests that reference this bucket.
 // For each eligible claim, it evaluates individual requests that match this bucket,
 // reserves capacity, then marks specific request allocations as Granted/Denied.
-func (r *AllowanceBucketController) processPendingClaims(ctx context.Context, bucket *quotav1alpha1.AllowanceBucket) error {
+func (r *AllowanceBucketController) processPendingClaims(ctx context.Context, clusterClient client.Client, bucket *quotav1alpha1.AllowanceBucket) error {
 	logger := log.FromContext(ctx)
 	var claims quotav1alpha1.ResourceClaimList
-	if err := r.List(ctx, &claims,
+	if err := clusterClient.List(ctx, &claims,
 		client.MatchingFields{resourceClaimConsumerRefIndex: consumerRefKey(bucket.Spec.ConsumerRef)},
 	); err != nil {
 		return fmt.Errorf("failed to list ResourceClaims: %w", err)
@@ -296,7 +310,7 @@ func (r *AllowanceBucketController) processPendingClaims(ctx context.Context, bu
 					"available", limit-allocated)
 
 				// Mark this specific request as denied
-				if err := r.updateResourceClaimAllocation(ctx, &claim, request.ResourceType, quotav1alpha1.ResourceClaimAllocationStatusDenied,
+				if err := r.updateResourceClaimAllocation(ctx, clusterClient, &claim, request.ResourceType, quotav1alpha1.ResourceClaimAllocationStatusDenied,
 					quotav1alpha1.ResourceClaimDeniedReason,
 					fmt.Sprintf("Resource quota exceeded: requested %d, available %d", request.Amount, limit-allocated),
 					0, "", fieldManagerName); err != nil {
@@ -312,7 +326,7 @@ func (r *AllowanceBucketController) processPendingClaims(ctx context.Context, bu
 			bucket.Status.Available = max(0, bucket.Status.Limit-bucket.Status.Allocated)
 			bucket.Status.ObservedGeneration = bucket.Generation
 
-			if err := r.Status().Update(ctx, bucket); err != nil {
+			if err := clusterClient.Status().Update(ctx, bucket); err != nil {
 				if apierrors.IsConflict(err) {
 					// Controller runtime will automatically re-queue this resource
 					return nil
@@ -324,7 +338,7 @@ func (r *AllowanceBucketController) processPendingClaims(ctx context.Context, bu
 			allocated = bucket.Status.Allocated
 
 			// Mark this specific request as granted
-			if err := r.updateResourceClaimAllocation(ctx, &claim, request.ResourceType, quotav1alpha1.ResourceClaimAllocationStatusGranted,
+			if err := r.updateResourceClaimAllocation(ctx, clusterClient, &claim, request.ResourceType, quotav1alpha1.ResourceClaimAllocationStatusGranted,
 				quotav1alpha1.ResourceClaimGrantedReason,
 				"Capacity reserved",
 				request.Amount, bucket.Name, fieldManagerName); err != nil {
@@ -351,7 +365,7 @@ func (r *AllowanceBucketController) isResourceClaimAllocationProcessed(claim *qu
 }
 
 // updateResourceClaimAllocation updates or creates a request allocation status using Server Side Apply.
-func (r *AllowanceBucketController) updateResourceClaimAllocation(ctx context.Context, claim *quotav1alpha1.ResourceClaim,
+func (r *AllowanceBucketController) updateResourceClaimAllocation(ctx context.Context, clusterClient client.Client, claim *quotav1alpha1.ResourceClaim,
 	resourceType string, status, reason, message string, allocatedAmount int64, bucketName, fieldManagerName string) error {
 
 	allocation := quotav1alpha1.ResourceClaimAllocationStatus{
@@ -385,7 +399,7 @@ func (r *AllowanceBucketController) updateResourceClaimAllocation(ctx context.Co
 
 	// Apply the patch using Server Side Apply with our field manager
 	// The allocations list is a map-list keyed by resourceType, so SSA will merge entries correctly
-	if err := r.Status().Patch(ctx, patchClaim, client.Apply, client.FieldOwner(fieldManagerName)); err != nil {
+	if err := clusterClient.Status().Patch(ctx, patchClaim, client.Apply, client.FieldOwner(fieldManagerName)); err != nil {
 		return fmt.Errorf("failed to apply request allocation status: %w", err)
 	}
 
@@ -393,9 +407,22 @@ func (r *AllowanceBucketController) updateResourceClaimAllocation(ctx context.Co
 }
 
 // generateAllowanceBucketName creates a deterministic name for an AllowanceBucket.
-func generateAllowanceBucketName(namespace, resourceType string, ownerRef quotav1alpha1.ConsumerRef) string {
-	input := fmt.Sprintf("%s%s%s%s", namespace, resourceType, ownerRef.Kind, ownerRef.Name)
+// Buckets are global per consumer and resource type, not per claim namespace.
+func generateAllowanceBucketName(resourceType string, ownerRef quotav1alpha1.ConsumerRef) string {
+	input := fmt.Sprintf("%s%s%s", resourceType, ownerRef.Kind, ownerRef.Name)
 	return fmt.Sprintf("bucket-%x", sha256.Sum256([]byte(input)))
+}
+
+// getBucketNamespace determines the namespace where an AllowanceBucket should be created
+// based on the consumer type:
+// - Organization consumers → organization-{name} namespace
+// - Project consumers → milo-system namespace (centralized quota tracking)
+// - Other consumers → milo-system namespace (default)
+func getBucketNamespace(consumerRef quotav1alpha1.ConsumerRef) string {
+	if consumerRef.Kind == "Organization" {
+		return fmt.Sprintf("organization-%s", consumerRef.Name)
+	}
+	return "milo-system"
 }
 
 // consumerRefKey generates a consistent field index key for a ConsumerRef.
@@ -405,28 +432,47 @@ func consumerRefKey(ref quotav1alpha1.ConsumerRef) string {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AllowanceBucketController) SetupWithManager(mgr ctrl.Manager) error {
-	// Set up field index for efficient ResourceClaim queries by ConsumerRef
+// This controller watches AllowanceBuckets, ResourceGrants, and ResourceClaims across all control planes.
+func (r *AllowanceBucketController) SetupWithManager(mgr mcmanager.Manager) error {
+	indexFunc := func(obj client.Object) []string {
+		claim := obj.(*quotav1alpha1.ResourceClaim)
+		return []string{consumerRefKey(claim.Spec.ConsumerRef)}
+	}
+
+	// Register index on both multicluster manager and local manager to support queries across all clusters
 	if err := mgr.GetFieldIndexer().IndexField(
 		context.Background(),
 		&quotav1alpha1.ResourceClaim{},
 		resourceClaimConsumerRefIndex,
-		func(obj client.Object) []string {
-			claim := obj.(*quotav1alpha1.ResourceClaim)
-			return []string{consumerRefKey(claim.Spec.ConsumerRef)}
-		},
+		indexFunc,
 	); err != nil {
-		return fmt.Errorf("failed to set up field index for ResourceClaim.Spec.ConsumerRef: %w", err)
+		return fmt.Errorf("failed to set up field index for ResourceClaim.Spec.ConsumerRef on provider clusters: %w", err)
 	}
 
-	// Watch buckets directly; react to grants/claims that change aggregates.
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&quotav1alpha1.AllowanceBucket{}).
+	if err := mgr.GetLocalManager().GetFieldIndexer().IndexField(
+		context.Background(),
+		&quotav1alpha1.ResourceClaim{},
+		resourceClaimConsumerRefIndex,
+		indexFunc,
+	); err != nil {
+		return fmt.Errorf("failed to set up field index for ResourceClaim.Spec.ConsumerRef on local cluster: %w", err)
+	}
+
+	return mcbuilder.ControllerManagedBy(mgr).
+		For(&quotav1alpha1.AllowanceBucket{},
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true)).
 		// Watch ResourceGrants that affect bucket limits
 		Watches(
 			&quotav1alpha1.ResourceGrant{},
-			handler.EnqueueRequestsFromMapFunc(r.enqueueAffectedBuckets),
-			builder.WithPredicates(predicate.Funcs{
+			mchandler.TypedEnqueueRequestsFromMapFunc(
+				func(ctx context.Context, obj client.Object) []mcreconcile.Request {
+					return r.enqueueAffectedBuckets(ctx, obj)
+				},
+			),
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true),
+			mcbuilder.WithPredicates(predicate.Funcs{
 				CreateFunc: func(e event.CreateEvent) bool {
 					// React on new grants so newly active grants can be picked up
 					return true
@@ -447,8 +493,14 @@ func (r *AllowanceBucketController) SetupWithManager(mgr ctrl.Manager) error {
 		// Watch ResourceClaims that affect bucket usage
 		Watches(
 			&quotav1alpha1.ResourceClaim{},
-			handler.EnqueueRequestsFromMapFunc(r.enqueueAffectedBuckets),
-			builder.WithPredicates(predicate.Funcs{
+			mchandler.TypedEnqueueRequestsFromMapFunc(
+				func(ctx context.Context, obj client.Object) []mcreconcile.Request {
+					return r.enqueueAffectedBuckets(ctx, obj)
+				},
+			),
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true),
+			mcbuilder.WithPredicates(predicate.Funcs{
 				CreateFunc: func(e event.CreateEvent) bool {
 					// React immediately on new claims to create buckets on demand
 					return true
@@ -477,61 +529,47 @@ func (r *AllowanceBucketController) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // enqueueAffectedBuckets determines which AllowanceBuckets need to be reconciled
-// when ResourceGrants or ResourceClaims change.
-func (r *AllowanceBucketController) enqueueAffectedBuckets(ctx context.Context, obj client.Object) []reconcile.Request {
-	logger := log.FromContext(ctx)
-	var requests []reconcile.Request
+// when ResourceGrants or ResourceClaims change. Buckets are centralized in milo-system namespace.
+func (r *AllowanceBucketController) enqueueAffectedBuckets(ctx context.Context, obj client.Object) []mcreconcile.Request {
+	var requests []mcreconcile.Request
+
+	clusterName, _ := mccontext.ClusterFrom(ctx)
 
 	switch o := obj.(type) {
 	case *quotav1alpha1.ResourceGrant:
-		// For each allowance in the grant, find matching buckets
+		// For each allowance in the grant, enqueue the corresponding bucket
+		// Bucket namespace is determined by consumer type (Organization namespace or milo-system)
 		for _, allowance := range o.Spec.Allowances {
-			buckets, err := r.findBucketsForResourceType(ctx, o.Namespace, allowance.ResourceType, o.Spec.ConsumerRef)
-			if err != nil {
-				logger.Error(err, "Failed to find buckets for grant", "grantName", o.Name)
-				continue
-			}
-			for _, bucket := range buckets {
-				requests = append(requests, reconcile.Request{
+			bucketName := generateAllowanceBucketName(allowance.ResourceType, o.Spec.ConsumerRef)
+			bucketNamespace := getBucketNamespace(o.Spec.ConsumerRef)
+			requests = append(requests, mcreconcile.Request{
+				ClusterName: clusterName,
+				Request: ctrl.Request{
 					NamespacedName: types.NamespacedName{
-						Name:      bucket.Name,
-						Namespace: bucket.Namespace,
+						Name:      bucketName,
+						Namespace: bucketNamespace,
 					},
-				})
-			}
+				},
+			})
 		}
 
 	case *quotav1alpha1.ResourceClaim:
-		// For each request in the claim, find matching buckets
+		// For each request in the claim, enqueue the corresponding bucket
+		// Bucket namespace is determined by consumer type (Organization namespace or milo-system)
 		for _, request := range o.Spec.Requests {
-			bucketName := generateAllowanceBucketName(o.Namespace, request.ResourceType, o.Spec.ConsumerRef)
-			requests = append(requests, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      bucketName,
-					Namespace: o.Namespace,
+			bucketName := generateAllowanceBucketName(request.ResourceType, o.Spec.ConsumerRef)
+			bucketNamespace := getBucketNamespace(o.Spec.ConsumerRef)
+			requests = append(requests, mcreconcile.Request{
+				ClusterName: clusterName,
+				Request: ctrl.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      bucketName,
+						Namespace: bucketNamespace,
+					},
 				},
 			})
 		}
 	}
 
 	return requests
-}
-
-// findBucketsForResourceType finds all AllowanceBuckets for a given resource type and owner.
-func (r *AllowanceBucketController) findBucketsForResourceType(ctx context.Context, namespace, resourceType string, ownerRef quotav1alpha1.ConsumerRef) ([]quotav1alpha1.AllowanceBucket, error) {
-	var buckets quotav1alpha1.AllowanceBucketList
-	if err := r.List(ctx, &buckets, client.InNamespace(namespace)); err != nil {
-		return nil, err
-	}
-
-	var matchingBuckets []quotav1alpha1.AllowanceBucket
-	for _, bucket := range buckets.Items {
-		if bucket.Spec.ResourceType == resourceType &&
-			bucket.Spec.ConsumerRef.Kind == ownerRef.Kind &&
-			bucket.Spec.ConsumerRef.Name == ownerRef.Name {
-			matchingBuckets = append(matchingBuckets, bucket)
-		}
-	}
-
-	return matchingBuckets, nil
 }

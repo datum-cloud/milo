@@ -17,6 +17,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	mcbuilder "sigs.k8s.io/multicluster-runtime/pkg/builder"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 
 	"go.miloapis.com/milo/internal/informer"
 	"go.miloapis.com/milo/internal/quota/engine"
@@ -25,29 +28,20 @@ import (
 
 // GrantCreationController watches trigger resources and creates grants based on active policies.
 type GrantCreationController struct {
-	client.Client
-	// Scheme is the runtime scheme for object serialization.
-	Scheme *runtime.Scheme
-	// TemplateEngine renders grant templates with trigger resource data.
-	TemplateEngine engine.TemplateEngine
-	// CELEngine evaluates CEL expressions for parent context resolution.
-	CELEngine engine.CELEngine
-	// ParentContextResolver resolves cross-cluster clients for grant creation.
+	Scheme                *runtime.Scheme
+	Manager               mcmanager.Manager
+	TemplateEngine        engine.TemplateEngine
+	CELEngine             engine.CELEngine
 	ParentContextResolver *ParentContextResolver
-	// EventRecorder records events for processed resources.
-	EventRecorder record.EventRecorder
+	EventRecorder         record.EventRecorder
 
-	// informerManager manages dynamic watches for trigger resources.
 	informerManager informer.Manager
-	// logger is the controller's logger instance.
-	logger logr.Logger
+	logger          logr.Logger
 }
 
 // grantCreationHandler implements informer.ResourceEventHandler for grant creation.
 type grantCreationHandler struct {
-	// controller is the parent GrantCreationController.
 	controller *GrantCreationController
-	// policyName is the name of the policy this handler processes.
 	policyName string
 }
 
@@ -68,7 +62,7 @@ func (h *grantCreationHandler) OnDelete(obj *unstructured.Unstructured) {
 
 // NewGrantCreationController creates a new GrantCreationController.
 func NewGrantCreationController(
-	client client.Client,
+	manager mcmanager.Manager,
 	scheme *runtime.Scheme,
 	templateEngine engine.TemplateEngine,
 	celEngine engine.CELEngine,
@@ -79,7 +73,7 @@ func NewGrantCreationController(
 	logger := ctrl.Log.WithName("grant-creation")
 
 	return &GrantCreationController{
-		Client:                client,
+		Manager:               manager,
 		Scheme:                scheme,
 		TemplateEngine:        templateEngine,
 		CELEngine:             celEngine,
@@ -137,12 +131,22 @@ func (r *GrantCreationController) processTriggerResource(obj *unstructured.Unstr
 }
 
 // Reconcile handles GrantCreationPolicy changes.
-func (r *GrantCreationController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *GrantCreationController) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("policyName", req.Name)
+	if req.ClusterName != "" {
+		logger = logger.WithValues("cluster", req.ClusterName)
+		ctx = log.IntoContext(ctx, logger)
+	}
+
+	cluster, err := r.Manager.GetCluster(ctx, req.ClusterName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster %q: %w", req.ClusterName, err)
+	}
+	clusterClient := cluster.GetClient()
 
 	// Fetch the policy
 	var policy quotav1alpha1.GrantCreationPolicy
-	if err := r.Get(ctx, req.NamespacedName, &policy); err != nil {
+	if err := clusterClient.Get(ctx, req.NamespacedName, &policy); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Policy was deleted
 			logger.Info("Policy deleted, removing watch")
@@ -226,11 +230,14 @@ func (r *GrantCreationController) removeWatchForPolicy(ctx context.Context, poli
 }
 
 // getPolicyByName retrieves a GrantCreationPolicy by name.
+// Uses local cluster client since policies exist in the core control plane.
 func (r *GrantCreationController) getPolicyByName(ctx context.Context, name string) (*quotav1alpha1.GrantCreationPolicy, error) {
 	policy := &quotav1alpha1.GrantCreationPolicy{}
 	key := client.ObjectKey{Name: name}
 
-	if err := r.Get(ctx, key, policy); err != nil {
+	clusterClient := r.Manager.GetLocalManager().GetClient()
+
+	if err := clusterClient.Get(ctx, key, policy); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, nil
 		}
@@ -284,15 +291,14 @@ func (r *GrantCreationController) processPolicy(
 }
 
 // resolveTargetClient determines the target client for grant creation.
-// The namespace is always rendered by the template engine, so only the client is returned.
+// Namespace is always rendered by the template engine.
 func (r *GrantCreationController) resolveTargetClient(
 	ctx context.Context,
 	policy *quotav1alpha1.GrantCreationPolicy,
 	triggerObj *unstructured.Unstructured,
 ) (client.Client, error) {
-	// If no parent context is specified, use the current client
 	if policy.Spec.Target.ParentContext == nil {
-		return r.Client, nil
+		return r.Manager.GetLocalManager().GetClient(), nil
 	}
 
 	// Resolve parent context name using CEL template expression
@@ -426,12 +432,13 @@ func (r *GrantCreationController) cleanupGrant(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *GrantCreationController) SetupWithManager(mgr ctrl.Manager) error {
+func (r *GrantCreationController) SetupWithManager(mgr mcmanager.Manager) error {
 	r.logger.Info("Setting up GrantCreationController")
 
-	// Watch GrantCreationPolicies to update dynamic watches when policies change
-	controller := ctrl.NewControllerManagedBy(mgr).
-		For(&quotav1alpha1.GrantCreationPolicy{}).
+	controller := mcbuilder.ControllerManagedBy(mgr).
+		For(&quotav1alpha1.GrantCreationPolicy{},
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true)).
 		Named("grant-creation-controller")
 
 	r.logger.Info("GrantCreationController setup completed successfully")

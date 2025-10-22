@@ -76,10 +76,6 @@ spec:
               jsonPath:
                 path: '{.status.phase}'
                 value: Active
-        - apply:
-            file: 03-test-user.yaml
-        - apply:
-            file: 04-multi-resource-membership.yaml
 
     # Create multiple resource grants
     - name: setup-multi-resource-grants

@@ -70,8 +70,9 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
 
 	// Register JSON logging format
 	_ "k8s.io/component-base/logs/json/register"
@@ -90,6 +91,7 @@ import (
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	miloprovider "go.miloapis.com/milo/pkg/multicluster-runtime/milo"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 )
 
@@ -391,7 +393,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					HealthProbeBindAddress: "0",
 					// The existing controller manage endpoint already exposes a metrics
 					// endpoint. We can disable this one to avoid conflicts.
-					Metrics: server.Options{
+					Metrics: metricsserver.Options{
 						BindAddress: "0",
 					},
 					WebhookServer: webhook.NewServer(webhook.Options{
@@ -490,8 +492,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			// Setup all quota controllers using the registry
-			// Create a dedicated config for dynamic client with even higher rate limits for quota operations
+			// Quota enforcement requires cross-cluster coordination
+			logger.Info("Creating multicluster manager for quota system")
+
+			// Quota operations require higher rate limits to handle cross-cluster coordination
 			quotaDynamicConfig := *ctrlConfig
 			quotaDynamicConfig.QPS = 500
 			quotaDynamicConfig.Burst = 1000
@@ -502,10 +506,64 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			if err := quotacontroller.SetupQuotaControllers(ctrl, dynamicClient, logger.WithName("quota")); err != nil {
+			// Provider enables dynamic discovery of project control planes for cross-cluster quota enforcement
+			provider, err := miloprovider.New(ctrl, miloprovider.Options{
+				ClusterOptions: []cluster.Option{
+					func(o *cluster.Options) {
+						o.Scheme = Scheme
+					},
+				},
+				InternalServiceDiscovery: false, // Use Project resources for user-facing API
+				ProjectRestConfig:        ctrlConfig,
+			})
+			if err != nil {
+				logger.Error(err, "Error creating Milo provider for multicluster quota")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			mcMgr, err := mcmanager.New(ctrlConfig, provider, mcmanager.Options{
+				Scheme: Scheme,
+				Logger: logger.WithName("multicluster"),
+				Metrics: metricsserver.Options{
+					BindAddress: "0", // Avoid port conflict with main manager
+				},
+			})
+			if err != nil {
+				logger.Error(err, "Error creating multicluster manager")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			if err := quotacontroller.SetupQuotaControllers(mcMgr, dynamicClient, logger.WithName("quota")); err != nil {
 				logger.Error(err, "Error setting up quota controllers")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+
+			// Engage local cluster before starting to prevent race conditions with informer initialization.
+			// Local cluster ("") hosts ResourceRegistrations and core quota resources.
+			logger.Info("Engaging local cluster for quota controllers")
+			localCluster := mcMgr.GetLocalManager()
+			if err := mcMgr.Engage(ctx, "", localCluster); err != nil {
+				logger.Error(err, "Error engaging local cluster")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			logger.Info("Local cluster engaged successfully")
+
+			// Start concurrently to resolve circular dependency between provider and manager
+			go func() {
+				logger.Info("Starting Datum cluster provider")
+				if err := provider.Run(ctx, mcMgr); err != nil {
+					logger.Error(err, "Datum cluster provider failed")
+					panic(err)
+				}
+			}()
+
+			go func() {
+				logger.Info("Starting multicluster manager for quota system")
+				if err := mcMgr.Start(ctx); err != nil {
+					logger.Error(err, "Multicluster manager failed")
+					panic(err)
+				}
+			}()
 
 			userCtrl := iamcontroller.UserController{
 				Client: ctrl.GetClient(),

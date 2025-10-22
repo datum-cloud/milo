@@ -13,12 +13,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	mcbuilder "sigs.k8s.io/multicluster-runtime/pkg/builder"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 )
@@ -48,11 +51,10 @@ type OrphanAnalysis struct {
 //   - Fast path: When a claim is Granted=True and has no ownerRefs, resolve and set a
 //     single controller ownerRef via Server-Side Apply.
 //   - Safety net: After a grace period, rescue claims whose owner now exists; delete
-//     claims past a max age if the owner still doesn’t exist.
+//     claims past a max age if the owner still doesn't exist.
 type ResourceClaimOwnershipController struct {
-	client.Client
-	DynamicClient dynamic.Interface
-	Scheme        *runtime.Scheme
+	Scheme  *runtime.Scheme
+	Manager mcmanager.Manager
 
 	// RESTMapper for reliable GVK<->GVR resolution and scope detection
 	restMapper meta.RESTMapper
@@ -63,12 +65,23 @@ type ResourceClaimOwnershipController struct {
 
 // Reconcile identifies and cleans up orphaned ResourceClaims.
 // This controller focuses on safety-net functionality rather than immediate ownership creation.
-func (r *ResourceClaimOwnershipController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// This controller runs across all control planes to handle claims wherever they exist.
+func (r *ResourceClaimOwnershipController) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithName("resourceclaim-ownership")
+	if req.ClusterName != "" {
+		logger = logger.WithValues("cluster", req.ClusterName)
+		ctx = log.IntoContext(ctx, logger)
+	}
+
+	cluster, err := r.Manager.GetCluster(ctx, req.ClusterName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster %q: %w", req.ClusterName, err)
+	}
+	clusterClient := cluster.GetClient()
 
 	// Get the ResourceClaim
 	var claim quotav1alpha1.ResourceClaim
-	if err := r.Get(ctx, req.NamespacedName, &claim); err != nil {
+	if err := clusterClient.Get(ctx, req.NamespacedName, &claim); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
@@ -95,9 +108,9 @@ func (r *ResourceClaimOwnershipController) Reconcile(ctx context.Context, req ct
 	claimAge := time.Since(claim.CreationTimestamp.Time)
 
 	// Fast path: attempt to resolve owner immediately and set ownerRef
-	ownerObj, _, _, err := r.resolveOwner(ctx, &claim)
+	ownerObj, _, _, err := r.resolveOwner(ctx, cluster, &claim)
 	if err == nil && ownerObj != nil {
-		if err := r.applyOwnerReferenceSSA(ctx, &claim, ownerObj); err != nil {
+		if err := r.applyOwnerReferenceSSA(ctx, clusterClient, &claim, ownerObj); err != nil {
 			logger.Error(err, "Failed to set ownerReference via SSA; requeue")
 			return ctrl.Result{RequeueAfter: 500 * time.Millisecond}, nil
 		}
@@ -114,9 +127,9 @@ func (r *ResourceClaimOwnershipController) Reconcile(ctx context.Context, req ct
 		}
 
 		// Beyond grace: try once more to resolve owner and rescue
-		ownerObj2, _, _, err2 := r.resolveOwner(ctx, &claim)
+		ownerObj2, _, _, err2 := r.resolveOwner(ctx, cluster, &claim)
 		if err2 == nil && ownerObj2 != nil {
-			if err := r.applyOwnerReferenceSSA(ctx, &claim, ownerObj2); err != nil {
+			if err := r.applyOwnerReferenceSSA(ctx, clusterClient, &claim, ownerObj2); err != nil {
 				logger.Error(err, "Failed to rescue owner reference via SSA; requeue")
 				return ctrl.Result{RequeueAfter: time.Second}, nil
 			}
@@ -127,7 +140,7 @@ func (r *ResourceClaimOwnershipController) Reconcile(ctx context.Context, req ct
 		maxAge := r.getOrphanMaxAge()
 		if claimAge > maxAge {
 			logger.Info("Deleting orphaned ResourceClaim after max age", "claim", claim.Name, "age", claimAge, "maxAge", maxAge)
-			return ctrl.Result{}, r.Delete(ctx, &claim)
+			return ctrl.Result{}, clusterClient.Delete(ctx, &claim)
 		}
 
 		// Not beyond max age; requeue to check later
@@ -139,34 +152,8 @@ func (r *ResourceClaimOwnershipController) Reconcile(ctx context.Context, req ct
 }
 
 // rescueOrphanedClaim adds an owner reference via SSA
-func (r *ResourceClaimOwnershipController) rescueOrphanedClaim(ctx context.Context, claim *quotav1alpha1.ResourceClaim, claimingResource *unstructured.Unstructured) error {
-	return r.applyOwnerReferenceSSA(ctx, claim, claimingResource)
-}
-
-// findTargetResource finds the target resource referenced by the ResourceClaim using RESTMapper.
-func (r *ResourceClaimOwnershipController) findTargetResource(ctx context.Context, claim *quotav1alpha1.ResourceClaim) (*unstructured.Unstructured, error) {
-	gk := schema.GroupKind{Group: claim.Spec.ResourceRef.APIGroup, Kind: claim.Spec.ResourceRef.Kind}
-	mapping, err := r.restMapper.RESTMapping(gk)
-	if err != nil {
-		return nil, err
-	}
-	gvr := mapping.Resource
-
-	// Determine namespace based on scope
-	namespace := ""
-	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-		if claim.Spec.ResourceRef.Namespace != "" {
-			namespace = claim.Spec.ResourceRef.Namespace
-		} else {
-			namespace = claim.Namespace
-		}
-	}
-
-	resource, err := r.DynamicClient.Resource(gvr).Namespace(namespace).Get(ctx, claim.Spec.ResourceRef.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return resource, nil
+func (r *ResourceClaimOwnershipController) rescueOrphanedClaim(ctx context.Context, clusterClient client.Client, claim *quotav1alpha1.ResourceClaim, claimingResource *unstructured.Unstructured) error {
+	return r.applyOwnerReferenceSSA(ctx, clusterClient, claim, claimingResource)
 }
 
 // getOwnershipGracePeriod returns the grace period before considering a claim for orphan analysis.
@@ -190,8 +177,8 @@ func (r *ResourceClaimOwnershipController) getOrphanMaxAge() time.Duration {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ResourceClaimOwnershipController) SetupWithManager(mgr ctrl.Manager) error {
-	r.restMapper = mgr.GetRESTMapper()
+func (r *ResourceClaimOwnershipController) SetupWithManager(mgr mcmanager.Manager) error {
+	r.restMapper = mgr.GetLocalManager().GetRESTMapper()
 
 	onlyGrantedMissingOwner := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
@@ -219,17 +206,28 @@ func (r *ResourceClaimOwnershipController) SetupWithManager(mgr ctrl.Manager) er
 		GenericFunc: func(event.GenericEvent) bool { return false },
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&quotav1alpha1.ResourceClaim{}, builder.WithPredicates(onlyGrantedMissingOwner)).
+	return mcbuilder.ControllerManagedBy(mgr).
+		For(&quotav1alpha1.ResourceClaim{},
+			mcbuilder.WithEngageWithLocalCluster(true),
+			mcbuilder.WithEngageWithProviderClusters(true),
+			mcbuilder.WithPredicates(onlyGrantedMissingOwner)).
 		Named("resource-claim-ownership").
 		Complete(r)
 }
 
 // resolveOwner resolves the owning object and returns it, along with its GVK and namespace used for GET.
-func (r *ResourceClaimOwnershipController) resolveOwner(ctx context.Context, claim *quotav1alpha1.ResourceClaim) (*unstructured.Unstructured, schema.GroupVersionKind, string, error) {
+func (r *ResourceClaimOwnershipController) resolveOwner(ctx context.Context, cluster interface {
+	GetConfig() *rest.Config
+}, claim *quotav1alpha1.ResourceClaim) (*unstructured.Unstructured, schema.GroupVersionKind, string, error) {
 	if r.restMapper == nil {
 		return nil, schema.GroupVersionKind{}, "", fmt.Errorf("RESTMapper not initialized")
 	}
+
+	dynamicClient, err := dynamic.NewForConfig(cluster.GetConfig())
+	if err != nil {
+		return nil, schema.GroupVersionKind{}, "", fmt.Errorf("failed to create dynamic client for cluster: %w", err)
+	}
+
 	gk := schema.GroupKind{Group: claim.Spec.ResourceRef.APIGroup, Kind: claim.Spec.ResourceRef.Kind}
 	mapping, err := r.restMapper.RESTMapping(gk)
 	if err != nil {
@@ -247,7 +245,7 @@ func (r *ResourceClaimOwnershipController) resolveOwner(ctx context.Context, cla
 		}
 	}
 
-	obj, err := r.DynamicClient.Resource(gvr).Namespace(ownerNS).Get(ctx, claim.Spec.ResourceRef.Name, metav1.GetOptions{})
+	obj, err := dynamicClient.Resource(gvr).Namespace(ownerNS).Get(ctx, claim.Spec.ResourceRef.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, schema.GroupVersionKind{}, ownerNS, err
 	}
@@ -261,7 +259,7 @@ func (r *ResourceClaimOwnershipController) resolveOwner(ctx context.Context, cla
 }
 
 // applyOwnerReferenceSSA sets a single controller ownerReference on the claim using Server-Side Apply.
-func (r *ResourceClaimOwnershipController) applyOwnerReferenceSSA(ctx context.Context, claim *quotav1alpha1.ResourceClaim, owner *unstructured.Unstructured) error {
+func (r *ResourceClaimOwnershipController) applyOwnerReferenceSSA(ctx context.Context, clusterClient client.Client, claim *quotav1alpha1.ResourceClaim, owner *unstructured.Unstructured) error {
 	// Use unstructured to ensure we only manage metadata.ownerReferences via SSA.
 	patch := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "quota.miloapis.com/v1alpha1",
@@ -282,7 +280,7 @@ func (r *ResourceClaimOwnershipController) applyOwnerReferenceSSA(ctx context.Co
 		},
 	}}
 	// Use a dedicated field manager that never touched spec to avoid SSA conflicts
-	return r.Patch(ctx, patch, client.Apply, client.FieldOwner("resourceclaim-ownership-metadata"))
+	return clusterClient.Patch(ctx, patch, client.Apply, client.FieldOwner("resourceclaim-ownership-metadata"))
 }
 
 // isResourceClaimGranted checks if the claim has Granted=True.

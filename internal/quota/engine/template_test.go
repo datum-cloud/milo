@@ -244,9 +244,9 @@ func TestRenderClaimWithUserContext(t *testing.T) {
 					Metadata: quotav1alpha1.ObjectMetaTemplate{
 						Name: "{{trigger.metadata.name}}-{{user.name}}-claim",
 						Annotations: map[string]string{
-							"created-by":    "{{user.name}}",
-							"request-verb":  "{{requestInfo.verb}}",
-							"trigger-name":  "{{trigger.metadata.name}}",
+							"created-by":   "{{user.name}}",
+							"request-verb": "{{requestInfo.verb}}",
+							"trigger-name": "{{trigger.metadata.name}}",
 						},
 					},
 					Spec: quotav1alpha1.ResourceClaimSpec{
