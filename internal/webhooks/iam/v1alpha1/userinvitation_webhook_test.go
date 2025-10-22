@@ -11,15 +11,10 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-func init() {
-	utilruntime.Must(iamv1alpha1.AddToScheme(runtimeScheme))
-}
-
-// TestUserInvitationMutator_Default ensures that the InvitedBy field is defaulted to the requesting user.
 func TestUserInvitationMutator_Default(t *testing.T) {
 	// Prepare basic UserInvitation with no InvitedBy
 	ui := &iamv1alpha1.UserInvitation{
@@ -33,12 +28,18 @@ func TestUserInvitationMutator_Default(t *testing.T) {
 	// Create admission request context with authenticated user
 	req := admission.Request{
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			UserInfo: authenticationv1.UserInfo{Username: "requester"},
+			UserInfo: authenticationv1.UserInfo{Username: "requester", UID: "requester"},
 		},
 	}
 	ctx := admission.NewContextWithRequest(context.Background(), req)
 
-	mutator := &UserInvitationMutator{}
+	// Build a fake client containing the inviter User so the mutator's lookup succeeds.
+	inviterUser := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{Name: "requester", UID: "requester"},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(runtimeScheme).WithObjects(inviterUser).Build()
+
+	mutator := &UserInvitationMutator{client: fakeClient}
 	assert.NoError(t, mutator.Default(ctx, ui))
 
 	// Check that InvitedBy has been populated correctly
