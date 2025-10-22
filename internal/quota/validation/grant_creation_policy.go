@@ -24,9 +24,9 @@ func NewGrantCreationPolicyValidator(
 	}
 }
 
-// Validate performs complete validation of a GrantCreationPolicy including CEL expressions,
+// Validate validates a GrantCreationPolicy including CEL expressions,
 // parent context configuration, and grant template structure.
-func (v *GrantCreationPolicyValidator) Validate(ctx context.Context, policy *quotav1alpha1.GrantCreationPolicy) field.ErrorList {
+func (v *GrantCreationPolicyValidator) Validate(ctx context.Context, policy *quotav1alpha1.GrantCreationPolicy, opts ValidationOptions) field.ErrorList {
 	var allErrs field.ErrorList
 
 	if err := v.CELValidator.ValidateConstraints(policy.Spec.Trigger.Constraints); err != nil {
@@ -48,7 +48,7 @@ func (v *GrantCreationPolicyValidator) Validate(ctx context.Context, policy *quo
 	}
 
 	templatePath := field.NewPath("spec", "target", "resourceGrantTemplate")
-	if errs := v.TemplateValidator.ValidateGrantTemplate(ctx, policy.Spec.Target.ResourceGrantTemplate); len(errs) > 0 {
+	if errs := v.TemplateValidator.ValidateGrantTemplate(ctx, policy.Spec.Target.ResourceGrantTemplate, opts); len(errs) > 0 {
 		for _, err := range errs {
 			allErrs = append(allErrs, &field.Error{
 				Type:     err.Type,

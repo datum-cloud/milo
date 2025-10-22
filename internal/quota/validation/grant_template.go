@@ -28,14 +28,14 @@ func NewGrantTemplateValidator(resourceTypeValidator ResourceTypeValidator) (*Gr
 	}, nil
 }
 
-func (v *GrantTemplateValidator) ValidateGrantTemplate(ctx context.Context, grantTemplate quotav1alpha1.ResourceGrantTemplate) field.ErrorList {
+func (v *GrantTemplateValidator) ValidateGrantTemplate(ctx context.Context, grantTemplate quotav1alpha1.ResourceGrantTemplate, opts ValidationOptions) field.ErrorList {
 	var allErrs field.ErrorList
 
 	if errs := v.ValidateMetadataTemplate(grantTemplate.Metadata, field.NewPath("metadata")); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
 	}
 
-	if errs := v.ValidateSpecTemplate(ctx, grantTemplate.Spec, field.NewPath("spec")); len(errs) > 0 {
+	if errs := v.ValidateSpecTemplate(ctx, grantTemplate.Spec, field.NewPath("spec"), opts); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
 	}
 
@@ -80,18 +80,21 @@ func (v *GrantTemplateValidator) ValidateMetadataTemplate(metadata quotav1alpha1
 	return allErrs
 }
 
-func (v *GrantTemplateValidator) ValidateSpecTemplate(ctx context.Context, spec quotav1alpha1.ResourceGrantSpec, fldPath *field.Path) field.ErrorList {
+func (v *GrantTemplateValidator) ValidateSpecTemplate(ctx context.Context, spec quotav1alpha1.ResourceGrantSpec, fldPath *field.Path, opts ValidationOptions) field.ErrorList {
 	var allErrs field.ErrorList
 
 	if errs := v.ValidateConsumerRefTemplate(spec.ConsumerRef, fldPath.Child("consumerRef")); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
 	}
 
-	for i, allowance := range spec.Allowances {
-		ifldPath := fldPath.Child("allowances").Index(i)
+	// Skip resource type validation during dry-run because it queries API server state
+	if !opts.DryRun {
+		for i, allowance := range spec.Allowances {
+			ifldPath := fldPath.Child("allowances").Index(i)
 
-		if err := v.resourceTypeValidator.ValidateResourceType(ctx, allowance.ResourceType); err != nil {
-			allErrs = append(allErrs, field.Invalid(ifldPath.Child("resourceType"), allowance.ResourceType, fmt.Sprintf("resource type validation failed: %v", err)))
+			if err := v.resourceTypeValidator.ValidateResourceType(ctx, allowance.ResourceType); err != nil {
+				allErrs = append(allErrs, field.Invalid(ifldPath.Child("resourceType"), allowance.ResourceType, fmt.Sprintf("resource type validation failed: %v", err)))
+			}
 		}
 	}
 
