@@ -47,6 +47,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&PlatformInvitationList{},
 		&PlatformAccessApproval{},
 		&PlatformAccessApprovalList{},
+		&PlatformAccessRejection{},
+		&PlatformAccessRejectionList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

@@ -4,21 +4,21 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: platformaccessapprovals.iam.miloapis.com
+  name: platformaccessdenials.iam.miloapis.com
 spec:
   group: iam.miloapis.com
   names:
-    kind: PlatformAccessApproval
-    listKind: PlatformAccessApprovalList
-    plural: platformaccessapprovals
-    singular: platformaccessapproval
+    kind: PlatformAccessDenial
+    listKind: PlatformAccessDenialList
+    plural: platformaccessdenials
+    singular: platformaccessdenial
   scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          PlatformAccessApproval is the Schema for the platformaccessapprovals API.
+          PlatformAccessDenial is the Schema for the platformaccessapprovals API.
           It represents a platform access approval for a user. Once the platform access approval is created, an email will be sent to the user.
         properties:
           apiVersion:
@@ -39,7 +39,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: PlatformAccessApprovalSpec defines the desired state of PlatformAccessApproval.
+            description: PlatformAccessDenialSpec defines the desired state of PlatformAccessDenial.
             properties:
               approverRef:
                 description: |-
@@ -85,14 +85,6 @@ spec:
               rule: self == oldSelf
           status:
             properties:
-              approverUser:
-                description: ApproverUser contains information about the user who
-                  approved the access request.
-                properties:
-                  email:
-                    description: Email is the email of the User being referenced.
-                    type: string
-                type: object
               conditions:
                 default:
                 - lastTransitionTime: "1970-01-01T00:00:00Z"
@@ -101,7 +93,7 @@ spec:
                   status: Unknown
                   type: Ready
                 description: Conditions provide conditions that represent the current
-                  status of the PlatformAccessApproval.
+                  status of the PlatformAccessDenial.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

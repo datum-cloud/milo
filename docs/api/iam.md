@@ -18,6 +18,10 @@ Resource Types:
 
 - [PlatformAccessApproval](#platformaccessapproval)
 
+- [PlatformAccessDenial](#platformaccessdenial)
+
+- [PlatformAccessRejection](#platformaccessrejection)
+
 - [PlatformInvitation](#platforminvitation)
 
 - [PolicyBinding](#policybinding)
@@ -1070,12 +1074,46 @@ If not specified, the approval was made by the system.
         </tr>
     </thead>
     <tbody><tr>
+        <td><b><a href="#platformaccessapprovalstatusapproveruser">approverUser</a></b></td>
+        <td>object</td>
+        <td>
+          ApproverUser contains information about the user who approved the access request.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b><a href="#platformaccessapprovalstatusconditionsindex">conditions</a></b></td>
         <td>[]object</td>
         <td>
           Conditions provide conditions that represent the current status of the PlatformAccessApproval.<br/>
           <br/>
             <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Platform access approval reconciliation is pending reason:ReconcilePending status:Unknown type:Ready]]<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessApproval.status.approverUser
+<sup><sup>[↩ Parent](#platformaccessapprovalstatus)</sup></sup>
+
+
+
+ApproverUser contains information about the user who approved the access request.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>email</b></td>
+        <td>string</td>
+        <td>
+          Email is the email of the User being referenced.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -1153,6 +1191,624 @@ with respect to the current state of the instance.<br/>
           <br/>
             <i>Format</i>: int64<br/>
             <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+## PlatformAccessDenial
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+
+
+
+
+
+PlatformAccessDenial is the Schema for the platformaccessapprovals API.
+It represents a platform access approval for a user. Once the platform access approval is created, an email will be sent to the user.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+      <td><b>apiVersion</b></td>
+      <td>string</td>
+      <td>iam.miloapis.com/v1alpha1</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b>kind</b></td>
+      <td>string</td>
+      <td>PlatformAccessDenial</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#objectmeta-v1-meta">metadata</a></b></td>
+      <td>object</td>
+      <td>Refer to the Kubernetes API documentation for the fields of the `metadata` field.</td>
+      <td>true</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessdenialspec">spec</a></b></td>
+        <td>object</td>
+        <td>
+          PlatformAccessDenialSpec defines the desired state of PlatformAccessDenial.<br/>
+          <br/>
+            <i>Validations</i>:<li>self == oldSelf: spec is immutable</li>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessdenialstatus">status</a></b></td>
+        <td>object</td>
+        <td>
+          <br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessDenial.spec
+<sup><sup>[↩ Parent](#platformaccessdenial)</sup></sup>
+
+
+
+PlatformAccessDenialSpec defines the desired state of PlatformAccessDenial.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#platformaccessdenialspecsubjectref">subjectRef</a></b></td>
+        <td>object</td>
+        <td>
+          SubjectRef is the reference to the subject being approved.<br/>
+          <br/>
+            <i>Validations</i>:<li>(has(self.email) && !has(self.userRef)) || (!has(self.email) && has(self.userRef)): Exactly one of email or userRef must be specified</li>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessdenialspecapproverref">approverRef</a></b></td>
+        <td>object</td>
+        <td>
+          ApproverRef is the reference to the approver being approved.
+If not specified, the approval was made by the system.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessDenial.spec.subjectRef
+<sup><sup>[↩ Parent](#platformaccessdenialspec)</sup></sup>
+
+
+
+SubjectRef is the reference to the subject being approved.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>email</b></td>
+        <td>string</td>
+        <td>
+          Email is the email of the user being approved.
+Use Email to approve an email address that is not associated with a created user. (e.g. when using PlatformInvitation)
+UserRef and Email are mutually exclusive. Exactly one of them must be specified.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessdenialspecsubjectrefuserref">userRef</a></b></td>
+        <td>object</td>
+        <td>
+          UserRef is the reference to the user being approved.
+UserRef and Email are mutually exclusive. Exactly one of them must be specified.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessDenial.spec.subjectRef.userRef
+<sup><sup>[↩ Parent](#platformaccessdenialspecsubjectref)</sup></sup>
+
+
+
+UserRef is the reference to the user being approved.
+UserRef and Email are mutually exclusive. Exactly one of them must be specified.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the User being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessDenial.spec.approverRef
+<sup><sup>[↩ Parent](#platformaccessdenialspec)</sup></sup>
+
+
+
+ApproverRef is the reference to the approver being approved.
+If not specified, the approval was made by the system.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the User being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessDenial.status
+<sup><sup>[↩ Parent](#platformaccessdenial)</sup></sup>
+
+
+
+
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#platformaccessdenialstatusconditionsindex">conditions</a></b></td>
+        <td>[]object</td>
+        <td>
+          Conditions provide conditions that represent the current status of the PlatformAccessDenial.<br/>
+          <br/>
+            <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Platform access approval reconciliation is pending reason:ReconcilePending status:Unknown type:Ready]]<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessDenial.status.conditions[index]
+<sup><sup>[↩ Parent](#platformaccessdenialstatus)</sup></sup>
+
+
+
+Condition contains details for one aspect of the current state of this API Resource.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>lastTransitionTime</b></td>
+        <td>string</td>
+        <td>
+          lastTransitionTime is the last time the condition transitioned from one status to another.
+This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>message</b></td>
+        <td>string</td>
+        <td>
+          message is a human readable message indicating details about the transition.
+This may be an empty string.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>reason</b></td>
+        <td>string</td>
+        <td>
+          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+Producers of specific condition types may define expected values and meanings for this field,
+and whether the values are considered a guaranteed API.
+The value should be a CamelCase string.
+This field may not be empty.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>status</b></td>
+        <td>enum</td>
+        <td>
+          status of the condition, one of True, False, Unknown.<br/>
+          <br/>
+            <i>Enum</i>: True, False, Unknown<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>type</b></td>
+        <td>string</td>
+        <td>
+          type of condition in CamelCase or in foo.example.com/CamelCase.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>observedGeneration</b></td>
+        <td>integer</td>
+        <td>
+          observedGeneration represents the .metadata.generation that the condition was set based upon.
+For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+with respect to the current state of the instance.<br/>
+          <br/>
+            <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+## PlatformAccessRejection
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+
+
+
+
+
+PlatformAccessRejection is the Schema for the platformaccessrejections API.
+It represents a formal denial of platform access for a user. Once the rejection is created, a notification can be sent to the user.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+      <td><b>apiVersion</b></td>
+      <td>string</td>
+      <td>iam.miloapis.com/v1alpha1</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b>kind</b></td>
+      <td>string</td>
+      <td>PlatformAccessRejection</td>
+      <td>true</td>
+      </tr>
+      <tr>
+      <td><b><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.27/#objectmeta-v1-meta">metadata</a></b></td>
+      <td>object</td>
+      <td>Refer to the Kubernetes API documentation for the fields of the `metadata` field.</td>
+      <td>true</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessrejectionspec">spec</a></b></td>
+        <td>object</td>
+        <td>
+          PlatformAccessRejectionSpec defines the desired state of PlatformAccessRejection.<br/>
+          <br/>
+            <i>Validations</i>:<li>self == oldSelf: spec is immutable</li>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessrejectionstatus">status</a></b></td>
+        <td>object</td>
+        <td>
+          <br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessRejection.spec
+<sup><sup>[↩ Parent](#platformaccessrejection)</sup></sup>
+
+
+
+PlatformAccessRejectionSpec defines the desired state of PlatformAccessRejection.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#platformaccessrejectionspecsubjectref">subjectRef</a></b></td>
+        <td>object</td>
+        <td>
+          SubjectRef is the reference to the subject being rejected.<br/>
+          <br/>
+            <i>Validations</i>:<li>(has(self.email) && !has(self.userRef)) || (!has(self.email) && has(self.userRef)): Exactly one of email or userRef must be specified</li>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessrejectionspecrejecterref">rejecterRef</a></b></td>
+        <td>object</td>
+        <td>
+          RejecterRef is the reference to the actor who issued the rejection.
+If not specified, the rejection was made by the system.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessRejection.spec.subjectRef
+<sup><sup>[↩ Parent](#platformaccessrejectionspec)</sup></sup>
+
+
+
+SubjectRef is the reference to the subject being rejected.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>email</b></td>
+        <td>string</td>
+        <td>
+          Email is the email of the user being approved.
+Use Email to approve an email address that is not associated with a created user. (e.g. when using PlatformInvitation)
+UserRef and Email are mutually exclusive. Exactly one of them must be specified.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessrejectionspecsubjectrefuserref">userRef</a></b></td>
+        <td>object</td>
+        <td>
+          UserRef is the reference to the user being approved.
+UserRef and Email are mutually exclusive. Exactly one of them must be specified.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessRejection.spec.subjectRef.userRef
+<sup><sup>[↩ Parent](#platformaccessrejectionspecsubjectref)</sup></sup>
+
+
+
+UserRef is the reference to the user being approved.
+UserRef and Email are mutually exclusive. Exactly one of them must be specified.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the User being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessRejection.spec.rejecterRef
+<sup><sup>[↩ Parent](#platformaccessrejectionspec)</sup></sup>
+
+
+
+RejecterRef is the reference to the actor who issued the rejection.
+If not specified, the rejection was made by the system.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the User being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessRejection.status
+<sup><sup>[↩ Parent](#platformaccessrejection)</sup></sup>
+
+
+
+
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#platformaccessrejectionstatusconditionsindex">conditions</a></b></td>
+        <td>[]object</td>
+        <td>
+          Conditions provide conditions that represent the current status of the PlatformAccessRejection.<br/>
+          <br/>
+            <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Platform access rejection reconciliation is pending reason:ReconcilePending status:Unknown type:Ready]]<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#platformaccessrejectionstatusrejecteruser">rejecterUser</a></b></td>
+        <td>object</td>
+        <td>
+          RejecterUser contains information about the user who rejected the access request.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessRejection.status.conditions[index]
+<sup><sup>[↩ Parent](#platformaccessrejectionstatus)</sup></sup>
+
+
+
+Condition contains details for one aspect of the current state of this API Resource.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>lastTransitionTime</b></td>
+        <td>string</td>
+        <td>
+          lastTransitionTime is the last time the condition transitioned from one status to another.
+This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>message</b></td>
+        <td>string</td>
+        <td>
+          message is a human readable message indicating details about the transition.
+This may be an empty string.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>reason</b></td>
+        <td>string</td>
+        <td>
+          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+Producers of specific condition types may define expected values and meanings for this field,
+and whether the values are considered a guaranteed API.
+The value should be a CamelCase string.
+This field may not be empty.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>status</b></td>
+        <td>enum</td>
+        <td>
+          status of the condition, one of True, False, Unknown.<br/>
+          <br/>
+            <i>Enum</i>: True, False, Unknown<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>type</b></td>
+        <td>string</td>
+        <td>
+          type of condition in CamelCase or in foo.example.com/CamelCase.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>observedGeneration</b></td>
+        <td>integer</td>
+        <td>
+          observedGeneration represents the .metadata.generation that the condition was set based upon.
+For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+with respect to the current state of the instance.<br/>
+          <br/>
+            <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### PlatformAccessRejection.status.rejecterUser
+<sup><sup>[↩ Parent](#platformaccessrejectionstatus)</sup></sup>
+
+
+
+RejecterUser contains information about the user who rejected the access request.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>email</b></td>
+        <td>string</td>
+        <td>
+          Email is the email of the User being referenced.<br/>
         </td>
         <td>false</td>
       </tr></tbody>

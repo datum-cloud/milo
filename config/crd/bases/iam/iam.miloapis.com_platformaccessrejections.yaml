@@ -4,22 +4,22 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: platformaccessapprovals.iam.miloapis.com
+  name: platformaccessrejections.iam.miloapis.com
 spec:
   group: iam.miloapis.com
   names:
-    kind: PlatformAccessApproval
-    listKind: PlatformAccessApprovalList
-    plural: platformaccessapprovals
-    singular: platformaccessapproval
+    kind: PlatformAccessRejection
+    listKind: PlatformAccessRejectionList
+    plural: platformaccessrejections
+    singular: platformaccessrejection
   scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: |-
-          PlatformAccessApproval is the Schema for the platformaccessapprovals API.
-          It represents a platform access approval for a user. Once the platform access approval is created, an email will be sent to the user.
+          PlatformAccessRejection is the Schema for the platformaccessrejections API.
+          It represents a formal denial of platform access for a user. Once the rejection is created, a notification can be sent to the user.
         properties:
           apiVersion:
             description: |-
@@ -39,12 +39,13 @@ spec:
           metadata:
             type: object
           spec:
-            description: PlatformAccessApprovalSpec defines the desired state of PlatformAccessApproval.
+            description: PlatformAccessRejectionSpec defines the desired state of
+              PlatformAccessRejection.
             properties:
-              approverRef:
+              rejecterRef:
                 description: |-
-                  ApproverRef is the reference to the approver being approved.
-                  If not specified, the approval was made by the system.
+                  RejecterRef is the reference to the actor who issued the rejection.
+                  If not specified, the rejection was made by the system.
                 properties:
                   name:
                     description: Name is the name of the User being referenced.
@@ -53,7 +54,7 @@ spec:
                 - name
                 type: object
               subjectRef:
-                description: SubjectRef is the reference to the subject being approved.
+                description: SubjectRef is the reference to the subject being rejected.
                 properties:
                   email:
                     description: |-
@@ -85,23 +86,15 @@ spec:
               rule: self == oldSelf
           status:
             properties:
-              approverUser:
-                description: ApproverUser contains information about the user who
-                  approved the access request.
-                properties:
-                  email:
-                    description: Email is the email of the User being referenced.
-                    type: string
-                type: object
               conditions:
                 default:
                 - lastTransitionTime: "1970-01-01T00:00:00Z"
-                  message: Platform access approval reconciliation is pending
+                  message: Platform access rejection reconciliation is pending
                   reason: ReconcilePending
                   status: Unknown
                   type: Ready
                 description: Conditions provide conditions that represent the current
-                  status of the PlatformAccessApproval.
+                  status of the PlatformAccessRejection.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -157,6 +150,14 @@ spec:
                   - type
                   type: object
                 type: array
+              rejecterUser:
+                description: RejecterUser contains information about the user who
+                  rejected the access request.
+                properties:
+                  email:
+                    description: Email is the email of the User being referenced.
+                    type: string
+                type: object
             type: object
         type: object
     served: true
