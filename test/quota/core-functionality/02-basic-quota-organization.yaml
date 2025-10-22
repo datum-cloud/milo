@@ -1,0 +1,12 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: core-test-basic-quota-org
+  annotations:
+    kubernetes.io/display-name: "Test Basic Quota Organization"
+    kubernetes.io/description: "Organization for testing basic quota enforcement"
+  labels:
+    test.miloapis.com/quota: "basic"
+    test.miloapis.com/scenario: "core-functionality"
+spec:
+  type: Standard

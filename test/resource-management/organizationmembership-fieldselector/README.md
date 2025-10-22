@@ -1,23 +1,13 @@
 # Test: `organizationmembership-fieldselector`
 
-Validates `fieldSelector` behavior for `OrganizationMembership` within an org-scoped session.
+Tests field selector functionality for OrganizationMemberships.
 
-It covers:
-- Filtering by `spec.userRef.name` (single result for a specific user, zero for non-existent)
-- Filtering by `spec.organizationRef.name` (both memberships in the org)
-- Plain list returns both, adding `spec.userRef.name` narrows to one
+This test verifies:
+- Field selectors work on spec.userRef.name
+- Field selectors work on spec.organizationRef.name
+- Field selectors correctly filter memberships within organization namespaces
+- Non-matching field selectors return zero results
 
-Run:
-
-```
-task test:end-to-end -- resource-management/organizationmembership-fieldselector
-```
-
-Regenerate docs:
-
-```
-bin/chainsaw build docs --test-dir test/resource-management/organizationmembership-fieldselector
-```
 
 ## Steps
 
@@ -29,37 +19,37 @@ bin/chainsaw build docs --test-dir test/resource-management/organizationmembersh
 
 ### Step: `setup`
 
-Creates the org and the two `OrganizationMembership` resources targeting users `admin` and `test-user`, then waits for one to become Ready.
+Create Organization and OrganizationMemberships for field selector testing
 
 #### Try
 
 | # | Operation | Bindings | Outputs | Description |
 |:-:|---|:-:|:-:|---|
-| 1 | `apply` | 0 | 0 | Create org |
-| 2 | `wait` | 0 | 0 | Wait for org namespace to be Active |
-| 3 | `apply` | 0 | 0 | Create membership for admin |
-| 4 | `apply` | 0 | 0 | Create membership for test-user |
-| 5 | `wait` | 0 | 0 | Wait for membership Ready |
+| 1 | `apply` | 0 | 0 | *No description* |
+| 2 | `wait` | 0 | 0 | *No description* |
+| 3 | `apply` | 0 | 0 | *No description* |
+| 4 | `apply` | 0 | 0 | *No description* |
+| 5 | `wait` | 0 | 0 | *No description* |
 
 ### Step: `direct-field-selector-on-org-cluster`
 
-Runs shell assertions against the API using `--field-selector`.
+Test field selector filtering on userRef.name and organizationRef.name
 
 #### Try
 
 | # | Operation | Bindings | Outputs | Description |
 |:-:|---|:-:|:-:|---|
-| 1 | `script` | 0 | 0 | Check user filter (1 match and 0 for non-existent) and org filter (2 matches) |
+| 1 | `script` | 0 | 0 | *No description* |
 
 ### Step: `org-scoped-fieldselector-behavior`
 
-Verifies plain list vs user-filter interaction in org scope.
+Verify field selector correctly narrows results within organization namespace
 
 #### Try
 
 | # | Operation | Bindings | Outputs | Description |
-|:-:|---|:-:|---|
-| 1 | `script` | 0 | 0 | Plain list returns 2; filtering by `test-user` returns 1 |
+|:-:|---|:-:|:-:|---|
+| 1 | `script` | 0 | 0 | *No description* |
 
 ---
 

@@ -1,0 +1,29 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ClaimCreationPolicy
+metadata:
+  name: edge-test-project-quota-policy
+  labels:
+    test.miloapis.com/quota: "true"
+spec:
+  disabled: false
+  trigger:
+    resource:
+      apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+      kind: "Project"
+    constraints:
+      # Only trigger for projects with the enforcement-edge-cases test scenario label
+      - expression: 'has(trigger.metadata.labels) && "test.miloapis.com/scenario" in trigger.metadata.labels && trigger.metadata.labels["test.miloapis.com/scenario"] == "enforcement-edge-cases"'
+  target:
+    resourceClaimTemplate:
+      metadata:
+        namespace: "milo-system"
+        labels:
+          quota.miloapis.com/test: "true"
+      spec:
+        consumerRef:
+          apiGroup: "resourcemanager.miloapis.com"
+          kind: "Organization"
+          name: "{{trigger.spec.organizationName}}"
+        requests:
+          - resourceType: "test.miloapis.com/edgeprojects"
+            amount: 1

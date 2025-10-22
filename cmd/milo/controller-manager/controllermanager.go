@@ -30,6 +30,7 @@ import (
 	"k8s.io/apiserver/pkg/server/mux"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/metadata"
@@ -66,29 +67,32 @@ import (
 	kubectrlmgrconfig "k8s.io/kubernetes/pkg/controller/apis/config"
 	garbagecollector "k8s.io/kubernetes/pkg/controller/garbagecollector"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
 
 	// Register JSON logging format
 	_ "k8s.io/component-base/logs/json/register"
 
-	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
 	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
+	quotacontroller "go.miloapis.com/milo/internal/quota/controllers"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
+	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	miloprovider "go.miloapis.com/milo/pkg/multicluster-runtime/milo"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
-	controllerruntime "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 var (
@@ -127,6 +131,7 @@ func init() {
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(quotav1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(apiregistrationv1.AddToScheme(Scheme))
 }
 
@@ -213,7 +218,6 @@ func NewCommand() *cobra.Command {
 	// s.CSRSigningController.AddFlags(fss.FlagSet(names.CertificateSigningRequestSigningController))
 	s.GarbageCollectorController.AddFlags(namedFlagSets.FlagSet(names.GarbageCollectorController))
 	s.NamespaceController.AddFlags(namedFlagSets.FlagSet(names.NamespaceController))
-	s.ResourceQuotaController.AddFlags(namedFlagSets.FlagSet(names.ResourceQuotaController))
 	s.ValidatingAdmissionPolicyStatusController.AddFlags(namedFlagSets.FlagSet(names.ValidatingAdmissionPolicyStatusController))
 	s.Metrics.AddFlags(namedFlagSets.FlagSet("metrics"))
 	logsapi.AddFlags(s.Logs, namedFlagSets.FlagSet("logs"))
@@ -282,6 +286,7 @@ func NewOptions() (*Options, error) {
 		},
 		ControlPlane: &controlplane.Options{},
 	}
+
 	return opts, nil
 }
 
@@ -353,6 +358,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error building infrastructure cluster client")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+
 			infraCluster, err := cluster.New(infraClient, func(o *cluster.Options) {
 				o.Scheme = Scheme
 			})
@@ -369,6 +375,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			// Increase rate limits for controller-runtime manager to handle quota system load
+			ctrlConfig.QPS = 100
+			ctrlConfig.Burst = 200
+
 			// TODO: This is a hack to get the controller manager to start. We should
 			//       find a better way to use the controller manager framework to manage
 			//       controllers.
@@ -383,7 +393,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					HealthProbeBindAddress: "0",
 					// The existing controller manage endpoint already exposes a metrics
 					// endpoint. We can disable this one to avoid conflicts.
-					Metrics: server.Options{
+					Metrics: metricsserver.Options{
 						BindAddress: "0",
 					},
 					WebhookServer: webhook.NewServer(webhook.Options{
@@ -481,6 +491,79 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up group controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+
+			// Quota enforcement requires cross-cluster coordination
+			logger.Info("Creating multicluster manager for quota system")
+
+			// Quota operations require higher rate limits to handle cross-cluster coordination
+			quotaDynamicConfig := *ctrlConfig
+			quotaDynamicConfig.QPS = 500
+			quotaDynamicConfig.Burst = 1000
+
+			dynamicClient, err := dynamic.NewForConfig(&quotaDynamicConfig)
+			if err != nil {
+				logger.Error(err, "Error creating dynamic client for quota controllers")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Provider enables dynamic discovery of project control planes for cross-cluster quota enforcement
+			provider, err := miloprovider.New(ctrl, miloprovider.Options{
+				ClusterOptions: []cluster.Option{
+					func(o *cluster.Options) {
+						o.Scheme = Scheme
+					},
+				},
+				InternalServiceDiscovery: false, // Use Project resources for user-facing API
+				ProjectRestConfig:        ctrlConfig,
+			})
+			if err != nil {
+				logger.Error(err, "Error creating Milo provider for multicluster quota")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			mcMgr, err := mcmanager.New(ctrlConfig, provider, mcmanager.Options{
+				Scheme: Scheme,
+				Logger: logger.WithName("multicluster"),
+				Metrics: metricsserver.Options{
+					BindAddress: "0", // Avoid port conflict with main manager
+				},
+			})
+			if err != nil {
+				logger.Error(err, "Error creating multicluster manager")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			if err := quotacontroller.SetupQuotaControllers(mcMgr, dynamicClient, logger.WithName("quota")); err != nil {
+				logger.Error(err, "Error setting up quota controllers")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Engage local cluster before starting to prevent race conditions with informer initialization.
+			// Local cluster ("") hosts ResourceRegistrations and core quota resources.
+			logger.Info("Engaging local cluster for quota controllers")
+			localCluster := mcMgr.GetLocalManager()
+			if err := mcMgr.Engage(ctx, "", localCluster); err != nil {
+				logger.Error(err, "Error engaging local cluster")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			logger.Info("Local cluster engaged successfully")
+
+			// Start concurrently to resolve circular dependency between provider and manager
+			go func() {
+				logger.Info("Starting Datum cluster provider")
+				if err := provider.Run(ctx, mcMgr); err != nil {
+					logger.Error(err, "Datum cluster provider failed")
+					panic(err)
+				}
+			}()
+
+			go func() {
+				logger.Info("Starting multicluster manager for quota system")
+				if err := mcMgr.Start(ctx); err != nil {
+					logger.Error(err, "Multicluster manager failed")
+					panic(err)
+				}
+			}()
 
 			userCtrl := iamcontroller.UserController{
 				Client: ctrl.GetClient(),
@@ -798,7 +881,6 @@ func NewControllerDescriptors() map[string]*ControllerDescriptor {
 
 	register(newNamespaceControllerDescriptor())
 	register(newGarbageCollectorControllerDescriptor())
-	register(newResourceQuotaControllerDescriptor())
 	// register(newCertificateSigningRequestSigningControllerDescriptor())
 	// register(newCertificateSigningRequestApprovingControllerDescriptor())
 	// register(newCertificateSigningRequestCleanerControllerDescriptor())

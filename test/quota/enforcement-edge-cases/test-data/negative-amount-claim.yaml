@@ -1,0 +1,20 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceClaim
+metadata:
+  name: test-negative-amount-claim
+  namespace: milo-system
+  labels:
+    test.miloapis.com/quota: "true"
+    test.miloapis.com/scenario: "negative-amount"
+spec:
+  consumerRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+    name: edge-test-quota-enforcement-org
+  requests:
+    - resourceType: "test.miloapis.com/edgeprojects"
+      amount: -1  # Invalid negative amount
+  resourceRef:
+    apiGroup: test.miloapis.com
+    kind: EdgeProject
+    name: test-negative-amount-edge-project

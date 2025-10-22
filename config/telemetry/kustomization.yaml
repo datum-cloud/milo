@@ -5,3 +5,6 @@ namespace: milo-system
 
 components:
   - ./vector-audit-log-processor
+  - ./resource-metrics-collector
+  - ./alerts
+  - ./recording-rules

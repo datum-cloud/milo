@@ -1,0 +1,90 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/component: exporter
+    app.kubernetes.io/name: custom-resources-state-metrics
+    app.kubernetes.io/version: 2.15.0
+  name: custom-resources-state-metrics
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "watch", "list"]
+- apiGroups:
+  - "apiextensions.k8s.io"
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - "discovery.k8s.io"
+  resources:
+  - endpointslices
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - "gateway.networking.k8s.io"
+  resources:
+  - gateways
+  - gatewayclasses
+  - httproutes
+  - grpcroutes
+  - tcproutes
+  - tlsroutes
+  - udproutes
+  - backendtlspolicies
+  verbs:
+  - list
+  - watch
+- apiGroups:
+    - "kustomize.toolkit.fluxcd.io"
+  resources:
+    - kustomizations
+  verbs:
+    - list
+    - watch
+- apiGroups:
+    - "helm.toolkit.fluxcd.io"
+  resources:
+    - helmreleases
+  verbs:
+    - list
+    - watch
+- apiGroups:
+    - "source.toolkit.fluxcd.io"
+  resources:
+    - gitrepositories
+    - buckets
+    - helmrepositories
+    - helmcharts
+    - ocirepositories
+  verbs:
+    - list
+    - watch
+- apiGroups:
+    - "notification.toolkit.fluxcd.io"
+  resources:
+    - alerts
+    - providers
+    - receivers
+  verbs:
+    - list
+    - watch
+- apiGroups:
+    - "image.toolkit.fluxcd.io"
+  resources:
+    - imagerepositories
+    - imagepolicies
+    - imageupdateautomations
+  verbs:
+    - list
+    - watch
+- apiGroups:
+    - "infrastructure.miloapis.com"
+  resources:
+    - projectcontrolplanes
+  verbs:
+    - list
+    - watch

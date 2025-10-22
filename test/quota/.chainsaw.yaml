@@ -1,0 +1,20 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Configuration
+metadata:
+  name: quota-tests-config
+spec:
+  # Enable controlled parallel execution - start with 2 parallel tests
+  parallel: 4
+  # Increased timeouts to handle parallel execution and controller load
+  timeouts:
+    apply: 120s
+    assert: 90s
+    cleanup: 90s
+    delete: 45s
+    error: 90s
+    exec: 45s
+  # Ensure proper cleanup
+  skipDelete: false
+  failFast: false
+  # Add delay between test starts to allow cleanup to complete
+  delayBeforeCleanup: 5s
