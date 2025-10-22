@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: perf-runner
+  namespace: NAMESPACE_PLACEHOLDER
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: perf-runner
+      restartPolicy: Never
+      containers:
+      - name: runner
+        image: python:3.11
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TARGET_NAMESPACE
+          value: NAMESPACE_PLACEHOLDER
+        - name: VM_BASE_URL
+          value: VM_BASE_URL_PLACEHOLDER
+        - name: MILO_NAMESPACE
+          value: MILO_NAMESPACE_PLACEHOLDER
+        - name: APISERVER_POD_REGEX
+          value: APISERVER_REGEX_PLACEHOLDER
+        - name: ETCD_POD_REGEX
+          value: ETCD_REGEX_PLACEHOLDER
+        - name: NUM_PROJECTS
+          value: "NUM_PROJECTS_PLACEHOLDER"
+        - name: NUM_SECRETS_PER_PROJECT
+          value: "NUM_SECRETS_PLACEHOLDER"
+        - name: NUM_CONFIGMAPS_PER_PROJECT
+          value: "NUM_CONFIGMAPS_PLACEHOLDER"
+        - name: STABILIZE_SECONDS
+          value: "STABILIZE_SECONDS_PLACEHOLDER"
+        - name: MEASURE_WINDOW
+          value: "MEASURE_WINDOW_PLACEHOLDER"
+        - name: ORG_NAME
+          value: "ORG_NAME_PLACEHOLDER"
+        - name: PROJECT_CONCURRENCY
+          value: "PROJECT_CONCURRENCY_PLACEHOLDER"
+        - name: OBJECT_CONCURRENCY
+          value: "OBJECT_CONCURRENCY_PLACEHOLDER"
+        - name: RUN_OBJECTS_PHASE
+          value: "RUN_OBJECTS_PHASE_PLACEHOLDER"
+        - name: OUT_DIR
+          value: "/work/out"
+        - name: MPLBACKEND
+          value: Agg
+        - name: MILO_KUBECONFIG_PATH
+          value: "/work/milo-kubeconfig"
+        volumeMounts:
+        - name: script
+          mountPath: /work/perf_run.py
+          subPath: perf_run.py
+          readOnly: true
+        - name: milo-kubeconfig
+          mountPath: /work/milo-kubeconfig
+          subPath: MILO_KUBECONFIG_KEY_PLACEHOLDER
+          readOnly: true
+        command: ["bash","-lc"]
+        args:
+        - >-
+          python -m pip install --no-cache-dir kubernetes requests pyyaml matplotlib &&
+          python -u /work/perf_run.py
+      volumes:
+      - name: script
+        configMap:
+          name: perf-script
+          defaultMode: 0444
+      - name: milo-kubeconfig
+        secret:
+          secretName: MILO_KUBECONFIG_SECRET_PLACEHOLDER
+          defaultMode: 0400
+
+
