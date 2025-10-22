@@ -74,8 +74,7 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req mcrec
 	// Store original status to detect changes
 	originalStatus := policy.Status.DeepCopy()
 
-	// Validate the policy
-	validationErrs := r.PolicyValidator.Validate(ctx, &policy)
+	validationErrs := r.PolicyValidator.Validate(ctx, &policy, validation.DefaultValidationOptions())
 
 	// Update policy status based on validation results
 	r.updatePolicyStatus(&policy, validationErrs)

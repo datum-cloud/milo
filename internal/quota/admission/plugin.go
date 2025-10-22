@@ -1001,17 +1001,19 @@ func (p *ResourceQuotaEnforcementPlugin) validateClaimCreationPolicy(ctx context
 	span.SetAttributes(
 		attribute.String("policy.name", policy.Name),
 		attribute.String("policy.namespace", policy.Namespace),
+		attribute.Bool("dry_run", attrs.IsDryRun()),
 	)
 
-	// Validate the ClaimCreationPolicy
-	if validationErrs := p.claimCreationPolicyValidator.Validate(ctx, policy); len(validationErrs) > 0 {
+	validationOpts := validation.ValidationOptions{DryRun: attrs.IsDryRun()}
+	if validationErrs := p.claimCreationPolicyValidator.Validate(ctx, policy, validationOpts); len(validationErrs) > 0 {
 		span.SetAttributes(attribute.String("validation.status", "failed"))
 		span.SetStatus(codes.Error, "ClaimCreationPolicy validation failed")
 
 		p.logger.Info("ClaimCreationPolicy validation failed",
 			"name", policy.Name,
 			"namespace", policy.Namespace,
-			"errors", validationErrs)
+			"errors", validationErrs,
+			"dryRun", attrs.IsDryRun())
 
 		return admission.NewForbidden(attrs, errors.NewInvalid(
 			quotav1alpha1.GroupVersion.WithKind("ClaimCreationPolicy").GroupKind(),
@@ -1061,17 +1063,19 @@ func (p *ResourceQuotaEnforcementPlugin) validateGrantCreationPolicy(ctx context
 	span.SetAttributes(
 		attribute.String("policy.name", policy.Name),
 		attribute.String("policy.namespace", policy.Namespace),
+		attribute.Bool("dry_run", attrs.IsDryRun()),
 	)
 
-	// Validate the GrantCreationPolicy
-	if validationErrs := p.grantCreationPolicyValidator.Validate(ctx, policy); len(validationErrs) > 0 {
+	validationOpts := validation.ValidationOptions{DryRun: attrs.IsDryRun()}
+	if validationErrs := p.grantCreationPolicyValidator.Validate(ctx, policy, validationOpts); len(validationErrs) > 0 {
 		span.SetAttributes(attribute.String("validation.status", "failed"))
 		span.SetStatus(codes.Error, "GrantCreationPolicy validation failed")
 
 		p.logger.Info("GrantCreationPolicy validation failed",
 			"name", policy.Name,
 			"namespace", policy.Namespace,
-			"errors", validationErrs)
+			"errors", validationErrs,
+			"dryRun", attrs.IsDryRun())
 
 		return admission.NewForbidden(attrs, errors.NewInvalid(
 			quotav1alpha1.GroupVersion.WithKind("GrantCreationPolicy").GroupKind(),
@@ -1122,17 +1126,19 @@ func (p *ResourceQuotaEnforcementPlugin) validateResourceGrant(ctx context.Conte
 		attribute.String("grant.name", grant.Name),
 		attribute.String("grant.namespace", grant.Namespace),
 		attribute.Int("grant.allowances_count", len(grant.Spec.Allowances)),
+		attribute.Bool("dry_run", attrs.IsDryRun()),
 	)
 
-	// Validate the ResourceGrant
-	if validationErrs := p.resourceGrantValidator.Validate(ctx, grant); len(validationErrs) > 0 {
+	validationOpts := validation.ValidationOptions{DryRun: attrs.IsDryRun()}
+	if validationErrs := p.resourceGrantValidator.Validate(ctx, grant, validationOpts); len(validationErrs) > 0 {
 		span.SetAttributes(attribute.String("validation.status", "failed"))
 		span.SetStatus(codes.Error, "ResourceGrant validation failed")
 
 		p.logger.Info("ResourceGrant validation failed",
 			"name", grant.Name,
 			"namespace", grant.Namespace,
-			"errors", validationErrs)
+			"errors", validationErrs,
+			"dryRun", attrs.IsDryRun())
 
 		return admission.NewForbidden(attrs, errors.NewInvalid(
 			quotav1alpha1.GroupVersion.WithKind("ResourceGrant").GroupKind(),

@@ -75,8 +75,7 @@ func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context,
 	// Always update the observed generation in the status to match the current generation of the spec.
 	grant.Status.ObservedGeneration = grant.Generation
 
-	// Validate the ResourceGrant
-	if validationErrs := r.GrantValidator.Validate(ctx, grant); len(validationErrs) > 0 {
+	if validationErrs := r.GrantValidator.Validate(ctx, grant, validation.DefaultValidationOptions()); len(validationErrs) > 0 {
 		logger.Info("ResourceGrant validation failed", "errors", validationErrs.ToAggregate())
 		return r.setValidationFailedCondition(ctx, clusterClient, grant, validationErrs.ToAggregate())
 	}

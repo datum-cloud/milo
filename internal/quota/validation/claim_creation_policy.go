@@ -20,8 +20,8 @@ func NewClaimCreationPolicyValidator(resourceTypeValidator ResourceTypeValidator
 	}
 }
 
-// Validate performs complete validation of a ClaimCreationPolicy.
-func (v *ClaimCreationPolicyValidator) Validate(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy) field.ErrorList {
+// Validate validates a ClaimCreationPolicy.
+func (v *ClaimCreationPolicyValidator) Validate(ctx context.Context, policy *quotav1alpha1.ClaimCreationPolicy, opts ValidationOptions) field.ErrorList {
 	var allErrs field.ErrorList
 
 	templatePath := field.NewPath("spec", "target", "resourceClaimTemplate")
@@ -36,8 +36,11 @@ func (v *ClaimCreationPolicyValidator) Validate(ctx context.Context, policy *quo
 		}
 	}
 
-	if errs := v.validateResourceTypes(ctx, policy); len(errs) > 0 {
-		allErrs = append(allErrs, errs...)
+	// Skip resource type validation during dry-run because it queries API server state
+	if !opts.DryRun {
+		if errs := v.validateResourceTypes(ctx, policy); len(errs) > 0 {
+			allErrs = append(allErrs, errs...)
+		}
 	}
 
 	return allErrs
