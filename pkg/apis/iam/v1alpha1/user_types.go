@@ -29,6 +29,7 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state"
+// +kubebuilder:printcolumn:name="Registration Approval",type="string",JSONPath=".status.registrationApproval"
 // +kubebuilder:resource:path=users,scope=Cluster
 type User struct {
 	metav1.TypeMeta   `json:",inline"`
