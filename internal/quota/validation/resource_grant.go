@@ -27,8 +27,8 @@ func (v *ResourceGrantValidator) Validate(ctx context.Context, grant *quotav1alp
 	allowancesPath := field.NewPath("spec", "allowances")
 	seen := make(map[string]bool)
 
-	// Skip resource type validation during dry-run because it queries API server state
-	if !opts.DryRun {
+	// Skip resource type validation when configured because it queries API server state
+	if !opts.SkipAPIStateValidation {
 		for i, allowance := range grant.Spec.Allowances {
 			resourceType := allowance.ResourceType
 			if !seen[resourceType] {

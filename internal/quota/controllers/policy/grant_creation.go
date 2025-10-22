@@ -72,7 +72,7 @@ func (r *GrantCreationPolicyReconciler) Reconcile(ctx context.Context, req mcrec
 	// Store original status to detect changes
 	originalStatus := policy.Status.DeepCopy()
 
-	validationErrs := r.PolicyValidator.Validate(ctx, &policy, validation.DefaultValidationOptions())
+	validationErrs := r.PolicyValidator.Validate(ctx, &policy, validation.ControllerValidationOptions())
 
 	// Update policy status based on validation results
 	r.updatePolicyStatus(&policy, validationErrs)

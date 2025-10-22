@@ -2,41 +2,36 @@ package validation
 
 // ValidationOptions configures validation behavior.
 type ValidationOptions struct {
-	// DryRun, when true, skips validations that query API server state.
-	// Set DryRun to true when validating resources during dry-run operations,
-	// such as GitOps workflows where multiple resources are applied together
-	// and may not exist yet in the API server.
+	// SkipAPIStateValidation, when true, skips validations that query API server state.
 	//
-	// When DryRun is true, validators perform:
+	// When SkipAPIStateValidation is true, validators perform:
 	// - Syntax validation (CEL expressions, template syntax)
 	// - Structural validation (required fields, mutual exclusivity)
 	// - Static schema validation
 	//
-	// When DryRun is true, validators skip:
+	// When SkipAPIStateValidation is true, validators skip:
 	// - Resource type existence checks against ResourceRegistrations
 	// - Cross-resource reference validation
 	// - Any validation requiring API server queries
 	//
-	// Use DryRun=true for:
-	// - Flux/ArgoCD server-side apply with --dry-run
-	// - kubectl apply --dry-run=server
-	// - Admission webhooks handling dry-run requests
-	DryRun bool
+	// Admission webhooks always skip API state validation because they validate
+	// incoming requests without querying API state. Controllers perform full
+	// validation including API state checks.
+	SkipAPIStateValidation bool
 }
 
-// DefaultValidationOptions returns options for full validation.
-// Controllers use DefaultValidationOptions to perform complete validation,
-// including API state checks.
-func DefaultValidationOptions() ValidationOptions {
+// AdmissionValidationOptions returns options for admission webhook validation.
+// Admission webhooks validate request syntax and structure without querying API state.
+func AdmissionValidationOptions() ValidationOptions {
 	return ValidationOptions{
-		DryRun: false,
+		SkipAPIStateValidation: true,
 	}
 }
 
-// DryRunValidationOptions returns options for dry-run validation.
-// Admission webhooks use DryRunValidationOptions when handling dry-run requests.
-func DryRunValidationOptions() ValidationOptions {
+// ControllerValidationOptions returns options for controller validation.
+// Controllers perform full validation including API state checks.
+func ControllerValidationOptions() ValidationOptions {
 	return ValidationOptions{
-		DryRun: true,
+		SkipAPIStateValidation: false,
 	}
 }

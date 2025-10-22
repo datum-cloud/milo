@@ -87,8 +87,8 @@ func (v *GrantTemplateValidator) ValidateSpecTemplate(ctx context.Context, spec 
 		allErrs = append(allErrs, errs...)
 	}
 
-	// Skip resource type validation during dry-run because it queries API server state
-	if !opts.DryRun {
+	// Skip resource type validation when configured because it queries API server state
+	if !opts.SkipAPIStateValidation {
 		for i, allowance := range spec.Allowances {
 			ifldPath := fldPath.Child("allowances").Index(i)
 
