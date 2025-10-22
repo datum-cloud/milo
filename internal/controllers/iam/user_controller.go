@@ -54,6 +54,22 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
+	// Ensure owner references are set on PolicyBinding and UserPreference resources
+	if err := r.ensureOwnerReferences(ctx, user); err != nil {
+		log.Error(err, "Failed to ensure owner references")
+		return ctrl.Result{}, err
+	}
+
+	// Determine desired state based on existence of any UserDeactivation for this user
+	var udList iamv1alpha1.UserDeactivationList
+	if err := r.Client.List(ctx, &udList, client.MatchingFields{"spec.userRef.name": user.Name}); err != nil {
+		log.Error(err, "failed to list UserDeactivations")
+		return ctrl.Result{}, fmt.Errorf("failed to list UserDeactivations: %w", err)
+	}
+
+	// Capture the current status to detect changes later
+	oldUserStatus := user.Status.DeepCopy()
+
 	// TODO: Remove this bootstrap logic after first production run.
 	// Automatically approve users that were created before 22 Oct 2025 14:00 UTC to
 	// avoid blocking legacy user accounts. For newer users, initialise the
@@ -75,22 +91,6 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 			}
 		}
 	}
-
-	// Ensure owner references are set on PolicyBinding and UserPreference resources
-	if err := r.ensureOwnerReferences(ctx, user); err != nil {
-		log.Error(err, "Failed to ensure owner references")
-		return ctrl.Result{}, err
-	}
-
-	// Determine desired state based on existence of any UserDeactivation for this user
-	var udList iamv1alpha1.UserDeactivationList
-	if err := r.Client.List(ctx, &udList, client.MatchingFields{"spec.userRef.name": user.Name}); err != nil {
-		log.Error(err, "failed to list UserDeactivations")
-		return ctrl.Result{}, fmt.Errorf("failed to list UserDeactivations: %w", err)
-	}
-
-	// Capture the current status to detect changes later
-	oldUserStatus := user.Status.DeepCopy()
 
 	// Defining the desired user state
 	var desiredState iamv1alpha1.UserState
