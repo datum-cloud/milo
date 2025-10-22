@@ -3435,6 +3435,23 @@ UserStatus defines the observed state of User
         </td>
         <td>false</td>
       </tr><tr>
+        <td><b>registrationApproval</b></td>
+        <td>enum</td>
+        <td>
+          RegistrationApproval represents the administrator’s decision on the user’s registration request.
+States:
+  - Pending:  The user is awaiting review by an administrator.
+  - Approved: The user registration has been approved.
+  - Rejected: The user registration has been rejected.
+The User resource is always created regardless of this value, but the
+ability for the person to sign into the platform and access resources is
+governed by this status: only *Approved* users are granted access, while
+*Pending* and *Rejected* users are prevented for interacting with resources.<br/>
+          <br/>
+            <i>Enum</i>: Pending, Approved, Rejected<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b>state</b></td>
         <td>enum</td>
         <td>
