@@ -21,7 +21,7 @@ import (
 var userinvitationlog = logf.Log.WithName("userinvitation-resource")
 
 // SetupUserInvitationWebhooksWithManager sets up the webhooks for UserInvitation resources.
-func SetupUserInvitationWebhooksWithManager(mgr ctrl.Manager, systemNamespace string) error {
+func SetupUserInvitationWebhooksWithManager(mgr ctrl.Manager, systemNamespace, assignableRolesNamespace string) error {
 	userinvitationlog.Info("Setting up iam.miloapis.com userinvitation webhooks")
 
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -30,8 +30,9 @@ func SetupUserInvitationWebhooksWithManager(mgr ctrl.Manager, systemNamespace st
 			client: mgr.GetClient(),
 		}).
 		WithValidator(&UserInvitationValidator{
-			client:          mgr.GetClient(),
-			systemNamespace: systemNamespace,
+			client:                   mgr.GetClient(),
+			systemNamespace:          systemNamespace,
+			assignableRolesNamespace: assignableRolesNamespace,
 		}).
 		Complete()
 }
@@ -73,8 +74,9 @@ func (m *UserInvitationMutator) Default(ctx context.Context, obj runtime.Object)
 
 // UserInvitationValidator validates UserInvitation resources.
 type UserInvitationValidator struct {
-	client          client.Client
-	systemNamespace string
+	client                   client.Client
+	systemNamespace          string
+	assignableRolesNamespace string
 }
 
 // ValidateCreate ensures the expiration date, if provided, is not already expired.
@@ -113,10 +115,10 @@ func (v *UserInvitationValidator) ValidateCreate(ctx context.Context, obj runtim
 			canGetRole = false
 			errs = append(errs, field.Invalid(field.NewPath("spec").Child("roles").Index(i).Child("name"), role.Name, "name is required"))
 		}
-		allowedNamespaces := []string{req.Namespace, v.systemNamespace}
+		allowedNamespaces := []string{req.Namespace, v.systemNamespace, v.assignableRolesNamespace}
 		if !slices.Contains(allowedNamespaces, role.Namespace) {
 			canGetRole = false
-			errs = append(errs, field.Invalid(field.NewPath("spec").Child("roles").Index(i).Child("namespace"), role.Namespace, "namespace is required"))
+			errs = append(errs, field.Invalid(field.NewPath("spec").Child("roles").Index(i).Child("namespace"), role.Namespace, "namespace is invalid"))
 		}
 		if !canGetRole {
 			continue
