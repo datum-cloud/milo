@@ -123,12 +123,24 @@ spec:
     - name: test-policy-validation
       description: |
         Test that ClaimCreationPolicy validation catches invalid configurations.
-        Policies referencing non-existent resources should be rejected at admission time.
+        Policies referencing non-existent resources are allowed at admission time
+        but marked as not Ready by the controller with validation errors.
       try:
-        - description: Attempt to create policy with missing resource reference (should fail)
-          create:
+        - description: Create policy with missing resource reference (allowed at admission)
+          apply:
             file: test-data/invalid-policy-missing-resource.yaml
-            expect:
-              - check:
-                  ($error != null): true
+        - description: Wait for policy to be processed and marked invalid
+          assert:
+            file: test-data/invalid-policy-missing-resource.yaml
+        - description: Verify policy is not Ready due to validation failure
+          assert:
+            resource:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: ClaimCreationPolicy
+              metadata:
+                name: test-invalid-missing-resource-policy
+              status:
+                (conditions[?type == 'Ready']):
+                - status: "False"
+                  reason: "ValidationFailed"
 
