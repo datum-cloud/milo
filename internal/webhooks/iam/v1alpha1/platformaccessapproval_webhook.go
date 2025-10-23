@@ -16,7 +16,33 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 )
 
+const platformAccessApprovalIndexKey = "iam.miloapis.com/platformaccessapproval"
+const platformAccessRejectionIndexKey = "iam.miloapis.com/platformaccess"
+
+func buildPlatformAccessIndexKey(subject *iamv1alpha1.SubjectReference) string {
+	if subject.UserRef != nil {
+		return subject.UserRef.Name
+	}
+	return subject.Email
+}
+
 func SetupPlatformAccessApprovalWebhooksWithManager(mgr ctrl.Manager) error {
+	// Index platformaccessapprovals by subject
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.PlatformAccessApproval{}, platformAccessApprovalIndexKey, func(rawObj client.Object) []string {
+		paa := rawObj.(*iamv1alpha1.PlatformAccessApproval)
+		return []string{buildPlatformAccessIndexKey(&paa.Spec.SubjectRef)}
+	}); err != nil {
+		return fmt.Errorf("failed to index platformaccessapproval key: %w", err)
+	}
+
+	// Index platformaccessrejections by subject
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.PlatformAccessRejection{}, platformAccessRejectionIndexKey, func(rawObj client.Object) []string {
+		paa := rawObj.(*iamv1alpha1.PlatformAccessRejection)
+		return []string{buildPlatformAccessIndexKey(&paa.Spec.SubjectRef)}
+	}); err != nil {
+		return fmt.Errorf("failed to index platformaccessrejection key: %w", err)
+	}
+
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.PlatformAccessApproval{}).
 		WithDefaulter(&PlatformAccessApprovalMutator{
@@ -103,6 +129,28 @@ func (v *PlatformAccessApprovalValidator) ValidateCreate(ctx context.Context, ob
 				errs = append(errs, field.InternalError(field.NewPath("spec").Child("subjectRef").Child("userRef").Child("name"), fmt.Errorf("failed to get user: %w", err)))
 			}
 		}
+	}
+
+	// Validate that another PlatformAccessApproval already exists for the same subject
+	existingPaas := &iamv1alpha1.PlatformAccessApprovalList{}
+	if err := v.client.List(ctx, existingPaas, client.MatchingFields{platformAccessApprovalIndexKey: buildPlatformAccessIndexKey(&paa.Spec.SubjectRef)}); err != nil {
+		log.Error(err, "failed to list platformaccessapprovals", "subject", buildPlatformAccessIndexKey(&paa.Spec.SubjectRef))
+		errs = append(errs, field.InternalError(field.NewPath("spec").Child("subjectRef"), fmt.Errorf("failed to list platformaccessapprovals: %w", err)))
+	}
+	if len(existingPaas.Items) > 0 {
+		log.Info("an platformaccessapproval already exists for the same subject", "subject", buildPlatformAccessIndexKey(&paa.Spec.SubjectRef))
+		errs = append(errs, field.Invalid(field.NewPath("spec").Child("subjectRef"), buildPlatformAccessIndexKey(&paa.Spec.SubjectRef), "an existing platformaccessapproval already exists for the same subject."))
+	}
+
+	// Validate that another PlatformAccessRejection already exists for the same subject
+	existingPres := &iamv1alpha1.PlatformAccessRejectionList{}
+	if err := v.client.List(ctx, existingPres, client.MatchingFields{platformAccessRejectionIndexKey: buildPlatformAccessIndexKey(&paa.Spec.SubjectRef)}); err != nil {
+		log.Error(err, "failed to list platformaccessrejections", "subject", buildPlatformAccessIndexKey(&paa.Spec.SubjectRef))
+		errs = append(errs, field.InternalError(field.NewPath("spec").Child("subjectRef"), fmt.Errorf("failed to list platformaccessrejections: %w", err)))
+	}
+	if len(existingPres.Items) > 0 {
+		log.Info("an platformaccessrejection already exists for the same subject", "subject", buildPlatformAccessIndexKey(&paa.Spec.SubjectRef))
+		errs = append(errs, field.Invalid(field.NewPath("spec").Child("subjectRef"), buildPlatformAccessIndexKey(&paa.Spec.SubjectRef), "an existing platformaccessrejection already exists for the same subject."))
 	}
 
 	if len(errs) > 0 {

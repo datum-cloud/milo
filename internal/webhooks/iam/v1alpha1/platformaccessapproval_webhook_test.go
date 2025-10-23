@@ -105,6 +105,38 @@ func TestPlatformAccessApprovalValidator_ValidateCreate(t *testing.T) {
 			expectError:  true,
 			errSubstring: "Not found",
 		},
+		"platformaccessapproval already exists": {
+			paa: &iamv1alpha1.PlatformAccessApproval{
+				ObjectMeta: metav1.ObjectMeta{Name: "dup-approval"},
+				Spec: iamv1alpha1.PlatformAccessApprovalSpec{
+					SubjectRef: iamv1alpha1.SubjectReference{Email: "dup@example.com"},
+				},
+			},
+			preObjects: []client.Object{&iamv1alpha1.PlatformAccessApproval{
+				ObjectMeta: metav1.ObjectMeta{Name: "existing-dup"},
+				Spec: iamv1alpha1.PlatformAccessApprovalSpec{
+					SubjectRef: iamv1alpha1.SubjectReference{Email: "dup@example.com"},
+				},
+			}},
+			expectError:  true,
+			errSubstring: "an existing platformaccessapproval",
+		},
+		"platformaccessrejection already exists": {
+			paa: &iamv1alpha1.PlatformAccessApproval{
+				ObjectMeta: metav1.ObjectMeta{Name: "rejection-exists"},
+				Spec: iamv1alpha1.PlatformAccessApprovalSpec{
+					SubjectRef: iamv1alpha1.SubjectReference{Email: "reject@example.com"},
+				},
+			},
+			preObjects: []client.Object{&iamv1alpha1.PlatformAccessRejection{
+				ObjectMeta: metav1.ObjectMeta{Name: "existing-rej"},
+				Spec: iamv1alpha1.PlatformAccessRejectionSpec{
+					SubjectRef: iamv1alpha1.SubjectReference{Email: "reject@example.com"},
+				},
+			}},
+			expectError:  true,
+			errSubstring: "platformaccessrejection",
+		},
 	}
 
 	for name, tc := range tests {
@@ -113,6 +145,16 @@ func TestPlatformAccessApprovalValidator_ValidateCreate(t *testing.T) {
 			if len(tc.preObjects) > 0 {
 				builder = builder.WithObjects(tc.preObjects...)
 			}
+			// Register the same field indexes used by the real manager so MatchingFields selectors work in tests.
+			builder = builder.
+				WithIndex(&iamv1alpha1.PlatformAccessApproval{}, platformAccessApprovalIndexKey, func(rawObj client.Object) []string {
+					paa := rawObj.(*iamv1alpha1.PlatformAccessApproval)
+					return []string{buildPlatformAccessIndexKey(&paa.Spec.SubjectRef)}
+				}).
+				WithIndex(&iamv1alpha1.PlatformAccessRejection{}, platformAccessRejectionIndexKey, func(rawObj client.Object) []string {
+					par := rawObj.(*iamv1alpha1.PlatformAccessRejection)
+					return []string{buildPlatformAccessIndexKey(&par.Spec.SubjectRef)}
+				})
 			cl := builder.Build()
 			validator := &PlatformAccessApprovalValidator{client: cl}
 
