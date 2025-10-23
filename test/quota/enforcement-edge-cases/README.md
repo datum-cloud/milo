@@ -18,7 +18,7 @@ This test verifies:
 | 3 | [setup-quota-enforcement-organization](#step-setup-quota-enforcement-organization) | 0 | 2 | 0 | 0 | 0 |
 | 4 | [create-limited-resource-grant](#step-create-limited-resource-grant) | 0 | 2 | 0 | 0 | 0 |
 | 5 | [test-boundary-conditions](#step-test-boundary-conditions) | 0 | 2 | 0 | 0 | 0 |
-| 6 | [test-policy-validation](#step-test-policy-validation) | 0 | 1 | 0 | 0 | 0 |
+| 6 | [test-policy-validation](#step-test-policy-validation) | 0 | 3 | 0 | 0 | 0 |
 
 ### Step: `setup-base-infrastructure`
 
@@ -84,14 +84,17 @@ Zero and negative amounts should be prevented by API validation.
 ### Step: `test-policy-validation`
 
 Test that ClaimCreationPolicy validation catches invalid configurations.
-Policies referencing non-existent resources should be rejected at admission time.
+Policies referencing non-existent resources are allowed at admission time
+but marked as not Ready by the controller with validation errors.
 
 
 #### Try
 
 | # | Operation | Bindings | Outputs | Description |
 |:-:|---|:-:|:-:|---|
-| 1 | `create` | 0 | 0 | Attempt to create policy with missing resource reference (should fail) |
+| 1 | `apply` | 0 | 0 | Create policy with missing resource reference (allowed at admission) |
+| 2 | `assert` | 0 | 0 | Wait for policy to be processed and marked invalid |
+| 3 | `assert` | 0 | 0 | Verify policy is not Ready due to validation failure |
 
 ---
 
