@@ -1,0 +1,47 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "iam.miloapis.com"
+        kind: "UserInvitation"
+        version: "v1alpha1"
+      metricNamePrefix: milo_user_invitations
+      commonLabels:
+        component: iam
+        resource_type: user_invitation
+      labelsFromPath:
+        email: [spec, email]
+      metrics:
+        - name: "info"
+          help: "Information about user invitations"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for user invitations"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the user invitation was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "current_generation"
+          help: "The current generation for the user invitation"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]

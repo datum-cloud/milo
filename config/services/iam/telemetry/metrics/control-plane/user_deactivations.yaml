@@ -1,0 +1,49 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "iam.miloapis.com"
+        kind: "UserDeactivation"
+        version: "v1alpha1"
+      metricNamePrefix: milo_user_deactivations
+      commonLabels:
+        component: iam
+        resource_type: user_deactivation
+      labelsFromPath:
+        user_name: [spec, userRef, name]
+        deactivated_by: [spec, deactivatedBy]
+        reason: [spec, reason]
+      metrics:
+        - name: "info"
+          help: "Information about user deactivations"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for user deactivations"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the user deactivation was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "current_generation"
+          help: "The current generation for the user deactivation"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]

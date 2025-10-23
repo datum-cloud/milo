@@ -1,0 +1,48 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "notification.miloapis.com"
+        kind: "ContactGroupMembershipRemoval"
+        version: "v1alpha1"
+      metricNamePrefix: milo_contact_group_membership_removals
+      commonLabels:
+        component: notification
+        resource_type: contact_group_membership_removal
+      labelsFromPath:
+        contact_group_name: [spec, contactGroupRef, name]
+        contact_name: [spec, contactRef, name]
+      metrics:
+        - name: "info"
+          help: "Information about contact group membership removals"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for contact group membership removals"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the contact group membership removal was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "current_generation"
+          help: "The current generation for the contact group membership removal"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]

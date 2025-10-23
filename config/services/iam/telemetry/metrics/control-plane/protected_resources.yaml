@@ -1,0 +1,57 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "iam.miloapis.com"
+        kind: "ProtectedResource"
+        version: "v1alpha1"
+      metricNamePrefix: milo_protected_resources
+      commonLabels:
+        component: iam
+        resource_type: protected_resource
+      labelsFromPath:
+        resource_api_group: [spec, resourceRef, apiGroup]
+        resource_kind: [spec, resourceRef, kind]
+        resource_name: [spec, resourceRef, name]
+      metrics:
+        - name: "info"
+          help: "Information about protected resources"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for protected resources"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the protected resource was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "observed_generation"
+          help: "The observed generation for the protected resource"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, observedGeneration]
+              nilIsZero: true
+
+        - name: "current_generation"
+          help: "The current generation for the protected resource"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]
