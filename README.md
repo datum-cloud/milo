@@ -1,6 +1,8 @@
 <p align="center"><img src="docs/images/milo.png" width="500px"></p>
 
 # Milo
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdatum-cloud%2Fmilo.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdatum-cloud%2Fmilo?ref=badge_shield)
+
 
 Milo is a "business operating system" for product-led, B2B companies. Think of
 it like a control plane for modern service providers, built on top of a
@@ -98,3 +100,7 @@ some areas we're planning to work on:
 - Purchase Orders: An API to support end user procurement tracking
 - Billing: A centralized hub for account statements, two sided ledger, & invoice
   status
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdatum-cloud%2Fmilo.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdatum-cloud%2Fmilo?ref=badge_large)
