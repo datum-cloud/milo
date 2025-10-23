@@ -117,6 +117,9 @@ var (
 
 	// UserInvitationEmailTemplate is the template for the user invitation email.
 	UserInvitationEmailTemplate string
+
+	// AssignableRolesNamespace is an extra namespace that the system allows to be used for assignable roles.
+	AssignableRolesNamespace string
 )
 
 func init() {
@@ -234,6 +237,8 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&UserInvitationEmailTemplate, "user-invitation-email-template", "emailtemplates.notification.miloapis.com-userinvitationemailtemplate", "The name of the template that will be used to send the user invitation email.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
+
+	fs.StringVar(&AssignableRolesNamespace, "assignable-roles-namespace", "datum-cloud", "An extra namespace that the system allows to be used for assignable roles.")
 
 	s.InfraCluster.AddFlags(namedFlagSets.FlagSet("Infrastructure Cluster"))
 	s.ControlPlane.AddFlags(namedFlagSets.FlagSet("Control Plane"))
@@ -438,7 +443,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "unable to setup email webhook", "error", err)
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-			if err := iamv1alpha1webhook.SetupUserInvitationWebhooksWithManager(ctrl, SystemNamespace); err != nil {
+			if err := iamv1alpha1webhook.SetupUserInvitationWebhooksWithManager(ctrl, SystemNamespace, AssignableRolesNamespace); err != nil {
 				logger.Error(err, "Error setting up user invitation webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
