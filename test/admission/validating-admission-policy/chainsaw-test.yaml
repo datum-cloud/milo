@@ -3,6 +3,15 @@ kind: Test
 metadata:
   name: validating-admission-policy-project
 spec:
+  description: |
+    Tests ValidatingAdmissionPolicy for project naming enforcement across organizations.
+
+    This test verifies:
+    - ValidatingAdmissionPolicies can enforce organization-specific naming rules
+    - Projects with invalid names are rejected
+    - Projects with valid prefixes matching their organization are accepted
+    - Policies work correctly across multiple organization contexts
+
   clusters:
     orgA:
       kubeconfig: kubeconfig-org-a
@@ -10,6 +19,7 @@ spec:
       kubeconfig: kubeconfig-org-b
   steps:
   - name: apply-policy-and-orgs
+    description: Create ValidatingAdmissionPolicy and test organizations
     try:
     - apply:
         file: resources/policy.yaml
@@ -21,17 +31,20 @@ spec:
         file: resources/org-b.yaml
 
   - name: deny-projects-with-bad-names-orgA
+    description: Verify projects with invalid names are rejected in orgA
     cluster: orgA
     try:
     - error:
         file: resources/project-bad-a.yaml
   - name: deny-projects-with-bad-names-orgB
+    description: Verify projects with invalid names are rejected in orgB
     cluster: orgB
     try:
     - error:
         file: resources/project-bad-b.yaml
 
   - name: allow-projects-with-ok-prefix-orgA
+    description: Verify projects with correct orgA prefix are accepted
     cluster: orgA
     try:
     - apply:
@@ -48,6 +61,7 @@ spec:
     - assert:
         file: assertions/assert-project-a-owner.yaml
   - name: allow-projects-with-ok-prefix-orgB
+    description: Verify projects with correct orgB prefix are accepted
     cluster: orgB
     try:
     - apply:

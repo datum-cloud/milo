@@ -1,0 +1,19 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: mc-test-secrets-per-project
+  labels:
+    test.miloapis.com/quota: "multicluster"
+spec:
+  consumerType:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Project
+  type: "Entity"
+  resourceType: "test.multicluster.miloapis.com/secrets"
+  description: "Multicluster test quota for maximum secrets per project"
+  baseUnit: "secret"
+  displayUnit: "secrets"
+  unitConversionFactor: 1
+  claimingResources:
+    - apiGroup: ""
+      kind: Secret

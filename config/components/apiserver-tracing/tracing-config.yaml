@@ -1,0 +1,6 @@
+apiVersion: apiserver.config.k8s.io/v1alpha1
+kind: TracingConfiguration
+# Connect to Grafana Tempo in telemetry-system namespace
+endpoint: telemetry-system-tempo.telemetry-system.svc.cluster.local:4317
+# Sample 100% of traces (1,000,000 per million)
+samplingRatePerMillion: 1000000

@@ -6,14 +6,18 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
+	crd "go.miloapis.com/milo/config/crd"
 	"go.miloapis.com/milo/internal/apiserver/admission/plugin/namespace/lifecycle"
 	projectstorage "go.miloapis.com/milo/internal/apiserver/storage/project"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // ← add / keep this
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -37,6 +41,8 @@ import (
 	_ "k8s.io/component-base/logs/json/register"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
 	"k8s.io/kubernetes/pkg/controlplane/apiserver/options"
+
+	admissionquota "go.miloapis.com/milo/internal/quota/admission"
 )
 
 func init() {
@@ -97,6 +103,8 @@ func NewCommand() *cobra.Command {
 			}
 
 			// utilfeature.DefaultMutableFeatureGate.Set("ExternalServiceAccountTokenSigner=true")
+			// Enable tracing to support trace continuation from incoming requests
+			utilfeature.DefaultMutableFeatureGate.Set("APIServerTracing=true")
 
 			if errs := completedOptions.Validate(); len(errs) != 0 {
 				return utilerrors.NewAggregate(errs)
@@ -166,11 +174,22 @@ func NewCommand() *cobra.Command {
 
 func NewOptions() *options.Options {
 	s := options.NewOptions()
-	s.Admission.GenericAdmission.DefaultOffPlugins = DefaultOffAdmissionPlugins()
 
 	if s.Admission.GenericAdmission.Plugins == nil {
 		s.Admission.GenericAdmission.Plugins = admission.NewPlugins()
 	}
+
+	// Register custom admission plugins BEFORE determining which plugins to disable
+	// This ensures our plugins are known when DefaultOffAdmissionPlugins() is called
+	admissionquota.Register(s.Admission.GenericAdmission.Plugins)
+
+	// Set custom plugin order that includes our ClaimCreationQuota plugin
+	// This dynamically extends Kubernetes' plugin order with our custom plugins
+	s.Admission.GenericAdmission.RecommendedPluginOrder = GetMiloOrderedPlugins()
+
+	// Configure which plugins should be disabled
+	s.Admission.GenericAdmission.DefaultOffPlugins = DefaultOffAdmissionPlugins()
+
 	lifecycle.Register(s.Admission.GenericAdmission.Plugins)
 
 	s.Admission.GenericAdmission.RecommendedPluginOrder =
@@ -232,11 +251,14 @@ func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregat
 	// 1. CRDs
 	notFoundHandler := notfoundhandler.New(config.ControlPlane.Generic.Serializer, genericapifilters.NoMuxAndDiscoveryIncompleteKey)
 
+	// Use loopback config to enable automatic namespace bootstrapping in project control planes
+	loopbackConfig := config.ControlPlane.Generic.LoopbackClientConfig
+
 	config.APIExtensions.GenericConfig.RESTOptionsGetter =
-		projectstorage.WithProjectAwareDecorator(config.APIExtensions.GenericConfig.RESTOptionsGetter)
+		projectstorage.WithProjectAwareDecoratorAndConfig(config.APIExtensions.GenericConfig.RESTOptionsGetter, loopbackConfig)
 
 	config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter =
-		projectstorage.WithProjectAwareDecorator(config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter)
+		projectstorage.WithProjectAwareDecoratorAndConfig(config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter, loopbackConfig)
 
 	apiExtensionsServer, err := config.APIExtensions.New(genericapiserver.NewEmptyDelegateWithCustomHandler(notFoundHandler))
 	if err != nil {
@@ -281,4 +303,38 @@ func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregat
 	}
 
 	return aggregatorServer, nil
+}
+
+// bootstrapCRDsHook installs all embedded CRDs into the cluster as a post-start hook.
+// This is called after the API server starts but before readiness checks pass.
+// This follows KCP's pattern of bootstrapping CRDs with polling retry.
+func bootstrapCRDsHook(hookCtx genericapiserver.PostStartHookContext, loopbackConfig *rest.Config) error {
+	logger := klog.FromContext(hookCtx).WithName("bootstrap-crds")
+
+	// Create apiextensions client from loopback config
+	extClient, err := apiextensionsclient.NewForConfig(loopbackConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create apiextensions client: %w", err)
+	}
+
+	logger.Info("Starting CRD bootstrap from embedded filesystem")
+
+	// Use polling with retry in case the apiextensions server isn't fully ready yet.
+	// Post-start hooks run after the server starts listening but before readiness.
+	// The embedded Context in PostStartHookContext is cancelled when the server stops.
+	err = wait.PollUntilContextCancel(hookCtx, time.Second, true, func(ctx context.Context) (bool, error) {
+		if err := crd.Bootstrap(ctx, extClient); err != nil {
+			logger.Error(err, "failed to bootstrap CRDs, retrying")
+			return false, nil // keep retrying
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		logger.Error(err, "failed to bootstrap CRDs")
+		return nil // don't fail the server start, just log the error
+	}
+
+	logger.Info("CRD bootstrap completed successfully")
+	return nil
 }

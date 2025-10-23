@@ -1,0 +1,391 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: allowancebuckets.quota.miloapis.com
+spec:
+  group: quota.miloapis.com
+  names:
+    kind: AllowanceBucket
+    listKind: AllowanceBucketList
+    plural: allowancebuckets
+    singular: allowancebucket
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.resourceType
+      name: Resource Type
+      type: string
+    - jsonPath: .status.limit
+      name: Limit
+      type: integer
+    - jsonPath: .status.allocated
+      name: Allocated
+      type: integer
+    - jsonPath: .status.available
+      name: Available
+      type: integer
+    - jsonPath: .status.claimCount
+      name: Claims
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          **AllowanceBucket** aggregates quota limits and usage for a single (consumer, resourceType) combination.
+          The system automatically creates buckets to provide real-time quota availability information
+          for **ResourceClaim** evaluation during admission.
+
+          ### How It Works
+          1. **Auto-Creation**: Quota system creates buckets automatically for each unique (consumer, resourceType) pair found in active **ResourceGrants**
+          2. **Aggregation**: Quota system continuously aggregates capacity from active **ResourceGrants** and consumption from granted **ResourceClaims**
+          3. **Decision Support**: Quota system uses bucket `status.available` to determine if **ResourceClaims** can be granted
+          4. **Updates**: Quota system updates bucket status whenever contributing grants or claims change
+
+          ### Aggregation Logic
+          **AllowanceBuckets** serve as the central aggregation point where quota capacity meets quota consumption.
+          The quota system continuously scans for **ResourceGrants** that match both the bucket's consumer
+          and resource type, but only considers grants with an `Active` status condition. For each qualifying
+          grant, the quota system examines all allowances targeting the bucket's resource type and sums the
+          amounts from every bucket within those allowances. This sum becomes the bucket's limit - the total
+          quota capacity available to the consumer for that specific resource type.
+
+          Simultaneously, the quota system tracks quota consumption by finding all **ResourceClaims** with matching
+          consumer and resource type specifications. However, only claims that have been successfully granted
+          contribute to the allocated total. The quota system sums the allocated amounts from all granted
+          requests, creating a running total of consumed quota capacity.
+
+          The available quota emerges from this simple relationship: Available = Limit - Allocated. The
+          system ensures this value never goes negative, treating any calculated negative as zero. This
+          available amount represents the quota capacity remaining for new **ResourceClaims** and drives
+          real-time admission decisions throughout the cluster.
+
+          ### Real-Time Admission Decisions
+          When a **ResourceClaim** is created:
+          1. Quota system identifies the relevant bucket (matching consumer and resource type)
+          2. Compares requested amount with bucket's `status.available`
+          3. Grants claim if requested amount <= available capacity
+          4. Denies claim if requested amount > available capacity
+          5. Updates bucket status to reflect the new allocation (if granted)
+
+          ### Bucket Lifecycle
+          1. **Auto-Created**: When first ResourceGrant creates allowance for (consumer, resourceType)
+          2. **Active**: Continuously aggregated while ResourceGrants or ResourceClaims exist
+          3. **Updated**: Status refreshed whenever contributing resources change
+          4. **Persistent**: Buckets remain even when limit drops to 0 (for monitoring)
+
+          ### Consistency and Performance
+          **Eventual Consistency:**
+          - Status may lag briefly after ResourceGrant or ResourceClaim changes
+          - Controller processes updates asynchronously for performance
+          - LastReconciliation timestamp indicates data freshness
+
+          **Scale Optimization:**
+          - Stores aggregates (limit, allocated, available) rather than individual entries
+          - ContributingGrantRefs tracks grants (few) but not claims (many)
+          - Single bucket per (consumer, resourceType) regardless of claim count
+
+          ### Status Information
+          - **Limit**: Total quota capacity from all contributing ResourceGrants
+          - **Allocated**: Total quota consumed by all granted ResourceClaims
+          - **Available**: Remaining quota capacity (Limit - Allocated)
+          - **ClaimCount**: Number of granted claims consuming from this bucket
+          - **GrantCount**: Number of active grants contributing to this bucket
+          - **ContributingGrantRefs**: Detailed information about contributing grants
+
+          ### Monitoring and Troubleshooting
+          **Quota Monitoring:**
+          - Monitor status.available to track quota usage trends
+          - Check status.allocated vs status.limit for utilization ratios
+          - Use status.claimCount to understand resource creation patterns
+
+          **Troubleshooting Issues:**
+          When investigating quota problems, start with the bucket's limit value. A limit of zero typically
+          indicates that no ResourceGrants are contributing capacity for this consumer and resource type
+          combination. Verify that ResourceGrants exist with matching consumer and resource type specifications,
+          and confirm their status conditions show Active=True. Grants with validation failures or pending
+          states won't contribute to bucket limits.
+
+          High allocation values relative to limits suggest quota consumption issues. Review the ResourceClaims
+          that match this bucket's consumer and resource type to identify which resources are consuming large
+          amounts of quota. Check the claim allocation details to understand consumption patterns and identify
+          potential quota leaks where claims aren't being cleaned up properly.
+
+          Stale bucket data manifests as allocation or limit values that don't reflect recent changes to
+          grants or claims. Check the lastReconciliation timestamp to determine data freshness, then examine
+          quota system logs for aggregation errors or performance issues. The quota system should process
+          changes within seconds under normal conditions.
+
+          ### System Architecture
+          - **Single Writer**: Only the quota system updates bucket status (prevents races)
+          - **Dedicated Processing**: Separate components focus solely on bucket aggregation
+          - **Event-Driven**: Responds to ResourceGrant and ResourceClaim changes
+          - **Efficient Queries**: Uses indexes and field selectors for fast aggregation
+
+          ### Selectors and Filtering
+          - **Field selectors**: spec.consumerRef.kind, spec.consumerRef.name, spec.resourceType
+          - **System labels** (set automatically by quota system):
+            - quota.miloapis.com/consumer-kind: Organization
+            - quota.miloapis.com/consumer-name: acme-corp
+
+          ### Common Queries
+          - All buckets for a consumer: label selector quota.miloapis.com/consumer-kind + quota.miloapis.com/consumer-name
+          - All buckets for a resource type: field selector spec.resourceType=<value>
+          - Specific bucket: field selector spec.consumerRef.name + spec.resourceType
+          - Overutilized buckets: filter by status.available < threshold
+          - Empty buckets: filter by status.limit = 0
+
+          ### Performance Considerations
+          - Bucket status updates are asynchronous and may lag resource changes
+          - Large numbers of ResourceClaims can impact aggregation performance
+          - Controller uses efficient aggregation queries to handle scale
+          - Status updates are batched to reduce API server load
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              AllowanceBucketSpec defines the desired state of AllowanceBucket.
+              The system automatically creates buckets for each unique (consumer, resourceType) combination
+              found in active ResourceGrants.
+            properties:
+              consumerRef:
+                description: |-
+                  ConsumerRef identifies the quota consumer tracked by this bucket.
+                  Must match the ConsumerRef from ResourceGrants that contribute to this bucket.
+                  Only one bucket exists per unique (ConsumerRef, ResourceType) combination.
+
+                  Examples:
+                  - Organization "acme-corp" consuming Project quota
+                  - Project "web-app" consuming User quota
+                  - Organization "enterprise-corp" consuming storage quota
+                properties:
+                  apiGroup:
+                    description: |-
+                      APIGroup specifies the API group of the consumer resource.
+                      Use full group name for Milo resources.
+
+                      Examples:
+                      - "resourcemanager.miloapis.com" (Organization/Project resources)
+                      - "iam.miloapis.com" (User/Group resources)
+                      - "infrastructure.miloapis.com" (infrastructure resources)
+                    type: string
+                  kind:
+                    description: |-
+                      Kind specifies the type of consumer resource.
+                      Must match an existing Kubernetes resource type that can receive quota grants.
+
+                      Common consumer types:
+                      - "Organization" (top-level quota consumer)
+                      - "Project" (project-level quota consumer)
+                      - "User" (user-level quota consumer)
+                    type: string
+                  name:
+                    description: |-
+                      Name identifies the specific consumer resource instance.
+                      Must match the name of an existing consumer resource in the cluster.
+
+                      Examples:
+                      - "acme-corp" (Organization name)
+                      - "web-application" (Project name)
+                      - "john.doe" (User name)
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace identifies the namespace of the consumer resource.
+                      Required for namespaced consumer resources (e.g., Projects).
+                      Leave empty for cluster-scoped consumer resources (e.g., Organizations).
+
+                      Examples:
+                      - "" (empty for cluster-scoped Organizations)
+                      - "organization-acme-corp" (namespace for Projects within an organization)
+                      - "project-web-app" (namespace for resources within a project)
+                    type: string
+                required:
+                - kind
+                - name
+                type: object
+              resourceType:
+                description: |-
+                  ResourceType specifies which resource type this bucket aggregates quota for.
+                  Must exactly match a ResourceRegistration.spec.resourceType that is currently active.
+                  The quota system validates this reference and only creates buckets for registered types.
+
+                  The identifier format is flexible, as defined by platform administrators
+                  in their ResourceRegistrations.
+
+                  Examples:
+                  - "resourcemanager.miloapis.com/projects"
+                  - "compute_cpu"
+                  - "storage.volumes"
+                  - "custom-service-quota"
+                maxLength: 253
+                minLength: 1
+                type: string
+            required:
+            - consumerRef
+            - resourceType
+            type: object
+          status:
+            description: |-
+              AllowanceBucketStatus contains the quota system-computed quota aggregation for a specific
+              (consumer, resourceType) combination. The quota system continuously updates this status
+              by aggregating capacity from active ResourceGrants and consumption from granted ResourceClaims.
+            properties:
+              allocated:
+                description: |-
+                  Allocated represents the total quota currently consumed by granted ResourceClaims.
+                  Calculated by summing all allocation amounts from ResourceClaims with status.conditions[type=Granted]=True
+                  that match the bucket's spec.consumerRef and have requests for spec.resourceType.
+
+                  Aggregation logic:
+                  - Only ResourceClaims with Granted=True contribute to allocated amount
+                  - Only requests matching spec.resourceType are included
+                  - All allocated amounts from matching requests are summed
+                format: int64
+                minimum: 0
+                type: integer
+              available:
+                description: |-
+                  Available represents the quota capacity remaining for new ResourceClaims.
+                  Always calculated as: Available = Limit - Allocated (never negative).
+                  The system uses this value to determine whether new ResourceClaims can be granted.
+
+                  Decision logic:
+                  - ResourceClaim is granted if requested amount <= Available
+                  - ResourceClaim is denied if requested amount > Available
+                  - Multiple concurrent claims may race; first to be processed wins
+                format: int64
+                minimum: 0
+                type: integer
+              claimCount:
+                description: |-
+                  ClaimCount indicates the total number of granted ResourceClaims consuming quota from this bucket.
+                  Includes all ResourceClaims with status.conditions[type=Granted]=True that have requests
+                  matching spec.resourceType and spec.consumerRef.
+
+                  Used for monitoring quota usage patterns and identifying potential issues.
+                format: int32
+                minimum: 0
+                type: integer
+              contributingGrantRefs:
+                description: |-
+                  ContributingGrantRefs provides detailed information about each ResourceGrant that contributes
+                  to this bucket's limit. Includes grant names, amounts, and last observed generations for
+                  tracking and debugging quota sources.
+
+                  This field provides visibility into:
+                  - Which grants are providing quota capacity
+                  - How much each grant contributes
+                  - Whether grants have been updated since last bucket calculation
+
+                  Grants are tracked individually because they are typically few in number compared to claims.
+                items:
+                  description: |-
+                    ContributingGrantRef tracks a ResourceGrant that contributes capacity to this bucket.
+                    The quota system maintains these references to provide visibility into quota sources
+                    and to detect when grants change.
+                  properties:
+                    amount:
+                      description: |-
+                        Amount specifies how much quota capacity this grant contributes to the bucket.
+                        Represents the sum of all buckets within all allowances for the matching
+                        resource type in the referenced grant. Measured in BaseUnit.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    lastObservedGeneration:
+                      description: |-
+                        LastObservedGeneration records the ResourceGrant's generation when the bucket
+                        quota system last processed it. Used to detect when grants have been updated
+                        and the bucket needs to recalculate its aggregated limit.
+                      format: int64
+                      type: integer
+                    name:
+                      description: |-
+                        Name identifies the ResourceGrant that contributes to this bucket's limit.
+                        Used for tracking quota sources and debugging allocation issues.
+                      type: string
+                  required:
+                  - amount
+                  - lastObservedGeneration
+                  - name
+                  type: object
+                type: array
+              grantCount:
+                description: |-
+                  GrantCount indicates the total number of active ResourceGrants contributing to this bucket's limit.
+                  Includes all ResourceGrants with status.conditions[type=Active]=True that have allowances
+                  matching spec.resourceType and spec.consumerRef.
+
+                  Used for understanding quota source distribution and debugging capacity issues.
+                format: int32
+                minimum: 0
+                type: integer
+              lastReconciliation:
+                description: |-
+                  LastReconciliation records when the quota system last recalculated this status.
+                  Used for monitoring quota system health and understanding how fresh the aggregated data is.
+
+                  The quota system updates this timestamp every time it processes the bucket, regardless of
+                  whether the aggregated values changed.
+                format: date-time
+                type: string
+              limit:
+                description: |-
+                  Limit represents the total quota capacity available for this (consumer, resourceType) combination.
+                  Calculated by summing all bucket amounts from active ResourceGrants that match the bucket's
+                  spec.consumerRef and spec.resourceType. Measured in BaseUnit from the ResourceRegistration.
+
+                  Aggregation logic:
+                  - Only ResourceGrants with status.conditions[type=Active]=True contribute to the limit
+                  - All allowances matching spec.resourceType are included from contributing grants
+                  - All bucket amounts within matching allowances are summed
+                format: int64
+                minimum: 0
+                type: integer
+              observedGeneration:
+                description: |-
+                  ObservedGeneration indicates the most recent spec generation the quota system has processed.
+                  When ObservedGeneration matches metadata.generation, the status reflects the current spec.
+                  When ObservedGeneration is lower, the quota system is still processing recent changes.
+                format: int64
+                type: integer
+            required:
+            - allocated
+            - available
+            - claimCount
+            - grantCount
+            - limit
+            type: object
+        required:
+        - spec
+        type: object
+    selectableFields:
+    - jsonPath: .spec.consumerRef.kind
+    - jsonPath: .spec.consumerRef.name
+    - jsonPath: .spec.resourceType
+    served: true
+    storage: true
+    subresources:
+      status: {}

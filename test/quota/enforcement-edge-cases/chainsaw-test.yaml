@@ -1,0 +1,146 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: quota-enforcement-edge-cases
+spec:
+  description: |
+    Tests edge cases and boundary conditions in the quota enforcement system.
+
+    This test verifies:
+    - Zero and negative claim amounts are rejected
+    - Invalid ClaimCreationPolicy configurations are detected
+    - Policy validation catches missing resource references
+    - Boundary conditions are properly handled
+
+  # Define clusters for organizational context testing
+  clusters:
+    main:
+      kubeconfig: kubeconfig-main
+    org:
+      kubeconfig: kubeconfig-org-template
+
+  steps:
+    # Setup base quota infrastructure
+    - name: setup-base-infrastructure
+      description: |
+        Register the resource type and wait for it to become active.
+      try:
+        - description: Create ResourceRegistration
+          apply:
+            file: 01-resource-registration.yaml
+        - description: Wait for ResourceRegistration to become active
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: edge-test-projects-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Setup claim creation policy
+    - name: setup-claim-creation-policy
+      description: |
+        Create ClaimCreationPolicy for automatic claim generation.
+      try:
+        - description: Create ClaimCreationPolicy
+          apply:
+            file: project-creation-policy.yaml
+        - description: Wait for policy to be ready
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ClaimCreationPolicy
+            name: edge-test-project-quota-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+
+    # Create organization with strict quota enforcement
+    - name: setup-quota-enforcement-organization
+      description: |
+        Create Organization, User, and OrganizationMembership for testing.
+      try:
+        - description: Create Organization
+          apply:
+            file: 02-quota-enforcement-organization.yaml
+        - description: Wait for Organization namespace to be active
+          wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-edge-test-quota-enforcement-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+
+    # Create resource grant with limited allowance
+    - name: create-limited-resource-grant
+      description: |
+        Create ResourceGrant with a limited allowance for edge case testing.
+      try:
+        - description: Create ResourceGrant
+          apply:
+            file: quota-enforcement-grant.yaml
+        - description: Wait for ResourceGrant to become active
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: edge-test-quota-enforcement-org-grant
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Test ResourceClaim boundary conditions and validation
+    # (Quota grant/deny functionality is covered by core-functionality test)
+
+    # Test resource claim boundary conditions
+    - name: test-boundary-conditions
+      description: |
+        Test that invalid ResourceClaim configurations are rejected.
+        Zero and negative amounts should be prevented by API validation.
+      try:
+        - description: Attempt to create claim with zero amount (should fail)
+          apply:
+            file: test-data/zero-amount-claim.yaml
+            expect:
+              - check:
+                  ($error != null): true
+        - description: Attempt to create claim with negative amount (should fail)
+          apply:
+            file: test-data/negative-amount-claim.yaml
+            expect:
+              - check:
+                  ($error != null): true
+
+    # Test claim creation policy validation
+    - name: test-policy-validation
+      description: |
+        Test that ClaimCreationPolicy validation catches invalid configurations.
+        Policies referencing non-existent resources are allowed at admission time
+        but marked as not Ready by the controller with validation errors.
+      try:
+        - description: Create policy with missing resource reference (allowed at admission)
+          apply:
+            file: test-data/invalid-policy-missing-resource.yaml
+        - description: Wait for policy to be processed and marked invalid
+          assert:
+            file: test-data/invalid-policy-missing-resource.yaml
+        - description: Verify policy is not Ready due to validation failure
+          assert:
+            resource:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: ClaimCreationPolicy
+              metadata:
+                name: test-invalid-missing-resource-policy
+              status:
+                (conditions[?type == 'Ready']):
+                - status: "False"
+                  reason: "ValidationFailed"
+

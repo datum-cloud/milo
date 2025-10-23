@@ -2,6 +2,7 @@ package projectstorage
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"strings"
 	"sync"
@@ -9,8 +10,13 @@ import (
 
 	"go.miloapis.com/milo/pkg/request"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	generic "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
@@ -18,6 +24,7 @@ import (
 	factory "k8s.io/apiserver/pkg/storage/storagebackend/factory"
 	k8smetrics "k8s.io/component-base/metrics"
 	k8slegacy "k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/klog/v2"
 
 	"k8s.io/client-go/tools/cache"
 )
@@ -184,9 +191,10 @@ type projectMux struct {
 	children  map[string]*child
 	versioner storage.Versioner
 
-	inner generic.StorageDecorator
-	cfg   storagebackend.ConfigForResource
-	args  decoratorArgs
+	inner          generic.StorageDecorator
+	cfg            storagebackend.ConfigForResource
+	args           decoratorArgs
+	loopbackConfig *rest.Config
 }
 
 func (m *projectMux) Versioner() storage.Versioner { return m.versioner }
@@ -241,6 +249,12 @@ func (m *projectMux) childForProject(project string) (storage.Interface, error) 
 
 	m.children[project] = c
 	childCreations.WithLabelValues(project, m.args.resourceGroup, m.args.resourceKind).Inc()
+
+	// Bootstrap system namespace synchronously to prevent resource creation failures
+	if project != "" && m.loopbackConfig != nil {
+		m.bootstrapMiloSystemNamespace(project)
+	}
+
 	return c.s, nil
 }
 
@@ -252,6 +266,45 @@ func (m *projectMux) destroyAll() {
 			c.destroy()
 		}
 		delete(m.children, k)
+	}
+}
+
+// bootstrapMiloSystemNamespace ensures milo-system namespace exists in the project control plane.
+// Called synchronously during storage initialization to prevent quota resource creation failures.
+func (m *projectMux) bootstrapMiloSystemNamespace(projectName string) {
+	cfg := rest.CopyConfig(m.loopbackConfig)
+	cfg.Host = strings.TrimSuffix(cfg.Host, "/") + fmt.Sprintf("/apis/resourcemanager.miloapis.com/v1alpha1/projects/%s/control-plane", projectName)
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		klog.Errorf("Failed to create client for project %s: %v", projectName, err)
+		return
+	}
+
+	ctx := context.Background()
+
+	_, err = clientset.CoreV1().Namespaces().Get(ctx, "milo-system", metav1.GetOptions{})
+	if err == nil {
+		return
+	}
+	if !apierrors.IsNotFound(err) {
+		klog.Errorf("Failed to check for milo-system namespace in project %s: %v", projectName, err)
+		return
+	}
+
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "milo-system",
+			Labels: map[string]string{
+				"miloapis.com/system": "true",
+			},
+		},
+	}
+
+	_, err = clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		klog.Errorf("Failed to create milo-system namespace in project %s: %v", projectName, err)
+		return
 	}
 }
 

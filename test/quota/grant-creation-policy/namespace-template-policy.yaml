@@ -1,0 +1,32 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: GrantCreationPolicy
+metadata:
+  name: test-namespace-template-policy
+  labels:
+    test.miloapis.com/quota: "grant-creation-policy"
+spec:
+  disabled: false
+  trigger:
+    resource:
+      apiVersion: "resourcemanager.miloapis.com/v1alpha1"
+      kind: "Organization"
+    constraints:
+      # Only trigger for Standard orgs with the namespace-template label
+      - expression: 'trigger.spec.type == "Standard" && has(trigger.metadata.labels) && "test.miloapis.com/scenario" in trigger.metadata.labels && trigger.metadata.labels["test.miloapis.com/scenario"] == "namespace-template"'
+  target:
+    resourceGrantTemplate:
+      metadata:
+        name: "grant-{{.trigger.metadata.name}}-default-org"
+        namespace: "organization-{{.trigger.metadata.name}}"
+        labels:
+          quota.miloapis.com/auto-created: "true"
+          quota.miloapis.com/policy: "test-namespace-template-policy"
+      spec:
+        consumerRef:
+          apiGroup: "resourcemanager.miloapis.com"
+          kind: "Organization"
+          name: "{{.trigger.metadata.name}}"
+        allowances:
+          - resourceType: "test.grantpolicy.miloapis.com/projects"
+            buckets:
+              - amount: 5
