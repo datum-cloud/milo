@@ -1,4 +1,5 @@
-<p align="center"><img src="docs/images/milo.png" width="500px"></p>
+![Hero image](docs/images/hero-D.png#gh-dark-mode-only)
+![Hero image](docs/images/hero-L.png#gh-light-mode-only)
 
 Milo is a "system of action" for product-led, B2B companies. Think of
 it like a control plane for modern service providers, built on top of a
