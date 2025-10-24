@@ -1,0 +1,9 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam.miloapis.com-acceptinvitation
+spec:
+  launchStage: Beta
+  includedPermissions:
+  - iam.miloapis.com/userinvitations.update
+  - iam.miloapis.com/userinvitations.patch
