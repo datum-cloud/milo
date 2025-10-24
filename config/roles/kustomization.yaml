@@ -50,3 +50,5 @@ resources:
   - organization-admin.yaml
   - project-viewer.yaml
   - project-admin.yaml
+  - iam.miloapis.com-getinvitation.yaml
+  - iam.miloapis.com-acceptinvitation.yaml
