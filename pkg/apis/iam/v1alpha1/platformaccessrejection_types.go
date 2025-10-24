@@ -22,7 +22,6 @@ type PlatformAccessRejection struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   PlatformAccessRejectionSpec   `json:"spec,omitempty"`
-	Status PlatformAccessRejectionStatus `json:"status,omitempty"`
 }
 
 // PlatformAccessRejectionSpec defines the desired state of PlatformAccessRejection.
@@ -51,21 +50,4 @@ type PlatformAccessRejectionList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []PlatformAccessRejection `json:"items"`
-}
-
-type PlatformAccessRejectionStatus struct {
-	// Conditions provide conditions that represent the current status of the PlatformAccessRejection.
-	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "ReconcilePending", message: "Platform access rejection reconciliation is pending", lastTransitionTime: "1970-01-01T00:00:00Z"}}
-	// +kubebuilder:validation:Optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// RejecterUser contains information about the user who rejected the access request.
-	// +kubebuilder:validation:Optional
-	RejecterUser *PlatformAccessRejectionUserStatus `json:"rejecterUser,omitempty"`
-}
-
-type PlatformAccessRejectionUserStatus struct {
-	// Email is the email of the User being referenced.
-	// +kubebuilder:validation:Optional
-	Email string `json:"email,omitempty"`
 }

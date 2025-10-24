@@ -22,7 +22,6 @@ type PlatformAccessApproval struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   PlatformAccessApprovalSpec   `json:"spec,omitempty"`
-	Status PlatformAccessApprovalStatus `json:"status,omitempty"`
 }
 
 // PlatformAccessApprovalSpec defines the desired state of PlatformAccessApproval.
@@ -46,23 +45,6 @@ type PlatformAccessApprovalList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []PlatformAccessApproval `json:"items"`
-}
-
-type PlatformAccessApprovalStatus struct {
-	// Conditions provide conditions that represent the current status of the PlatformAccessApproval.
-	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "ReconcilePending", message: "Platform access approval reconciliation is pending", lastTransitionTime: "1970-01-01T00:00:00Z"}}
-	// +kubebuilder:validation:Optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// ApproverUser contains information about the user who approved the access request.
-	// +kubebuilder:validation:Optional
-	ApproverUser *PlatformAccessApprovalUserStatus `json:"approverUser,omitempty"`
-}
-
-type PlatformAccessApprovalUserStatus struct {
-	// Email is the email of the User being referenced.
-	// +kubebuilder:validation:Optional
-	Email string `json:"email,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="(has(self.email) && !has(self.userRef)) || (!has(self.email) && has(self.userRef))",message="Exactly one of email or userRef must be specified"
