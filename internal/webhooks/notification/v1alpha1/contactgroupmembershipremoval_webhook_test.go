@@ -37,6 +37,24 @@ func TestContactGroupMembershipRemovalValidator(t *testing.T) {
 		return &notificationv1alpha1.ContactGroup{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"}}
 	}
 
+	// makeContactWithSubject creates a Contact that includes a SubjectRef with the given apiGroup and namespace.
+	makeContactWithSubject := func(name, ns, apiGroup string) *notificationv1alpha1.Contact {
+		return &notificationv1alpha1.Contact{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+			Spec: notificationv1alpha1.ContactSpec{
+				SubjectRef: &notificationv1alpha1.SubjectReference{
+					APIGroup:  apiGroup,
+					Kind:      "User",
+					Name:      "demo", // value not relevant for validator logic
+					Namespace: ns,
+				},
+				FamilyName: "Doe",
+				GivenName:  "John",
+				Email:      "john.doe@example.com",
+			},
+		}
+	}
+
 	tests := map[string]struct {
 		newObj        *notificationv1alpha1.ContactGroupMembershipRemoval
 		seedObjects   []client.Object
@@ -80,6 +98,29 @@ func TestContactGroupMembershipRemovalValidator(t *testing.T) {
 				makeRemoval("existing", "c1", "g1"),
 			},
 			expectError: false,
+		},
+		"contact with resourcemanager apiGroup same namespace": {
+			newObj:      makeRemoval("rm7", "c-res", "g1"),
+			seedObjects: []client.Object{makeContactWithSubject("c-res", "default", "resourcemanager.miloapis.com"), makeGroup("g1")},
+			expectError: false,
+		},
+		"contact with resourcemanager apiGroup different namespace": {
+			newObj: &notificationv1alpha1.ContactGroupMembershipRemoval{
+				ObjectMeta: metav1.ObjectMeta{Name: "rm8", Namespace: "other-ns"},
+				Spec: notificationv1alpha1.ContactGroupMembershipRemovalSpec{
+					ContactRef:      notificationv1alpha1.ContactReference{Name: "c-res", Namespace: "default"},
+					ContactGroupRef: notificationv1alpha1.ContactGroupReference{Name: "g1", Namespace: "default"},
+				},
+			},
+			seedObjects:   []client.Object{makeContactWithSubject("c-res", "default", "resourcemanager.miloapis.com"), makeGroup("g1")},
+			expectError:   true,
+			errorContains: "namespace must be the same",
+		},
+		"contact with unsupported apiGroup": {
+			newObj:        makeRemoval("rm9", "c-oth", "g1"),
+			seedObjects:   []client.Object{makeContactWithSubject("c-oth", "default", "unsupported.group"), makeGroup("g1")},
+			expectError:   true,
+			errorContains: "server does not handle subjectref apigroup",
 		},
 	}
 
