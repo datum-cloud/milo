@@ -42,6 +42,8 @@ type UserController struct {
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=userdeactivations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=userpreferences,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=platformaccessapprovals,verbs=get;list;watch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=platformaccessrejections,verbs=get;list;watch
 
 // Reconcile is the main reconciliation loop for the UserController.
 func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
