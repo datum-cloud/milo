@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -125,13 +126,13 @@ func TestPlatformAccessApprovalValidator_ValidateCreate(t *testing.T) {
 			paa: &iamv1alpha1.PlatformAccessApproval{
 				ObjectMeta: metav1.ObjectMeta{Name: "rejection-exists"},
 				Spec: iamv1alpha1.PlatformAccessApprovalSpec{
-					SubjectRef: iamv1alpha1.SubjectReference{Email: "reject@example.com"},
+					SubjectRef: iamv1alpha1.SubjectReference{UserRef: &iamv1alpha1.UserReference{Name: "reject-user"}},
 				},
 			},
 			preObjects: []client.Object{&iamv1alpha1.PlatformAccessRejection{
 				ObjectMeta: metav1.ObjectMeta{Name: "existing-rej"},
 				Spec: iamv1alpha1.PlatformAccessRejectionSpec{
-					SubjectRef: iamv1alpha1.SubjectReference{Email: "reject@example.com"},
+					UserRef: iamv1alpha1.UserReference{Name: "reject-user"},
 				},
 			}},
 			expectError:  true,
@@ -153,7 +154,11 @@ func TestPlatformAccessApprovalValidator_ValidateCreate(t *testing.T) {
 				}).
 				WithIndex(&iamv1alpha1.PlatformAccessRejection{}, platformAccessRejectionIndexKey, func(rawObj client.Object) []string {
 					par := rawObj.(*iamv1alpha1.PlatformAccessRejection)
-					return []string{buildPlatformAccessIndexKey(&par.Spec.SubjectRef)}
+					return []string{par.Spec.UserRef.Name}
+				}).
+				WithIndex(&iamv1alpha1.User{}, userEmailIndexKey, func(rawObj client.Object) []string {
+					user := rawObj.(*iamv1alpha1.User)
+					return []string{strings.ToLower(user.Spec.Email)}
 				})
 			cl := builder.Build()
 			validator := &PlatformAccessApprovalValidator{client: cl}

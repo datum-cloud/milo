@@ -11,6 +11,8 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 )
 
+const platformAccessRejectionIndexKey = "iam.miloapis.com/platformaccessrejection"
+
 func SetupPlatformAccessRejectionWebhooksWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.PlatformAccessRejection{}).

@@ -42,6 +42,9 @@ spec:
             description: PlatformAccessRejectionSpec defines the desired state of
               PlatformAccessRejection.
             properties:
+              reason:
+                description: Reason is the reason for the rejection.
+                type: string
               rejecterRef:
                 description: |-
                   RejecterRef is the reference to the actor who issued the rejection.
@@ -63,6 +66,7 @@ spec:
                 - name
                 type: object
             required:
+            - reason
             - subjectRef
             type: object
             x-kubernetes-validations:

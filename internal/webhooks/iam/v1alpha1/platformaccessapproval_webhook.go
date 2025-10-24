@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/mail"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,7 +18,7 @@ import (
 )
 
 const platformAccessApprovalIndexKey = "iam.miloapis.com/platformaccessapproval"
-const platformAccessRejectionIndexKey = "iam.miloapis.com/platformaccess"
+const userEmailIndexKey = "iam.miloapis.com/user-email"
 
 func buildPlatformAccessIndexKey(subject *iamv1alpha1.SubjectReference) string {
 	if subject.UserRef != nil {
@@ -35,12 +36,20 @@ func SetupPlatformAccessApprovalWebhooksWithManager(mgr ctrl.Manager) error {
 		return fmt.Errorf("failed to index platformaccessapproval key: %w", err)
 	}
 
-	// Index platformaccessrejections by subject
+	// Index platformaccessrejections by user
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.PlatformAccessRejection{}, platformAccessRejectionIndexKey, func(rawObj client.Object) []string {
-		paa := rawObj.(*iamv1alpha1.PlatformAccessRejection)
-		return []string{buildPlatformAccessIndexKey(&paa.Spec.SubjectRef)}
+		par := rawObj.(*iamv1alpha1.PlatformAccessRejection)
+		return []string{par.Spec.UserRef.Name}
 	}); err != nil {
 		return fmt.Errorf("failed to index platformaccessrejection key: %w", err)
+	}
+
+	// Index users by email
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.User{}, userEmailIndexKey, func(rawObj client.Object) []string {
+		user := rawObj.(*iamv1alpha1.User)
+		return []string{strings.ToLower(user.Spec.Email)}
+	}); err != nil {
+		return fmt.Errorf("failed to index user email key: %w", err)
 	}
 
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -114,6 +123,20 @@ func (v *PlatformAccessApprovalValidator) ValidateCreate(ctx context.Context, ob
 			log.Info("invalid email address", "email", emailAddress)
 			errs = append(errs, field.Invalid(field.NewPath("spec").Child("subjectRef").Child("email"), emailAddress, fmt.Sprintf("invalid email address: %v", err)))
 		}
+
+		// Validate that the email address is NOT associated with a user
+		users := &iamv1alpha1.UserList{}
+		if err := v.client.List(ctx, users, client.MatchingFields{userEmailIndexKey: strings.ToLower(emailAddress)}); err != nil {
+			log.Error(err, "failed to list users", "email", emailAddress)
+			errs = append(errs, field.InternalError(field.NewPath("spec").Child("subjectRef").Child("email"), fmt.Errorf("failed to list users: %w", err)))
+		}
+		if len(users.Items) > 0 {
+			log.Error(nil, "email address subject reference must only be used for not yet created users (user found for email address)", "email", emailAddress)
+			errs = append(errs, field.Invalid(field.NewPath("spec").Child("subjectRef").Child("email"), emailAddress, "email address subject must refernce must only be used for not yet created users (user found for email address)"))
+		}
+
+		// Non existen users cannot have pre-existing platformaccessrejections,
+		// as they are referenced by name, so okay to not check.
 	}
 
 	// Validate subjectRef.userRef is valid
@@ -129,6 +152,17 @@ func (v *PlatformAccessApprovalValidator) ValidateCreate(ctx context.Context, ob
 				errs = append(errs, field.InternalError(field.NewPath("spec").Child("subjectRef").Child("userRef").Child("name"), fmt.Errorf("failed to get user: %w", err)))
 			}
 		}
+
+		// Validate that a PlatformAccessRejection already exists for the same subject
+		existingPres := &iamv1alpha1.PlatformAccessRejectionList{}
+		if err := v.client.List(ctx, existingPres, client.MatchingFields{platformAccessRejectionIndexKey: userRef.Name}); err != nil {
+			log.Error(err, "failed to list platformaccessrejections", "subject", userRef.Name)
+			errs = append(errs, field.InternalError(field.NewPath("spec").Child("subjectRef"), fmt.Errorf("failed to list platformaccessrejections: %w", err)))
+		}
+		if len(existingPres.Items) > 0 {
+			log.Info("an platformaccessrejection already exists for the same subject", "subject", userRef.Name)
+			errs = append(errs, field.Invalid(field.NewPath("spec").Child("subjectRef"), userRef.Name, "an existing platformaccessrejection already exists for the same subject."))
+		}
 	}
 
 	// Validate that another PlatformAccessApproval already exists for the same subject
@@ -140,17 +174,6 @@ func (v *PlatformAccessApprovalValidator) ValidateCreate(ctx context.Context, ob
 	if len(existingPaas.Items) > 0 {
 		log.Info("an platformaccessapproval already exists for the same subject", "subject", buildPlatformAccessIndexKey(&paa.Spec.SubjectRef))
 		errs = append(errs, field.Invalid(field.NewPath("spec").Child("subjectRef"), buildPlatformAccessIndexKey(&paa.Spec.SubjectRef), "an existing platformaccessapproval already exists for the same subject."))
-	}
-
-	// Validate that another PlatformAccessRejection already exists for the same subject
-	existingPres := &iamv1alpha1.PlatformAccessRejectionList{}
-	if err := v.client.List(ctx, existingPres, client.MatchingFields{platformAccessRejectionIndexKey: buildPlatformAccessIndexKey(&paa.Spec.SubjectRef)}); err != nil {
-		log.Error(err, "failed to list platformaccessrejections", "subject", buildPlatformAccessIndexKey(&paa.Spec.SubjectRef))
-		errs = append(errs, field.InternalError(field.NewPath("spec").Child("subjectRef"), fmt.Errorf("failed to list platformaccessrejections: %w", err)))
-	}
-	if len(existingPres.Items) > 0 {
-		log.Info("an platformaccessrejection already exists for the same subject", "subject", buildPlatformAccessIndexKey(&paa.Spec.SubjectRef))
-		errs = append(errs, field.Invalid(field.NewPath("spec").Child("subjectRef"), buildPlatformAccessIndexKey(&paa.Spec.SubjectRef), "an existing platformaccessrejection already exists for the same subject."))
 	}
 
 	if len(errs) > 0 {

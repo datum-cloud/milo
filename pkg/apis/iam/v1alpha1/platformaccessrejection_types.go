@@ -32,6 +32,11 @@ type PlatformAccessRejectionSpec struct {
 	// UserRef is the reference to the user being rejected.
 	// +kubebuilder:validation:Required
 	UserRef UserReference `json:"subjectRef"`
+
+	// Reason is the reason for the rejection.
+	// +kubebuilder:validation:Required
+	Reason string `json:"reason"`
+
 	// RejecterRef is the reference to the actor who issued the rejection.
 	// If not specified, the rejection was made by the system.
 	// +kubebuilder:validation:Optional

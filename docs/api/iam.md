@@ -1562,6 +1562,13 @@ PlatformAccessRejectionSpec defines the desired state of PlatformAccessRejection
         </tr>
     </thead>
     <tbody><tr>
+        <td><b>reason</b></td>
+        <td>string</td>
+        <td>
+          Reason is the reason for the rejection.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
         <td><b><a href="#platformaccessrejectionspecsubjectref">subjectRef</a></b></td>
         <td>object</td>
         <td>
