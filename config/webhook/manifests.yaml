@@ -35,7 +35,7 @@ webhooks:
       path: /mutate-iam-miloapis-com-v1alpha1-platformaccessarejection
       port: 9443
   failurePolicy: Fail
-  name: mplatformaccessarejection.iam.miloapis.com
+  name: mplatformaccessrejection.iam.miloapis.com
   rules:
   - apiGroups:
     - iam.miloapis.com
@@ -167,7 +167,7 @@ webhooks:
       path: /validate-iam-miloapis-com-v1alpha1-platformaccessarejection
       port: 9443
   failurePolicy: Fail
-  name: vplatformaccessarejection.iam.miloapis.com
+  name: vplatformaccessrejection.iam.miloapis.com
   rules:
   - apiGroups:
     - iam.miloapis.com
