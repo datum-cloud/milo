@@ -1,4 +1,5 @@
-<p align="center"><img src="docs/images/milo.png" width="500px"></p>
+![Hero image](docs/images/hero-D.png#gh-dark-mode-only)
+![Hero image](docs/images/hero-L.png#gh-light-mode-only)
 
 # Milo
 
