@@ -125,8 +125,8 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		log.Error(err, "Failed to get Organization Display Name")
 		return ctrl.Result{}, fmt.Errorf("failed to get Organization Display Name: %w", err)
 	}
-	// Get the display name of the User who invited the user in the invitation
-	inviterDisplayName, err := r.getReferencedInviterUserDisplayName(ctx, ui.Spec.InvitedBy)
+	// Get the display name and email address of the User who invited the user in the invitation
+	inviterDisplayName, inviterEmailAddress, err := r.getReferencedInviterUserInfo(ctx, ui.Spec.InvitedBy)
 	if err != nil {
 		log.Error(err, "Failed to get Inviter Display Name")
 		return ctrl.Result{}, fmt.Errorf("failed to get Inviter Display Name: %w", err)
@@ -136,7 +136,8 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		DisplayName: organizationDisplayName,
 	}
 	ui.Status.InviterUser = iamv1alpha1.UserInvitationUserStatus{
-		DisplayName: inviterDisplayName,
+		DisplayName:  inviterDisplayName,
+		EmailAddress: inviterEmailAddress,
 	}
 
 	// Check that the UserInvitation is not expired
@@ -673,11 +674,11 @@ func (r *UserInvitationController) getInviteeUser(ctx context.Context, email str
 	return &users.Items[0], nil
 }
 
-// getReferencedInviterUserDisplayName gets the display name of the user who invited the user in the invitation.
-func (r *UserInvitationController) getReferencedInviterUserDisplayName(ctx context.Context, inviterUserRef iamv1alpha1.UserReference) (string, error) {
+// getReferencedInviterUserInfo gets the display name and email address of the user who invited the user in the invitation.
+func (r *UserInvitationController) getReferencedInviterUserInfo(ctx context.Context, inviterUserRef iamv1alpha1.UserReference) (string, string, error) {
 	user := &iamv1alpha1.User{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: inviterUserRef.Name}, user); err != nil {
-		return "", fmt.Errorf("failed to get inviterUser: %w", err)
+		return "", "", fmt.Errorf("failed to get inviterUser: %w", err)
 	}
 
 	displayName := strings.TrimSpace(user.Spec.GivenName + " " + user.Spec.FamilyName)
@@ -685,7 +686,7 @@ func (r *UserInvitationController) getReferencedInviterUserDisplayName(ctx conte
 		displayName = user.Name
 	}
 
-	return displayName, nil
+	return displayName, user.Spec.Email, nil
 }
 
 // getOrganizationDisplayName gets the display name of the Organization referenced by the UserInvitation.

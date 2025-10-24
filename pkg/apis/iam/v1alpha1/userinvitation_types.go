@@ -120,6 +120,10 @@ type UserInvitationUserStatus struct {
 	// DisplayName is the display name of the user who invited the user in the invitation.
 	// +kubebuilder:validation:Optional
 	DisplayName string `json:"displayName,omitempty"`
+
+	// EmailAddress is the email address of the user who invited the user in the invitation.
+	// +kubebuilder:validation:Optional
+	EmailAddress string `json:"emailAddress,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

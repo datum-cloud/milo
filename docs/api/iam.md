@@ -2473,6 +2473,13 @@ InviterUser contains information about the user who invited the user in the invi
           DisplayName is the display name of the user who invited the user in the invitation.<br/>
         </td>
         <td>false</td>
+      </tr><tr>
+        <td><b>emailAddress</b></td>
+        <td>string</td>
+        <td>
+          EmailAddress is the email address of the user who invited the user in the invitation.<br/>
+        </td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
