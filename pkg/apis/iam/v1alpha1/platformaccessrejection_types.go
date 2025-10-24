@@ -29,9 +29,9 @@ type PlatformAccessRejection struct {
 // +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec is immutable"
 // +kubebuilder:validation:Type=object
 type PlatformAccessRejectionSpec struct {
-	// SubjectRef is the reference to the subject being rejected.
+	// UserRef is the reference to the user being rejected.
 	// +kubebuilder:validation:Required
-	SubjectRef SubjectReference `json:"subjectRef"`
+	UserRef UserReference `json:"subjectRef"`
 	// RejecterRef is the reference to the actor who issued the rejection.
 	// If not specified, the rejection was made by the system.
 	// +kubebuilder:validation:Optional

@@ -54,30 +54,14 @@ spec:
                 - name
                 type: object
               subjectRef:
-                description: SubjectRef is the reference to the subject being rejected.
+                description: UserRef is the reference to the user being rejected.
                 properties:
-                  email:
-                    description: |-
-                      Email is the email of the user being approved.
-                      Use Email to approve an email address that is not associated with a created user. (e.g. when using PlatformInvitation)
-                      UserRef and Email are mutually exclusive. Exactly one of them must be specified.
+                  name:
+                    description: Name is the name of the User being referenced.
                     type: string
-                  userRef:
-                    description: |-
-                      UserRef is the reference to the user being approved.
-                      UserRef and Email are mutually exclusive. Exactly one of them must be specified.
-                    properties:
-                      name:
-                        description: Name is the name of the User being referenced.
-                        type: string
-                    required:
-                    - name
-                    type: object
+                required:
+                - name
                 type: object
-                x-kubernetes-validations:
-                - message: Exactly one of email or userRef must be specified
-                  rule: (has(self.email) && !has(self.userRef)) || (!has(self.email)
-                    && has(self.userRef))
             required:
             - subjectRef
             type: object

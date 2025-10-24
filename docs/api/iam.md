@@ -1565,9 +1565,7 @@ PlatformAccessRejectionSpec defines the desired state of PlatformAccessRejection
         <td><b><a href="#platformaccessrejectionspecsubjectref">subjectRef</a></b></td>
         <td>object</td>
         <td>
-          SubjectRef is the reference to the subject being rejected.<br/>
-          <br/>
-            <i>Validations</i>:<li>(has(self.email) && !has(self.userRef)) || (!has(self.email) && has(self.userRef)): Exactly one of email or userRef must be specified</li>
+          UserRef is the reference to the user being rejected.<br/>
         </td>
         <td>true</td>
       </tr><tr>
@@ -1587,45 +1585,7 @@ If not specified, the rejection was made by the system.<br/>
 
 
 
-SubjectRef is the reference to the subject being rejected.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>email</b></td>
-        <td>string</td>
-        <td>
-          Email is the email of the user being approved.
-Use Email to approve an email address that is not associated with a created user. (e.g. when using PlatformInvitation)
-UserRef and Email are mutually exclusive. Exactly one of them must be specified.<br/>
-        </td>
-        <td>false</td>
-      </tr><tr>
-        <td><b><a href="#platformaccessrejectionspecsubjectrefuserref">userRef</a></b></td>
-        <td>object</td>
-        <td>
-          UserRef is the reference to the user being approved.
-UserRef and Email are mutually exclusive. Exactly one of them must be specified.<br/>
-        </td>
-        <td>false</td>
-      </tr></tbody>
-</table>
-
-
-### PlatformAccessRejection.spec.subjectRef.userRef
-<sup><sup>[↩ Parent](#platformaccessrejectionspecsubjectref)</sup></sup>
-
-
-
-UserRef is the reference to the user being approved.
-UserRef and Email are mutually exclusive. Exactly one of them must be specified.
+UserRef is the reference to the user being rejected.
 
 <table>
     <thead>
