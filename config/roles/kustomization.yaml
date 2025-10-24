@@ -50,3 +50,9 @@ resources:
   - organization-admin.yaml
   - project-viewer.yaml
   - project-admin.yaml
+  - iam-platform-access-approvals-reader.yaml
+  - iam-platform-access-approvals-editor.yaml
+  - iam-platform-access-approvals-admin.yaml
+  - iam-platform-access-rejections-reader.yaml
+  - iam-platform-access-rejections-editor.yaml
+  - iam-platform-access-rejections-admin.yaml

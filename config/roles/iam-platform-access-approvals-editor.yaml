@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam-platform-access-approvals-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: iam-platform-access-approvals-reader
+  includedPermissions:
+    - iam.miloapis.com/platformaccessapprovals.create
+    - iam.miloapis.com/platformaccessapprovals.update
+    - iam.miloapis.com/platformaccessapprovals.patch
+    - iam.miloapis.com/platformaccessapprovals.delete
