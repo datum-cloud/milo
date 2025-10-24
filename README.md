@@ -1,8 +1,6 @@
 <p align="center"><img src="docs/images/milo.png" width="500px"></p>
 
-# Milo
-
-Milo is a "business operating system" for product-led, B2B companies. Think of
+Milo is a "system of action" for product-led, B2B companies. Think of
 it like a control plane for modern service providers, built on top of a
 comprehensive system of record that ties together key parts of your business.
 
@@ -11,14 +9,14 @@ comprehensive system of record that ties together key parts of your business.
 Over the last two decades scaling infrastructure clouds (Voxel, Packet,
 SoftLayer, StackPath), we've spent a lot of time building or stitching together
 the pieces required to run a company at some decent scale: understanding our
-contacts, users, accounts, usage, quotes, contracts, agreements, billing, etc.
+contacts, users, accounts, usage, quotes, contracts, agreements, etc.
 
 While a number of awesome vertical tools have emerged to solve particular pain
-points (like authorization, metering, or SOC2 compliance), fast-growing
+points (like authorization, metering, billing, or SOC2 compliance), fast-growing
 companies have a large "back office" surface area to maintain and very little
-go-to-market (GTM) tooling suitable for complex motions. Inevitably, each tool
+go-to-market (GTM) tooling suitable for omni-channel cloud motions. Inevitably, each tool
 needs foundational, trusted data upon which to act, creating a competing "system
-of record" environment. The recent emergence of AI agents makes this even more
+of record" environment. The emergence of AI agents makes this even more
 clear.
 
 As we set out to build [Datum Cloud](https://www.datum.net) (an infrastructure
