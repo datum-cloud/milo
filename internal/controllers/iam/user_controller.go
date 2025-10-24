@@ -76,13 +76,12 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	// RegistrationApproval to Pending if it is not already set.
 	{
 		// Hard-code the migration cutoff to 22 Oct 2025 14:00 UTC.
-		cutoff := metav1.Time{Time: time.Date(2025, time.October, 21, 14, 0, 0, 0, time.UTC)}
+		cutoff := metav1.Time{Time: time.Date(2025, time.October, 22, 14, 0, 0, 0, time.UTC)}
 
 		if user.CreationTimestamp.Time.Before(cutoff.Time) {
-			if user.Status.RegistrationApproval == "" {
-				user.Status.RegistrationApproval = iamv1alpha1.RegistrationApprovalStateApproved
-				log.Info("Bootstrap: auto-approving legacy user", "user", user.Name, "created", user.CreationTimestamp.Time)
-			}
+			// Auto-approve legacy users.
+			user.Status.RegistrationApproval = iamv1alpha1.RegistrationApprovalStateApproved
+			log.Info("Bootstrap: auto-approving legacy user", "user", user.Name, "created", user.CreationTimestamp.Time)
 		} else {
 			// For users created after the cutoff, ensure a default of Pending when empty.
 			if user.Status.RegistrationApproval == "" {
