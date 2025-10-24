@@ -220,6 +220,10 @@ spec:
                     description: DisplayName is the display name of the user who invited
                       the user in the invitation.
                     type: string
+                  emailAddress:
+                    description: EmailAddress is the email address of the user who
+                      invited the user in the invitation.
+                    type: string
                 type: object
               organization:
                 description: Organization contains information about the organization
