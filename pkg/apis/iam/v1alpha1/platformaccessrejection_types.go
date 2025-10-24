@@ -21,7 +21,7 @@ type PlatformAccessRejection struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   PlatformAccessRejectionSpec   `json:"spec,omitempty"`
+	Spec PlatformAccessRejectionSpec `json:"spec,omitempty"`
 }
 
 // PlatformAccessRejectionSpec defines the desired state of PlatformAccessRejection.

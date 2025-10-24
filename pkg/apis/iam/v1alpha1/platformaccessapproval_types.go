@@ -21,7 +21,7 @@ type PlatformAccessApproval struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   PlatformAccessApprovalSpec   `json:"spec,omitempty"`
+	Spec PlatformAccessApprovalSpec `json:"spec,omitempty"`
 }
 
 // PlatformAccessApprovalSpec defines the desired state of PlatformAccessApproval.
