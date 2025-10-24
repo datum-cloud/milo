@@ -21,8 +21,8 @@ import (
 const (
 	userFinalizerKey                = "iam.miloapis.com/user"
 	userReadyConditionType          = "Ready"
-	platformAccessApprovalIndexKey  = "iam.miloapis.com/platformaccessapproval"
-	platformAccessRejectionIndexKey = "iam.miloapis.com/platformaccessrejection"
+	platformAccessApprovalIndexKey  = "iam.miloapis.com/platformaccessapprovalkey"
+	platformAccessRejectionIndexKey = "iam.miloapis.com/platformaccessrejectionkey"
 )
 
 func buildPlatformAccessApprovalIndexKey(subject *iamv1alpha1.SubjectReference) string {
