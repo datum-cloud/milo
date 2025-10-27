@@ -32,7 +32,7 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
-      path: /mutate-iam-miloapis-com-v1alpha1-platformaccessarejection
+      path: /mutate-iam-miloapis-com-v1alpha1-platformaccessrejection
       port: 9443
   failurePolicy: Fail
   name: mplatformaccessrejection.iam.miloapis.com
@@ -44,7 +44,7 @@ webhooks:
     operations:
     - CREATE
     resources:
-    - platformaccessarejections
+    - platformaccessrejections
   sideEffects: None
 - admissionReviewVersions:
   - v1
@@ -164,7 +164,7 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
-      path: /validate-iam-miloapis-com-v1alpha1-platformaccessarejection
+      path: /validate-iam-miloapis-com-v1alpha1-platformaccessrejection
       port: 9443
   failurePolicy: Fail
   name: vplatformaccessrejection.iam.miloapis.com
@@ -176,7 +176,7 @@ webhooks:
     operations:
     - CREATE
     resources:
-    - platformaccessarejections
+    - platformaccessrejections
   sideEffects: None
 - admissionReviewVersions:
   - v1

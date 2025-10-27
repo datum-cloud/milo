@@ -29,7 +29,7 @@ func SetupPlatformAccessRejectionWebhooksWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/mutate-iam-miloapis-com-v1alpha1-platformaccessarejection,mutating=true,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=platformaccessarejections,verbs=create,versions=v1alpha1,name=mplatformaccessrejection.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/mutate-iam-miloapis-com-v1alpha1-platformaccessrejection,mutating=true,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=platformaccessrejections,verbs=create,versions=v1alpha1,name=mplatformaccessrejection.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // PlatformAccessRejectionMutator mutates PlatformAccessRejection resources to set the rejecter to the user who is rejecting the access request.
 type PlatformAccessRejectionMutator struct {
@@ -66,7 +66,7 @@ func (m *PlatformAccessRejectionMutator) Default(ctx context.Context, obj runtim
 	return nil
 }
 
-// +kubebuilder:webhook:path=/validate-iam-miloapis-com-v1alpha1-platformaccessarejection,mutating=false,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=platformaccessarejections,verbs=create,versions=v1alpha1,name=vplatformaccessrejection.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/validate-iam-miloapis-com-v1alpha1-platformaccessrejection,mutating=false,failurePolicy=fail,sideEffects=None,groups=iam.miloapis.com,resources=platformaccessrejections,verbs=create,versions=v1alpha1,name=vplatformaccessrejection.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // PlatformAccessRejectionValidator validates PlatformAccessRejection resources.
 type PlatformAccessRejectionValidator struct {
