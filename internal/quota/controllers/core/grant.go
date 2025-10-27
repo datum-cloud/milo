@@ -27,9 +27,9 @@ import (
 
 // ResourceGrantController reconciles a ResourceGrant object.
 type ResourceGrantController struct {
-	Scheme          *runtime.Scheme
-	Manager         mcmanager.Manager
-	GrantValidator  *validation.ResourceGrantValidator
+	Scheme         *runtime.Scheme
+	Manager        mcmanager.Manager
+	GrantValidator *validation.ResourceGrantValidator
 }
 
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
