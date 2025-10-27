@@ -52,3 +52,4 @@ resources:
   - project-admin.yaml
   - iam.miloapis.com-getinvitation.yaml
   - iam.miloapis.com-acceptinvitation.yaml
+  - viewer.yaml

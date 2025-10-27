@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: viewer
+  annotations:
+    kubernetes.io/display-name: Viewer
+    kubernetes.io/description: "View access to all resources"
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: resourcemanager-reader
+    - name: core-reader
+    - name: apiextensions-reader
+    - name: iam-viewer
+    - name: networking.datumapis.com-viewer
+    - name: telemetry.miloapis.com-viewer
+    - name: organizationmembership-reader
+    - name: quota.miloapis.com-viewer
