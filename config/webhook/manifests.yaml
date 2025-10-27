@@ -11,6 +11,48 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
+      path: /mutate-iam-miloapis-com-v1alpha1-platformaccessapproval
+      port: 9443
+  failurePolicy: Fail
+  name: mplatformaccessapproval.iam.miloapis.com
+  rules:
+  - apiGroups:
+    - iam.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - platformaccessapprovals
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /mutate-iam-miloapis-com-v1alpha1-platformaccessrejection
+      port: 9443
+  failurePolicy: Fail
+  name: mplatformaccessrejection.iam.miloapis.com
+  rules:
+  - apiGroups:
+    - iam.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - platformaccessrejections
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
       path: /mutate-iam-miloapis-com-v1alpha1-userdeactivation
       port: 9443
   failurePolicy: Fail
@@ -94,6 +136,48 @@ kind: ValidatingWebhookConfiguration
 metadata:
   name: resourcemanager.miloapis.com
 webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-iam-miloapis-com-v1alpha1-platformaccessapproval
+      port: 9443
+  failurePolicy: Fail
+  name: vplatformaccessapproval.iam.miloapis.com
+  rules:
+  - apiGroups:
+    - iam.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - platformaccessapprovals
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-iam-miloapis-com-v1alpha1-platformaccessrejection
+      port: 9443
+  failurePolicy: Fail
+  name: vplatformaccessrejection.iam.miloapis.com
+  rules:
+  - apiGroups:
+    - iam.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - platformaccessrejections
+  sideEffects: None
 - admissionReviewVersions:
   - v1
   - v1beta1

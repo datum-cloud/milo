@@ -4,42 +4,22 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: users.iam.miloapis.com
+  name: platformaccessdenials.iam.miloapis.com
 spec:
   group: iam.miloapis.com
   names:
-    kind: User
-    listKind: UserList
-    plural: users
-    singular: user
+    kind: PlatformAccessDenial
+    listKind: PlatformAccessDenialList
+    plural: platformaccessdenials
+    singular: platformaccessdenial
   scope: Cluster
   versions:
-  - additionalPrinterColumns:
-    - jsonPath: .spec.email
-      name: Email
-      type: string
-    - jsonPath: .spec.givenName
-      name: Given Name
-      type: string
-    - jsonPath: .spec.familyName
-      name: Family Name
-      type: string
-    - jsonPath: .status.conditions[?(@.type=='Ready')].status
-      name: Ready
-      type: string
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    - jsonPath: .status.state
-      name: State
-      type: string
-    - jsonPath: .status.registrationApproval
-      name: Registration Approval
-      type: string
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: User is the Schema for the users API
+        description: |-
+          PlatformAccessDenial is the Schema for the platformaccessapprovals API.
+          It represents a platform access approval for a user. Once the platform access approval is created, an email will be sent to the user.
         properties:
           apiVersion:
             description: |-
@@ -59,32 +39,61 @@ spec:
           metadata:
             type: object
           spec:
-            description: UserSpec defines the desired state of User
+            description: PlatformAccessDenialSpec defines the desired state of PlatformAccessDenial.
             properties:
-              email:
-                description: The email of the user.
-                type: string
-              familyName:
-                description: The last name of the user.
-                type: string
-              givenName:
-                description: The first name of the user.
-                type: string
+              approverRef:
+                description: |-
+                  ApproverRef is the reference to the approver being approved.
+                  If not specified, the approval was made by the system.
+                properties:
+                  name:
+                    description: Name is the name of the User being referenced.
+                    type: string
+                required:
+                - name
+                type: object
+              subjectRef:
+                description: SubjectRef is the reference to the subject being approved.
+                properties:
+                  email:
+                    description: |-
+                      Email is the email of the user being approved.
+                      Use Email to approve an email address that is not associated with a created user. (e.g. when using PlatformInvitation)
+                      UserRef and Email are mutually exclusive. Exactly one of them must be specified.
+                    type: string
+                  userRef:
+                    description: |-
+                      UserRef is the reference to the user being approved.
+                      UserRef and Email are mutually exclusive. Exactly one of them must be specified.
+                    properties:
+                      name:
+                        description: Name is the name of the User being referenced.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: Exactly one of email or userRef must be specified
+                  rule: (has(self.email) && !has(self.userRef)) || (!has(self.email)
+                    && has(self.userRef))
             required:
-            - email
+            - subjectRef
             type: object
+            x-kubernetes-validations:
+            - message: spec is immutable
+              rule: self == oldSelf
           status:
-            description: UserStatus defines the observed state of User
             properties:
               conditions:
                 default:
                 - lastTransitionTime: "1970-01-01T00:00:00Z"
-                  message: Waiting for control plane to reconcile
-                  reason: Unknown
+                  message: Platform access approval reconciliation is pending
+                  reason: ReconcilePending
                   status: Unknown
                   type: Ready
                 description: Conditions provide conditions that represent the current
-                  status of the User.
+                  status of the PlatformAccessDenial.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -140,41 +149,8 @@ spec:
                   - type
                   type: object
                 type: array
-              registrationApproval:
-                description: |-
-                  RegistrationApproval represents the administrator’s decision on the user’s registration request.
-                  States:
-                    - Pending:  The user is awaiting review by an administrator.
-                    - Approved: The user registration has been approved.
-                    - Rejected: The user registration has been rejected.
-                  The User resource is always created regardless of this value, but the
-                  ability for the person to sign into the platform and access resources is
-                  governed by this status: only *Approved* users are granted access, while
-                  *Pending* and *Rejected* users are prevented for interacting with resources.
-                enum:
-                - Pending
-                - Approved
-                - Rejected
-                type: string
-              state:
-                default: Active
-                description: |-
-                  State represents the current activation state of the user account from the
-                  auth provider. This field is managed exclusively by the UserDeactivation CRD
-                  and cannot be changed directly by the user. When a UserDeactivation resource
-                  is created for the user, the user is deactivated in the auth provider; when
-                  the UserDeactivation is deleted, the user is reactivated.
-                  States:
-                    - Active: The user can be used to authenticate.
-                    - Inactive: The user is prohibited to be used to authenticate, and revokes all existing sessions.
-                enum:
-                - Active
-                - Inactive
-                type: string
             type: object
         type: object
-    selectableFields:
-    - jsonPath: .status.registrationApproval
     served: true
     storage: true
     subresources:

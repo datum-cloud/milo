@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam-platform-access-rejections-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: iam-platform-access-rejections-reader
+  includedPermissions:
+    - iam.miloapis.com/platformaccessrejections.create
+    - iam.miloapis.com/platformaccessrejections.update
+    - iam.miloapis.com/platformaccessrejections.patch
+    - iam.miloapis.com/platformaccessrejections.delete

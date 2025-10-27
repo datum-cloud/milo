@@ -6,6 +6,14 @@ import (
 
 type UserState string
 
+type RegistrationApprovalState string
+
+const (
+	RegistrationApprovalStatePending  RegistrationApprovalState = "Pending"
+	RegistrationApprovalStateApproved RegistrationApprovalState = "Approved"
+	RegistrationApprovalStateRejected RegistrationApprovalState = "Rejected"
+)
+
 const (
 	UserStateActive   UserState = "Active"
 	UserStateInactive UserState = "Inactive"
@@ -21,7 +29,9 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state"
+// +kubebuilder:printcolumn:name="Registration Approval",type="string",JSONPath=".status.registrationApproval"
 // +kubebuilder:resource:path=users,scope=Cluster
+// +kubebuilder:selectablefield:JSONPath=".status.registrationApproval"
 type User struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -61,6 +71,18 @@ type UserStatus struct {
 	// +kubebuilder:default=Active
 	// +kubebuilder:validation:Enum=Active;Inactive
 	State UserState `json:"state,omitempty"`
+
+	// RegistrationApproval represents the administrator’s decision on the user’s registration request.
+	// States:
+	//   - Pending:  The user is awaiting review by an administrator.
+	//   - Approved: The user registration has been approved.
+	//   - Rejected: The user registration has been rejected.
+	// The User resource is always created regardless of this value, but the
+	// ability for the person to sign into the platform and access resources is
+	// governed by this status: only *Approved* users are granted access, while
+	// *Pending* and *Rejected* users are prevented for interacting with resources.
+	// +kubebuilder:validation:Enum=Pending;Approved;Rejected
+	RegistrationApproval RegistrationApprovalState `json:"registrationApproval,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -11,3 +11,5 @@ resources:
   - policybinding.yaml
   - userpreference.yaml
   - userdeactivation.yaml
+  - platformaccessapproval.yaml
+  - platformaccessrejection.yaml
