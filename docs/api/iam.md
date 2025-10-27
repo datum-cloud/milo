@@ -2181,6 +2181,15 @@ UserInvitationSpec defines the desired state of UserInvitation
         </td>
         <td>true</td>
       </tr><tr>
+        <td><b><a href="#userinvitationspecrolesindex">roles</a></b></td>
+        <td>[]object</td>
+        <td>
+          The roles that will be assigned to the user when they accept the invitation.<br/>
+          <br/>
+            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: roles type is immutable</li>
+        </td>
+        <td>true</td>
+      </tr><tr>
         <td><b>state</b></td>
         <td>enum</td>
         <td>
@@ -2229,15 +2238,6 @@ If not specified, the UserInvitation will never expire.<br/>
             <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: invitedBy type is immutable</li>
         </td>
         <td>false</td>
-      </tr><tr>
-        <td><b><a href="#userinvitationspecrolesindex">roles</a></b></td>
-        <td>[]object</td>
-        <td>
-          The roles that will be assigned to the user when they accept the invitation.<br/>
-          <br/>
-            <i>Validations</i>:<li>type(oldSelf) == null_type || self == oldSelf: roles type is immutable</li>
-        </td>
-        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -2263,33 +2263,6 @@ OrganizationRef is a reference to the Organization that the user is invoted to.
         <td>string</td>
         <td>
           Name is the name of resource being referenced<br/>
-        </td>
-        <td>true</td>
-      </tr></tbody>
-</table>
-
-
-### UserInvitation.spec.invitedBy
-<sup><sup>[↩ Parent](#userinvitationspec)</sup></sup>
-
-
-
-InvitedBy is the user who invited the user. A mutation webhook will default this field to the user who made the request.
-
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>name</b></td>
-        <td>string</td>
-        <td>
-          Name is the name of the User being referenced.<br/>
         </td>
         <td>true</td>
       </tr></tbody>
@@ -2326,6 +2299,33 @@ RoleReference contains information that points to the Role being used
           Namespace of the referenced Role. If empty, it is assumed to be in the PolicyBinding's namespace.<br/>
         </td>
         <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### UserInvitation.spec.invitedBy
+<sup><sup>[↩ Parent](#userinvitationspec)</sup></sup>
+
+
+
+InvitedBy is the user who invited the user. A mutation webhook will default this field to the user who made the request.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the User being referenced.<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 
