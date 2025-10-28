@@ -194,5 +194,5 @@ func (r *PlatformInvitationController) createPlatformAccessApproval(ctx context.
 
 // getDeterministicPlatformAccessApprovalName generates a deterministic name for a PlatformAccessApproval to create based on the PlatformInvitation.
 func getDeterministicPlatformAccessApprovalName(pi iamv1alpha1.PlatformInvitation) string {
-	return fmt.Sprintf("%s-%s", string(pi.GetUID()), strings.ToLower(pi.Spec.Email))
+	return fmt.Sprintf("%s-%s", string(pi.GetUID()), pi.GetName())
 }
