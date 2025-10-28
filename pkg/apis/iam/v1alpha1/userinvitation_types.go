@@ -69,7 +69,9 @@ type UserInvitationSpec struct {
 	FamilyName string `json:"familyName,omitempty"`
 
 	// The roles that will be assigned to the user when they accept the invitation.
-	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=100
 	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="roles type is immutable"
 	Roles []RoleReference `json:"roles,omitempty"`
 

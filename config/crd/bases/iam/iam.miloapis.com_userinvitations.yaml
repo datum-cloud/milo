@@ -122,6 +122,8 @@ spec:
                   required:
                   - name
                   type: object
+                maxItems: 100
+                minItems: 1
                 type: array
                 x-kubernetes-validations:
                 - message: roles type is immutable
@@ -143,6 +145,7 @@ spec:
             required:
             - email
             - organizationRef
+            - roles
             - state
             type: object
           status:

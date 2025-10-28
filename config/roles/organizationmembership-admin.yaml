@@ -2,6 +2,9 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: organizationmembership-admin
+  annotations:
+    kubernetes.io/display-name: Organization Membership Admin
+    kubernetes.io/description: "Full access to all organization membership resources"
 spec:
   launchStage: Beta
   inheritedRoles:

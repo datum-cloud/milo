@@ -98,6 +98,7 @@ rules:
   resources:
   - platformaccessapprovals
   - platformaccessrejections
+  - roles
   - userdeactivations
   verbs:
   - get

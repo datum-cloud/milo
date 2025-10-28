@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: User
+metadata:
+  name: test-user-alice
+  labels:
+    test.miloapis.com/scenario: "organization-membership-roles"
+spec:
+  email: alice@test-membership-roles.example.com
+  givenName: Alice
+  familyName: Testuser

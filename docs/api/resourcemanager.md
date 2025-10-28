@@ -25,7 +25,44 @@ Resource Types:
 
 
 
-OrganizationMembership is the Schema for the organizationmemberships API
+OrganizationMembership establishes a user's membership in an organization and
+optionally assigns roles to grant permissions. The controller automatically
+manages PolicyBinding resources for each assigned role, simplifying access
+control management.
+
+Key features:
+  - Establishes user-organization relationship
+  - Automatic PolicyBinding creation and deletion for assigned roles
+  - Supports multiple roles per membership
+  - Cross-namespace role references
+  - Detailed status tracking with per-role reconciliation state
+
+Prerequisites:
+  - User resource must exist
+  - Organization resource must exist
+  - Referenced Role resources must exist in their respective namespaces
+
+Example - Basic membership with role assignment:
+
+	apiVersion: resourcemanager.miloapis.com/v1alpha1
+	kind: OrganizationMembership
+	metadata:
+	  name: jane-acme-membership
+	  namespace: organization-acme-corp
+	spec:
+	  organizationRef:
+	    name: acme-corp
+	  userRef:
+	    name: jane-doe
+	  roles:
+	  - name: organization-viewer
+	    namespace: organization-acme-corp
+
+Related resources:
+  - User: The user being granted membership
+  - Organization: The organization the user joins
+  - Role: Defines permissions granted to the user
+  - PolicyBinding: Automatically created by the controller for each role
 
 <table>
     <thead>
@@ -57,14 +94,18 @@ OrganizationMembership is the Schema for the organizationmemberships API
         <td><b><a href="#organizationmembershipspec">spec</a></b></td>
         <td>object</td>
         <td>
-          OrganizationMembershipSpec defines the desired state of OrganizationMembership<br/>
+          OrganizationMembershipSpec defines the desired state of OrganizationMembership.
+It specifies which user should be a member of which organization, and optionally
+which roles should be assigned to grant permissions.<br/>
         </td>
         <td>false</td>
       </tr><tr>
         <td><b><a href="#organizationmembershipstatus">status</a></b></td>
         <td>object</td>
         <td>
-          OrganizationMembershipStatus defines the observed state of OrganizationMembership<br/>
+          OrganizationMembershipStatus defines the observed state of OrganizationMembership.
+The controller populates this status to reflect the current reconciliation state,
+including whether the membership is ready and which roles have been successfully applied.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -76,7 +117,9 @@ OrganizationMembership is the Schema for the organizationmemberships API
 
 
 
-OrganizationMembershipSpec defines the desired state of OrganizationMembership
+OrganizationMembershipSpec defines the desired state of OrganizationMembership.
+It specifies which user should be a member of which organization, and optionally
+which roles should be assigned to grant permissions.
 
 <table>
     <thead>
@@ -91,16 +134,50 @@ OrganizationMembershipSpec defines the desired state of OrganizationMembership
         <td><b><a href="#organizationmembershipspecorganizationref">organizationRef</a></b></td>
         <td>object</td>
         <td>
-          OrganizationRef is a reference to the Organization that the user is a member of.<br/>
+          OrganizationRef identifies the organization to grant membership in.
+The organization must exist before creating the membership.
+
+Required field.<br/>
         </td>
         <td>true</td>
       </tr><tr>
         <td><b><a href="#organizationmembershipspecuserref">userRef</a></b></td>
         <td>object</td>
         <td>
-          UserRef is a reference to the User that is a member of the Organization.<br/>
+          UserRef identifies the user to grant organization membership.
+The user must exist before creating the membership.
+
+Required field.<br/>
         </td>
         <td>true</td>
+      </tr><tr>
+        <td><b><a href="#organizationmembershipspecrolesindex">roles</a></b></td>
+        <td>[]object</td>
+        <td>
+          Roles specifies a list of roles to assign to the user within the organization.
+The controller automatically creates and manages PolicyBinding resources for
+each role. Roles can be added or removed after the membership is created.
+
+Optional field. When omitted or empty, the membership is established without
+any role assignments. Roles can be added later via update operations.
+
+Each role reference must specify:
+  - name: The role name (required)
+  - namespace: The role namespace (optional, defaults to membership namespace)
+
+Duplicate roles are prevented by admission webhook validation.
+
+Example:
+
+  roles:
+  - name: organization-admin
+    namespace: organization-acme-corp
+  - name: billing-manager
+    namespace: organization-acme-corp
+  - name: shared-developer
+    namespace: milo-system<br/>
+        </td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -110,7 +187,10 @@ OrganizationMembershipSpec defines the desired state of OrganizationMembership
 
 
 
-OrganizationRef is a reference to the Organization that the user is a member of.
+OrganizationRef identifies the organization to grant membership in.
+The organization must exist before creating the membership.
+
+Required field.
 
 <table>
     <thead>
@@ -137,7 +217,10 @@ OrganizationRef is a reference to the Organization that the user is a member of.
 
 
 
-UserRef is a reference to the User that is a member of the Organization.
+UserRef identifies the user to grant organization membership.
+The user must exist before creating the membership.
+
+Required field.
 
 <table>
     <thead>
@@ -159,12 +242,12 @@ UserRef is a reference to the User that is a member of the Organization.
 </table>
 
 
-### OrganizationMembership.status
-<sup><sup>[↩ Parent](#organizationmembership)</sup></sup>
+### OrganizationMembership.spec.roles[index]
+<sup><sup>[↩ Parent](#organizationmembershipspec)</sup></sup>
 
 
 
-OrganizationMembershipStatus defines the observed state of OrganizationMembership
+RoleReference defines a reference to a Role resource for organization membership.
 
 <table>
     <thead>
@@ -176,10 +259,90 @@ OrganizationMembershipStatus defines the observed state of OrganizationMembershi
         </tr>
     </thead>
     <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name of the referenced Role.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>namespace</b></td>
+        <td>string</td>
+        <td>
+          Namespace of the referenced Role.
+If not specified, it defaults to the organization membership's namespace.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### OrganizationMembership.status
+<sup><sup>[↩ Parent](#organizationmembership)</sup></sup>
+
+
+
+OrganizationMembershipStatus defines the observed state of OrganizationMembership.
+The controller populates this status to reflect the current reconciliation state,
+including whether the membership is ready and which roles have been successfully applied.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#organizationmembershipstatusappliedrolesindex">appliedRoles</a></b></td>
+        <td>[]object</td>
+        <td>
+          AppliedRoles tracks the reconciliation state of each role in spec.roles.
+This array provides per-role status, making it easy to identify which
+roles are applied and which failed.
+
+Each entry includes:
+  - name and namespace: Identifies the role
+  - status: "Applied", "Pending", or "Failed"
+  - policyBindingRef: Reference to the created PolicyBinding (when Applied)
+  - appliedAt: Timestamp when role was applied (when Applied)
+  - message: Error details (when Failed)
+
+Use this to troubleshoot role assignment issues. Roles marked as "Failed"
+include a message explaining why the PolicyBinding could not be created.
+
+Example:
+
+  appliedRoles:
+  - name: org-admin
+    namespace: organization-acme-corp
+    status: Applied
+    appliedAt: "2025-10-28T10:00:00Z"
+    policyBindingRef:
+      name: jane-acme-membership-a1b2c3d4
+      namespace: organization-acme-corp
+  - name: invalid-role
+    namespace: organization-acme-corp
+    status: Failed
+    message: "role 'invalid-role' not found in namespace 'organization-acme-corp'"<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b><a href="#organizationmembershipstatusconditionsindex">conditions</a></b></td>
         <td>[]object</td>
         <td>
-          Conditions provide conditions that represent the current status of the OrganizationMembership.<br/>
+          Conditions represent the current status of the membership.
+
+Standard conditions:
+  - Ready: Indicates membership has been established (user and org exist)
+  - RolesApplied: Indicates whether all roles have been successfully applied
+
+Check the RolesApplied condition to determine overall role assignment status:
+  - True with reason "AllRolesApplied": All roles successfully applied
+  - True with reason "NoRolesSpecified": No roles in spec, membership only
+  - False with reason "PartialRolesApplied": Some roles failed (check appliedRoles for details)<br/>
           <br/>
             <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for control plane to reconcile reason:Unknown status:Unknown type:Ready]]<br/>
         </td>
@@ -188,7 +351,9 @@ OrganizationMembershipStatus defines the observed state of OrganizationMembershi
         <td><b>observedGeneration</b></td>
         <td>integer</td>
         <td>
-          ObservedGeneration is the most recent generation observed for this OrganizationMembership by the controller.<br/>
+          ObservedGeneration tracks the most recent membership spec that the
+controller has processed. Use this to determine if status reflects
+the latest changes.<br/>
           <br/>
             <i>Format</i>: int64<br/>
         </td>
@@ -197,14 +362,147 @@ OrganizationMembershipStatus defines the observed state of OrganizationMembershi
         <td><b><a href="#organizationmembershipstatusorganization">organization</a></b></td>
         <td>object</td>
         <td>
-          Organization contains information about the organization in the membership.<br/>
+          Organization contains cached information about the organization in this membership.
+This information is populated by the controller from the referenced organization.<br/>
         </td>
         <td>false</td>
       </tr><tr>
         <td><b><a href="#organizationmembershipstatususer">user</a></b></td>
         <td>object</td>
         <td>
-          User contains information about the user in the membership.<br/>
+          User contains cached information about the user in this membership.
+This information is populated by the controller from the referenced user.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### OrganizationMembership.status.appliedRoles[index]
+<sup><sup>[↩ Parent](#organizationmembershipstatus)</sup></sup>
+
+
+
+AppliedRole tracks the reconciliation status of a single role assignment
+within an organization membership. The controller maintains this status to
+provide visibility into which roles are successfully applied and which failed.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name identifies the Role resource.
+
+Required field.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>status</b></td>
+        <td>enum</td>
+        <td>
+          Status indicates the current state of this role assignment.
+
+Valid values:
+  - "Applied": PolicyBinding successfully created and role is active
+  - "Pending": Role is being reconciled (transitional state)
+  - "Failed": PolicyBinding could not be created (see Message for details)
+
+Required field.<br/>
+          <br/>
+            <i>Enum</i>: Applied, Pending, Failed<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>appliedAt</b></td>
+        <td>string</td>
+        <td>
+          AppliedAt records when this role was successfully applied.
+Corresponds to the PolicyBinding creation time.
+
+Only populated when Status is "Applied".<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>message</b></td>
+        <td>string</td>
+        <td>
+          Message provides additional context about the role status.
+Contains error details when Status is "Failed", explaining why the
+PolicyBinding could not be created.
+
+Common failure messages:
+  - "role 'role-name' not found in namespace 'namespace'"
+  - "Failed to create PolicyBinding: <error details>"
+
+Empty when Status is "Applied" or "Pending".<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>namespace</b></td>
+        <td>string</td>
+        <td>
+          Namespace identifies the namespace containing the Role resource.
+Empty when the role is in the membership's namespace.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#organizationmembershipstatusappliedrolesindexpolicybindingref">policyBindingRef</a></b></td>
+        <td>object</td>
+        <td>
+          PolicyBindingRef references the PolicyBinding resource that was
+automatically created for this role.
+
+Only populated when Status is "Applied". Use this reference to
+inspect or troubleshoot the underlying PolicyBinding.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### OrganizationMembership.status.appliedRoles[index].policyBindingRef
+<sup><sup>[↩ Parent](#organizationmembershipstatusappliedrolesindex)</sup></sup>
+
+
+
+PolicyBindingRef references the PolicyBinding resource that was
+automatically created for this role.
+
+Only populated when Status is "Applied". Use this reference to
+inspect or troubleshoot the underlying PolicyBinding.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name of the PolicyBinding resource.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>namespace</b></td>
+        <td>string</td>
+        <td>
+          Namespace of the PolicyBinding resource.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -293,7 +591,8 @@ with respect to the current state of the instance.<br/>
 
 
 
-Organization contains information about the organization in the membership.
+Organization contains cached information about the organization in this membership.
+This information is populated by the controller from the referenced organization.
 
 <table>
     <thead>
@@ -327,7 +626,8 @@ Organization contains information about the organization in the membership.
 
 
 
-User contains information about the user in the membership.
+User contains cached information about the user in this membership.
+This information is populated by the controller from the referenced user.
 
 <table>
     <thead>

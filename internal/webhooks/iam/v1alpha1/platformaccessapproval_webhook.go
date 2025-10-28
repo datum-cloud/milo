@@ -86,15 +86,25 @@ func (m *PlatformAccessApprovalMutator) Default(ctx context.Context, obj runtime
 
 	// Get the approver user
 	approverUser := &iamv1alpha1.User{}
+	isSystemUser := false
 	if err := m.client.Get(ctx, client.ObjectKey{Name: string(req.UserInfo.UID)}, approverUser); err != nil {
-		// Approver should be found
-		log.Error(err, "failed to get user '%s' from iam.miloapis.com API", string(req.UserInfo.UID))
-		return errors.NewInternalError(fmt.Errorf("failed to get user '%s' from iam.miloapis.com API: %w", string(req.UserInfo.UID), err))
+		if errors.IsNotFound(err) {
+			isSystemUser = true
+			log.Info("user not found, probably a system user", "username", req.UserInfo.Username)
+		} else {
+			log.Error(err, "failed to get user '%s' from iam.miloapis.com API", string(req.UserInfo.UID))
+			return errors.NewInternalError(fmt.Errorf("failed to get user '%s' from iam.miloapis.com API: %w", string(req.UserInfo.UID), err))
+		}
+	}
+
+	approverRefName := req.UserInfo.Username
+	if !isSystemUser {
+		approverRefName = approverUser.Name
 	}
 
 	// Set the approver user
 	paa.Spec.ApproverRef = &iamv1alpha1.UserReference{
-		Name: approverUser.Name,
+		Name: approverRefName,
 	}
 
 	return nil

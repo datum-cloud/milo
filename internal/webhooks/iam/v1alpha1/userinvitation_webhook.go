@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -20,9 +21,24 @@ import (
 
 var userinvitationlog = logf.Log.WithName("userinvitation-resource")
 
+const userInvitationCompositeKey = "userInvitationByEmailAndOrg"
+
+// buildUserInvitationCompositeKey returns a composite key of lowercased email and organization name
+func buildUserInvitationCompositeKey(ui iamv1alpha1.UserInvitation) string {
+	return fmt.Sprintf("%s|%s", strings.ToLower(ui.Spec.Email), ui.Spec.OrganizationRef.Name)
+}
+
 // SetupUserInvitationWebhooksWithManager sets up the webhooks for UserInvitation resources.
 func SetupUserInvitationWebhooksWithManager(mgr ctrl.Manager, systemNamespace, assignableRolesNamespace string) error {
 	userinvitationlog.Info("Setting up iam.miloapis.com userinvitation webhooks")
+
+	// Index UserInvitation by composite key (lowercased email + organization name) for efficient duplicate checks
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.UserInvitation{}, userInvitationCompositeKey, func(raw client.Object) []string {
+		ui := raw.(*iamv1alpha1.UserInvitation)
+		return []string{buildUserInvitationCompositeKey(*ui)}
+	}); err != nil {
+		return fmt.Errorf("failed to set field index on UserInvitation by composite key: %w", err)
+	}
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.UserInvitation{}).
@@ -108,7 +124,20 @@ func (v *UserInvitationValidator) ValidateCreate(ctx context.Context, obj runtim
 		errs = append(errs, field.Invalid(field.NewPath("spec").Child("organizationRef"), ui.Spec.OrganizationRef.Name, "organizationRef must be the same as the requesting user's organization"))
 	}
 
-	// Ensure that the roles are valid
+	// Ensure there is no existing UserInvitation for the same email and organization
+	var existing iamv1alpha1.UserInvitationList
+	if err := v.client.List(ctx, &existing,
+		client.MatchingFields{userInvitationCompositeKey: buildUserInvitationCompositeKey(*ui)}); err != nil {
+		userinvitationlog.Error(err, "failed to list existing UserInvitations by email", "email", ui.Spec.Email)
+		return nil, errors.NewInternalError(fmt.Errorf("failed to list existing UserInvitations: %w", err))
+	}
+	if len(existing.Items) > 0 {
+		errs = append(errs, field.Duplicate(
+			field.NewPath("spec").Child("organizationRef"),
+			ui.Spec.OrganizationRef.Name,
+		))
+	}
+
 	for i, role := range ui.Spec.Roles {
 		canGetRole := true
 		if role.Name == "" {
