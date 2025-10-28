@@ -58,3 +58,6 @@ resources:
   - iam-platform-access-rejections-reader.yaml
   - iam-platform-access-rejections-editor.yaml
   - iam-platform-access-rejections-admin.yaml
+  - iam-platform-invitations-reader.yaml
+  - iam-platform-invitations-editor.yaml
+  - iam-platform-invitations-admin.yaml

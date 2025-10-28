@@ -501,6 +501,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			platformInvitationCtrl := iamcontroller.PlatformInvitationController{
+				Client: ctrl.GetClient(),
+			}
+			if err := platformInvitationCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform invitation controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
 			// Quota enforcement requires cross-cluster coordination
 			logger.Info("Creating multicluster manager for quota system")
 
