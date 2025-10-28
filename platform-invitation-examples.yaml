@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PlatformInvitation
+metadata:
+  name: platforminvitation-sample-2
+spec:
+  email: emergency.contact@company.com
+  givenName: Emergency
+  familyName: Contact
+  scheduleAt: "2025-12-25T12:00:00Z" # Optional - send at a specific time
+
