@@ -48,8 +48,23 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OrganizationMembership is the Schema for the organizationmemberships
-          API
+        description: "OrganizationMembership establishes a user's membership in an
+          organization and\noptionally assigns roles to grant permissions. The controller
+          automatically\nmanages PolicyBinding resources for each assigned role, simplifying
+          access\ncontrol management.\n\nKey features:\n  - Establishes user-organization
+          relationship\n  - Automatic PolicyBinding creation and deletion for assigned
+          roles\n  - Supports multiple roles per membership\n  - Cross-namespace role
+          references\n  - Detailed status tracking with per-role reconciliation state\n\nPrerequisites:\n
+          \ - User resource must exist\n  - Organization resource must exist\n  -
+          Referenced Role resources must exist in their respective namespaces\n\nExample
+          - Basic membership with role assignment:\n\n\tapiVersion: resourcemanager.miloapis.com/v1alpha1\n\tkind:
+          OrganizationMembership\n\tmetadata:\n\t  name: jane-acme-membership\n\t
+          \ namespace: organization-acme-corp\n\tspec:\n\t  organizationRef:\n\t    name:
+          acme-corp\n\t  userRef:\n\t    name: jane-doe\n\t  roles:\n\t  - name: organization-viewer\n\t
+          \   namespace: organization-acme-corp\n\nRelated resources:\n  - User: The
+          user being granted membership\n  - Organization: The organization the user
+          joins\n  - Role: Defines permissions granted to the user\n  - PolicyBinding:
+          Automatically created by the controller for each role"
         properties:
           apiVersion:
             description: |-
@@ -69,11 +84,17 @@ spec:
           metadata:
             type: object
           spec:
-            description: OrganizationMembershipSpec defines the desired state of OrganizationMembership
+            description: |-
+              OrganizationMembershipSpec defines the desired state of OrganizationMembership.
+              It specifies which user should be a member of which organization, and optionally
+              which roles should be assigned to grant permissions.
             properties:
               organizationRef:
-                description: OrganizationRef is a reference to the Organization that
-                  the user is a member of.
+                description: |-
+                  OrganizationRef identifies the organization to grant membership in.
+                  The organization must exist before creating the membership.
+
+                  Required field.
                 properties:
                   name:
                     description: Name is the name of resource being referenced
@@ -81,9 +102,55 @@ spec:
                 required:
                 - name
                 type: object
+              roles:
+                description: |-
+                  Roles specifies a list of roles to assign to the user within the organization.
+                  The controller automatically creates and manages PolicyBinding resources for
+                  each role. Roles can be added or removed after the membership is created.
+
+                  Optional field. When omitted or empty, the membership is established without
+                  any role assignments. Roles can be added later via update operations.
+
+                  Each role reference must specify:
+                    - name: The role name (required)
+                    - namespace: The role namespace (optional, defaults to membership namespace)
+
+                  Duplicate roles are prevented by admission webhook validation.
+
+                  Example:
+
+                    roles:
+                    - name: organization-admin
+                      namespace: organization-acme-corp
+                    - name: billing-manager
+                      namespace: organization-acme-corp
+                    - name: shared-developer
+                      namespace: milo-system
+                items:
+                  description: RoleReference defines a reference to a Role resource
+                    for organization membership.
+                  properties:
+                    name:
+                      description: Name of the referenced Role.
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace of the referenced Role.
+                        If not specified, it defaults to the organization membership's namespace.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               userRef:
-                description: UserRef is a reference to the User that is a member of
-                  the Organization.
+                description: |-
+                  UserRef identifies the user to grant organization membership.
+                  The user must exist before creating the membership.
+
+                  Required field.
                 properties:
                   name:
                     description: Name is the name of resource being referenced
@@ -96,9 +163,118 @@ spec:
             - userRef
             type: object
           status:
-            description: OrganizationMembershipStatus defines the observed state of
-              OrganizationMembership
+            description: |-
+              OrganizationMembershipStatus defines the observed state of OrganizationMembership.
+              The controller populates this status to reflect the current reconciliation state,
+              including whether the membership is ready and which roles have been successfully applied.
             properties:
+              appliedRoles:
+                description: |-
+                  AppliedRoles tracks the reconciliation state of each role in spec.roles.
+                  This array provides per-role status, making it easy to identify which
+                  roles are applied and which failed.
+
+                  Each entry includes:
+                    - name and namespace: Identifies the role
+                    - status: "Applied", "Pending", or "Failed"
+                    - policyBindingRef: Reference to the created PolicyBinding (when Applied)
+                    - appliedAt: Timestamp when role was applied (when Applied)
+                    - message: Error details (when Failed)
+
+                  Use this to troubleshoot role assignment issues. Roles marked as "Failed"
+                  include a message explaining why the PolicyBinding could not be created.
+
+                  Example:
+
+                    appliedRoles:
+                    - name: org-admin
+                      namespace: organization-acme-corp
+                      status: Applied
+                      appliedAt: "2025-10-28T10:00:00Z"
+                      policyBindingRef:
+                        name: jane-acme-membership-a1b2c3d4
+                        namespace: organization-acme-corp
+                    - name: invalid-role
+                      namespace: organization-acme-corp
+                      status: Failed
+                      message: "role 'invalid-role' not found in namespace 'organization-acme-corp'"
+                items:
+                  description: |-
+                    AppliedRole tracks the reconciliation status of a single role assignment
+                    within an organization membership. The controller maintains this status to
+                    provide visibility into which roles are successfully applied and which failed.
+                  properties:
+                    appliedAt:
+                      description: |-
+                        AppliedAt records when this role was successfully applied.
+                        Corresponds to the PolicyBinding creation time.
+
+                        Only populated when Status is "Applied".
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        Message provides additional context about the role status.
+                        Contains error details when Status is "Failed", explaining why the
+                        PolicyBinding could not be created.
+
+                        Common failure messages:
+                          - "role 'role-name' not found in namespace 'namespace'"
+                          - "Failed to create PolicyBinding: <error details>"
+
+                        Empty when Status is "Applied" or "Pending".
+                      type: string
+                    name:
+                      description: |-
+                        Name identifies the Role resource.
+
+                        Required field.
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace identifies the namespace containing the Role resource.
+                        Empty when the role is in the membership's namespace.
+                      type: string
+                    policyBindingRef:
+                      description: |-
+                        PolicyBindingRef references the PolicyBinding resource that was
+                        automatically created for this role.
+
+                        Only populated when Status is "Applied". Use this reference to
+                        inspect or troubleshoot the underlying PolicyBinding.
+                      properties:
+                        name:
+                          description: Name of the PolicyBinding resource.
+                          type: string
+                        namespace:
+                          description: Namespace of the PolicyBinding resource.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    status:
+                      description: |-
+                        Status indicates the current state of this role assignment.
+
+                        Valid values:
+                          - "Applied": PolicyBinding successfully created and role is active
+                          - "Pending": Role is being reconciled (transitional state)
+                          - "Failed": PolicyBinding could not be created (see Message for details)
+
+                        Required field.
+                      enum:
+                      - Applied
+                      - Pending
+                      - Failed
+                      type: string
+                  required:
+                  - name
+                  - status
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               conditions:
                 default:
                 - lastTransitionTime: "1970-01-01T00:00:00Z"
@@ -106,8 +282,17 @@ spec:
                   reason: Unknown
                   status: Unknown
                   type: Ready
-                description: Conditions provide conditions that represent the current
-                  status of the OrganizationMembership.
+                description: |-
+                  Conditions represent the current status of the membership.
+
+                  Standard conditions:
+                    - Ready: Indicates membership has been established (user and org exist)
+                    - RolesApplied: Indicates whether all roles have been successfully applied
+
+                  Check the RolesApplied condition to determine overall role assignment status:
+                    - True with reason "AllRolesApplied": All roles successfully applied
+                    - True with reason "NoRolesSpecified": No roles in spec, membership only
+                    - False with reason "PartialRolesApplied": Some roles failed (check appliedRoles for details)
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -164,13 +349,16 @@ spec:
                   type: object
                 type: array
               observedGeneration:
-                description: ObservedGeneration is the most recent generation observed
-                  for this OrganizationMembership by the controller.
+                description: |-
+                  ObservedGeneration tracks the most recent membership spec that the
+                  controller has processed. Use this to determine if status reflects
+                  the latest changes.
                 format: int64
                 type: integer
               organization:
-                description: Organization contains information about the organization
-                  in the membership.
+                description: |-
+                  Organization contains cached information about the organization in this membership.
+                  This information is populated by the controller from the referenced organization.
                 properties:
                   displayName:
                     description: DisplayName is the display name of the organization
@@ -181,7 +369,9 @@ spec:
                     type: string
                 type: object
               user:
-                description: User contains information about the user in the membership.
+                description: |-
+                  User contains cached information about the user in this membership.
+                  This information is populated by the controller from the referenced user.
                 properties:
                   email:
                     description: Email is the email of the user in the membership.
