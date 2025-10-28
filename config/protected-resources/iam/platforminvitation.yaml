@@ -1,0 +1,20 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: iam.miloapis.com-platforminvitation
+spec:
+  serviceRef:
+    name: "iam.miloapis.com"
+  kind: PlatformInvitation
+  plural: platforminvitations
+  singular: platforminvitation
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
+
+

@@ -1,0 +1,15 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: iam-platform-invitations-editor
+spec:
+  launchStage: Beta
+  inheritedRoles:
+    - name: iam-platform-invitations-reader
+  includedPermissions:
+    - iam.miloapis.com/platforminvitations.create
+    - iam.miloapis.com/platforminvitations.update
+    - iam.miloapis.com/platforminvitations.patch
+    - iam.miloapis.com/platforminvitations.delete
+
+

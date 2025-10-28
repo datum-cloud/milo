@@ -471,6 +471,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up platform access rejection webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupPlatformInvitationWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform invitation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
@@ -502,6 +506,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := groupCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up group controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			platformInvitationCtrl := iamcontroller.PlatformInvitationController{
+				Client: ctrl.GetClient(),
+			}
+			if err := platformInvitationCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform invitation controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
