@@ -2,6 +2,7 @@ package resourcemanager
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -22,6 +24,8 @@ import (
 const (
 	// OrganizationMembershipReady indicates that the organization membership status has been populated
 	OrganizationMembershipReady = "Ready"
+	// RolesApplied indicates that the roles have been applied to the membership
+	RolesApplied = "RolesApplied"
 )
 
 const (
@@ -33,6 +37,19 @@ const (
 	UserNotFoundReason = "UserNotFound"
 	// ReconcileErrorReason indicates an error occurred during reconciliation
 	ReconcileErrorReason = "ReconcileError"
+	// AllRolesAppliedReason indicates all roles have been successfully applied
+	AllRolesAppliedReason = "AllRolesApplied"
+	// PartialRolesAppliedReason indicates some roles failed to apply
+	PartialRolesAppliedReason = "PartialRolesApplied"
+	// NoRolesSpecifiedReason indicates no roles were specified
+	NoRolesSpecifiedReason = "NoRolesSpecified"
+)
+
+const (
+	// Labels for PolicyBindings managed by this controller
+	MembershipLabel = "resourcemanager.miloapis.com/membership"
+	ManagedByLabel  = "resourcemanager.miloapis.com/managed-by"
+	ManagedByValue  = "organization-membership-controller"
 )
 
 // OrganizationMembershipController reconciles an OrganizationMembership object
@@ -44,6 +61,8 @@ type OrganizationMembershipController struct {
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizationmemberships/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=roles,verbs=get;list;watch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;watch;create;update;delete
 
 func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, err error) {
 	logger := log.FromContext(ctx)
@@ -153,6 +172,25 @@ func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ct
 
 	apimeta.SetStatusCondition(&organizationMembership.Status.Conditions, *readyCondition)
 
+	// Reconcile roles if any are specified
+	if len(organizationMembership.Spec.Roles) > 0 {
+		if err := r.reconcileRoles(ctx, &organizationMembership, &organization, &user); err != nil {
+			logger.Error(err, "failed to reconcile roles")
+			return ctrl.Result{}, fmt.Errorf("failed to reconcile roles: %w", err)
+		}
+	} else {
+		// No roles specified, ensure RolesApplied condition reflects this
+		rolesAppliedCondition := metav1.Condition{
+			Type:               RolesApplied,
+			Status:             metav1.ConditionTrue,
+			Reason:             NoRolesSpecifiedReason,
+			Message:            "No roles specified for this membership",
+			ObservedGeneration: organizationMembership.Generation,
+		}
+		apimeta.SetStatusCondition(&organizationMembership.Status.Conditions, rolesAppliedCondition)
+		organizationMembership.Status.AppliedRoles = []resourcemanagerv1alpha.AppliedRole{}
+	}
+
 	// Update the status only if something changed
 	if !equality.Semantic.DeepEqual(originalStatus, organizationMembership.Status) {
 		if err := r.Client.Status().Update(ctx, &organizationMembership); err != nil {
@@ -162,6 +200,239 @@ func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ct
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// reconcileRoles manages PolicyBinding resources for the roles specified in the membership
+func (r *OrganizationMembershipController) reconcileRoles(
+	ctx context.Context,
+	membership *resourcemanagerv1alpha.OrganizationMembership,
+	organization *resourcemanagerv1alpha.Organization,
+	user *iamv1alpha1.User,
+) error {
+	logger := log.FromContext(ctx)
+
+	// Get existing PolicyBindings managed by this controller
+	existingBindings, err := r.getManagedPolicyBindings(ctx, membership)
+	if err != nil {
+		return fmt.Errorf("failed to list existing policy bindings: %w", err)
+	}
+
+	// Build a map of desired roles
+	desiredRoles := make(map[string]resourcemanagerv1alpha.RoleReference)
+	for _, role := range membership.Spec.Roles {
+		key := r.getRoleKey(role)
+		desiredRoles[key] = role
+	}
+
+	// Build a map of existing bindings
+	existingBindingMap := make(map[string]*iamv1alpha1.PolicyBinding)
+	for i := range existingBindings.Items {
+		binding := &existingBindings.Items[i]
+		roleKey := r.getRoleKeyFromBinding(binding)
+		existingBindingMap[roleKey] = binding
+	}
+
+	// Track applied roles for status
+	appliedRoles := []resourcemanagerv1alpha.AppliedRole{}
+	successCount := 0
+	failureCount := 0
+
+	// Process each desired role
+	for roleKey, roleRef := range desiredRoles {
+		appliedRole := resourcemanagerv1alpha.AppliedRole{
+			Name:      roleRef.Name,
+			Namespace: roleRef.Namespace,
+		}
+
+		if existingBinding, exists := existingBindingMap[roleKey]; exists {
+			// PolicyBinding already exists, verify it's correct
+			appliedRole.Status = "Applied"
+			appliedRole.PolicyBindingRef = &resourcemanagerv1alpha.PolicyBindingReference{
+				Name:      existingBinding.Name,
+				Namespace: existingBinding.Namespace,
+			}
+			if existingBinding.CreationTimestamp.Time.IsZero() {
+				now := metav1.Now()
+				appliedRole.AppliedAt = &now
+			} else {
+				appliedRole.AppliedAt = &existingBinding.CreationTimestamp
+			}
+			successCount++
+			delete(existingBindingMap, roleKey) // Mark as processed
+		} else {
+			// Need to create PolicyBinding
+			if err := r.createPolicyBinding(ctx, membership, organization, user, roleRef); err != nil {
+				logger.Error(err, "failed to create policy binding", "role", roleRef.Name)
+				appliedRole.Status = "Failed"
+				appliedRole.Message = fmt.Sprintf("Failed to create PolicyBinding: %v", err)
+				failureCount++
+			} else {
+				appliedRole.Status = "Applied"
+				now := metav1.Now()
+				appliedRole.AppliedAt = &now
+				appliedRole.PolicyBindingRef = &resourcemanagerv1alpha.PolicyBindingReference{
+					Name:      r.generatePolicyBindingName(membership, roleRef),
+					Namespace: membership.Namespace,
+				}
+				successCount++
+			}
+		}
+
+		appliedRoles = append(appliedRoles, appliedRole)
+	}
+
+	// Delete PolicyBindings that are no longer desired
+	for _, binding := range existingBindingMap {
+		logger.Info("deleting policy binding for removed role", "policyBinding", binding.Name)
+		if err := r.Client.Delete(ctx, binding); err != nil && !apierrors.IsNotFound(err) {
+			logger.Error(err, "failed to delete policy binding", "policyBinding", binding.Name)
+			// Continue with other deletions
+		}
+	}
+
+	// Update status with applied roles
+	membership.Status.AppliedRoles = appliedRoles
+
+	// Set RolesApplied condition
+	rolesAppliedCondition := metav1.Condition{
+		Type:               RolesApplied,
+		ObservedGeneration: membership.Generation,
+	}
+
+	if failureCount == 0 {
+		rolesAppliedCondition.Status = metav1.ConditionTrue
+		rolesAppliedCondition.Reason = AllRolesAppliedReason
+		rolesAppliedCondition.Message = fmt.Sprintf("All %d role(s) successfully applied", successCount)
+	} else {
+		rolesAppliedCondition.Status = metav1.ConditionFalse
+		rolesAppliedCondition.Reason = PartialRolesAppliedReason
+		rolesAppliedCondition.Message = fmt.Sprintf("%d of %d role(s) successfully applied", successCount, successCount+failureCount)
+	}
+
+	apimeta.SetStatusCondition(&membership.Status.Conditions, rolesAppliedCondition)
+
+	return nil
+}
+
+// getManagedPolicyBindings retrieves PolicyBindings managed by this controller for the given membership
+func (r *OrganizationMembershipController) getManagedPolicyBindings(
+	ctx context.Context,
+	membership *resourcemanagerv1alpha.OrganizationMembership,
+) (*iamv1alpha1.PolicyBindingList, error) {
+	var bindings iamv1alpha1.PolicyBindingList
+	err := r.Client.List(ctx, &bindings,
+		client.InNamespace(membership.Namespace),
+		client.MatchingLabels{
+			MembershipLabel: membership.Name,
+			ManagedByLabel:  ManagedByValue,
+		},
+	)
+	return &bindings, err
+}
+
+// createPolicyBinding creates a new PolicyBinding for a role assignment
+func (r *OrganizationMembershipController) createPolicyBinding(
+	ctx context.Context,
+	membership *resourcemanagerv1alpha.OrganizationMembership,
+	organization *resourcemanagerv1alpha.Organization,
+	user *iamv1alpha1.User,
+	roleRef resourcemanagerv1alpha.RoleReference,
+) error {
+	logger := log.FromContext(ctx)
+
+	// Resolve role namespace
+	roleNamespace := roleRef.Namespace
+	if roleNamespace == "" {
+		roleNamespace = membership.Namespace
+	}
+
+	// Verify the role exists
+	var role iamv1alpha1.Role
+	if err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      roleRef.Name,
+		Namespace: roleNamespace,
+	}, &role); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("role %s not found in namespace %s", roleRef.Name, roleNamespace)
+		}
+		return fmt.Errorf("failed to get role: %w", err)
+	}
+
+	// Create PolicyBinding
+	policyBinding := &iamv1alpha1.PolicyBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.generatePolicyBindingName(membership, roleRef),
+			Namespace: membership.Namespace,
+			Labels: map[string]string{
+				MembershipLabel: membership.Name,
+				ManagedByLabel:  ManagedByValue,
+			},
+		},
+		Spec: iamv1alpha1.PolicyBindingSpec{
+			RoleRef: iamv1alpha1.RoleReference{
+				Name:      roleRef.Name,
+				Namespace: roleNamespace,
+			},
+			Subjects: []iamv1alpha1.Subject{
+				{
+					Kind: "User",
+					Name: user.Name,
+					UID:  string(user.UID),
+				},
+			},
+			ResourceSelector: iamv1alpha1.ResourceSelector{
+				ResourceRef: &iamv1alpha1.ResourceReference{
+					APIGroup:  "resourcemanager.miloapis.com",
+					Kind:      "Organization",
+					Name:      organization.Name,
+					UID:       string(organization.UID),
+					Namespace: "",
+				},
+			},
+		},
+	}
+
+	// Set owner reference
+	if err := controllerutil.SetControllerReference(membership, policyBinding, r.Client.Scheme()); err != nil {
+		return fmt.Errorf("failed to set controller reference: %w", err)
+	}
+
+	logger.Info("creating policy binding", "policyBinding", policyBinding.Name, "role", roleRef.Name)
+
+	if err := r.Client.Create(ctx, policyBinding); err != nil {
+		return fmt.Errorf("failed to create policy binding: %w", err)
+	}
+
+	return nil
+}
+
+// generatePolicyBindingName generates a deterministic name for a PolicyBinding
+func (r *OrganizationMembershipController) generatePolicyBindingName(
+	membership *resourcemanagerv1alpha.OrganizationMembership,
+	roleRef resourcemanagerv1alpha.RoleReference,
+) string {
+	// Create a full hash for uniqueness
+	roleKey := r.getRoleKey(roleRef)
+	hash := sha256.Sum256([]byte(roleKey))
+	hashStr := fmt.Sprintf("%x", hash)
+
+	return fmt.Sprintf("%s-%s", membership.Name, hashStr)
+}
+
+// getRoleKey generates a unique key for a role reference
+func (r *OrganizationMembershipController) getRoleKey(roleRef resourcemanagerv1alpha.RoleReference) string {
+	if roleRef.Namespace != "" {
+		return fmt.Sprintf("%s/%s", roleRef.Namespace, roleRef.Name)
+	}
+	return roleRef.Name
+}
+
+// getRoleKeyFromBinding extracts the role key from a PolicyBinding
+func (r *OrganizationMembershipController) getRoleKeyFromBinding(binding *iamv1alpha1.PolicyBinding) string {
+	if binding.Spec.RoleRef.Namespace != "" {
+		return fmt.Sprintf("%s/%s", binding.Spec.RoleRef.Namespace, binding.Spec.RoleRef.Name)
+	}
+	return binding.Spec.RoleRef.Name
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -192,6 +463,7 @@ func (r *OrganizationMembershipController) SetupWithManager(mgr ctrl.Manager) er
 			handler.EnqueueRequestsFromMapFunc(r.findOrganizationMembershipsForOrganization)).
 		Watches(&iamv1alpha1.User{},
 			handler.EnqueueRequestsFromMapFunc(r.findOrganizationMembershipsForUser)).
+		Owns(&iamv1alpha1.PolicyBinding{}).
 		Named("organization-membership").
 		Complete(r)
 }

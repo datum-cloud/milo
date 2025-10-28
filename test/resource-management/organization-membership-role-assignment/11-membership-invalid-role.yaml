@@ -1,0 +1,15 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: alice-membership-invalid
+  namespace: organization-test-membership-roles
+  labels:
+    test.miloapis.com/scenario: "organization-membership-roles"
+spec:
+  organizationRef:
+    name: test-membership-roles
+  userRef:
+    name: test-user-alice
+  roles:
+    - name: nonexistent-role
+      namespace: organization-test-membership-roles
