@@ -463,6 +463,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up contactgroupmembershipremoval webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupPlatformInvitationWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform invitation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),

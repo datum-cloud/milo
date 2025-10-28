@@ -96,8 +96,6 @@ rules:
 - apiGroups:
   - iam.miloapis.com
   resources:
-  - platformaccessapprovals
-  - platformaccessrejections
   - userdeactivations
   verbs:
   - get
