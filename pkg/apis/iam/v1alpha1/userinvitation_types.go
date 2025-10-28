@@ -69,7 +69,9 @@ type UserInvitationSpec struct {
 	FamilyName string `json:"familyName,omitempty"`
 
 	// The roles that will be assigned to the user when they accept the invitation.
-	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=100
 	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="roles type is immutable"
 	Roles []RoleReference `json:"roles,omitempty"`
 
@@ -120,6 +122,10 @@ type UserInvitationUserStatus struct {
 	// DisplayName is the display name of the user who invited the user in the invitation.
 	// +kubebuilder:validation:Optional
 	DisplayName string `json:"displayName,omitempty"`
+
+	// EmailAddress is the email address of the user who invited the user in the invitation.
+	// +kubebuilder:validation:Optional
+	EmailAddress string `json:"emailAddress,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

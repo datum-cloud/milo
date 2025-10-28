@@ -11,6 +11,7 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -53,6 +54,7 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 	future := metav1.NewTime(now.Add(1 * time.Hour))
 
 	tests := map[string]struct {
+		existing       []client.Object
 		invitation     *iamv1alpha1.UserInvitation
 		expectError    bool
 		errorSubstring string
@@ -116,9 +118,29 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 			expectError:    true,
 			errorSubstring: "organizationRef must be the same as the requesting user's organization",
 		},
+		"error when duplicate invitation exists": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "duplicate-invitation"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email:           "duplicate@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+				},
+			},
+			existing: []client.Object{
+				&iamv1alpha1.UserInvitation{
+					ObjectMeta: metav1.ObjectMeta{Name: "existing-invitation"},
+					Spec: iamv1alpha1.UserInvitationSpec{
+						Email:           "duplicate@example.com",
+						State:           "Pending",
+						OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+					},
+				},
+			},
+			expectError:    true,
+			errorSubstring: "organizationRef",
+		},
 	}
-
-	validator := &UserInvitationValidator{}
 
 	// Common admission request used across sub-tests
 	req := admission.Request{
@@ -130,7 +152,20 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Ensure OrganizationRef is set so validator passes namespace check
+			// Build fake client with any existing objects for this test case
+			builder := fake.NewClientBuilder().WithScheme(runtimeScheme)
+			if len(tc.existing) > 0 {
+				builder = builder.WithObjects(tc.existing...)
+			}
+			// Add composite key index to mimic real indexer behaviour
+			builder = builder.WithIndex(&iamv1alpha1.UserInvitation{}, userInvitationCompositeKey, func(raw client.Object) []string {
+				ui := raw.(*iamv1alpha1.UserInvitation)
+				return []string{buildUserInvitationCompositeKey(*ui)}
+			})
+			fakeClient := builder.Build()
+
+			validator := &UserInvitationValidator{client: fakeClient}
+
 			ctx := admission.NewContextWithRequest(context.Background(), req)
 
 			warnings, err := validator.ValidateCreate(ctx, tc.invitation)

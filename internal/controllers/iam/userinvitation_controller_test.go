@@ -662,6 +662,10 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	if afterFirst.Status.InviterUser.DisplayName != "John Doe" {
 		t.Fatalf("expected inviter user display name to be John Doe, got %s", afterFirst.Status.InviterUser.DisplayName)
 	}
+	// Verify inviter user email address is set
+	if afterFirst.Status.InviterUser.EmailAddress != "inviter@example.com" {
+		t.Fatalf("expected inviter user email address to be inviter@example.com, got %s", afterFirst.Status.InviterUser.EmailAddress)
+	}
 
 	// Ensure organization role PolicyBinding does NOT exist yet
 	orgRoleRef := ui.Spec.Roles[0]

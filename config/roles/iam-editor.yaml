@@ -2,6 +2,9 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: iam-editor
+  annotations:
+    kubernetes.io/display-name: IAM Editor
+    kubernetes.io/description: "Edit IAM resources"
 spec:
   launchStage: Beta
   inheritedRoles:
