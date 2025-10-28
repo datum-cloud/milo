@@ -22,8 +22,6 @@ spec:
     - Garbage collection of PolicyBindings via owner references
 
   clusters:
-    main:
-      kubeconfig: kubeconfig-main
     org:
       kubeconfig: kubeconfig-org
 
