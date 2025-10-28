@@ -317,6 +317,28 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
+      path: /validate-resourcemanager-miloapis-com-v1alpha1-organizationmembership
+      port: 9443
+  failurePolicy: Fail
+  name: vorganizationmembership.datum.net
+  rules:
+  - apiGroups:
+    - resourcemanager.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - organizationmemberships
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
       path: /validate-resourcemanager-miloapis-com-v1alpha1-project
       port: 9443
   failurePolicy: Fail

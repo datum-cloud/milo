@@ -96,6 +96,7 @@ rules:
 - apiGroups:
   - iam.miloapis.com
   resources:
+  - roles
   - userdeactivations
   verbs:
   - get
