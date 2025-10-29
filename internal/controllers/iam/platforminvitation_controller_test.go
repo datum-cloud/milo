@@ -7,6 +7,7 @@ import (
 	"time"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -22,6 +23,7 @@ import (
 func getPlatformInvitationTestScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	_ = iamv1alpha1.AddToScheme(scheme)
+	_ = notificationv1alpha1.AddToScheme(scheme)
 	return scheme
 }
 
@@ -34,8 +36,8 @@ func Test_getDeterministicPlatformAccessApprovalName(t *testing.T) {
 		Spec: iamv1alpha1.PlatformInvitationSpec{Email: "Test@Example.com"},
 	}
 
-	name := getDeterministicPlatformAccessApprovalName(pi)
-	want := "pi-uid-test@example.com"
+	name := getDeterministicPlatformInvitationResourceName(pi)
+	want := "pi-uid-pi"
 	if name != want {
 		t.Fatalf("unexpected deterministic name, got %s want %s", name, want)
 	}
@@ -62,7 +64,7 @@ func Test_createPlatformAccessApproval_Idempotent(t *testing.T) {
 	}
 
 	// Verify exists
-	deterministic := getDeterministicPlatformAccessApprovalName(*pi)
+	deterministic := getDeterministicPlatformInvitationResourceName(*pi)
 	paa := &iamv1alpha1.PlatformAccessApproval{}
 	if err := c.Get(ctx, types.NamespacedName{Name: deterministic}, paa); err != nil {
 		t.Fatalf("expected PlatformAccessApproval %s to be created: %v", deterministic, err)
@@ -116,14 +118,14 @@ func Test_PlatformInvitationController_Reconcile_Scheduled(t *testing.T) {
 		t.Fatalf("failed to get updated PlatformInvitation: %v", err)
 	}
 
-	cond := meta.FindStatusCondition(updated.Status.Conditions, PlatformInvitationScheludedCondition)
-	if cond == nil || cond.Status != metav1.ConditionTrue {
+	cond := meta.FindStatusCondition(updated.Status.Conditions, iamv1alpha1.PlatformInvitationReadyCondition)
+	if cond == nil || cond.Status != metav1.ConditionFalse {
 		t.Fatalf("scheduled condition missing or not true: %+v", updated.Status.Conditions)
 	}
 
 	// Ensure no PlatformAccessApproval created yet when scheduled in future
 	paa := &iamv1alpha1.PlatformAccessApproval{}
-	if err := c.Get(ctx, types.NamespacedName{Name: getDeterministicPlatformAccessApprovalName(*pi)}, paa); err == nil {
+	if err := c.Get(ctx, types.NamespacedName{Name: getDeterministicPlatformInvitationResourceName(*pi)}, paa); err == nil {
 		t.Fatalf("PlatformAccessApproval should not be created for future scheduled invitation")
 	}
 }
@@ -161,7 +163,7 @@ func Test_PlatformInvitationController_Reconcile_UserExistsSkipsPAA(t *testing.T
 	}
 
 	// PAA should NOT exist
-	if err := c.Get(ctx, types.NamespacedName{Name: getDeterministicPlatformAccessApprovalName(*pi)}, &iamv1alpha1.PlatformAccessApproval{}); !errors.IsNotFound(err) {
+	if err := c.Get(ctx, types.NamespacedName{Name: getDeterministicPlatformInvitationResourceName(*pi)}, &iamv1alpha1.PlatformAccessApproval{}); !errors.IsNotFound(err) {
 		t.Fatalf("expected no PlatformAccessApproval when user exists, got err=%v", err)
 	}
 
@@ -209,7 +211,7 @@ func Test_PlatformInvitationController_Reconcile_NoUserCreatesPAA(t *testing.T) 
 	}
 
 	// PAA should be created with deterministic name
-	paaName := getDeterministicPlatformAccessApprovalName(*pi)
+	paaName := getDeterministicPlatformInvitationResourceName(*pi)
 	if err := c.Get(ctx, types.NamespacedName{Name: paaName}, &iamv1alpha1.PlatformAccessApproval{}); err != nil {
 		t.Fatalf("expected PlatformAccessApproval %s to be created: %v", paaName, err)
 	}

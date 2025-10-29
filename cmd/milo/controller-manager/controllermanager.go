@@ -118,6 +118,12 @@ var (
 	// UserInvitationEmailTemplate is the template for the user invitation email.
 	UserInvitationEmailTemplate string
 
+	// PlatformInvitationEmailTemplate is the template for the platform invitation email.
+	PlatformInvitationEmailTemplate string
+
+	// WaitlistRelatedResourcesNamespace is the namespace that contains the waitlist related resources.
+	WaitlistRelatedResourcesNamespace string
+
 	// AssignableRolesNamespace is an extra namespace that the system allows to be used for assignable roles.
 	AssignableRolesNamespace string
 )
@@ -235,6 +241,8 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&GetInvitationRoleName, "get-invitation-role-name", "iam.miloapis.com-getinvitation", "The name of the role that will be used to grant get invitation permissions.")
 	fs.StringVar(&AcceptInvitationRoleName, "accept-invitation-role-name", "iam.miloapis.com-acceptinvitation", "The name of the role that will be used to grant accept invitation permissions.")
 	fs.StringVar(&UserInvitationEmailTemplate, "user-invitation-email-template", "emailtemplates.notification.miloapis.com-userinvitationemailtemplate", "The name of the template that will be used to send the user invitation email.")
+	fs.StringVar(&PlatformInvitationEmailTemplate, "platform-invitation-email-template", "emailtemplates.notification.miloapis.com-platforminvitationemailtemplate", "The name of the template that will be used to send the platform invitation email.")
+	fs.StringVar(&WaitlistRelatedResourcesNamespace, "waitlist-related-resources-namespace", "milo-system", "The namespace that contains the waitlist related resources.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -514,7 +522,9 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 
 			platformInvitationCtrl := iamcontroller.PlatformInvitationController{
-				Client: ctrl.GetClient(),
+				Client:                              ctrl.GetClient(),
+				PlatformInvitationEmailTemplateName: PlatformInvitationEmailTemplate,
+				WaitlistRelatedResourcesNamespace:   WaitlistRelatedResourcesNamespace,
 			}
 			if err := platformInvitationCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up platform invitation controller")
