@@ -13,11 +13,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // UserWaitlistController watches User resources and ensures waitlist emails are sent exactly once per approval state.
@@ -104,27 +101,19 @@ func (r *UserWaitlistController) Reconcile(ctx context.Context, req ctrl.Request
 		log.Info("User status unchanged, skipping status update")
 	}
 
+	if mailError {
+		return ctrl.Result{}, fmt.Errorf("failed to send waitlist email: %s", errMsg)
+	}
+
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager wires the controller into the manager.
 func (r *UserWaitlistController) SetupWithManager(mgr ctrl.Manager) error {
+	// TODO: If User quantity increases significantly, consider
+	// adding a predicate to only reconcile when the registration approval field has changed.
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&iamv1alpha1.User{}, builder.WithPredicates(predicate.Funcs{
-			UpdateFunc: func(e event.UpdateEvent) bool {
-				oldUser, okOld := e.ObjectOld.(*iamv1alpha1.User)
-				newUser, okNew := e.ObjectNew.(*iamv1alpha1.User)
-				if !okOld || !okNew {
-					return false
-				}
-				// Reconcile only when the registration approval field has changed
-				return oldUser.Status.RegistrationApproval != newUser.Status.RegistrationApproval
-			},
-			// Ignore create, delete and generic events
-			CreateFunc:  func(e event.CreateEvent) bool { return false },
-			DeleteFunc:  func(e event.DeleteEvent) bool { return false },
-			GenericFunc: func(e event.GenericEvent) bool { return false },
-		})).
+		For(&iamv1alpha1.User{}).
 		Named("user-waitlist").
 		Complete(r)
 }
