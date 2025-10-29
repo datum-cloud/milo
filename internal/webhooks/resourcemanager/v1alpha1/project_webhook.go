@@ -126,6 +126,15 @@ func (v *ProjectValidator) ValidateCreate(ctx context.Context, obj runtime.Objec
 	projectlog.Info("Validating Project", "name", project.Name)
 	errs := field.ErrorList{}
 
+	// Validate project name length
+	if len(project.Name) > 55 {
+		errs = append(errs, field.Invalid(
+			field.NewPath("metadata", "name"),
+			project.Name,
+			"name exceeds maximum length of 55 characters. Choose a shorter name and try again",
+		))
+	}
+
 	if project.Spec.OwnerRef.Kind == "" {
 		errs = append(errs, field.Invalid(field.NewPath("spec.ownerRef.kind"), project.Spec.OwnerRef.Kind, "must be set"))
 	}
@@ -172,6 +181,15 @@ func (v *ProjectValidator) ValidateUpdate(ctx context.Context, oldObj, newObj ru
 
 	projectlog.Info("Validating Project update", "name", newProject.Name)
 	errs := field.ErrorList{}
+
+	// Validate project name length
+	if len(newProject.Name) > 55 {
+		errs = append(errs, field.Invalid(
+			field.NewPath("metadata", "name"),
+			newProject.Name,
+			"name exceeds maximum length of 55 characters. Choose a shorter name and try again",
+		))
+	}
 
 	// Existing projects always have the organization label, so prevent any changes to it
 	oldOrgLabel := oldProject.Labels[v1alpha1.OrganizationNameLabel]
