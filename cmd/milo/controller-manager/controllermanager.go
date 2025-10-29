@@ -467,6 +467,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up contactgroupmembershipremoval webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupPlatformAccessApprovalWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform access approval webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := iamv1alpha1webhook.SetupPlatformAccessRejectionWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform access rejection webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),

@@ -3,6 +3,7 @@ package iam
 import (
 	"context"
 	"fmt"
+	"time"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -18,9 +19,18 @@ import (
 )
 
 const (
-	userFinalizerKey       = "iam.miloapis.com/user"
-	userReadyConditionType = "Ready"
+	userFinalizerKey                = "iam.miloapis.com/user"
+	userReadyConditionType          = "Ready"
+	platformAccessApprovalIndexKey  = "iam.miloapis.com/platformaccessapprovalkey"
+	platformAccessRejectionIndexKey = "iam.miloapis.com/platformaccessrejectionkey"
 )
+
+func buildPlatformAccessApprovalIndexKey(subject *iamv1alpha1.SubjectReference) string {
+	if subject.UserRef != nil {
+		return subject.UserRef.Name
+	}
+	return subject.Email
+}
 
 // UserController reconciles a User object
 type UserController struct {
@@ -32,6 +42,8 @@ type UserController struct {
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=userdeactivations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=userpreferences,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=platformaccessapprovals,verbs=get;list;watch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=platformaccessrejections,verbs=get;list;watch
 
 // Reconcile is the main reconciliation loop for the UserController.
 func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -68,6 +80,29 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	// Capture the current status to detect changes later
 	oldUserStatus := user.Status.DeepCopy()
+
+	// TODO: Remove this bootstrap logic after first production run.
+	// Automatically approve users that were created before 22 Oct 2025 14:00 UTC to
+	// avoid blocking legacy user accounts. For newer users, initialise the
+	// RegistrationApproval to Pending if it is not already set.
+	{
+		// Hard-code the migration cutoff to 22 Oct 2025 14:00 UTC.
+		cutoff := metav1.Time{Time: time.Date(2025, time.October, 22, 14, 0, 0, 0, time.UTC)}
+
+		if user.CreationTimestamp.Time.Before(cutoff.Time) {
+			// Auto-approve legacy users.
+			user.Status.RegistrationApproval = iamv1alpha1.RegistrationApprovalStateApproved
+			log.Info("Bootstrap: auto-approving legacy user", "user", user.Name, "created", user.CreationTimestamp.Time)
+		} else {
+			// Get the user access approval status
+			registrationApproval, err := r.getUserAccessApprovalStatus(ctx, user)
+			if err != nil {
+				log.Error(err, "failed to get user access approval status")
+				return ctrl.Result{}, fmt.Errorf("failed to get user access approval status: %w", err)
+			}
+			user.Status.RegistrationApproval = registrationApproval
+		}
+	}
 
 	// Defining the desired user state
 	var desiredState iamv1alpha1.UserState
@@ -189,6 +224,28 @@ func hasOwnerReference(refs []metav1.OwnerReference, ref metav1.OwnerReference) 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *UserController) SetupWithManager(mgr ctrl.Manager) error {
+	// Index PlatformAccessApproval for efficient lookups
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.PlatformAccessApproval{}, platformAccessApprovalIndexKey, func(obj client.Object) []string {
+		paa, ok := obj.(*iamv1alpha1.PlatformAccessApproval)
+		if !ok {
+			return nil
+		}
+		return []string{buildPlatformAccessApprovalIndexKey(&paa.Spec.SubjectRef)}
+	}); err != nil {
+		return fmt.Errorf("failed to set field index on PlatformAccessApproval: %w", err)
+	}
+
+	// Index PlatformAccessRejection for efficient lookups
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.PlatformAccessRejection{}, platformAccessRejectionIndexKey, func(obj client.Object) []string {
+		par, ok := obj.(*iamv1alpha1.PlatformAccessRejection)
+		if !ok {
+			return nil
+		}
+		return []string{par.Spec.UserRef.Name}
+	}); err != nil {
+		return fmt.Errorf("failed to set field index on PlatformAccessRejection: %w", err)
+	}
+
 	// Index UserDeactivation by spec.userRef.name for efficient lookups
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.UserDeactivation{}, "spec.userRef.name", func(obj client.Object) []string {
 		ud, ok := obj.(*iamv1alpha1.UserDeactivation)
@@ -207,6 +264,8 @@ func (r *UserController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&iamv1alpha1.User{}).
 		Watches(&iamv1alpha1.UserDeactivation{}, handler.EnqueueRequestsFromMapFunc(r.findUserDeactivationsForUser)).
+		Watches(&iamv1alpha1.PlatformAccessApproval{}, handler.EnqueueRequestsFromMapFunc(r.findPlatformAccessApprovalsForUser)).
+		Watches(&iamv1alpha1.PlatformAccessRejection{}, handler.EnqueueRequestsFromMapFunc(r.findPlatformAccessRejectionsForUser)).
 		Named("user").
 		Complete(r)
 }
@@ -235,4 +294,81 @@ func (r *UserController) findUserDeactivationsForUser(ctx context.Context, obj c
 			},
 		},
 	}
+}
+
+// findPlatformAccessApprovalsForUser finds all PlatformAccessApproval resources that reference a given User
+func (r *UserController) findPlatformAccessApprovalsForUser(ctx context.Context, obj client.Object) []reconcile.Request {
+	log := log.FromContext(ctx).WithName("find-platform-access-approval-for-user")
+	paa, ok := obj.(*iamv1alpha1.PlatformAccessApproval)
+	if !ok {
+		log.Error(fmt.Errorf("unexpected object type %T, expected *iamv1alpha1.PlatformAccessApproval", obj), "unexpected object type")
+		return nil
+	}
+
+	userRef := paa.Spec.SubjectRef.UserRef
+	if userRef == nil {
+		log.Info("platform access approval has no user reference, skipping as probably is for an user invitation", "platformAccessApproval", paa.Name)
+		return nil
+	}
+	log.Info("found PlatformAccessApproval for user", "user", userRef.Name, "platformAccessApproval", paa.Name)
+
+	return []reconcile.Request{
+		{
+			NamespacedName: types.NamespacedName{
+				Name: userRef.Name,
+			},
+		},
+	}
+}
+
+// findPlatformAccessRejectionsForUser finds all PlatformAccessRejection resources that reference a given User
+func (r *UserController) findPlatformAccessRejectionsForUser(ctx context.Context, obj client.Object) []reconcile.Request {
+	log := log.FromContext(ctx).WithName("find-platform-access-rejection-for-user")
+	par, ok := obj.(*iamv1alpha1.PlatformAccessRejection)
+	if !ok {
+		log.Error(fmt.Errorf("unexpected object type %T, expected *iamv1alpha1.PlatformAccessRejection", obj), "unexpected object type")
+		return nil
+	}
+	log.Info("found PlatformAccessRejection for user", "user", par.Spec.UserRef.Name, "platformAccessRejection", par.Name)
+
+	return []reconcile.Request{
+		{
+			NamespacedName: types.NamespacedName{
+				Name: par.Spec.UserRef.Name,
+			},
+		},
+	}
+}
+
+func (r *UserController) getUserAccessApprovalStatus(ctx context.Context, user *iamv1alpha1.User) (iamv1alpha1.RegistrationApprovalState, error) {
+	log := log.FromContext(ctx).WithName("get-user-access-approval-status")
+
+	// Webhooks validations warranties that there is only one PlatformAccessApproval or PlatformAccessRejection related to the user
+
+	// Check if it has a PlatformAccessApproval related to email address or user reference
+	userReferences := []string{user.Spec.Email, user.Name}
+	for _, reference := range userReferences {
+		paas := &iamv1alpha1.PlatformAccessApprovalList{}
+		if err := r.Client.List(ctx, paas, client.MatchingFields{platformAccessApprovalIndexKey: reference}); err != nil {
+			log.Error(err, "failed to list platformaccessapprovals", "reference", reference)
+			return "", fmt.Errorf("failed to list platformaccessapprovals: %w", err)
+		}
+		if len(paas.Items) > 0 {
+			return iamv1alpha1.RegistrationApprovalStateApproved, nil
+		}
+	}
+
+	// Check if it has a PlatformAccessRejection related to user reference
+	par := &iamv1alpha1.PlatformAccessRejectionList{}
+	if err := r.Client.List(ctx, par, client.MatchingFields{platformAccessRejectionIndexKey: user.Name}); err != nil {
+		log.Error(err, "failed to list platformaccessrejections", "user", user.Name)
+		return "", fmt.Errorf("failed to list platformaccessrejections: %w", err)
+	}
+	if len(par.Items) > 0 {
+		return iamv1alpha1.RegistrationApprovalStateRejected, nil
+	}
+
+	// If no PlatformAccessApproval or PlatformAccessRejection is found, return Pending
+	return iamv1alpha1.RegistrationApprovalStatePending, nil
+
 }
