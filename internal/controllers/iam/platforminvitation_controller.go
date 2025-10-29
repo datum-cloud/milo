@@ -31,6 +31,8 @@ const platformInvitationUserEmailIndexKey = "iam.miloapis.com/useremailkey"
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=platforminvitations/status,verbs=update
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=platformaccessapprovals,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=notification.miloapis.com,resources=emails,verbs=get;list;watch;create
+
 func (r *PlatformInvitationController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx).WithValues("controller", "PlatformInvitationController", "trigger", req.NamespacedName)
 	log.Info("Starting reconciliation", "name", req.Name)
