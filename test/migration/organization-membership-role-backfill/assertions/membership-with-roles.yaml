@@ -1,0 +1,23 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: migration-test-membership
+  namespace: organization-migration-test-org
+spec:
+  organizationRef:
+    name: migration-test-org
+  userRef:
+    name: migration-test-user
+  roles:
+  - name: organization-owner
+    namespace: organization-migration-test-org
+  - name: organization-viewer
+    namespace: organization-migration-test-org
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+  - type: RolesApplied
+    status: "True"
+    reason: AllRolesApplied
+  (length(appliedRoles)): 2

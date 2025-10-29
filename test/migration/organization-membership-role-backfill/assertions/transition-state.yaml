@@ -1,0 +1,5 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBindingList
+items:
+# Verify at least 4 PolicyBindings exist (2 legacy + 2 managed)
+(length(items) >= 4): true

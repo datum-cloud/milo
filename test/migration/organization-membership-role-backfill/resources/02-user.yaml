@@ -1,0 +1,9 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: User
+metadata:
+  name: migration-test-user
+spec:
+  email: migration-test@example.com
+  givenName: Migration
+  familyName: Tester
+  disabled: false

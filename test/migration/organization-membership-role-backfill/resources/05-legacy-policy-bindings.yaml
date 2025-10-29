@@ -1,0 +1,42 @@
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: legacy-owner-binding
+  namespace: organization-migration-test-org
+  # Note: No managed-by label - this is a legacy binding
+spec:
+  roleRef:
+    name: organization-owner
+    namespace: organization-migration-test-org
+  subjects:
+  - kind: User
+    name: migration-test-user
+    uid: ($testUser.metadata.uid)
+  resourceSelector:
+    resourceRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: migration-test-org
+      uid: ($testOrg.metadata.uid)
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: legacy-viewer-binding
+  namespace: organization-migration-test-org
+  # Note: No managed-by label - this is a legacy binding
+spec:
+  roleRef:
+    name: organization-viewer
+    namespace: organization-migration-test-org
+  subjects:
+  - kind: User
+    name: migration-test-user
+    uid: ($testUser.metadata.uid)
+  resourceSelector:
+    resourceRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: migration-test-org
+      uid: ($testOrg.metadata.uid)

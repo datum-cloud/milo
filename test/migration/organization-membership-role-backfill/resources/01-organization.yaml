@@ -1,0 +1,9 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: migration-test-org
+  annotations:
+    kubernetes.io/display-name: "Migration Test Organization"
+spec:
+  type: Standard
+  displayName: Migration Test Organization

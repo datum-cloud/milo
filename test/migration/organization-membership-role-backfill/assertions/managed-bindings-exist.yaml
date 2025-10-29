@@ -1,0 +1,41 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+spec:
+  # This assertion verifies that managed PolicyBindings exist for both roles
+  # and that they have the correct labels and owner references
+  validationFailureAction: Enforce
+  rules:
+  - name: verify-managed-bindings
+    match:
+      any:
+      - resources:
+          kinds:
+          - PolicyBinding
+          namespaces:
+          - organization-migration-test-org
+          selector:
+            matchLabels:
+              resourcemanager.miloapis.com/managed-by: organization-membership-controller
+              resourcemanager.miloapis.com/membership: migration-test-membership
+    validate:
+      message: "Managed PolicyBindings must exist with correct labels"
+      pattern:
+        metadata:
+          labels:
+            resourcemanager.miloapis.com/managed-by: organization-membership-controller
+            resourcemanager.miloapis.com/membership: migration-test-membership
+          ownerReferences:
+          - apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: migration-test-membership
+        spec:
+          roleRef:
+            namespace: organization-migration-test-org
+          subjects:
+          - kind: User
+            name: migration-test-user
+          resourceSelector:
+            resourceRef:
+              apiGroup: resourcemanager.miloapis.com
+              kind: Organization
+              name: migration-test-org

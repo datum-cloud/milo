@@ -1,0 +1,16 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: migration-test-membership
+  namespace: organization-migration-test-org
+spec:
+  organizationRef:
+    name: migration-test-org
+  userRef:
+    name: migration-test-user
+  # Verify no roles field exists
+  (roles == null): true
+status:
+  conditions:
+  - type: Ready
+    status: "True"

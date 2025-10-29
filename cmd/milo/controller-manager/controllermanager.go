@@ -79,6 +79,7 @@ import (
 
 	controlplane "go.miloapis.com/milo/internal/control-plane"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
+	migrationcontroller "go.miloapis.com/milo/internal/controllers/migration"
 	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
@@ -490,6 +491,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := organizationMembershipCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up organization membership controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			migrationCtrl := migrationcontroller.MigrationController{
+				Client: ctrl.GetClient(),
+			}
+			if err := migrationCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up migration controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

@@ -1,0 +1,26 @@
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: organization-owner
+  namespace: organization-migration-test-org
+spec:
+  displayName: Organization Owner
+  description: Full access to organization resources
+  permissions:
+  - action: "*"
+    resource: "*"
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: organization-viewer
+  namespace: organization-migration-test-org
+spec:
+  displayName: Organization Viewer
+  description: Read-only access to organization resources
+  permissions:
+  - action: "get"
+    resource: "*"
+  - action: "list"
+    resource: "*"

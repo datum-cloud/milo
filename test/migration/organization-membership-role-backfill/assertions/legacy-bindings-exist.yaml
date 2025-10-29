@@ -1,0 +1,32 @@
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: legacy-owner-binding
+  namespace: organization-migration-test-org
+  # Verify no managed-by label
+  (labels."resourcemanager.miloapis.com/managed-by" == null): true
+spec:
+  roleRef:
+    name: organization-owner
+    namespace: organization-migration-test-org
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  name: legacy-viewer-binding
+  namespace: organization-migration-test-org
+  # Verify no managed-by label
+  (labels."resourcemanager.miloapis.com/managed-by" == null): true
+spec:
+  roleRef:
+    name: organization-viewer
+    namespace: organization-migration-test-org
+status:
+  conditions:
+  - type: Ready
+    status: "True"

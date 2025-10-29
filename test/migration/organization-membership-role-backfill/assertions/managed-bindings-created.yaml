@@ -1,0 +1,24 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBindingList
+items:
+- metadata:
+    namespace: organization-migration-test-org
+    labels:
+      resourcemanager.miloapis.com/managed-by: organization-membership-controller
+      resourcemanager.miloapis.com/membership: migration-test-membership
+  spec:
+    roleRef:
+      (name == 'organization-owner' || name == 'organization-viewer'): true
+      namespace: organization-migration-test-org
+    subjects:
+    - kind: User
+      name: migration-test-user
+    resourceSelector:
+      resourceRef:
+        apiGroup: resourcemanager.miloapis.com
+        kind: Organization
+        name: migration-test-org
+  status:
+    conditions:
+    - type: Ready
+      status: "True"
