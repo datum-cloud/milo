@@ -427,7 +427,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up organization webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-			if err := resourcemanagerv1alpha1webhook.SetupOrganizationMembershipWebhooksWithManager(ctrl); err != nil {
+			if err := resourcemanagerv1alpha1webhook.SetupOrganizationMembershipWebhooksWithManager(ctrl, SystemNamespace, OrganizationOwnerRoleName); err != nil {
 				logger.Error(err, "Error setting up organizationmembership webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
