@@ -52,6 +52,9 @@ spec:
           spec:
             description: UserPreferenceSpec defines the desired state of UserPreference
             properties:
+              displayName:
+                description: DisplayName is the user's preferred display name.
+                type: string
               theme:
                 default: system
                 description: The user's theme preference.
@@ -59,6 +62,9 @@ spec:
                 - light
                 - dark
                 - system
+                type: string
+              title:
+                description: Title is the user's title or role.
                 type: string
               userRef:
                 description: Reference to the user these preferences belong to.

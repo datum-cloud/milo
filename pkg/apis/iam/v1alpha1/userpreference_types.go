@@ -32,6 +32,14 @@ type UserPreferenceSpec struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=system
 	Theme string `json:"theme,omitempty"`
+
+	// DisplayName is the user's preferred display name.
+	// +kubebuilder:validation:Optional
+	DisplayName string `json:"displayName,omitempty"`
+
+	// Title is the user's title or role.
+	// +kubebuilder:validation:Optional
+	Title string `json:"title,omitempty"`
 }
 
 // UserPreferenceStatus defines the observed state of UserPreference
