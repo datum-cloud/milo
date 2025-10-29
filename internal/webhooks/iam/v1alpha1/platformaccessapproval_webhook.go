@@ -17,7 +17,7 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 )
 
-const platformAccessApprovalIndexKey = "iam.miloapis.com/platformaccessapproval"
+const platformAccessApprovalIndexKey = "iam.miloapis.com/platformaccessapprovalkey"
 const userEmailIndexKey = "iam.miloapis.com/user-email"
 
 func buildPlatformAccessIndexKey(subject *iamv1alpha1.SubjectReference) string {
