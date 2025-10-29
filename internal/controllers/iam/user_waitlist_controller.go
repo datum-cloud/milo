@@ -3,6 +3,7 @@ package iam
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
@@ -183,7 +184,7 @@ func (r *UserWaitlistController) ensureWaitlistEmailSent(ctx context.Context, us
 }
 
 func getDeterministicWaitlistEmailName(user *iamv1alpha1.User, condition iamv1alpha1.UserWaitlistEmailSentCondition) string {
-	return fmt.Sprintf("%s-%s-%s", string(user.GetUID()), user.GetName(), string(condition))
+	return fmt.Sprintf("%s-%s-%s", string(user.GetUID()), user.GetName(), strings.ToLower(string(condition)))
 }
 
 // getEmailStatusCondition returns the status condition for the email based on the user's registration approval state.
