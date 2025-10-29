@@ -236,6 +236,7 @@ func (r *OrganizationMembershipController) reconcileRoles(
 	appliedRoles := []resourcemanagerv1alpha.AppliedRole{}
 	successCount := 0
 	failureCount := 0
+	pendingCount := 0
 
 	// Process each desired role
 	for roleKey, roleRef := range desiredRoles {
@@ -245,19 +246,31 @@ func (r *OrganizationMembershipController) reconcileRoles(
 		}
 
 		if existingBinding, exists := existingBindingMap[roleKey]; exists {
-			// PolicyBinding already exists, verify it's correct
-			appliedRole.Status = "Applied"
-			appliedRole.PolicyBindingRef = &resourcemanagerv1alpha.PolicyBindingReference{
-				Name:      existingBinding.Name,
-				Namespace: existingBinding.Namespace,
-			}
-			if existingBinding.CreationTimestamp.Time.IsZero() {
-				now := metav1.Now()
-				appliedRole.AppliedAt = &now
+			// PolicyBinding exists, check if it's Ready
+			isReady := r.isPolicyBindingReady(existingBinding)
+
+			if isReady {
+				appliedRole.Status = "Applied"
+				appliedRole.PolicyBindingRef = &resourcemanagerv1alpha.PolicyBindingReference{
+					Name:      existingBinding.Name,
+					Namespace: existingBinding.Namespace,
+				}
+				if existingBinding.CreationTimestamp.Time.IsZero() {
+					now := metav1.Now()
+					appliedRole.AppliedAt = &now
+				} else {
+					appliedRole.AppliedAt = &existingBinding.CreationTimestamp
+				}
+				successCount++
 			} else {
-				appliedRole.AppliedAt = &existingBinding.CreationTimestamp
+				appliedRole.Status = "Pending"
+				appliedRole.Message = "Waiting for PolicyBinding to become Ready"
+				appliedRole.PolicyBindingRef = &resourcemanagerv1alpha.PolicyBindingReference{
+					Name:      existingBinding.Name,
+					Namespace: existingBinding.Namespace,
+				}
+				pendingCount++
 			}
-			successCount++
 			delete(existingBindingMap, roleKey) // Mark as processed
 		} else {
 			// Need to create PolicyBinding
@@ -267,14 +280,13 @@ func (r *OrganizationMembershipController) reconcileRoles(
 				appliedRole.Message = fmt.Sprintf("Failed to create PolicyBinding: %v", err)
 				failureCount++
 			} else {
-				appliedRole.Status = "Applied"
-				now := metav1.Now()
-				appliedRole.AppliedAt = &now
+				appliedRole.Status = "Pending"
+				appliedRole.Message = "PolicyBinding created, waiting for Ready status"
 				appliedRole.PolicyBindingRef = &resourcemanagerv1alpha.PolicyBindingReference{
 					Name:      r.generatePolicyBindingName(membership, roleRef),
 					Namespace: membership.Namespace,
 				}
-				successCount++
+				pendingCount++
 			}
 		}
 
@@ -299,11 +311,20 @@ func (r *OrganizationMembershipController) reconcileRoles(
 		ObservedGeneration: membership.Generation,
 	}
 
-	if failureCount == 0 {
+	if failureCount == 0 && pendingCount == 0 {
+		// All roles are ready
 		rolesAppliedCondition.Status = metav1.ConditionTrue
 		rolesAppliedCondition.Reason = AllRolesAppliedReason
 		rolesAppliedCondition.Message = fmt.Sprintf("All %d role(s) successfully applied", successCount)
+	} else if pendingCount > 0 {
+		// Some roles are still pending
+		rolesAppliedCondition.Status = metav1.ConditionFalse
+		rolesAppliedCondition.Reason = PartialRolesAppliedReason
+		rolesAppliedCondition.Message = fmt.Sprintf("%d of %d role(s) ready, %d pending", successCount, successCount+pendingCount+failureCount, pendingCount)
+		// Requeue to check again when PolicyBindings become ready
+		logger.Info("some roles pending, will requeue", "pending", pendingCount)
 	} else {
+		// Some roles failed
 		rolesAppliedCondition.Status = metav1.ConditionFalse
 		rolesAppliedCondition.Reason = PartialRolesAppliedReason
 		rolesAppliedCondition.Message = fmt.Sprintf("%d of %d role(s) successfully applied", successCount, successCount+failureCount)
@@ -433,6 +454,16 @@ func (r *OrganizationMembershipController) getRoleKeyFromBinding(binding *iamv1a
 		return fmt.Sprintf("%s/%s", binding.Spec.RoleRef.Namespace, binding.Spec.RoleRef.Name)
 	}
 	return binding.Spec.RoleRef.Name
+}
+
+// isPolicyBindingReady checks if a PolicyBinding has a Ready condition with status True
+func (r *OrganizationMembershipController) isPolicyBindingReady(binding *iamv1alpha1.PolicyBinding) bool {
+	for _, condition := range binding.Status.Conditions {
+		if condition.Type == "Ready" {
+			return condition.Status == metav1.ConditionTrue
+		}
+	}
+	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.
