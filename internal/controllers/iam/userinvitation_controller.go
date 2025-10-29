@@ -148,7 +148,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			Type:    string(iamv1alpha1.UserInvitationExpiredCondition),
 			Status:  metav1.ConditionTrue,
 			Reason:  string(iamv1alpha1.UserInvitationStateExpiredReason),
-			Message: fmt.Sprintf("UserInvitation %s is expired", ui.GetName()),
+			Message: "User Invitation is expired",
 		}); err != nil {
 			log.Error(err, "Failed to update expired UserInvitation status")
 			return ctrl.Result{}, fmt.Errorf("failed to update expired UserInvitation status: %w", err)
@@ -211,7 +211,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			Type:    string(iamv1alpha1.UserInvitationReadyCondition),
 			Status:  metav1.ConditionTrue,
 			Reason:  string(iamv1alpha1.UserInvitationStateAcceptedReason),
-			Message: fmt.Sprintf("User accepted the invitation %s", ui.GetName()),
+			Message: "User accepted the invitation",
 		}); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status: %w", err)
 		}
@@ -236,7 +236,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			Type:    string(iamv1alpha1.UserInvitationReadyCondition),
 			Status:  metav1.ConditionTrue,
 			Reason:  string(iamv1alpha1.UserInvitationStateDeclinedReason),
-			Message: fmt.Sprintf("User declined the invitation %s", ui.GetName()),
+			Message: "User declined the invitation",
 		}); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status: %w", err)
 		}
@@ -268,7 +268,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		Type:    string(iamv1alpha1.UserInvitationPendingCondition),
 		Status:  metav1.ConditionTrue,
 		Reason:  string(iamv1alpha1.UserInvitationStatePendingReason),
-		Message: fmt.Sprintf("User invitation is pending, ui: %s", ui.GetName()),
+		Message: "Waiting for user to accept the invitation",
 	}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status: %w", err)
 	}
