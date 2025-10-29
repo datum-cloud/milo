@@ -123,6 +123,12 @@ var (
 
 	// WaitlistRelatedResourcesNamespace is the namespace that contains the waitlist related resources.
 	WaitlistRelatedResourcesNamespace string
+	// UserWaitlistPendingEmailTemplate is the template for the waitlist pending email.
+	UserWaitlistPendingEmailTemplate string
+	// UserWaitlistApprovedEmailTemplate is the template for the waitlist approved email.
+	UserWaitlistApprovedEmailTemplate string
+	// UserWaitlistRejectedEmailTemplate is the template for the waitlist rejected email.
+	UserWaitlistRejectedEmailTemplate string
 
 	// AssignableRolesNamespace is an extra namespace that the system allows to be used for assignable roles.
 	AssignableRolesNamespace string
@@ -243,6 +249,9 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&UserInvitationEmailTemplate, "user-invitation-email-template", "emailtemplates.notification.miloapis.com-userinvitationemailtemplate", "The name of the template that will be used to send the user invitation email.")
 	fs.StringVar(&PlatformInvitationEmailTemplate, "platform-invitation-email-template", "emailtemplates.notification.miloapis.com-platforminvitationemailtemplate", "The name of the template that will be used to send the platform invitation email.")
 	fs.StringVar(&WaitlistRelatedResourcesNamespace, "waitlist-related-resources-namespace", "milo-system", "The namespace that contains the waitlist related resources.")
+	fs.StringVar(&UserWaitlistPendingEmailTemplate, "user-waitlist-pending-email-template", "emailtemplates.notification.miloapis.com-userwaitlistemailtemplate", "The name of the template that will be used to send the waitlist pending email.")
+	fs.StringVar(&UserWaitlistApprovedEmailTemplate, "user-waitlist-approved-email-template", "emailtemplates.notification.miloapis.com-userapprovedemailtemplate", "The name of the template that will be used to send the waitlist approved email.")
+	fs.StringVar(&UserWaitlistRejectedEmailTemplate, "user-waitlist-rejected-email-template", "emailtemplates.notification.miloapis.com-userrejectedemailtemplate", "The name of the template that will be used to send the waitlist rejected email.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -609,6 +618,18 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			userWaitlistCtrl := iamcontroller.UserWaitlistController{
+				Client:                    ctrl.GetClient(),
+				SystemNamespace:           SystemNamespace,
+				PendingEmailTemplateName:  UserWaitlistPendingEmailTemplate,
+				ApprovedEmailTemplateName: UserWaitlistApprovedEmailTemplate,
+				RejectedEmailTemplateName: UserWaitlistRejectedEmailTemplate,
+			}
+			if err := userWaitlistCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user waitlist controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
