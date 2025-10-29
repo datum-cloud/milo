@@ -124,6 +124,9 @@ var (
 	// WaitlistRelatedResourcesNamespace is the namespace that contains the waitlist related resources.
 	WaitlistRelatedResourcesNamespace string
 
+	// PlatformInvitationActionUrl is the action url for the platform invitation email.
+	PlatformInvitationEmailVariableActionUrl string
+
 	// AssignableRolesNamespace is an extra namespace that the system allows to be used for assignable roles.
 	AssignableRolesNamespace string
 )
@@ -243,6 +246,7 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&UserInvitationEmailTemplate, "user-invitation-email-template", "emailtemplates.notification.miloapis.com-userinvitationemailtemplate", "The name of the template that will be used to send the user invitation email.")
 	fs.StringVar(&PlatformInvitationEmailTemplate, "platform-invitation-email-template", "emailtemplates.notification.miloapis.com-platforminvitationemailtemplate", "The name of the template that will be used to send the platform invitation email.")
 	fs.StringVar(&WaitlistRelatedResourcesNamespace, "waitlist-related-resources-namespace", "milo-system", "The namespace that contains the waitlist related resources.")
+	fs.StringVar(&PlatformInvitationEmailVariableActionUrl, "platform-invitation-email-variable-action-url", "https://cloud.datum.net", "The action url for the platform invitation email.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -525,6 +529,9 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				Client:                              ctrl.GetClient(),
 				PlatformInvitationEmailTemplateName: PlatformInvitationEmailTemplate,
 				WaitlistRelatedResourcesNamespace:   WaitlistRelatedResourcesNamespace,
+				EmailVariables: iamcontroller.PlatformInvitationEmailVariables{
+					ActionUrl: PlatformInvitationEmailVariableActionUrl,
+				},
 			}
 			if err := platformInvitationCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up platform invitation controller")

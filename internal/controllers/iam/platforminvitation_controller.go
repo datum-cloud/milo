@@ -23,6 +23,11 @@ type PlatformInvitationController struct {
 	Client                              client.Client
 	PlatformInvitationEmailTemplateName string
 	WaitlistRelatedResourcesNamespace   string
+	EmailVariables                      PlatformInvitationEmailVariables
+}
+
+type PlatformInvitationEmailVariables struct {
+	ActionUrl string
 }
 
 const platformInvitationUserEmailIndexKey = "iam.miloapis.com/useremailkey"
@@ -255,7 +260,7 @@ func (r *PlatformInvitationController) createPlatformInvitationEmail(ctx context
 		},
 		{
 			Name:  "ActionUrl",
-			Value: "https://cloud.datum.net",
+			Value: r.EmailVariables.ActionUrl,
 		},
 	}
 
