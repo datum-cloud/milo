@@ -427,6 +427,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up organization webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := resourcemanagerv1alpha1webhook.SetupOrganizationMembershipWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up organizationmembership webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 			if err := iamv1alpha1webhook.SetupUserWebhooksWithManager(ctrl, SystemNamespace, "iam-user-self-manage"); err != nil {
 				logger.Error(err, "Error setting up user webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
@@ -465,6 +469,14 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := iamv1alpha1webhook.SetupPlatformInvitationWebhooksWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up platform invitation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := iamv1alpha1webhook.SetupPlatformAccessApprovalWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform access approval webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := iamv1alpha1webhook.SetupPlatformAccessRejectionWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform access rejection webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

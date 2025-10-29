@@ -1,0 +1,17 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: alice-membership-cross-ns
+  namespace: organization-test-membership-roles
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Ready
+    - type: RolesApplied
+      status: "True"
+      reason: AllRolesApplied
+  appliedRoles:
+    - name: shared-developer
+      namespace: milo-system
+      status: Applied
