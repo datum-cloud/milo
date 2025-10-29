@@ -1,0 +1,24 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: alice-membership-single
+  namespace: organization-test-membership-roles
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Ready
+    - type: RolesApplied
+      status: "True"
+      reason: AllRolesApplied
+  appliedRoles:
+    - name: organization-viewer
+      namespace: organization-test-membership-roles
+      status: Applied
+  user:
+    email: alice@test-membership-roles.example.com
+    givenName: Alice
+    familyName: Testuser
+  organization:
+    type: Standard
+    displayName: "Test Membership Roles Organization"

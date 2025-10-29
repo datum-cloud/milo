@@ -1,0 +1,61 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: organization-admin
+  namespace: organization-test-membership-roles
+  labels:
+    test.miloapis.com/scenario: "organization-membership-roles"
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - resourcemanager.miloapis.com/organizations.delete
+    - resourcemanager.miloapis.com/organizations.get
+    - resourcemanager.miloapis.com/organizations.update
+    - resourcemanager.miloapis.com/projects.create
+    - resourcemanager.miloapis.com/projects.delete
+    - resourcemanager.miloapis.com/projects.get
+    - resourcemanager.miloapis.com/projects.update
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: organization-viewer
+  namespace: organization-test-membership-roles
+  labels:
+    test.miloapis.com/scenario: "organization-membership-roles"
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - resourcemanager.miloapis.com/organizations.get
+    - resourcemanager.miloapis.com/projects.get
+    - resourcemanager.miloapis.com/projects.list
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: billing-manager
+  namespace: organization-test-membership-roles
+  labels:
+    test.miloapis.com/scenario: "organization-membership-roles"
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - billing.miloapis.com/invoices.get
+    - billing.miloapis.com/invoices.list
+    - billing.miloapis.com/paymentmethods.create
+    - billing.miloapis.com/paymentmethods.update
+---
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: shared-developer
+  namespace: milo-system
+  labels:
+    test.miloapis.com/scenario: "organization-membership-roles"
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - compute.miloapis.com/workloads.create
+    - compute.miloapis.com/workloads.get
+    - compute.miloapis.com/workloads.update
+    - compute.miloapis.com/workloads.delete

@@ -1,0 +1,19 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: PolicyBinding
+metadata:
+  namespace: organization-test-membership-roles
+  labels:
+    resourcemanager.miloapis.com/membership: alice-membership-single
+    resourcemanager.miloapis.com/managed-by: organization-membership-controller
+spec:
+  roleRef:
+    name: organization-viewer
+    namespace: organization-test-membership-roles
+  subjects:
+    - kind: User
+      name: test-user-alice
+  resourceSelector:
+    resourceRef:
+      apiGroup: resourcemanager.miloapis.com
+      kind: Organization
+      name: test-membership-roles

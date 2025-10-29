@@ -15,9 +15,8 @@ organizations.
 
 ## Non-Goals
 
-- This enhancement does not cover permissions within an organization. It only
-  establishes membership. Role definitions and their enforcement are out of
-  scope for this specific enhancement.
+- Role and permission definitions are covered separately in the IAM enhancement
+- Authorization policy enforcement is handled by the authorization provider
 
 ## API
 
@@ -27,84 +26,112 @@ This resource will be cluster-scoped.
 
 ### OrganizationMembership Resource
 
-The `OrganizationMembership` resource will have the following structure:
+The `OrganizationMembership` resource links users to organizations:
 
 ```yaml
-apiVersion: iam.miloapis.com/v1alpha1
+apiVersion: resourcemanager.miloapis.com/v1alpha1
 kind: OrganizationMembership
 metadata:
-  name: <user-name>-<organization-name> # e.g. "scott-wells-datum-cloud"
+  name: alice-acme
+  namespace: organization-acme
 spec:
   organizationRef:
-    name: <organization-name>
+    name: acme
   userRef:
-    name: <user-name>
-  roles:
-  - member
-  - admin
+    name: alice
 ```
 
 The `spec` contains:
-- `organizationRef`: A reference to the `Organization` a user is a member of.
-- `userRef`: A reference to the `User` who is the member.
-- `roles`: A list of roles the user has in the organization.
+- `organizationRef`: Reference to the `Organization`
+- `userRef`: Reference to the `User`
 
-The name of the `OrganizationMembership` resource should be a combination of the
-user and organization name to ensure uniqueness.
+#### Role Assignment (Optional)
+
+Assign roles directly in the membership. The controller automatically creates and manages `PolicyBinding` resources:
+
+```yaml
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: alice-acme
+  namespace: organization-acme
+spec:
+  organizationRef:
+    name: acme
+  userRef:
+    name: alice
+  roles:
+    - name: organization-admin
+      namespace: organization-acme
+    - name: billing-manager
+      namespace: organization-acme
+```
+
+Each role reference specifies:
+- `name`: Role resource name
+- `namespace`: Role namespace (optional, defaults to membership namespace)
+
+The controller:
+- Creates one `PolicyBinding` per role
+- Updates PolicyBindings when roles change
+- Deletes PolicyBindings when roles are removed
+- Uses owner references for garbage collection
+- Tracks status in `appliedRoles` field
 
 ### Usage
 
-With this new resource, we can satisfy the requirements:
+**List organization members:**
+```bash
+kubectl get organizationmemberships -n organization-acme
+```
 
-- **List all users in an organization:** One can list all
-  `OrganizationMembership` resources and filter them by the
-  `spec.organizationRef.name`.
+**List user's organizations:**
+```bash
+kubectl get organizationmemberships --all-namespaces \
+  --field-selector spec.userRef.name=alice
+```
 
-- **List all organizations for a user:** One can list all
-  `OrganizationMembership` resources and filter them by the `spec.userRef.name`.
+**Check role assignment status:**
+```bash
+kubectl get organizationmembership alice-acme -n organization-acme -o yaml
+```
 
-This approach aligns with Kubernetes API conventions for representing
-associations between resources.
+Example status:
+```yaml
+status:
+  appliedRoles:
+    - name: organization-admin
+      namespace: organization-acme
+      status: Applied
+    - name: billing-manager
+      namespace: organization-acme
+      status: Applied
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: RolesApplied
+      status: "True"
+      reason: AllRolesApplied
+      message: All 2 role(s) successfully applied
+```
 
 ## Authorization
 
-Access to `OrganizationMembership` resources will be managed by a custom filter
-within the API server's handler chain. This filter will inspect requests for
-`OrganizationMembership` resources and, if a `fieldSelector` is present, it will
-augment the user's authentication information. This extra context will then be
-used by the authorizer to make a decision.
-
-This approach is preferred over a webhook as it keeps the authorization logic
-within the API server process, reducing external dependencies and potential
-latency.
+A custom filter in the API server handler chain manages access to `OrganizationMembership` resources. When a `fieldSelector` is present, the filter augments the user's authentication context for authorization decisions.
 
 ### Filter Logic
 
-The filter will be placed in the handler chain before the authorization filter.
-For any request to `organizationmemberships.iam.miloapis.com`, the filter will
-perform the following steps:
+The filter runs before authorization:
 
-1.  Extract the `RequestInfo` from the request context.
-2.  Check if a `fieldSelector` is present in the request.
-3.  Parse the `fieldSelector` to find `spec.userRef.name` or
-    `spec.organizationRef.name`.
-4.  If a known field is found, it will add the value to the `Extra` map on the
-    user's `user.Info` object in the request context.
-    -   For `spec.userRef.name=<user-name>`, it will add
-        `iam.miloapis.com/parent-name: ["<user-name>"]`,
-        `iam.miloapis.com/parent-type: ["User"]`, and
-        `iam.miloapis.com/parent-api-group: ["iam.miloapis.com"]`.
-    -   For `spec.organizationRef.name=<org-name>`, it will add
-        `iam.miloapis.com/parent-name: ["<org-name>"]`,
-        `iam.miloapis.com/parent-type: ["Organization"]`, and
-        `iam.miloapis.com/parent-api-group: ["resourcemanager.miloapis.com"]`.
-5.  It will then pass the request with the augmented context to the next handler
-    in the chain.
+1. Extracts `RequestInfo` from request context
+2. Checks for `fieldSelector` in the request
+3. Parses `fieldSelector` for `spec.userRef.name` or `spec.organizationRef.name`
+4. Adds values to the user's `Extra` map:
+   - For `spec.userRef.name=<user>`: Adds `iam.miloapis.com/parent-name`, `parent-type: User`, and `parent-api-group: iam.miloapis.com`
+   - For `spec.organizationRef.name=<org>`: Adds `iam.miloapis.com/parent-name`, `parent-type: Organization`, and `parent-api-group: resourcemanager.miloapis.com`
+5. Passes request with augmented context to next handler
 
-The authorizer can then use the presence of these `Extra` keys to apply more
-specific authorization rules. For example, a rule could allow a user to list
-memberships if `iam.miloapis.com/parent-type` is `"User"` and
-`iam.miloapis.com/parent-name` matches their own username.
+The authorizer uses these `Extra` keys to apply authorization rules. For example, users can list their own memberships when `parent-type` is `User` and `parent-name` matches their username.
 
 ### Sequence Diagram
 
