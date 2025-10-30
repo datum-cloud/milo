@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/finalizer"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -474,18 +475,7 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 	log := logf.FromContext(ctx).WithName("userinvitation-create-organization-membership")
 	log.Info("Creating OrganizationMembership for userInvitation", "userInvitation", ui.GetName(), "user", user.GetName())
 
-	// Check if the OrganizationMembership already exists
 	organizationMembership := &resourcemanagerv1alpha1.OrganizationMembership{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: fmt.Sprintf("member-%s", user.Name), Namespace: fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name)}, organizationMembership); err != nil {
-		if errors.IsNotFound(err) {
-			log.Info("OrganizationMembership not found, creating")
-		} else {
-			return fmt.Errorf("failed to get OrganizationMembership: %w", err)
-		}
-	} else {
-		log.Info("OrganizationMembership found, skipping creation")
-		return nil
-	}
 
 	roles := []resourcemanagerv1alpha1.RoleReference{}
 	for _, role := range ui.Spec.Roles {
@@ -509,7 +499,11 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 				},
 			},
 		},
-		Spec: resourcemanagerv1alpha1.OrganizationMembershipSpec{
+	}
+
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, organizationMembership, func() error {
+		log.Info("Creating or updating invitation-related organization membership", "organization", organizationMembership.Spec.OrganizationRef.Name)
+		organizationMembership.Spec = resourcemanagerv1alpha1.OrganizationMembershipSpec{
 			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
 				Name: ui.Spec.OrganizationRef.Name,
 			},
@@ -517,12 +511,11 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 				Name: user.Name,
 			},
 			Roles: roles,
-		},
-	}
-
-	// Create the OrganizationMembership
-	if err := r.Client.Create(ctx, organizationMembership); err != nil {
-		return fmt.Errorf("failed to create organization membership resource: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create or update organization membership: %w", err)
 	}
 
 	log.Info("OrganizationMembership created", "name", organizationMembership.GetName())
