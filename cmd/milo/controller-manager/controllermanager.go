@@ -240,9 +240,6 @@ func NewCommand() *cobra.Command {
 
 	fs.StringVar(&AssignableRolesNamespace, "assignable-roles-namespace", "datum-cloud", "An extra namespace that the system allows to be used for assignable roles.")
 
-	// Leader election flags
-	cmd.Flags().StringVar(&s.LeaderElection.Namespace, "leader-election-namespace", "datum-system", "The namespace in which the leader election resource will be created. If empty, uses the current namespace.")
-
 	s.InfraCluster.AddFlags(namedFlagSets.FlagSet("Infrastructure Cluster"))
 	s.ControlPlane.AddFlags(namedFlagSets.FlagSet("Control Plane"))
 
@@ -273,11 +270,8 @@ func ResyncPeriod(c *config.CompletedConfig) func() time.Duration {
 type Options struct {
 	*options.KubeControllerManagerOptions
 
-	InfraCluster   *infracluster.Options
-	ControlPlane   *controlplane.Options
-	LeaderElection struct {
-		Namespace string
-	}
+	InfraCluster *infracluster.Options
+	ControlPlane *controlplane.Options
 
 	// The port to use for the controller-runtime webhook server.
 	ControllerRuntimeWebhookPort int
@@ -294,6 +288,9 @@ func NewOptions() (*Options, error) {
 		KubeControllerManagerOptions: baseOpts,
 		InfraCluster: &infracluster.Options{
 			KubeconfigFile: baseOpts.Generic.ClientConnection.Kubeconfig,
+			LeaderElection: &infracluster.LeaderElectionConfig{
+				CandidateNamespace: "datum-system",
+			},
 		},
 		ControlPlane: &controlplane.Options{},
 	}
@@ -675,7 +672,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 		// Start lease candidate controller for coordinated leader election
 		leaseCandidate, waitForSync, err := leaderelection.NewCandidate(
 			c.Client,
-			opts.LeaderElection.Namespace,
+			opts.InfraCluster.LeaderElection.CandidateNamespace,
 			id,
 			"datum-controller-manager",
 			binaryVersion.FinalizeVersion(),
