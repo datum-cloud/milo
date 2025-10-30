@@ -186,24 +186,12 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, fmt.Errorf("failed to delete PolicyBinding for accepting the invitation: %w", err)
 		}
 
-		log.Info("Granting roles to the invitee user for the organization, as the invitation is accepted", "user", user.Name, "roles", ui.Spec.Roles)
+		log.Info("Creating OrganizationMembership with roles for the invitee user, as the invitation is accepted", "user", user.Name, "roles", ui.Spec.Roles)
 
-		// Create the OrganizationMembership
+		// Create the OrganizationMembership with roles
 		if err := r.createOrganizationMembership(ctx, user, ui); err != nil {
 			log.Error(err, "Failed to create OrganizationMembership for userInvitation")
 			return ctrl.Result{}, fmt.Errorf("failed to create OrganizationMembership for userInvitation: %w", err)
-		}
-
-		// Create the PolicyBindings
-		for _, roleRef := range ui.Spec.Roles {
-			err := r.createPolicyBinding(ctx, user, ui, &iamv1alpha1.RoleReference{
-				Name:      roleRef.Name,
-				Namespace: roleRef.Namespace,
-			})
-			if err != nil {
-				log.Error(err, "Failed to create policy binding with %s role", roleRef.Name)
-				return ctrl.Result{}, fmt.Errorf("failed to create policy binding with %s role: %w", roleRef.Name, err)
-			}
 		}
 
 		// Update the UserInvitation status
@@ -485,7 +473,7 @@ func deletePolicyBinding(ctx context.Context, c client.Client, roleRef *iamv1alp
 	return nil
 }
 
-// createOrganizationMembership creates an OrganizationMembership for the invitee user. This is an idempotent operation.
+// createOrganizationMembership creates an OrganizationMembership for the invitee user with roles from the invitation. This is an idempotent operation.
 func (r *UserInvitationController) createOrganizationMembership(ctx context.Context, user *iamv1alpha1.User, ui *iamv1alpha1.UserInvitation) error {
 	log := logf.FromContext(ctx).WithName("userinvitation-create-organization-membership")
 	log.Info("Creating OrganizationMembership for userInvitation", "userInvitation", ui.GetName(), "user", user.GetName())
@@ -503,7 +491,16 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 		return nil
 	}
 
-	// Build the OrganizationMembership
+	// Convert IAM RoleReferences to ResourceManager RoleReferences
+	roles := make([]resourcemanagerv1alpha1.RoleReference, 0, len(ui.Spec.Roles))
+	for _, roleRef := range ui.Spec.Roles {
+		roles = append(roles, resourcemanagerv1alpha1.RoleReference{
+			Name:      roleRef.Name,
+			Namespace: roleRef.Namespace,
+		})
+	}
+
+	// Build the OrganizationMembership with roles
 	organizationMembership = &resourcemanagerv1alpha1.OrganizationMembership{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("member-%s", user.Name),
@@ -524,6 +521,7 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 			UserRef: resourcemanagerv1alpha1.MemberReference{
 				Name: user.Name,
 			},
+			Roles: roles,
 		},
 	}
 
@@ -532,7 +530,7 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 		return fmt.Errorf("failed to create organization membership resource: %w", err)
 	}
 
-	log.Info("OrganizationMembership created", "name", organizationMembership.GetName())
+	log.Info("OrganizationMembership created with roles", "name", organizationMembership.GetName(), "roles", roles)
 
 	return nil
 }
