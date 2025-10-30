@@ -194,18 +194,6 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, fmt.Errorf("failed to create OrganizationMembership for userInvitation: %w", err)
 		}
 
-		// Create the PolicyBindings
-		for _, roleRef := range ui.Spec.Roles {
-			err := r.createPolicyBinding(ctx, user, ui, &iamv1alpha1.RoleReference{
-				Name:      roleRef.Name,
-				Namespace: roleRef.Namespace,
-			})
-			if err != nil {
-				log.Error(err, "Failed to create policy binding with %s role", roleRef.Name)
-				return ctrl.Result{}, fmt.Errorf("failed to create policy binding with %s role: %w", roleRef.Name, err)
-			}
-		}
-
 		// Update the UserInvitation status
 		if err := r.updateUserInvitationStatus(ctx, ui.DeepCopy(), metav1.Condition{
 			Type:    string(iamv1alpha1.UserInvitationReadyCondition),
@@ -503,6 +491,14 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 		return nil
 	}
 
+	roles := []resourcemanagerv1alpha1.RoleReference{}
+	for _, role := range ui.Spec.Roles {
+		roles = append(roles, resourcemanagerv1alpha1.RoleReference{
+			Name:      role.Name,
+			Namespace: role.Namespace,
+		})
+	}
+
 	// Build the OrganizationMembership
 	organizationMembership = &resourcemanagerv1alpha1.OrganizationMembership{
 		ObjectMeta: metav1.ObjectMeta{
@@ -524,6 +520,7 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 			UserRef: resourcemanagerv1alpha1.MemberReference{
 				Name: user.Name,
 			},
+			Roles: roles,
 		},
 	}
 
