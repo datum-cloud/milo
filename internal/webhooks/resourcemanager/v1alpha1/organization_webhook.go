@@ -6,8 +6,10 @@ import (
 	"slices"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -47,6 +49,21 @@ type OrganizationValidator struct {
 func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	org := obj.(*resourcemanagerv1alpha1.Organization)
 	organizationlog.Info("Validating Organization", "name", org.Name)
+
+	// Validate organization name length
+	if len(org.Name) > 50 {
+		return nil, apierrors.NewInvalid(
+			resourcemanagerv1alpha1.Kind("Organization"),
+			org.Name,
+			field.ErrorList{
+				field.Invalid(
+					field.NewPath("metadata", "name"),
+					org.Name,
+					"name exceeds maximum length of 50 characters. Choose a shorter name and try again",
+				),
+			},
+		)
+	}
 
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
@@ -92,6 +109,23 @@ func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.
 }
 
 func (v *OrganizationValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	newOrg := newObj.(*resourcemanagerv1alpha1.Organization)
+
+	// Validate organization name length
+	if len(newOrg.Name) > 50 {
+		return nil, apierrors.NewInvalid(
+			resourcemanagerv1alpha1.Kind("Organization"),
+			newOrg.Name,
+			field.ErrorList{
+				field.Invalid(
+					field.NewPath("metadata", "name"),
+					newOrg.Name,
+					"name exceeds maximum length of 50 characters. Choose a shorter name and try again",
+				),
+			},
+		)
+	}
+
 	return nil, nil
 }
 

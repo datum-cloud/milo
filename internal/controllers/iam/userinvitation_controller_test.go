@@ -109,7 +109,7 @@ func TestUserInvitationController_createPolicyBinding(t *testing.T) {
 	}
 }
 
-// TestUserInvitationController_createOrganizationMembership verifies that createOrganizationMembership creates an OrganizationMembership CR.
+// TestUserInvitationController_createOrganizationMembership verifies that createOrganizationMembership creates an OrganizationMembership CR with roles.
 func TestUserInvitationController_createOrganizationMembership(t *testing.T) {
 	ctx := context.TODO()
 	scheme := getTestScheme()
@@ -135,6 +135,10 @@ func TestUserInvitationController_createOrganizationMembership(t *testing.T) {
 			Email: user.Spec.Email,
 			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
 				Name: "test-org",
+			},
+			Roles: []iamv1alpha1.RoleReference{
+				{Name: "org-admin", Namespace: "milo-system"},
+				{Name: "billing-manager", Namespace: "milo-system"},
 			},
 		},
 	}
@@ -171,6 +175,17 @@ func TestUserInvitationController_createOrganizationMembership(t *testing.T) {
 	}
 	if om.Spec.OrganizationRef.Name != ui.Spec.OrganizationRef.Name {
 		t.Errorf("OrganizationMembership has unexpected OrganizationRef: %+v", om.Spec.OrganizationRef)
+	}
+
+	// Verify roles are set
+	if len(om.Spec.Roles) != 2 {
+		t.Errorf("expected 2 roles, got %d", len(om.Spec.Roles))
+	}
+	if om.Spec.Roles[0].Name != "org-admin" || om.Spec.Roles[0].Namespace != "milo-system" {
+		t.Errorf("unexpected first role: %+v", om.Spec.Roles[0])
+	}
+	if om.Spec.Roles[1].Name != "billing-manager" || om.Spec.Roles[1].Namespace != "milo-system" {
+		t.Errorf("unexpected second role: %+v", om.Spec.Roles[1])
 	}
 
 	// Call createOrganizationMembership again to ensure idempotency
@@ -668,11 +683,11 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 		t.Fatalf("expected inviter user email address to be inviter@example.com, got %s", afterFirst.Status.InviterUser.EmailAddress)
 	}
 
-	// Ensure organization role PolicyBinding does NOT exist yet
-	orgRoleRef := ui.Spec.Roles[0]
-	pbOrgName := getDeterministicRoleName(&orgRoleRef, *ui)
-	if err := c.Get(ctx, types.NamespacedName{Name: pbOrgName, Namespace: orgRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err == nil {
-		t.Fatalf("organization PolicyBinding should not exist before acceptance")
+	// Ensure OrganizationMembership does NOT exist yet
+	omName := "member-" + user.Name
+	omNamespace := "organization-" + ui.Spec.OrganizationRef.Name
+	if err := c.Get(ctx, types.NamespacedName{Name: omName, Namespace: omNamespace}, &resourcemanagerv1alpha1.OrganizationMembership{}); err == nil {
+		t.Fatalf("OrganizationMembership should not exist before acceptance")
 	}
 
 	// Update state to Accepted
@@ -686,6 +701,20 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	// Second reconcile after state change
 	if _, err := uic.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}}); err != nil {
 		t.Fatalf("second reconcile error: %v", err)
+	}
+
+	// Verify OrganizationMembership created with roles
+	om := &resourcemanagerv1alpha1.OrganizationMembership{}
+	if err := c.Get(ctx, types.NamespacedName{Name: omName, Namespace: omNamespace}, om); err != nil {
+		t.Fatalf("expected OrganizationMembership created: %v", err)
+	}
+
+	// Verify roles are set on OrganizationMembership
+	if len(om.Spec.Roles) != 1 {
+		t.Fatalf("expected 1 role on OrganizationMembership, got %d", len(om.Spec.Roles))
+	}
+	if om.Spec.Roles[0].Name != "org-admin" || om.Spec.Roles[0].Namespace != "milo-system" {
+		t.Fatalf("unexpected role on OrganizationMembership: %+v", om.Spec.Roles[0])
 	}
 
 	// The UserInvitation should now be deleted
