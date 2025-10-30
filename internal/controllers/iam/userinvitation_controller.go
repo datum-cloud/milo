@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/finalizer"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -81,7 +82,7 @@ const (
 	userEmailIndexKey = "spec.email"
 )
 
-// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations,verbs=get;list;watch;update;delete
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations/status,verbs=update
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;watch;create;delete
@@ -194,29 +195,13 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, fmt.Errorf("failed to create OrganizationMembership for userInvitation: %w", err)
 		}
 
-		// Create the PolicyBindings
-		for _, roleRef := range ui.Spec.Roles {
-			err := r.createPolicyBinding(ctx, user, ui, &iamv1alpha1.RoleReference{
-				Name:      roleRef.Name,
-				Namespace: roleRef.Namespace,
-			})
-			if err != nil {
-				log.Error(err, "Failed to create policy binding with %s role", roleRef.Name)
-				return ctrl.Result{}, fmt.Errorf("failed to create policy binding with %s role: %w", roleRef.Name, err)
-			}
+		// Delete the UserInvitation now that it has been fully processed and accepted.
+		if err := r.Client.Delete(ctx, ui); err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete UserInvitation after acceptance")
+			return ctrl.Result{}, fmt.Errorf("failed to delete UserInvitation after acceptance: %w", err)
 		}
 
-		// Update the UserInvitation status
-		if err := r.updateUserInvitationStatus(ctx, ui.DeepCopy(), metav1.Condition{
-			Type:    string(iamv1alpha1.UserInvitationReadyCondition),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(iamv1alpha1.UserInvitationStateAcceptedReason),
-			Message: "User accepted the invitation",
-		}); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status: %w", err)
-		}
-
-		log.Info("UserInvitation reconciled. User accepted the invitation", "userInvitation", ui.GetName())
+		log.Info("UserInvitation accepted and deleted", "userInvitation", ui.GetName())
 		return ctrl.Result{}, nil
 	}
 
@@ -490,17 +475,14 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 	log := logf.FromContext(ctx).WithName("userinvitation-create-organization-membership")
 	log.Info("Creating OrganizationMembership for userInvitation", "userInvitation", ui.GetName(), "user", user.GetName())
 
-	// Check if the OrganizationMembership already exists
 	organizationMembership := &resourcemanagerv1alpha1.OrganizationMembership{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: fmt.Sprintf("member-%s", user.Name), Namespace: fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name)}, organizationMembership); err != nil {
-		if errors.IsNotFound(err) {
-			log.Info("OrganizationMembership not found, creating")
-		} else {
-			return fmt.Errorf("failed to get OrganizationMembership: %w", err)
-		}
-	} else {
-		log.Info("OrganizationMembership found, skipping creation")
-		return nil
+
+	roles := []resourcemanagerv1alpha1.RoleReference{}
+	for _, role := range ui.Spec.Roles {
+		roles = append(roles, resourcemanagerv1alpha1.RoleReference{
+			Name:      role.Name,
+			Namespace: role.Namespace,
+		})
 	}
 
 	// Build the OrganizationMembership
@@ -517,19 +499,23 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 				},
 			},
 		},
-		Spec: resourcemanagerv1alpha1.OrganizationMembershipSpec{
+	}
+
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, organizationMembership, func() error {
+		log.Info("Creating or updating invitation-related organization membership", "organization", organizationMembership.Spec.OrganizationRef.Name)
+		organizationMembership.Spec = resourcemanagerv1alpha1.OrganizationMembershipSpec{
 			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
 				Name: ui.Spec.OrganizationRef.Name,
 			},
 			UserRef: resourcemanagerv1alpha1.MemberReference{
 				Name: user.Name,
 			},
-		},
-	}
-
-	// Create the OrganizationMembership
-	if err := r.Client.Create(ctx, organizationMembership); err != nil {
-		return fmt.Errorf("failed to create organization membership resource: %w", err)
+			Roles: roles,
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create or update organization membership: %w", err)
 	}
 
 	log.Info("OrganizationMembership created", "name", organizationMembership.GetName())

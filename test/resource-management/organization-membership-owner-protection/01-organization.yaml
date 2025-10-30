@@ -1,0 +1,11 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: owner-protection
+  labels:
+    test.miloapis.com/scenario: "organization-membership-owner-protection"
+  annotations:
+    kubernetes.io/description: "Organization for validating owner deletion guard"
+    kubernetes.io/display-name: "Owner Protection Test Organization"
+spec:
+  type: Standard
