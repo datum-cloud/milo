@@ -25,25 +25,27 @@ var organizationlog = logf.Log.WithName("organization-resource")
 // +kubebuilder:webhook:path=/validate-resourcemanager-miloapis-com-v1alpha1-organization,mutating=false,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=resourcemanager.miloapis.com,resources=organizations,verbs=create,versions=v1alpha1,name=vorganization.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // SetupWebhooksWithManager sets up all resourcemanager.miloapis.com webhooks
-func SetupOrganizationWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, organizationOwnerRoleName string) error {
+func SetupOrganizationWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, organizationOwnerRoleName string, organizationOwnerRoleNamespace string) error {
 	organizationlog.Info("Setting up resourcemanager.miloapis.com organization webhooks")
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&resourcemanagerv1alpha1.Organization{}).
 		WithValidator(&OrganizationValidator{
-			client:          mgr.GetClient(),
-			systemNamespace: systemNamespace,
-			ownerRoleName:   organizationOwnerRoleName,
+			client:               mgr.GetClient(),
+			systemNamespace:      systemNamespace,
+			ownerRoleName:        organizationOwnerRoleName,
+			ownerRoleNamespace:   organizationOwnerRoleNamespace,
 		}).
 		Complete()
 }
 
 // OrganizationValidator validates Organizations
 type OrganizationValidator struct {
-	client          client.Client
-	decoder         admission.Decoder
-	systemNamespace string
-	ownerRoleName   string
+	client               client.Client
+	decoder              admission.Decoder
+	systemNamespace      string
+	ownerRoleName        string
+	ownerRoleNamespace   string
 }
 
 func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
@@ -190,7 +192,7 @@ func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context
 			Roles: []resourcemanagerv1alpha1.RoleReference{
 				{
 					Name:      v.ownerRoleName,
-					Namespace: v.systemNamespace,
+					Namespace: v.ownerRoleNamespace,
 				},
 			},
 		},
