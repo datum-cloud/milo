@@ -83,11 +83,7 @@ func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.
 		return nil, fmt.Errorf("failed to lookup user: %w", err)
 	}
 
-	if err := v.createOwnerPolicyBinding(ctx, org, user); err != nil {
-		return nil, fmt.Errorf("failed to create owner policy binding: %w", err)
-	}
-
-	// Create OrganizationMembership for the organization owner
+	// Create OrganizationMembership with owner role for the organization owner
 	if err := v.createOrganizationMembership(ctx, org, user); err != nil {
 		return nil, fmt.Errorf("failed to create organization membership: %w", err)
 	}
@@ -118,48 +114,6 @@ func (v *OrganizationValidator) lookupUser(ctx context.Context) (*iamv1alpha1.Us
 	return foundUser, nil
 }
 
-// createOwnerPolicyBinding creates a PolicyBinding for the organization owner
-func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, org *resourcemanagerv1alpha1.Organization, user *iamv1alpha1.User) error {
-	organizationlog.Info("Attempting to create PolicyBinding for new organization", "organization", org.Name)
-
-	// Build the PolicyBinding
-	policyBinding := &iamv1alpha1.PolicyBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			// Don't worry about uniqueness here because the namespace will have just
-			// been created for the organization.
-			Name:      "organization-owner",
-			Namespace: fmt.Sprintf("organization-%s", org.Name),
-		},
-		Spec: iamv1alpha1.PolicyBindingSpec{
-			RoleRef: iamv1alpha1.RoleReference{
-				Name:      v.ownerRoleName,
-				Namespace: v.systemNamespace,
-			},
-			Subjects: []iamv1alpha1.Subject{
-				{
-					Kind: "User",
-					Name: user.Name,
-					UID:  string(user.GetUID()),
-				},
-			},
-			ResourceSelector: iamv1alpha1.ResourceSelector{
-				ResourceRef: &iamv1alpha1.ResourceReference{
-					APIGroup: resourcemanagerv1alpha1.GroupVersion.Group,
-					Kind:     "Organization",
-					Name:     org.Name,
-					UID:      string(org.UID),
-				},
-			},
-		},
-	}
-
-	if err := v.client.Create(ctx, policyBinding); err != nil {
-		return fmt.Errorf("failed to create policy binding resource: %w", err)
-	}
-
-	return nil
-}
-
 // createOrganizationNamespace creates a namespace for organization-scoped resources
 func (v *OrganizationValidator) createOrganizationNamespace(ctx context.Context, org *resourcemanagerv1alpha1.Organization) error {
 	namespaceName := fmt.Sprintf("organization-%s", org.Name)
@@ -184,9 +138,9 @@ func (v *OrganizationValidator) createOrganizationNamespace(ctx context.Context,
 }
 
 func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context, org *resourcemanagerv1alpha1.Organization, user *iamv1alpha1.User) error {
-	organizationlog.Info("Creating OrganizationMembership for organization owner", "organization", org.Name)
+	organizationlog.Info("Creating OrganizationMembership for organization owner", "organization", org.Name, "user", user.Name)
 
-	// Build the OrganizationMembership object
+	// Build the OrganizationMembership object with owner role
 	organizationMembership := &resourcemanagerv1alpha1.OrganizationMembership{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("member-%s", user.Name),
@@ -198,6 +152,12 @@ func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context
 			},
 			UserRef: resourcemanagerv1alpha1.MemberReference{
 				Name: user.Name,
+			},
+			Roles: []resourcemanagerv1alpha1.RoleReference{
+				{
+					Name:      v.ownerRoleName,
+					Namespace: v.systemNamespace,
+				},
 			},
 		},
 	}

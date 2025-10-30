@@ -1,0 +1,15 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: owner-membership-bob
+  namespace: organization-owner-protection
+  labels:
+    test.miloapis.com/scenario: "organization-membership-owner-protection"
+spec:
+  organizationRef:
+    name: owner-protection
+  userRef:
+    name: test-owner-bob
+  roles:
+    - name: resourcemanager.miloapis.com-organizationowner
+      namespace: milo-system

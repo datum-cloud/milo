@@ -1,0 +1,248 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: organization-membership-owner-protection
+spec:
+  description: |
+    Validates safeguarding organization owners when deleting memberships.
+
+    Ensures deletion is allowed when another owner remains and blocked when
+    attempting to delete the final owner. Confirms the webhook returns clear
+    guidance for remediation.
+
+  clusters:
+    org:
+      kubeconfig: kubeconfig-org
+
+  steps:
+    - name: setup-environment
+      cluster: org
+      description: |
+        Creates organization namespace and two users. Waits for namespace to
+        become active and for both users to reach Ready so memberships can be
+        created safely.
+      try:
+        - description: Remove any leftover owner organization from earlier runs
+          continueOnError: true
+          delete:
+            timeout: 60s
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: Organization
+              name: owner-protection
+        - description: Ensure previous organization namespace is cleaned up
+          continueOnError: true
+          delete:
+            timeout: 120s
+            ref:
+              apiVersion: v1
+              kind: Namespace
+              name: organization-owner-protection
+        - description: Wait for organization namespace to be fully removed
+          continueOnError: true
+          wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-owner-protection
+            timeout: 120s
+            for:
+              deletion: {}
+        - description: Allow webhook server time to become ready
+          sleep:
+            duration: 5s
+        - description: Create test organization
+          apply:
+            file: 01-organization.yaml
+        - description: Remove auto-created admin membership
+          continueOnError: true
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: OrganizationMembership
+              name: member-test-admin
+              namespace: organization-owner-protection
+        - description: Wait for organization namespace to become Active
+          wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-owner-protection
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - description: Create owner test users
+          apply:
+            file: 02-users.yaml
+        - description: Ensure owner role exists in milo-system
+          apply:
+            file: 03-owner-role.yaml
+        - description: Wait for Alice to be Ready
+          wait:
+            apiVersion: iam.miloapis.com/v1alpha1
+            kind: User
+            name: test-owner-alice
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Wait for Bob to be Ready
+          wait:
+            apiVersion: iam.miloapis.com/v1alpha1
+            kind: User
+            name: test-owner-bob
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+
+    - name: create-primary-owner
+      cluster: org
+      description: |
+        Creates the first owner membership and waits for the controller to apply
+        the owner role successfully.
+      try:
+        - description: Create owner membership for Alice
+          apply:
+            file: 03-membership-owner-alice.yaml
+        - description: Wait for membership to reach Ready
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: owner-membership-alice
+            namespace: organization-owner-protection
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Wait for owner role to be applied
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: owner-membership-alice
+            namespace: organization-owner-protection
+            timeout: 60s
+            for:
+              condition:
+                name: RolesApplied
+                value: 'True'
+
+    - name: create-secondary-owner
+      cluster: org
+      description: |
+        Adds a second owner to validate that deletions succeed when another
+        owner remains in the organization.
+      try:
+        - description: Create owner membership for Bob
+          apply:
+            file: 04-membership-owner-bob.yaml
+        - description: Wait for membership to reach Ready
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: owner-membership-bob
+            namespace: organization-owner-protection
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Wait for owner role to be applied
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: owner-membership-bob
+            namespace: organization-owner-protection
+            timeout: 60s
+            for:
+              condition:
+                name: RolesApplied
+                value: 'True'
+
+    - name: delete-secondary-owner
+      cluster: org
+      description: |
+        Deletes the first owner membership. With another owner still present the
+        operation should succeed.
+      try:
+        - description: Delete Alice's membership (should succeed)
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: OrganizationMembership
+              name: owner-membership-alice
+              namespace: organization-owner-protection
+        - description: Ensure Alice's membership was removed
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: owner-membership-alice
+            namespace: organization-owner-protection
+            timeout: 30s
+            for:
+              deletion: {}
+
+    - name: prevent-last-owner-deletion
+      cluster: org
+      description: |
+        Attempts to delete the remaining owner. The webhook should block the
+        deletion and return actionable guidance.
+      try:
+        - description: Deny removal of owner role from final owner
+          patch:
+            file: 05-membership-owner-bob-remove-owner.yaml
+            expect:
+              - check:
+                  ($error != null): true
+        - description: Deny deletion of final owner and verify error messaging
+          continueOnError: true
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: OrganizationMembership
+              name: owner-membership-bob
+              namespace: organization-owner-protection
+            expect:
+              - check:
+                  ($error != null): true
+        - description: Confirm Bob's membership still exists
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: owner-membership-bob
+            namespace: organization-owner-protection
+            timeout: 15s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+
+    - name: delete-organization
+      cluster: org
+      description: |
+        Deletes the organization and confirms both the namespace and remaining
+        membership are cleaned up automatically.
+      try:
+        - description: Delete organization to trigger namespace cleanup
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: Organization
+              name: owner-protection
+        - description: Ensure organization namespace no longer exists
+          wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-owner-protection
+            timeout: 120s
+            for:
+              deletion: {}
+        - description: Delete owner test users
+          delete:
+            file: 02-users.yaml
+        - description: Delete owner role assigned in setup
+          delete:
+            file: 03-owner-role.yaml
