@@ -203,7 +203,7 @@ func (r *UserWaitlistController) getEmailTemplateName(condition iamv1alpha1.User
 }
 
 func (r *UserWaitlistController) getEmailVariables(condition iamv1alpha1.UserWaitlistEmailSentCondition, user *iamv1alpha1.User) []notificationv1alpha1.EmailVariable {
-	userName := fmt.Sprintf("%s %s", user.Spec.FamilyName, user.Spec.GivenName)
+	userName := fmt.Sprintf("%s %s", user.Spec.GivenName, user.Spec.FamilyName)
 	if userName == "" {
 		userName = user.Spec.Email
 	}
