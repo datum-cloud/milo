@@ -2611,6 +2611,13 @@ UserPreferenceSpec defines the desired state of UserPreference
           Title is the user's title or role.<br/>
         </td>
         <td>false</td>
+      </tr><tr>
+        <td><b>timeZone</b></td>
+        <td>string</td>
+        <td>
+          The user's time zone preference.<br/>
+        </td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
