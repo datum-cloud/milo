@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -716,20 +717,11 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 		t.Fatalf("unexpected role on OrganizationMembership: %+v", om.Spec.Roles[0])
 	}
 
-	// Ready condition should now be true, Pending may remain true
-	final := &iamv1alpha1.UserInvitation{}
-	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
-	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
-		t.Fatalf("Ready condition should be true after acceptance")
-	}
-
-	// Verify organization display name is set
-	if final.Status.Organization.DisplayName != "Organization Display Name" {
-		t.Fatalf("expected organization display name to be Test Org, got %s", final.Status.Organization.DisplayName)
-	}
-	// Verify inviter user display name is set
-	if final.Status.InviterUser.DisplayName != "John Doe" {
-		t.Fatalf("expected inviter user display name to be John Doe, got %s", final.Status.InviterUser.DisplayName)
+	// The UserInvitation should now be deleted
+	if err := c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, &iamv1alpha1.UserInvitation{}); err == nil {
+		t.Fatalf("UserInvitation should be deleted after acceptance")
+	} else if !apierr.IsNotFound(err) {
+		t.Fatalf("unexpected error getting UserInvitation: %v", err)
 	}
 }
 
@@ -811,26 +803,27 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 		t.Fatalf("third reconcile error: %v", err)
 	}
 
-	// Verify OrganizationMembership created with roles
-	omName := "member-later-user"
-	omNamespace := "organization-org"
+	// Verify OrganizationMembership is created with expected roles
+	omNS := fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name)
+	omName := fmt.Sprintf("member-%s", user.Name)
 	om := &resourcemanagerv1alpha1.OrganizationMembership{}
-	if err := c.Get(ctx, types.NamespacedName{Name: omName, Namespace: omNamespace}, om); err != nil {
-		t.Fatalf("expected OrganizationMembership after acceptance: %v", err)
+	if err := c.Get(ctx, types.NamespacedName{Name: omName, Namespace: omNS}, om); err != nil {
+		t.Fatalf("expected OrganizationMembership %s/%s: %v", omNS, omName, err)
+	}
+	if len(om.Spec.Roles) != len(ui.Spec.Roles) {
+		t.Fatalf("expected %d roles in OrganizationMembership, got %d", len(ui.Spec.Roles), len(om.Spec.Roles))
+	}
+	for i, r := range ui.Spec.Roles {
+		if om.Spec.Roles[i].Name != r.Name || om.Spec.Roles[i].Namespace != r.Namespace {
+			t.Fatalf("role mismatch at index %d: expected %+v, got %+v", i, r, om.Spec.Roles[i])
+		}
 	}
 
-	// Verify roles are set on OrganizationMembership
-	if len(om.Spec.Roles) != 1 {
-		t.Fatalf("expected 1 role on OrganizationMembership, got %d", len(om.Spec.Roles))
-	}
-	if om.Spec.Roles[0].Name != "org-admin" || om.Spec.Roles[0].Namespace != "milo-system" {
-		t.Fatalf("unexpected role on OrganizationMembership: %+v", om.Spec.Roles[0])
-	}
-
-	final := &iamv1alpha1.UserInvitation{}
-	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
-	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
-		t.Fatalf("Ready condition should be true after acceptance")
+	// UserInvitation should be deleted
+	if err := c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, &iamv1alpha1.UserInvitation{}); err == nil {
+		t.Fatalf("UserInvitation should be deleted after acceptance")
+	} else if !apierr.IsNotFound(err) {
+		t.Fatalf("unexpected error getting UserInvitation: %v", err)
 	}
 }
 
