@@ -27,12 +27,6 @@ type UserPreferenceSpec struct {
 	// +kubebuilder:validation:Required
 	UserRef UserReference `json:"userRef"`
 
-	// The user's theme preference.
-	// +kubebuilder:validation:Enum=light;dark;system
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=system
-	Theme string `json:"theme,omitempty"`
-
 	// DisplayName is the user's preferred display name.
 	// +kubebuilder:validation:Optional
 	DisplayName string `json:"displayName,omitempty"`
@@ -40,6 +34,16 @@ type UserPreferenceSpec struct {
 	// Title is the user's title or role.
 	// +kubebuilder:validation:Optional
 	Title string `json:"title,omitempty"`
+
+	// The user's theme preference.
+	// +kubebuilder:validation:Enum=light;dark;system
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=system
+	Theme string `json:"theme,omitempty"`
+
+	// The user's time zone preference.
+	// +kubebuilder:validation:Optional'
+	TimeZone string `json:"timeZone,omitempty"`
 }
 
 // UserPreferenceStatus defines the observed state of UserPreference

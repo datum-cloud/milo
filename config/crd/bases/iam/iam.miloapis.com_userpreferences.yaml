@@ -63,6 +63,9 @@ spec:
                 - dark
                 - system
                 type: string
+              timeZone:
+                description: The user's time zone preference.
+                type: string
               title:
                 description: Title is the user's title or role.
                 type: string
