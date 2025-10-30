@@ -81,7 +81,7 @@ const (
 	userEmailIndexKey = "spec.email"
 )
 
-// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations,verbs=get;list;watch;update;delete
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations/status,verbs=update
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;watch;create;delete
@@ -194,17 +194,13 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, fmt.Errorf("failed to create OrganizationMembership for userInvitation: %w", err)
 		}
 
-		// Update the UserInvitation status
-		if err := r.updateUserInvitationStatus(ctx, ui.DeepCopy(), metav1.Condition{
-			Type:    string(iamv1alpha1.UserInvitationReadyCondition),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(iamv1alpha1.UserInvitationStateAcceptedReason),
-			Message: "User accepted the invitation",
-		}); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status: %w", err)
+		// Delete the UserInvitation now that it has been fully processed and accepted.
+		if err := r.Client.Delete(ctx, ui); err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete UserInvitation after acceptance")
+			return ctrl.Result{}, fmt.Errorf("failed to delete UserInvitation after acceptance: %w", err)
 		}
 
-		log.Info("UserInvitation reconciled. User accepted the invitation", "userInvitation", ui.GetName())
+		log.Info("UserInvitation accepted and deleted", "userInvitation", ui.GetName())
 		return ctrl.Result{}, nil
 	}
 

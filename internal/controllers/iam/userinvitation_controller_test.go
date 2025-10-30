@@ -688,20 +688,11 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 		t.Fatalf("second reconcile error: %v", err)
 	}
 
-	// Ready condition should now be true, Pending may remain true
-	final := &iamv1alpha1.UserInvitation{}
-	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
-	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
-		t.Fatalf("Ready condition should be true after acceptance")
-	}
-
-	// Verify organization display name is set
-	if final.Status.Organization.DisplayName != "Organization Display Name" {
-		t.Fatalf("expected organization display name to be Test Org, got %s", final.Status.Organization.DisplayName)
-	}
-	// Verify inviter user display name is set
-	if final.Status.InviterUser.DisplayName != "John Doe" {
-		t.Fatalf("expected inviter user display name to be John Doe, got %s", final.Status.InviterUser.DisplayName)
+	// The UserInvitation should now be deleted
+	if err := c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, &iamv1alpha1.UserInvitation{}); err == nil {
+		t.Fatalf("UserInvitation should be deleted after acceptance")
+	} else if !apierr.IsNotFound(err) {
+		t.Fatalf("unexpected error getting UserInvitation: %v", err)
 	}
 }
 
@@ -799,10 +790,11 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 		}
 	}
 
-	final := &iamv1alpha1.UserInvitation{}
-	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
-	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
-		t.Fatalf("Ready condition should be true after acceptance")
+	// UserInvitation should be deleted
+	if err := c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, &iamv1alpha1.UserInvitation{}); err == nil {
+		t.Fatalf("UserInvitation should be deleted after acceptance")
+	} else if !apierr.IsNotFound(err) {
+		t.Fatalf("unexpected error getting UserInvitation: %v", err)
 	}
 }
 
