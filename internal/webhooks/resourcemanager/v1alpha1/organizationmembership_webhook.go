@@ -23,7 +23,7 @@ var organizationmembershiplog = logf.Log.WithName("organizationmembership-resour
 // +kubebuilder:webhook:path=/validate-resourcemanager-miloapis-com-v1alpha1-organizationmembership,mutating=false,failurePolicy=fail,sideEffects=None,groups=resourcemanager.miloapis.com,resources=organizationmemberships,verbs=create;update;delete,versions=v1alpha1,name=vorganizationmembership.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // SetupOrganizationMembershipWebhooksWithManager sets up OrganizationMembership webhooks
-func SetupOrganizationMembershipWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, organizationOwnerRoleName string) error {
+func SetupOrganizationMembershipWebhooksWithManager(mgr ctrl.Manager, organizationOwnerRoleName string, organizationOwnerRoleNamespace string) error {
 	organizationmembershiplog.Info("Setting up resourcemanager.miloapis.com organizationmembership webhooks")
 
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -31,7 +31,7 @@ func SetupOrganizationMembershipWebhooksWithManager(mgr ctrl.Manager, systemName
 		WithValidator(&OrganizationMembershipValidator{
 			client:             mgr.GetClient(),
 			ownerRoleName:      organizationOwnerRoleName,
-			ownerRoleNamespace: systemNamespace,
+			ownerRoleNamespace: organizationOwnerRoleNamespace,
 		}).
 		Complete()
 }

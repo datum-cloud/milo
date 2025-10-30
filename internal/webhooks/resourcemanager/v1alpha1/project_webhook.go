@@ -20,15 +20,16 @@ import (
 var projectlog = logf.Log.WithName("project-resource")
 
 // SetupWebhooksWithManager sets up all resourcemanager.miloapis.com webhooks
-func SetupProjectWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, projectOwnerRoleName string) error {
+func SetupProjectWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, projectOwnerRoleName string, projectOwnerRoleNamespace string) error {
 	projectlog.Info("Setting up resourcemanager.miloapis.com project webhooks")
 
 	ctrl.NewWebhookManagedBy(mgr).
 		For(&v1alpha1.Project{}).
 		WithValidator(&ProjectValidator{
-			Client:               mgr.GetClient(),
-			SystemNamespace:      systemNamespace,
-			ProjectOwnerRoleName: projectOwnerRoleName,
+			Client:                    mgr.GetClient(),
+			SystemNamespace:           systemNamespace,
+			ProjectOwnerRoleName:      projectOwnerRoleName,
+			ProjectOwnerRoleNamespace: projectOwnerRoleNamespace,
 		}).
 		WithDefaulter(&ProjectMutator{
 			client: mgr.GetClient(),
@@ -109,10 +110,11 @@ func (m *ProjectMutator) Default(ctx context.Context, obj runtime.Object) error 
 
 // ProjectValidator validates Projects and creates associated PolicyBindings for owners.
 type ProjectValidator struct {
-	Client               client.Client
-	decoder              admission.Decoder
-	SystemNamespace      string
-	ProjectOwnerRoleName string
+	Client                    client.Client
+	decoder                   admission.Decoder
+	SystemNamespace           string
+	ProjectOwnerRoleName      string
+	ProjectOwnerRoleNamespace string
 }
 
 // ValidateCreate validates the Project and creates the associated PolicyBinding
@@ -260,7 +262,7 @@ func (v *ProjectValidator) createOwnerPolicyBinding(ctx context.Context, project
 		Spec: iamv1alpha1.PolicyBindingSpec{
 			RoleRef: iamv1alpha1.RoleReference{
 				Name:      v.ProjectOwnerRoleName,
-				Namespace: v.SystemNamespace,
+				Namespace: v.ProjectOwnerRoleNamespace,
 			},
 			Subjects: []iamv1alpha1.Subject{
 				{
