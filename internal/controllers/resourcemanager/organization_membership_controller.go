@@ -238,8 +238,9 @@ func (r *OrganizationMembershipController) reconcileRoles(
 	failureCount := 0
 	pendingCount := 0
 
-	// Process each desired role
-	for roleKey, roleRef := range desiredRoles {
+	// Process each desired role in the order specified in the spec
+	for _, roleRef := range membership.Spec.Roles {
+		roleKey := r.getRoleKey(roleRef)
 		appliedRole := resourcemanagerv1alpha.AppliedRole{
 			Name:      roleRef.Name,
 			Namespace: roleRef.Namespace,
