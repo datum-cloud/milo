@@ -106,8 +106,16 @@ var (
 	// OrganizationOwnerRoleName is the name of the role that will be used to grant organization owner permissions.
 	OrganizationOwnerRoleName string
 
+	// OrganizationOwnerRoleNamespace is the namespace where the organization owner role is located.
+	// This allows service providers to configure where owner roles are stored.
+	OrganizationOwnerRoleNamespace string
+
 	// ProjectOwnerRoleName is the name of the role that will be used to grant project owner permissions.
 	ProjectOwnerRoleName string
+
+	// ProjectOwnerRoleNamespace is the namespace where the project owner role is located.
+	// This allows service providers to configure where owner roles are stored.
+	ProjectOwnerRoleNamespace string
 
 	// GetInvitationRoleName is the name of the role that will be used to grant get invitation permissions.
 	GetInvitationRoleName string
@@ -199,6 +207,14 @@ func NewCommand() *cobra.Command {
 			}
 			cliflag.PrintFlags(cmd.Flags())
 
+			// Default owner role namespaces to SystemNamespace if not explicitly set
+			if OrganizationOwnerRoleNamespace == "" {
+				OrganizationOwnerRoleNamespace = SystemNamespace
+			}
+			if ProjectOwnerRoleNamespace == "" {
+				ProjectOwnerRoleNamespace = SystemNamespace
+			}
+
 			c, err := s.Config(KnownControllers(), nil, ControllerAliases())
 			if err != nil {
 				return err
@@ -240,7 +256,9 @@ func NewCommand() *cobra.Command {
 	// TODO: Investigate why these aren't showing up in the help output
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
 	fs.StringVar(&OrganizationOwnerRoleName, "organization-owner-role-name", "resourcemanager.miloapis.com-organizationowner", "The name of the role that will be used to grant organization owner permissions.")
+	fs.StringVar(&OrganizationOwnerRoleNamespace, "organization-owner-role-namespace", "", "The namespace where the organization owner role is located. Defaults to system-namespace if not specified.")
 	fs.StringVar(&ProjectOwnerRoleName, "project-owner-role-name", "resourcemanager.miloapis.com-projectowner", "The name of the role that will be used to grant project owner permissions.")
+	fs.StringVar(&ProjectOwnerRoleNamespace, "project-owner-role-namespace", "", "The namespace where the project owner role is located. Defaults to system-namespace if not specified.")
 	fs.StringVar(&GetInvitationRoleName, "get-invitation-role-name", "iam.miloapis.com-getinvitation", "The name of the role that will be used to grant get invitation permissions.")
 	fs.StringVar(&AcceptInvitationRoleName, "accept-invitation-role-name", "iam.miloapis.com-acceptinvitation", "The name of the role that will be used to grant accept invitation permissions.")
 	fs.StringVar(&UserInvitationEmailTemplate, "user-invitation-email-template", "emailtemplates.notification.miloapis.com-userinvitationemailtemplate", "The name of the template that will be used to send the user invitation email.")
@@ -431,15 +449,15 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			if err := resourcemanagerv1alpha1webhook.SetupProjectWebhooksWithManager(ctrl, SystemNamespace, ProjectOwnerRoleName); err != nil {
+			if err := resourcemanagerv1alpha1webhook.SetupProjectWebhooksWithManager(ctrl, SystemNamespace, ProjectOwnerRoleName, ProjectOwnerRoleNamespace); err != nil {
 				logger.Error(err, "Error setting up project webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-			if err := resourcemanagerv1alpha1webhook.SetupOrganizationWebhooksWithManager(ctrl, SystemNamespace, OrganizationOwnerRoleName); err != nil {
+			if err := resourcemanagerv1alpha1webhook.SetupOrganizationWebhooksWithManager(ctrl, SystemNamespace, OrganizationOwnerRoleName, OrganizationOwnerRoleNamespace); err != nil {
 				logger.Error(err, "Error setting up organization webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-			if err := resourcemanagerv1alpha1webhook.SetupOrganizationMembershipWebhooksWithManager(ctrl); err != nil {
+			if err := resourcemanagerv1alpha1webhook.SetupOrganizationMembershipWebhooksWithManager(ctrl, OrganizationOwnerRoleName, OrganizationOwnerRoleNamespace); err != nil {
 				logger.Error(err, "Error setting up organizationmembership webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}

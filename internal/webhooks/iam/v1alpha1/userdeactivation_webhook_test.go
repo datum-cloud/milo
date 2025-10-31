@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,6 +22,7 @@ var runtimeScheme = runtime.NewScheme()
 
 func init() {
 	utilruntime.Must(iamv1alpha1.AddToScheme(runtimeScheme))
+	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(runtimeScheme))
 }
 
 func TestUserDeactivationValidator_ValidateCreate(t *testing.T) {
