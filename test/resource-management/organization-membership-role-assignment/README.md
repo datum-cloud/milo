@@ -23,15 +23,15 @@ Key scenarios tested:
 | # | Name | Bindings | Try | Catch | Finally | Cleanup |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | [setup-test-environment](#step-setup-test-environment) | 0 | 6 | 0 | 0 | 0 |
-| 2 | [test-membership-with-single-role](#step-test-membership-with-single-role) | 0 | 5 | 0 | 0 | 0 |
-| 3 | [test-membership-with-multiple-roles](#step-test-membership-with-multiple-roles) | 0 | 5 | 0 | 0 | 0 |
-| 4 | [test-add-roles-via-update](#step-test-add-roles-via-update) | 0 | 4 | 0 | 0 | 0 |
+| 2 | [test-membership-with-single-role](#step-test-membership-with-single-role) | 0 | 6 | 0 | 0 | 0 |
+| 3 | [test-membership-with-multiple-roles](#step-test-membership-with-multiple-roles) | 0 | 6 | 0 | 0 | 0 |
+| 4 | [test-add-roles-via-update](#step-test-add-roles-via-update) | 0 | 5 | 0 | 0 | 0 |
 | 5 | [test-remove-roles-via-update](#step-test-remove-roles-via-update) | 0 | 4 | 0 | 0 | 0 |
 | 6 | [test-membership-without-roles](#step-test-membership-without-roles) | 0 | 4 | 0 | 0 | 0 |
-| 7 | [test-cross-namespace-role](#step-test-cross-namespace-role) | 0 | 4 | 0 | 0 | 0 |
+| 7 | [test-cross-namespace-role](#step-test-cross-namespace-role) | 0 | 5 | 0 | 0 | 0 |
 | 8 | [test-validation-duplicate-roles](#step-test-validation-duplicate-roles) | 0 | 1 | 0 | 0 | 0 |
 | 9 | [test-validation-invalid-role](#step-test-validation-invalid-role) | 0 | 1 | 0 | 0 | 0 |
-| 10 | [test-partial-role-application](#step-test-partial-role-application) | 0 | 4 | 0 | 0 | 0 |
+| 10 | [test-partial-role-application](#step-test-partial-role-application) | 0 | 5 | 0 | 0 | 0 |
 | 11 | [test-garbage-collection](#step-test-garbage-collection) | 0 | 3 | 0 | 0 | 0 |
 
 ### Step: `setup-test-environment`
@@ -66,9 +66,10 @@ and owner references. Confirms appliedRoles status shows role as "Applied".
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | Create OrganizationMembership with organization-viewer role |
 | 2 | `wait` | 0 | 0 | Wait for membership to reach Ready state |
-| 3 | `wait` | 0 | 0 | Wait for controller to apply role and update RolesApplied condition |
-| 4 | `assert` | 0 | 0 | Verify membership status shows applied role |
-| 5 | `assert` | 0 | 0 | Verify controller created PolicyBinding with correct labels and owner reference |
+| 3 | `script` | 0 | 0 | Mark PolicyBindings as Ready (test workaround) |
+| 4 | `wait` | 0 | 0 | Wait for controller to apply role and update RolesApplied condition |
+| 5 | `assert` | 0 | 0 | Verify membership status shows applied role |
+| 6 | `assert` | 0 | 0 | Verify controller created PolicyBinding with correct labels and owner reference |
 
 ### Step: `test-membership-with-multiple-roles`
 
@@ -83,9 +84,10 @@ the correct role. Confirms both roles appear in appliedRoles status.
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | Create OrganizationMembership with organization-admin and billing-manager roles |
 | 2 | `wait` | 0 | 0 | Wait for membership to reach Ready state |
-| 3 | `wait` | 0 | 0 | Wait for controller to apply both roles |
-| 4 | `assert` | 0 | 0 | Verify membership status shows both applied roles |
-| 5 | `assert` | 0 | 0 | Verify controller created two PolicyBindings, one for each role |
+| 3 | `script` | 0 | 0 | Mark PolicyBindings as Ready (test workaround) |
+| 4 | `wait` | 0 | 0 | Wait for controller to apply both roles |
+| 5 | `assert` | 0 | 0 | Verify membership status shows both applied roles |
+| 6 | `assert` | 0 | 0 | Verify controller created two PolicyBindings, one for each role |
 
 ### Step: `test-add-roles-via-update`
 
@@ -99,9 +101,10 @@ existing PolicyBinding. Confirms appliedRoles status reflects both roles.
 | # | Operation | Bindings | Outputs | Description |
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | Update membership to add billing-manager role to existing organization-viewer role |
-| 2 | `wait` | 0 | 0 | Wait for controller to process update and apply new role |
-| 3 | `sleep` | 0 | 0 | Allow time for PolicyBinding creation to complete |
-| 4 | `assert` | 0 | 0 | Verify both roles in appliedRoles and two PolicyBindings exist |
+| 2 | `script` | 0 | 0 | Mark PolicyBindings as Ready (test workaround) |
+| 3 | `wait` | 0 | 0 | Wait for controller to process update and apply new role |
+| 4 | `sleep` | 0 | 0 | Allow time for PolicyBinding creation to complete |
+| 5 | `assert` | 0 | 0 | Verify both roles in appliedRoles and two PolicyBindings exist |
 
 ### Step: `test-remove-roles-via-update`
 
@@ -149,8 +152,9 @@ namespace/name format.
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | Create membership referencing shared-developer role from milo-system namespace |
 | 2 | `wait` | 0 | 0 | Wait for membership to reach Ready state |
-| 3 | `wait` | 0 | 0 | Wait for controller to apply cross-namespace role |
-| 4 | `assert` | 0 | 0 | Verify PolicyBinding created in membership namespace with correct cross-namespace role reference |
+| 3 | `script` | 0 | 0 | Mark PolicyBindings as Ready (test workaround) |
+| 4 | `wait` | 0 | 0 | Wait for controller to apply cross-namespace role |
+| 5 | `assert` | 0 | 0 | Verify PolicyBinding created in membership namespace with correct cross-namespace role reference |
 
 ### Step: `test-validation-duplicate-roles`
 
@@ -192,8 +196,9 @@ appliedRoles status accurately reflects successful role application.
 |:-:|---|:-:|:-:|---|
 | 1 | `create` | 0 | 0 | Create membership with organization-viewer role |
 | 2 | `wait` | 0 | 0 | Wait for membership to reach Ready state |
-| 3 | `sleep` | 0 | 0 | Allow time for role application to complete |
-| 4 | `assert` | 0 | 0 | Verify role successfully applied and status accurate |
+| 3 | `script` | 0 | 0 | Mark PolicyBindings as Ready (test workaround) |
+| 4 | `sleep` | 0 | 0 | Allow time for role application to complete |
+| 5 | `assert` | 0 | 0 | Verify role successfully applied and status accurate |
 
 ### Step: `test-garbage-collection`
 
