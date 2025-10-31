@@ -13,3 +13,5 @@ resources:
   - userdeactivation.yaml
   - platformaccessapproval.yaml
   - platformaccessrejection.yaml
+  - platforminvitation.yaml
+
