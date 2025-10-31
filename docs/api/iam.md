@@ -2678,6 +2678,16 @@ RoleStatus defines the observed state of Role
         </td>
         <td>false</td>
       </tr><tr>
+        <td><b>effectivePermissions</b></td>
+        <td>[]string</td>
+        <td>
+          EffectivePermissions is the complete flattened list of all permissions
+granted by this role, including permissions from inheritedRoles and
+directly specified includedPermissions. This is computed by the controller
+and provides a single source of truth for all permissions this role grants.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b>observedGeneration</b></td>
         <td>integer</td>
         <td>
