@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -140,6 +141,71 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 			expectError:    true,
 			errorSubstring: "organizationRef",
 		},
+		"error when user is already a member of organization": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "already-member"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email:           "member@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+				},
+			},
+			existing: []client.Object{
+				// Existing user with same email
+				&iamv1alpha1.User{
+					ObjectMeta: metav1.ObjectMeta{Name: "existing-user"},
+					Spec:       iamv1alpha1.UserSpec{Email: "member@example.com"},
+				},
+				// Membership linking user to organization
+				&resourcemanagerv1alpha1.OrganizationMembership{
+					ObjectMeta: metav1.ObjectMeta{Name: "membership"},
+					Spec: resourcemanagerv1alpha1.OrganizationMembershipSpec{
+						OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+						UserRef:         resourcemanagerv1alpha1.MemberReference{Name: "existing-user"},
+					},
+				},
+			},
+			expectError:    true,
+			errorSubstring: "already a member of the organization",
+		},
+		"success when user is not a member of the organization": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "not-a-member"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email:           "member@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+				},
+			},
+			existing: []client.Object{
+				// Existing user with same email
+				&iamv1alpha1.User{
+					ObjectMeta: metav1.ObjectMeta{Name: "existing-user"},
+					Spec:       iamv1alpha1.UserSpec{Email: "member@example.com"},
+				},
+				// Membership linking user to organization
+				&resourcemanagerv1alpha1.OrganizationMembership{
+					ObjectMeta: metav1.ObjectMeta{Name: "membership"},
+					Spec: resourcemanagerv1alpha1.OrganizationMembershipSpec{
+						OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+						UserRef:         resourcemanagerv1alpha1.MemberReference{Name: "existing-user-2"},
+					},
+				},
+			},
+			expectError: false,
+		},
+		"success when user does not exist": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "not-a-member"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email:           "member@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+				},
+			},
+			existing:    []client.Object{},
+			expectError: false,
+		},
 	}
 
 	// Common admission request used across sub-tests
@@ -162,6 +228,15 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 				ui := raw.(*iamv1alpha1.UserInvitation)
 				return []string{buildUserInvitationCompositeKey(*ui)}
 			})
+			builder = builder.WithIndex(&iamv1alpha1.User{}, userEmailKey, func(raw client.Object) []string {
+				user := raw.(*iamv1alpha1.User)
+				return []string{strings.ToLower(user.Spec.Email)}
+			})
+			builder = builder.WithIndex(&resourcemanagerv1alpha1.OrganizationMembership{}, organizationMembershipCompositeKey, func(raw client.Object) []string {
+				om := raw.(*resourcemanagerv1alpha1.OrganizationMembership)
+				return []string{buildOrganizationMembershipCompositeKey(om.Spec.OrganizationRef.Name, om.Spec.UserRef.Name)}
+			})
+
 			fakeClient := builder.Build()
 
 			validator := &UserInvitationValidator{client: fakeClient}

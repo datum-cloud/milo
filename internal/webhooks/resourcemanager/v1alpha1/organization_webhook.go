@@ -6,8 +6,10 @@ import (
 	"slices"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -23,30 +25,47 @@ var organizationlog = logf.Log.WithName("organization-resource")
 // +kubebuilder:webhook:path=/validate-resourcemanager-miloapis-com-v1alpha1-organization,mutating=false,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=resourcemanager.miloapis.com,resources=organizations,verbs=create,versions=v1alpha1,name=vorganization.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // SetupWebhooksWithManager sets up all resourcemanager.miloapis.com webhooks
-func SetupOrganizationWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, organizationOwnerRoleName string) error {
+func SetupOrganizationWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, organizationOwnerRoleName string, organizationOwnerRoleNamespace string) error {
 	organizationlog.Info("Setting up resourcemanager.miloapis.com organization webhooks")
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&resourcemanagerv1alpha1.Organization{}).
 		WithValidator(&OrganizationValidator{
-			client:          mgr.GetClient(),
-			systemNamespace: systemNamespace,
-			ownerRoleName:   organizationOwnerRoleName,
+			client:             mgr.GetClient(),
+			systemNamespace:    systemNamespace,
+			ownerRoleName:      organizationOwnerRoleName,
+			ownerRoleNamespace: organizationOwnerRoleNamespace,
 		}).
 		Complete()
 }
 
 // OrganizationValidator validates Organizations
 type OrganizationValidator struct {
-	client          client.Client
-	decoder         admission.Decoder
-	systemNamespace string
-	ownerRoleName   string
+	client             client.Client
+	decoder            admission.Decoder
+	systemNamespace    string
+	ownerRoleName      string
+	ownerRoleNamespace string
 }
 
 func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	org := obj.(*resourcemanagerv1alpha1.Organization)
 	organizationlog.Info("Validating Organization", "name", org.Name)
+
+	// Validate organization name length
+	if len(org.Name) > 50 {
+		return nil, apierrors.NewInvalid(
+			resourcemanagerv1alpha1.Kind("Organization"),
+			org.Name,
+			field.ErrorList{
+				field.Invalid(
+					field.NewPath("metadata", "name"),
+					org.Name,
+					"name exceeds maximum length of 50 characters. Choose a shorter name and try again",
+				),
+			},
+		)
+	}
 
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
@@ -92,6 +111,23 @@ func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.
 }
 
 func (v *OrganizationValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	newOrg := newObj.(*resourcemanagerv1alpha1.Organization)
+
+	// Validate organization name length
+	if len(newOrg.Name) > 50 {
+		return nil, apierrors.NewInvalid(
+			resourcemanagerv1alpha1.Kind("Organization"),
+			newOrg.Name,
+			field.ErrorList{
+				field.Invalid(
+					field.NewPath("metadata", "name"),
+					newOrg.Name,
+					"name exceeds maximum length of 50 characters. Choose a shorter name and try again",
+				),
+			},
+		)
+	}
+
 	return nil, nil
 }
 
@@ -156,7 +192,7 @@ func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context
 			Roles: []resourcemanagerv1alpha1.RoleReference{
 				{
 					Name:      v.ownerRoleName,
-					Namespace: v.systemNamespace,
+					Namespace: v.ownerRoleNamespace,
 				},
 			},
 		},
