@@ -108,8 +108,8 @@ rules:
   - iam.miloapis.com
   resources:
   - userinvitations
-  - users
   verbs:
+  - delete
   - get
   - list
   - update
@@ -122,6 +122,15 @@ rules:
   - get
   - list
   - patch
+  - update
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - users
+  verbs:
+  - get
+  - list
   - update
   - watch
 - apiGroups:
