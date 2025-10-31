@@ -92,6 +92,8 @@ const (
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=notification.miloapis.com,resources=emails,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=notification.miloapis.com,resources=emailtemplates,verbs=get;list;watch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=platformaccessrejections,verbs=get;list;watch;delete
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=platformaccessapprovals,verbs=get;list;watch
 
 func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx).WithName("userinvitation-reconciler")
@@ -768,7 +770,7 @@ func (r *UserInvitationController) grantAccessApproval(ctx context.Context, user
 		if len(platformAccessRejection.Items) > 0 {
 			// Remove the PlatformAccessRejection
 			log.Info("PlatformAccessRejection already exists, removing it")
-			if err := r.Client.Delete(ctx, &platformAccessRejection.Items[0]); err != nil {
+			if err := r.Client.Delete(ctx, &platformAccessRejection.Items[0]); err != nil && !errors.IsNotFound(err) {
 				log.Error(err, "Failed to delete PlatformAccessRejection")
 				return fmt.Errorf("failed to delete PlatformAccessRejection: %w", err)
 			}
