@@ -3,6 +3,7 @@ package iam
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
@@ -29,7 +30,7 @@ func buildPlatformAccessApprovalIndexKey(subject *iamv1alpha1.SubjectReference) 
 	if subject.UserRef != nil {
 		return subject.UserRef.Name
 	}
-	return subject.Email
+	return strings.ToLower(subject.Email)
 }
 
 // UserController reconciles a User object
