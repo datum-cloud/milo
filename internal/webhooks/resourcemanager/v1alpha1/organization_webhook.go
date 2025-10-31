@@ -31,21 +31,21 @@ func SetupOrganizationWebhooksWithManager(mgr ctrl.Manager, systemNamespace stri
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&resourcemanagerv1alpha1.Organization{}).
 		WithValidator(&OrganizationValidator{
-			client:               mgr.GetClient(),
-			systemNamespace:      systemNamespace,
-			ownerRoleName:        organizationOwnerRoleName,
-			ownerRoleNamespace:   organizationOwnerRoleNamespace,
+			client:             mgr.GetClient(),
+			systemNamespace:    systemNamespace,
+			ownerRoleName:      organizationOwnerRoleName,
+			ownerRoleNamespace: organizationOwnerRoleNamespace,
 		}).
 		Complete()
 }
 
 // OrganizationValidator validates Organizations
 type OrganizationValidator struct {
-	client               client.Client
-	decoder              admission.Decoder
-	systemNamespace      string
-	ownerRoleName        string
-	ownerRoleNamespace   string
+	client             client.Client
+	decoder            admission.Decoder
+	systemNamespace    string
+	ownerRoleName      string
+	ownerRoleNamespace string
 }
 
 func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
