@@ -31,6 +31,7 @@ type PlatformInvitationEmailVariables struct {
 }
 
 const platformInvitationUserEmailIndexKey = "iam.miloapis.com/useremailkey"
+const piPlatformAccessApprovalIndexKey = "iam.miloapis.com/pi-platformaccessapproval-key"
 
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=platforminvitations,verbs=get;list;watch;update
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=platforminvitations/status,verbs=update
@@ -159,6 +160,15 @@ func (r *PlatformInvitationController) SetupWithManager(mgr ctrl.Manager) error 
 		return fmt.Errorf("failed to set field index on User by .spec.email: %w", err)
 	}
 
+	// Index PlatformAccessApproval for efficient lookups (needed by createPlatformAccessApproval)
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &iamv1alpha1.PlatformAccessApproval{}, piPlatformAccessApprovalIndexKey, func(obj client.Object) []string {
+		paa := obj.(*iamv1alpha1.PlatformAccessApproval)
+		return []string{buildPlatformAccessApprovalIndexKey(&paa.Spec.SubjectRef)}
+	}); err != nil {
+		log.Error(err, "Failed to set field index on PlatformAccessApproval")
+		return fmt.Errorf("failed to set field index on PlatformAccessApproval: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&iamv1alpha1.PlatformInvitation{}).
 		Named("platforminvitation").
@@ -193,16 +203,14 @@ func (r *PlatformInvitationController) createPlatformAccessApproval(ctx context.
 	deterministicName := getDeterministicPlatformInvitationResourceName(*pi)
 
 	// Check if the PlatformAccessApproval already exists
-	existingPaa := &iamv1alpha1.PlatformAccessApproval{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: deterministicName}, existingPaa); err != nil {
-		if errors.IsNotFound(err) {
-			log.Info("PlatformAccessApproval not found, creating new one")
-		} else {
-			log.Error(err, "Failed to get PlatformAccessApproval")
-			return err
-		}
-	} else {
-		log.Info("PlatformAccessApproval already exists, skipping creation")
+	// We check by email address, as a previous PlatformAccessApproval may have been created
+	// because of a UserInvitation for joining to an organization.
+	paas := &iamv1alpha1.PlatformAccessApprovalList{}
+	if err := r.Client.List(ctx, paas, client.MatchingFields{piPlatformAccessApprovalIndexKey: pi.Spec.Email}); err != nil {
+		log.Error(err, "failed to list platformaccessapprovals", "email", pi.Spec.Email)
+		return fmt.Errorf("failed to list platformaccessapprovals: %w", err)
+	}
+	if len(paas.Items) > 0 {
 		return nil
 	}
 

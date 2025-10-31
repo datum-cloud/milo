@@ -55,7 +55,12 @@ func Test_createPlatformAccessApproval_Idempotent(t *testing.T) {
 		Spec: iamv1alpha1.PlatformInvitationSpec{Email: "invitee@example.com"},
 	}
 
-	c := fake.NewClientBuilder().WithScheme(scheme).Build()
+	builder := fake.NewClientBuilder().WithScheme(scheme).
+		WithIndex(&iamv1alpha1.PlatformAccessApproval{}, piPlatformAccessApprovalIndexKey, func(obj client.Object) []string {
+			paa := obj.(*iamv1alpha1.PlatformAccessApproval)
+			return []string{buildPlatformAccessApprovalIndexKey(&paa.Spec.SubjectRef)}
+		})
+	c := builder.Build()
 	pc := &PlatformInvitationController{Client: c}
 
 	// First create
@@ -154,6 +159,10 @@ func Test_PlatformInvitationController_Reconcile_UserExistsSkipsPAA(t *testing.T
 		u := obj.(*iamv1alpha1.User)
 		return []string{strings.ToLower(u.Spec.Email)}
 	})
+	builder = builder.WithIndex(&iamv1alpha1.PlatformAccessApproval{}, piPlatformAccessApprovalIndexKey, func(obj client.Object) []string {
+		paa := obj.(*iamv1alpha1.PlatformAccessApproval)
+		return []string{buildPlatformAccessApprovalIndexKey(&paa.Spec.SubjectRef)}
+	})
 	c := builder.Build()
 
 	pc := &PlatformInvitationController{Client: c}
@@ -197,6 +206,10 @@ func Test_PlatformInvitationController_Reconcile_NoUserCreatesPAA(t *testing.T) 
 	builder = builder.WithIndex(&iamv1alpha1.User{}, platformInvitationUserEmailIndexKey, func(obj client.Object) []string {
 		u := obj.(*iamv1alpha1.User)
 		return []string{strings.ToLower(u.Spec.Email)}
+	})
+	builder = builder.WithIndex(&iamv1alpha1.PlatformAccessApproval{}, piPlatformAccessApprovalIndexKey, func(obj client.Object) []string {
+		paa := obj.(*iamv1alpha1.PlatformAccessApproval)
+		return []string{buildPlatformAccessApprovalIndexKey(&paa.Spec.SubjectRef)}
 	})
 	c := builder.Build()
 
