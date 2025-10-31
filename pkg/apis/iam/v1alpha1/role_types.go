@@ -50,6 +50,13 @@ type RoleStatus struct {
 	// +kubebuilder:validation:Optional
 	Parent string `json:"parent,omitempty"`
 
+	// EffectivePermissions is the complete flattened list of all permissions
+	// granted by this role, including permissions from inheritedRoles and
+	// directly specified includedPermissions. This is computed by the controller
+	// and provides a single source of truth for all permissions this role grants.
+	// +kubebuilder:validation:Optional
+	EffectivePermissions []string `json:"effectivePermissions,omitempty"`
+
 	// Conditions provide conditions that represent the current status of the Role.
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
