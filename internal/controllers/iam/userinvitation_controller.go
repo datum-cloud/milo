@@ -9,6 +9,7 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -319,10 +320,17 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 // updateUserInvitationStatus updates the status of the UserInvitation
 func (r *UserInvitationController) updateUserInvitationStatus(ctx context.Context, ui *iamv1alpha1.UserInvitation, condition metav1.Condition) error {
 	log := logf.FromContext(ctx).WithName("userinvitation-update-status")
-	log.Info("Updating UserInvitation status", "status", ui.Status)
 
+	originalStatus := ui.Status.DeepCopy()
 	meta.SetStatusCondition(&ui.Status.Conditions, condition)
 
+	// Only update if status actually changed
+	if equality.Semantic.DeepEqual(&ui.Status, originalStatus) {
+		log.V(1).Info("UserInvitation status unchanged, skipping update")
+		return nil
+	}
+
+	log.Info("Updating UserInvitation status", "status", ui.Status)
 	if err := r.Client.Status().Update(ctx, ui); err != nil {
 		log.Error(err, "failed to update UserInvitation status", "userInvitation", ui.Name)
 		return fmt.Errorf("failed to update UserInvitation status: %w", err)

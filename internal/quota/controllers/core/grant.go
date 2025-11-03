@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -115,20 +116,19 @@ func (r *ResourceGrantController) setActiveCondition(grant *quotav1alpha1.Resour
 	apimeta.SetStatusCondition(&grant.Status.Conditions, condition)
 }
 
-// updateStatusIfChanged updates the status only if it has changed.
+// updateStatusIfChanged updates the status only if it has actually changed.
+// This prevents unnecessary API server writes and audit log entries.
 func (r *ResourceGrantController) updateStatusIfChanged(ctx context.Context, clusterClient client.Client, grant *quotav1alpha1.ResourceGrant, originalStatus *quotav1alpha1.ResourceGrantStatus) error {
-	activeCondition := apimeta.FindStatusCondition(grant.Status.Conditions, quotav1alpha1.ResourceGrantActive)
-	if activeCondition == nil {
+	// Use semantic equality to detect actual changes in status
+	// This compares all fields including conditions, observed generation, etc.
+	if equality.Semantic.DeepEqual(&grant.Status, originalStatus) {
+		// Status hasn't changed, skip update
 		return nil
 	}
 
-	// Check if status actually changed
-	if !apimeta.IsStatusConditionPresentAndEqual(originalStatus.Conditions, quotav1alpha1.ResourceGrantActive, activeCondition.Status) ||
-		grant.Status.ObservedGeneration != originalStatus.ObservedGeneration {
-
-		if err := clusterClient.Status().Update(ctx, grant); err != nil {
-			return fmt.Errorf("failed to update ResourceGrant status: %w", err)
-		}
+	// Status has changed, update it
+	if err := clusterClient.Status().Update(ctx, grant); err != nil {
+		return fmt.Errorf("failed to update ResourceGrant status: %w", err)
 	}
 
 	return nil
