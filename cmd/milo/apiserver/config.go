@@ -348,6 +348,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 
 	handler = datumfilters.OrganizationProjectListConstraintDecorator(handler)
 	handler = datumfilters.UserOrganizationMembershipListConstraintDecorator(handler)
+	handler = datumfilters.UserUserInvitationListConstraintDecorator(handler)
 	handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
 	handler = genericapifilters.WithRequestReceivedTimestamp(handler)
 	// handler = genericapifilters.WithMuxAndDiscoveryComplete(handler, c.lifecycleSignals.MuxAndDiscoveryComplete.Signaled())
