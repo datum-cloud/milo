@@ -30,6 +30,10 @@ const (
 	userInvitationFinalizerKey = "iam.miloapis.com/userinvitation"
 )
 
+const (
+	inviteeUserStatusUpdateConditionType = "InviteeUserStatusUpdate"
+)
+
 type UserInvitationController struct {
 	Client                          client.Client
 	finalizer                       finalizer.Finalizers
@@ -107,6 +111,13 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	log.Info("reconciling UserInvitation", "name", ui.Name, "email", ui.Spec.Email)
+
+	// Update the UserInvitation status with the invitee user information
+	// Done here for migration purposes, to ensure that the UserInvitation status is updated with the invitee user information.
+	if err := r.updateUserInvitationInviteeUserStatus(ctx, ui); err != nil {
+		log.Error(err, "Failed to update UserInvitation status with invitee user information")
+		return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status with invitee user information: %w", err)
+	}
 
 	// Check if the UserInvitation is ready
 	if meta.IsStatusConditionTrue(ui.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
@@ -717,4 +728,50 @@ func isUserInvitationExpired(ui *iamv1alpha1.UserInvitation) bool {
 		return true
 	}
 	return false
+}
+
+func (r *UserInvitationController) updateUserInvitationInviteeUserStatus(ctx context.Context, ui *iamv1alpha1.UserInvitation) error {
+	log := logf.FromContext(ctx).WithName("userinvitation-update-invitee-user-status")
+	log.Info("Updating UserInvitationInviteeUserStatus status", "name", ui.GetName())
+
+	if ui.Status.InviteeUser != nil {
+		log.Info("Invitee User status already set, skipping update", "name", ui.GetName())
+		return nil
+	}
+
+	// Attempt to resolve the invitee user
+	user, err := r.getInviteeUser(ctx, ui.Spec.Email)
+	if err != nil {
+		return fmt.Errorf("failed to get Invitee User: %w", err)
+	}
+
+	// Condition to update the UserInvitation status
+	var cond metav1.Condition
+
+	if user == nil {
+		// Invitee user not found yet
+		cond = metav1.Condition{
+			Type:    inviteeUserStatusUpdateConditionType,
+			Status:  metav1.ConditionFalse,
+			Reason:  "Invitee User not found",
+			Message: "Invitee User not found, probably not created yet.",
+		}
+	} else {
+		// Invitee user found – update the Status field on the invitation
+		ui.Status.InviteeUser = &iamv1alpha1.UserInvitationInviteeUserStatus{
+			Name: user.Name,
+		}
+		cond = metav1.Condition{
+			Type:    inviteeUserStatusUpdateConditionType,
+			Status:  metav1.ConditionTrue,
+			Reason:  "Updated",
+			Message: "Invitee User found",
+		}
+	}
+
+	if updateErr := r.updateUserInvitationStatus(ctx, ui, cond); updateErr != nil {
+		return fmt.Errorf("failed to update UserInvitation status: %w", updateErr)
+	}
+
+	return nil
 }
