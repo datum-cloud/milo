@@ -753,8 +753,8 @@ func (r *UserInvitationController) updateUserInvitationInviteeUserStatus(ctx con
 		cond = metav1.Condition{
 			Type:    inviteeUserStatusUpdateConditionType,
 			Status:  metav1.ConditionFalse,
-			Reason:  "Invitee User not found",
-			Message: "Invitee User not found, probably not created yet.",
+			Reason:  "InvitedUserNotRegistered",
+			Message: "The invited user has not registered their account yet.",
 		}
 	} else {
 		// Invitee user found – update the Status field on the invitation
@@ -764,8 +764,8 @@ func (r *UserInvitationController) updateUserInvitationInviteeUserStatus(ctx con
 		cond = metav1.Condition{
 			Type:    inviteeUserStatusUpdateConditionType,
 			Status:  metav1.ConditionTrue,
-			Reason:  "Updated",
-			Message: "Invitee User found",
+			Reason:  "InvitedUserRegistered",
+			Message: "Confirmed the invited user has an account registered with the platform.",
 		}
 	}
 
