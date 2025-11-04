@@ -6,7 +6,6 @@ package policy
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -95,16 +94,13 @@ func (r *ClaimCreationPolicyReconciler) Reconcile(ctx context.Context, req mcrec
 
 // updatePolicyStatus updates the policy status conditions based on validation results.
 func (r *ClaimCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1.ClaimCreationPolicy, validationErrs field.ErrorList) {
-	now := metav1.NewTime(time.Now())
-
 	if len(validationErrs) > 0 {
 		// Validation failed - format errors with field paths
 		apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
-			Type:               quotav1alpha1.ClaimCreationPolicyReady,
-			Status:             metav1.ConditionFalse,
-			Reason:             quotav1alpha1.ClaimCreationPolicyValidationFailedReason,
-			Message:            validationErrs.ToAggregate().Error(),
-			LastTransitionTime: now,
+			Type:    quotav1alpha1.ClaimCreationPolicyReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  quotav1alpha1.ClaimCreationPolicyValidationFailedReason,
+			Message: validationErrs.ToAggregate().Error(),
 		})
 		return
 	}
@@ -112,22 +108,20 @@ func (r *ClaimCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1
 	if policy.Spec.Disabled != nil && *policy.Spec.Disabled {
 		// Policy is disabled
 		apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
-			Type:               quotav1alpha1.ClaimCreationPolicyReady,
-			Status:             metav1.ConditionFalse,
-			Reason:             quotav1alpha1.ClaimCreationPolicyDisabledReason,
-			Message:            "Policy is disabled",
-			LastTransitionTime: now,
+			Type:    quotav1alpha1.ClaimCreationPolicyReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  quotav1alpha1.ClaimCreationPolicyDisabledReason,
+			Message: "Policy is disabled",
 		})
 		return
 	}
 
 	// Validation passed and policy is enabled
 	apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
-		Type:               quotav1alpha1.ClaimCreationPolicyReady,
-		Status:             metav1.ConditionTrue,
-		Reason:             quotav1alpha1.ClaimCreationPolicyReadyReason,
-		Message:            "Policy is ready and active",
-		LastTransitionTime: now,
+		Type:    quotav1alpha1.ClaimCreationPolicyReady,
+		Status:  metav1.ConditionTrue,
+		Reason:  quotav1alpha1.ClaimCreationPolicyReadyReason,
+		Message: "Policy is ready and active",
 	})
 }
 

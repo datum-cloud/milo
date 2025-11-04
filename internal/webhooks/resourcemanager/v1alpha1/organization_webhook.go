@@ -6,8 +6,10 @@ import (
 	"slices"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -23,30 +25,47 @@ var organizationlog = logf.Log.WithName("organization-resource")
 // +kubebuilder:webhook:path=/validate-resourcemanager-miloapis-com-v1alpha1-organization,mutating=false,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=resourcemanager.miloapis.com,resources=organizations,verbs=create,versions=v1alpha1,name=vorganization.datum.net,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // SetupWebhooksWithManager sets up all resourcemanager.miloapis.com webhooks
-func SetupOrganizationWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, organizationOwnerRoleName string) error {
+func SetupOrganizationWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, organizationOwnerRoleName string, organizationOwnerRoleNamespace string) error {
 	organizationlog.Info("Setting up resourcemanager.miloapis.com organization webhooks")
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&resourcemanagerv1alpha1.Organization{}).
 		WithValidator(&OrganizationValidator{
-			client:          mgr.GetClient(),
-			systemNamespace: systemNamespace,
-			ownerRoleName:   organizationOwnerRoleName,
+			client:             mgr.GetClient(),
+			systemNamespace:    systemNamespace,
+			ownerRoleName:      organizationOwnerRoleName,
+			ownerRoleNamespace: organizationOwnerRoleNamespace,
 		}).
 		Complete()
 }
 
 // OrganizationValidator validates Organizations
 type OrganizationValidator struct {
-	client          client.Client
-	decoder         admission.Decoder
-	systemNamespace string
-	ownerRoleName   string
+	client             client.Client
+	decoder            admission.Decoder
+	systemNamespace    string
+	ownerRoleName      string
+	ownerRoleNamespace string
 }
 
 func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	org := obj.(*resourcemanagerv1alpha1.Organization)
 	organizationlog.Info("Validating Organization", "name", org.Name)
+
+	// Validate organization name length
+	if len(org.Name) > 50 {
+		return nil, apierrors.NewInvalid(
+			resourcemanagerv1alpha1.Kind("Organization"),
+			org.Name,
+			field.ErrorList{
+				field.Invalid(
+					field.NewPath("metadata", "name"),
+					org.Name,
+					"name exceeds maximum length of 50 characters. Choose a shorter name and try again",
+				),
+			},
+		)
+	}
 
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
@@ -83,11 +102,7 @@ func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.
 		return nil, fmt.Errorf("failed to lookup user: %w", err)
 	}
 
-	if err := v.createOwnerPolicyBinding(ctx, org, user); err != nil {
-		return nil, fmt.Errorf("failed to create owner policy binding: %w", err)
-	}
-
-	// Create OrganizationMembership for the organization owner
+	// Create OrganizationMembership with owner role for the organization owner
 	if err := v.createOrganizationMembership(ctx, org, user); err != nil {
 		return nil, fmt.Errorf("failed to create organization membership: %w", err)
 	}
@@ -96,6 +111,23 @@ func (v *OrganizationValidator) ValidateCreate(ctx context.Context, obj runtime.
 }
 
 func (v *OrganizationValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	newOrg := newObj.(*resourcemanagerv1alpha1.Organization)
+
+	// Validate organization name length
+	if len(newOrg.Name) > 50 {
+		return nil, apierrors.NewInvalid(
+			resourcemanagerv1alpha1.Kind("Organization"),
+			newOrg.Name,
+			field.ErrorList{
+				field.Invalid(
+					field.NewPath("metadata", "name"),
+					newOrg.Name,
+					"name exceeds maximum length of 50 characters. Choose a shorter name and try again",
+				),
+			},
+		)
+	}
+
 	return nil, nil
 }
 
@@ -116,48 +148,6 @@ func (v *OrganizationValidator) lookupUser(ctx context.Context) (*iamv1alpha1.Us
 	}
 
 	return foundUser, nil
-}
-
-// createOwnerPolicyBinding creates a PolicyBinding for the organization owner
-func (v *OrganizationValidator) createOwnerPolicyBinding(ctx context.Context, org *resourcemanagerv1alpha1.Organization, user *iamv1alpha1.User) error {
-	organizationlog.Info("Attempting to create PolicyBinding for new organization", "organization", org.Name)
-
-	// Build the PolicyBinding
-	policyBinding := &iamv1alpha1.PolicyBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			// Don't worry about uniqueness here because the namespace will have just
-			// been created for the organization.
-			Name:      "organization-owner",
-			Namespace: fmt.Sprintf("organization-%s", org.Name),
-		},
-		Spec: iamv1alpha1.PolicyBindingSpec{
-			RoleRef: iamv1alpha1.RoleReference{
-				Name:      v.ownerRoleName,
-				Namespace: v.systemNamespace,
-			},
-			Subjects: []iamv1alpha1.Subject{
-				{
-					Kind: "User",
-					Name: user.Name,
-					UID:  string(user.GetUID()),
-				},
-			},
-			ResourceSelector: iamv1alpha1.ResourceSelector{
-				ResourceRef: &iamv1alpha1.ResourceReference{
-					APIGroup: resourcemanagerv1alpha1.GroupVersion.Group,
-					Kind:     "Organization",
-					Name:     org.Name,
-					UID:      string(org.UID),
-				},
-			},
-		},
-	}
-
-	if err := v.client.Create(ctx, policyBinding); err != nil {
-		return fmt.Errorf("failed to create policy binding resource: %w", err)
-	}
-
-	return nil
 }
 
 // createOrganizationNamespace creates a namespace for organization-scoped resources
@@ -184,9 +174,9 @@ func (v *OrganizationValidator) createOrganizationNamespace(ctx context.Context,
 }
 
 func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context, org *resourcemanagerv1alpha1.Organization, user *iamv1alpha1.User) error {
-	organizationlog.Info("Creating OrganizationMembership for organization owner", "organization", org.Name)
+	organizationlog.Info("Creating OrganizationMembership for organization owner", "organization", org.Name, "user", user.Name)
 
-	// Build the OrganizationMembership object
+	// Build the OrganizationMembership object with owner role
 	organizationMembership := &resourcemanagerv1alpha1.OrganizationMembership{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("member-%s", user.Name),
@@ -198,6 +188,12 @@ func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context
 			},
 			UserRef: resourcemanagerv1alpha1.MemberReference{
 				Name: user.Name,
+			},
+			Roles: []resourcemanagerv1alpha1.RoleReference{
+				{
+					Name:      v.ownerRoleName,
+					Namespace: v.ownerRoleNamespace,
+				},
 			},
 		},
 	}

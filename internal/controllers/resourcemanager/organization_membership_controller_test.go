@@ -89,7 +89,7 @@ func TestOrganizationMembershipController_ReconcileRoles(t *testing.T) {
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(organization, user, role, membership).
-		WithStatusSubresource(membership).
+		WithStatusSubresource(membership, &iamv1alpha1.PolicyBinding{}).
 		Build()
 
 	controller := &OrganizationMembershipController{
@@ -103,17 +103,17 @@ func TestOrganizationMembershipController_ReconcileRoles(t *testing.T) {
 			t.Fatalf("reconcileRoles failed: %v", err)
 		}
 
-		// Verify RolesApplied condition is set
+		// Verify RolesApplied condition is False (pending)
 		rolesAppliedCondition := apimeta.FindStatusCondition(membership.Status.Conditions, RolesApplied)
 		if rolesAppliedCondition == nil {
 			t.Fatal("RolesApplied condition not found")
 		}
-		if rolesAppliedCondition.Status != metav1.ConditionTrue {
-			t.Errorf("Expected RolesApplied condition status to be True, got %s: %s",
+		if rolesAppliedCondition.Status != metav1.ConditionFalse {
+			t.Errorf("Expected RolesApplied condition status to be False (pending), got %s: %s",
 				rolesAppliedCondition.Status, rolesAppliedCondition.Message)
 		}
 
-		// Verify AppliedRoles status
+		// Verify AppliedRoles status shows Pending
 		if len(membership.Status.AppliedRoles) != 1 {
 			t.Fatalf("Expected 1 applied role, got %d", len(membership.Status.AppliedRoles))
 		}
@@ -122,8 +122,8 @@ func TestOrganizationMembershipController_ReconcileRoles(t *testing.T) {
 		if appliedRole.Name != "org-viewer" {
 			t.Errorf("Expected role name 'org-viewer', got '%s'", appliedRole.Name)
 		}
-		if appliedRole.Status != "Applied" {
-			t.Errorf("Expected role status 'Applied', got '%s'", appliedRole.Status)
+		if appliedRole.Status != "Pending" {
+			t.Errorf("Expected role status 'Pending', got '%s'", appliedRole.Status)
 		}
 		if appliedRole.PolicyBindingRef == nil {
 			t.Error("Expected PolicyBindingRef to be set")
@@ -145,6 +145,38 @@ func TestOrganizationMembershipController_ReconcileRoles(t *testing.T) {
 		}
 		if len(binding.Spec.Subjects) != 1 || binding.Spec.Subjects[0].Name != "test-user" {
 			t.Errorf("Expected PolicyBinding subject 'test-user', got %v", binding.Spec.Subjects)
+		}
+
+		// Now simulate PolicyBinding becoming Ready
+		binding.Status.Conditions = []metav1.Condition{
+			{
+				Type:   "Ready",
+				Status: metav1.ConditionTrue,
+				Reason: "Ready",
+			},
+		}
+		err = c.Status().Update(ctx, &binding)
+		if err != nil {
+			t.Fatalf("Failed to update PolicyBinding status: %v", err)
+		}
+
+		// Reconcile again - now should be Applied
+		err = controller.reconcileRoles(ctx, membership, organization, user)
+		if err != nil {
+			t.Fatalf("Second reconcileRoles failed: %v", err)
+		}
+
+		// Verify RolesApplied condition is now True
+		rolesAppliedCondition = apimeta.FindStatusCondition(membership.Status.Conditions, RolesApplied)
+		if rolesAppliedCondition.Status != metav1.ConditionTrue {
+			t.Errorf("Expected RolesApplied condition status to be True after Ready, got %s: %s",
+				rolesAppliedCondition.Status, rolesAppliedCondition.Message)
+		}
+
+		// Verify role status is now Applied
+		appliedRole = membership.Status.AppliedRoles[0]
+		if appliedRole.Status != "Applied" {
+			t.Errorf("Expected role status 'Applied' after Ready, got '%s'", appliedRole.Status)
 		}
 	})
 }
