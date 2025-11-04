@@ -13,12 +13,12 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -36,6 +36,12 @@ var gvrGatewayClass = schema.GroupVersionResource{
 	Group:    "gateway.networking.k8s.io",
 	Version:  "v1",
 	Resource: "gatewayclasses",
+}
+
+var gvrDNSZoneClass = schema.GroupVersionResource{
+	Group:    "dns.networking.miloapis.com",
+	Version:  "v1alpha1",
+	Resource: "dnszoneclasses",
 }
 
 // ProjectController reconciles a Project object
@@ -143,20 +149,28 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Ensure per-project "default" Namespace exists
 	projCfg := r.forProject(r.BaseConfig, project.Name)
-	if err := ensureDefaultNamespace(ctx, projCfg); err != nil {
-		logger.Error(err, "ensure default namespace failed", "project", project.Name)
-		// Backoff and retry; don't mark Ready yet
+	pc, err := buildProjectClients(projCfg)
+	if err != nil {
+		logger.Error(err, "build per-project clients failed", "project", project.Name)
 		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 	}
 
-	// Ensure the project's GatewayClass exists
-	ok, err := hasGatewayClassCRD(ctx, projCfg)
+	if err := ensureDefaultNamespace(ctx, pc.Kube); err != nil {
+		logger.Error(err, "ensure default namespace failed", "project", project.Name)
+		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+	}
+
+	// Ensure the project's External Global Proxy GatewayClass exists
+	ok, err := hasResource(pc.Disc,
+		gvrGatewayClass.GroupVersion(),
+		"gatewayclasses",
+	)
 	if err != nil {
 		logger.Error(err, "gatewayclass discovery failed")
 		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 	}
 	if ok {
-		if err := ensureGatewayClass(ctx, projCfg,
+		if err := ensureGatewayClass(ctx, pc.Dynamic,
 			"datum-external-global-proxy",
 			"gateway.networking.datumapis.com/external-global-proxy-controller",
 		); err != nil {
@@ -165,6 +179,27 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	} else {
 		logger.Info("GatewayClass CRD not installed; skipping", "project", project.Name)
+	}
+
+	// Ensure the project's External Global DNS DNSZoneClass exists
+	ok, err = hasResource(pc.Disc,
+		gvrDNSZoneClass.GroupVersion(),
+		"dnszoneclasses",
+	)
+	if err != nil {
+		logger.Error(err, "dnszoneclass discovery failed")
+		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+	}
+	if ok {
+		if err := ensureDNSZoneClass(ctx, pc.Dynamic,
+			"datum-external-global-dns",
+			"dns.networking.miloapis.com/datum-external-global-dns",
+		); err != nil {
+			logger.Error(err, "ensure dnszoneclass failed", "project", project.Name)
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+		}
+	} else {
+		logger.Info("DNSZoneClass CRD not installed; skipping", "project", project.Name)
 	}
 
 	// Set Ready condition (idempotent)
@@ -186,48 +221,53 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // TODO(zach): Remove this once project addons are fully migrated to the new API.
 // ensureGatewayClass ensures that a GatewayClass with the given name and controller exists.
-func ensureGatewayClass(ctx context.Context, cfg *rest.Config, name, controller string) error {
-	dc, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("build dynamic client: %w", err)
-	}
-
-	// Check if it already exists
-	_, err = dc.Resource(gvrGatewayClass).Get(ctx, name, metav1.GetOptions{})
+func ensureGatewayClass(ctx context.Context, dc dynamic.Interface, name, controller string) error {
+	_, err := dc.Resource(gvrGatewayClass).Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
 		return nil
 	}
 	if !apierrors.IsNotFound(err) {
 		return fmt.Errorf("get GatewayClass %q: %w", name, err)
 	}
-
-	// Doesn’t exist → create it
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "gateway.networking.k8s.io/v1",
 			"kind":       "GatewayClass",
-			"metadata": map[string]interface{}{
-				"name": name,
-			},
-			"spec": map[string]interface{}{
-				"controllerName": controller,
-			},
+			"metadata":   map[string]interface{}{"name": name},
+			"spec":       map[string]interface{}{"controllerName": controller},
 		},
 	}
-
 	if _, err := dc.Resource(gvrGatewayClass).Create(ctx, obj, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("create GatewayClass %q: %w", name, err)
 	}
 	return nil
 }
 
-func ensureDefaultNamespace(ctx context.Context, cfg *rest.Config) error {
-	cs, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("build project client: %w", err)
+// ensureDNSZoneClass ensures that a DNSZoneClass with the given name and controller exists.
+func ensureDNSZoneClass(ctx context.Context, dc dynamic.Interface, name, controller string) error {
+	_, err := dc.Resource(gvrDNSZoneClass).Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		return nil
 	}
+	if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("get DNSZoneClass %q: %w", name, err)
+	}
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "dns.networking.miloapis.com/v1alpha1",
+			"kind":       "DNSZoneClass",
+			"metadata":   map[string]interface{}{"name": name},
+			"spec":       map[string]interface{}{"controllerName": controller},
+		},
+	}
+	if _, err := dc.Resource(gvrDNSZoneClass).Create(ctx, obj, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create DNSZoneClass %q: %w", name, err)
+	}
+	return nil
+}
 
-	// Quick GET first (cheap, idempotent)
+func ensureDefaultNamespace(ctx context.Context, cs kubernetes.Interface) error {
+	// GET is cheap and idempotent
 	if _, err := cs.CoreV1().Namespaces().Get(ctx, metav1.NamespaceDefault, metav1.GetOptions{}); err == nil {
 		return nil
 	} else if !apierrors.IsNotFound(err) {
@@ -236,10 +276,8 @@ func ensureDefaultNamespace(ctx context.Context, cfg *rest.Config) error {
 
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: metav1.NamespaceDefault,
-			Labels: map[string]string{
-				"miloapis.com/project-default": "true",
-			},
+			Name:   metav1.NamespaceDefault,
+			Labels: map[string]string{"miloapis.com/project-default": "true"},
 		},
 	}
 	if _, err := cs.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -254,30 +292,53 @@ func (r *ProjectController) forProject(base *rest.Config, project string) *rest.
 	return c
 }
 
-func hasGatewayClassCRD(ctx context.Context, cfg *rest.Config) (bool, error) {
+type projectClients struct {
+	Kube    kubernetes.Interface
+	Dynamic dynamic.Interface
+	Disc    discovery.DiscoveryInterface
+}
+
+func buildProjectClients(cfg *rest.Config) (*projectClients, error) {
 	httpClient, err := rest.HTTPClientFor(cfg)
 	if err != nil {
-		return false, fmt.Errorf("create HTTP client: %w", err)
+		return nil, fmt.Errorf("http client: %w", err)
 	}
-	rm, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
+
+	// Prefer *ForConfigAndClient to reuse the transport
+	dc, err := dynamic.NewForConfigAndClient(cfg, httpClient)
 	if err != nil {
-		return false, fmt.Errorf("new dynamic rest mapper: %w", err)
+		return nil, fmt.Errorf("dynamic: %w", err)
 	}
 
-	kinds := []schema.GroupVersionKind{
-		{Group: "gateway.networking.k8s.io", Version: "v1", Kind: "GatewayClass"},
-		{Group: "gateway.networking.k8s.io", Version: "v1beta1", Kind: "GatewayClass"},
+	cs, err := kubernetes.NewForConfigAndClient(cfg, httpClient)
+	if err != nil {
+		return nil, fmt.Errorf("kube: %w", err)
 	}
 
-	for _, gvk := range kinds {
-		_, err = rm.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if err == nil {
+	disc, err := discovery.NewDiscoveryClientForConfigAndClient(cfg, httpClient)
+	if err != nil {
+		return nil, fmt.Errorf("discovery: %w", err)
+	}
+
+	return &projectClients{Kube: cs, Dynamic: dc, Disc: disc}, nil
+}
+
+func hasResource(
+	disc discovery.DiscoveryInterface,
+	gv schema.GroupVersion,
+	resource string,
+) (bool, error) {
+	rl, err := disc.ServerResourcesForGroupVersion(gv.String())
+	if apierrors.IsNotFound(err) {
+		return false, nil // group/version not served yet
+	}
+	if err != nil {
+		return false, fmt.Errorf("discover %s: %w", gv.String(), err)
+	}
+	for _, r := range rl.APIResources {
+		if r.Name == resource {
 			return true, nil
 		}
-		if apimeta.IsNoMatchError(err) {
-			continue // not this version
-		}
-		return false, err
 	}
 	return false, nil
 }
