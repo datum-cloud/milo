@@ -13,7 +13,6 @@ processing hub for the Milo platform. It receives audit logs from the Milo API s
 metadata, and forwards them to downstream observability systems.
 
 ```mermaid
-
 graph TB
     subgraph "Milo API Server"
         MiloAPI["milo-apiserver"]
@@ -135,9 +134,14 @@ The main configuration is defined in `vector-config.yaml` and includes:
 - **Sources**: HTTP webhook servers for receiving audit logs
 - **Transforms**: VRL scripts for log enrichment and contextualization
 - **Sinks**: Output destinations (Loki, Prometheus metrics)
+- **Buffering**: Buffering is now configured to use disk-based buffers, with buffer data stored in `/var/lib/vector` and a maximum buffer size of 10Gi. This enables reliability during downstream disruptions. Buffer configuration is managed in both the deployment (with an `emptyDir` volume) and Vector configuration:
+  - Mount path: `/var/lib/vector`
+  - Buffer type: `disk`
+  - Buffer size limit: 10Gi
+  - Buffer policy: `when_full: block` (events will be blocked from being dropped when buffer is full)
 
 ### Kubernetes Resources
-- **Deployment**: Single replica Vector container with resource limits
+- **Deployment**: Highly available with 3 replicas. Deploys the Vector container with affinity and anti-affinity settings to maximize fault-tolerance. Updated resource requests and limits.
 - **Service**: Exposes ports 8080, 8081 (webhooks) and 9598 (metrics)
 - **ServiceMonitor**: Prometheus monitoring configuration
 - **ConfigMap**: Vector configuration via ConfigMapGenerator
@@ -172,9 +176,10 @@ A Prometheus ServiceMonitor is configured to scrape metrics every 5 seconds.
 
 ## Resource Requirements
 
-- **CPU**: 100m request, 500m limit
-- **Memory**: 256Mi request, 512Mi limit
-- **Replicas**: 1 (single instance)
+- **CPU**: 500m request, 2 CPU limit
+- **Memory**: 1Gi request, 2Gi limit
+- **Replicas**: 3 (highly available deployment with anti-affinity)
+- **Buffer**: 10Gi disk-based buffer (`emptyDir` mounted at `/var/lib/vector` for buffering audit events on disk)
 
 ## Downstream Integration
 
@@ -201,4 +206,4 @@ Logs can be queried in Loki using the label set:
 - Network policies should restrict access to webhook endpoints
 - TLS termination handled upstream (ingress/service mesh)
 
-  
+   
