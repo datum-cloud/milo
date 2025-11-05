@@ -17,3 +17,5 @@ spec:
   - identity.miloapis.com/sessions.list
   - identity.miloapis.com/sessions.get
   - identity.miloapis.com/sessions.delete
+  - iam.miloapis.com/userinvitations.get
+  - iam.miloapis.com/userinvitations.list

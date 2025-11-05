@@ -215,6 +215,19 @@ spec:
                   - type
                   type: object
                 type: array
+              inviteeUser:
+                description: |-
+                  InviteeUser contains information about the invitee user in the invitation.
+                  This value may be nil if the invitee user has not been created yet.
+                properties:
+                  name:
+                    description: |-
+                      Name is the name of the invitee user in the invitation.
+                      Name is a cluster-scoped resource, so Namespace is not needed.
+                    type: string
+                required:
+                - name
+                type: object
               inviterUser:
                 description: InviterUser contains information about the user who invited
                   the user in the invitation.
@@ -239,6 +252,8 @@ spec:
                 type: object
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .status.inviteeUser.name
     served: true
     storage: true
     subresources:

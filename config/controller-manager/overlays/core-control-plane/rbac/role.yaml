@@ -46,6 +46,18 @@ rules:
   verbs:
   - create
 - apiGroups:
+  - dns.networking.miloapis.com
+  resources:
+  - dnszoneclasses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - gateway.networking.k8s.io
   resources:
   - gatewayclasses
