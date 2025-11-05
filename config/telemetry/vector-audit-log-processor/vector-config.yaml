@@ -217,10 +217,3 @@ sinks:
       codec: json
     labels:
       telemetry_datumapis_com_audit_log: "true"
-      resource_api_group: "{{ objectRef.apiGroup }}"
-      resource_api_version: "{{ objectRef.apiVersion }}"
-      resource_kind: "{{ objectRef.resource }}"
-      user_name: "{{ user.username }}"
-      control_plane_type: '{{ annotations."telemetry.miloapis.com/control-plane-type" }}'
-      organization_name: '{{ annotations."resourcemanager.miloapis.com/organization-name" }}'
-      project_name: '{{ annotations."resourcemanager.miloapis.com/project-name" }}'
