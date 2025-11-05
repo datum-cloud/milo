@@ -62,7 +62,7 @@ graph TB
 - **HTTP Webhook Servers**: Two dedicated endpoints for receiving audit logs
 - **Log Transformers**: VRL (Vector Remap Language) scripts that enrich audit logs with contextual information
 - **Common Log Processor**: Shared processing step that applies IP filtering and API group defaults
-- **Loki Sink**: Forwards processed logs to Loki with rich contextual labels for efficient querying
+- **Loki Sink**: Forwards processed logs to Loki
 - **Prometheus Metrics**: Exposes operational metrics for monitoring
 
 ### Log Transformation Details
@@ -157,15 +157,8 @@ The processor adds the following annotations to audit logs:
 - `resourcemanager.miloapis.com/project-name: "{project-name}"`
 
 ### Loki Labels
-Processed logs are sent to Loki with the following labels:
+Processed logs are sent to Loki with the following label:
 - `telemetry_datumapis_com_audit_log: "true"`
-- `resource_api_group: "{objectRef.apiGroup}"`
-- `resource_api_version: "{objectRef.apiVersion}"`
-- `resource_kind: "{objectRef.kind}"`
-- `user_name: "{user.username}"`
-- `organization_name: "{annotations.resourcemanager.miloapis.com/organization-name}"`
-- `project_name: "{annotations.resourcemanager.miloapis.com/project-name}"`
-- `control_plane_type: "{annotations.telemetry.miloapis.com/control-plane-type}"`
 
 ## Monitoring
 
@@ -189,33 +182,17 @@ A Prometheus ServiceMonitor is configured to scrape metrics every 5 seconds.
 By default, processed audit logs are forwarded to:
 - **Endpoint**: `http://loki-single-binary.telemetry-system.svc.cluster.local:3100`
 - **Format**: JSON encoded
-- **Labels**: Rich contextual labels for efficient querying
+- **Labels**: Only the `telemetry_datumapis_com_audit_log` indicator for querying
 
 ### Querying Audit Logs
-Logs can be queried in Loki using the rich label set:
+Logs can be queried in Loki using the label set:
 
 ```logql
 # All audit logs
 {telemetry_datumapis_com_audit_log="true"}
-
-# Core control plane audit logs
-{control_plane_type="core"}
-
-# Project-specific audit logs
-{control_plane_type="project", project_name="my-project"}
-
-# Organization-specific audit logs
-{organization_name="my-org"}
-
-# User-specific audit logs
-{user_name="john.doe"}
-
-# Resource-specific audit logs
-{resource_api_group="resourcemanager.miloapis.com", resource_kind="Project"}
-
-# Combined queries
-{control_plane_type="project", resource_kind="Deployment", user_name="admin"}
 ```
+
+> **Note:** Fields such as `control_plane_type`, `project_name`, `organization_name`, `user_name`, and resource-related labels are present in the log event _body_ but are no longer part of Loki label sets, so queries on these must be performed via full-text or log content search, not as indexed labels.
 
 ## Security Considerations
 
@@ -223,3 +200,5 @@ Logs can be queried in Loki using the rich label set:
 - No service account token is mounted
 - Network policies should restrict access to webhook endpoints
 - TLS termination handled upstream (ingress/service mesh)
+
+  
