@@ -476,6 +476,20 @@ Standard condition is "Ready" which tracks contact group membership creation sta
         </td>
         <td>false</td>
       </tr><tr>
+        <td><b><a href="#contactgroupmembershipstatuscontact">contact</a></b></td>
+        <td>object</td>
+        <td>
+          Contact contains information about the Contact that is a member of the ContactGroup.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#contactgroupmembershipstatuscontactgroup">contactGroup</a></b></td>
+        <td>object</td>
+        <td>
+          ContactGroup contains information about the ContactGroup that the Contact is a member of.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b>providerID</b></td>
         <td>string</td>
         <td>
@@ -561,6 +575,64 @@ with respect to the current state of the instance.<br/>
             <i>Minimum</i>: 0<br/>
         </td>
         <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### ContactGroupMembership.status.contact
+<sup><sup>[↩ Parent](#contactgroupmembershipstatus)</sup></sup>
+
+
+
+Contact contains information about the Contact that is a member of the ContactGroup.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>providerID</b></td>
+        <td>string</td>
+        <td>
+          ProviderID is the identifier returned by the underlying contact provider
+(e.g. Resend) when the contact is created. It is usually
+used to track the contact creation status (e.g. provider webhooks).<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### ContactGroupMembership.status.contactGroup
+<sup><sup>[↩ Parent](#contactgroupmembershipstatus)</sup></sup>
+
+
+
+ContactGroup contains information about the ContactGroup that the Contact is a member of.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>providerID</b></td>
+        <td>string</td>
+        <td>
+          ProviderID is the identifier returned by the underlying contact group provider
+(e.g. Resend) when the contact group is created. It is usually
+used to track the contact group creation status (e.g. provider webhooks).<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 

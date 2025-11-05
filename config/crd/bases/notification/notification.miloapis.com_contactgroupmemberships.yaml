@@ -157,6 +157,32 @@ spec:
                   - type
                   type: object
                 type: array
+              contact:
+                description: Contact contains information about the Contact that is
+                  a member of the ContactGroup.
+                properties:
+                  providerID:
+                    description: |-
+                      ProviderID is the identifier returned by the underlying contact provider
+                      (e.g. Resend) when the contact is created. It is usually
+                      used to track the contact creation status (e.g. provider webhooks).
+                    type: string
+                required:
+                - providerID
+                type: object
+              contactGroup:
+                description: ContactGroup contains information about the ContactGroup
+                  that the Contact is a member of.
+                properties:
+                  providerID:
+                    description: |-
+                      ProviderID is the identifier returned by the underlying contact group provider
+                      (e.g. Resend) when the contact group is created. It is usually
+                      used to track the contact group creation status (e.g. provider webhooks).
+                    type: string
+                required:
+                - providerID
+                type: object
               providerID:
                 description: |-
                   ProviderID is the identifier returned by the underlying contact provider

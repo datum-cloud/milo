@@ -118,4 +118,28 @@ type ContactGroupMembershipStatus struct {
 	// used to track the contact-group membership creation status (e.g. provider webhooks).
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
+
+	// Contact contains information about the Contact that is a member of the ContactGroup.
+	// +kubebuilder:validation:Optional
+	Contact ContactGroupMembershipContactStatus `json:"contact,omitempty"`
+
+	// ContactGroup contains information about the ContactGroup that the Contact is a member of.
+	// +kubebuilder:validation:Optional
+	ContactGroup ContactGroupMembershipContactGroupStatus `json:"contactGroup,omitempty"`
+}
+
+type ContactGroupMembershipContactStatus struct {
+	// ProviderID is the identifier returned by the underlying contact provider
+	// (e.g. Resend) when the contact is created. It is usually
+	// used to track the contact creation status (e.g. provider webhooks).
+	// +kubebuilder:validation:Required
+	ProviderID string `json:"providerID"`
+}
+
+type ContactGroupMembershipContactGroupStatus struct {
+	// ProviderID is the identifier returned by the underlying contact group provider
+	// (e.g. Resend) when the contact group is created. It is usually
+	// used to track the contact group creation status (e.g. provider webhooks).
+	// +kubebuilder:validation:Required
+	ProviderID string `json:"providerID"`
 }
