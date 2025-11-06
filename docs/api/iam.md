@@ -3283,6 +3283,14 @@ UserInvitationStatus defines the observed state of UserInvitation
         </td>
         <td>false</td>
       </tr><tr>
+        <td><b><a href="#userinvitationstatusinviteeuser">inviteeUser</a></b></td>
+        <td>object</td>
+        <td>
+          InviteeUser contains information about the invitee user in the invitation.
+This value may be nil if the invitee user has not been created yet.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b><a href="#userinvitationstatusinviteruser">inviterUser</a></b></td>
         <td>object</td>
         <td>
@@ -3373,6 +3381,35 @@ with respect to the current state of the instance.<br/>
             <i>Minimum</i>: 0<br/>
         </td>
         <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### UserInvitation.status.inviteeUser
+<sup><sup>[↩ Parent](#userinvitationstatus)</sup></sup>
+
+
+
+InviteeUser contains information about the invitee user in the invitation.
+This value may be nil if the invitee user has not been created yet.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the invitee user in the invitation.
+Name is a cluster-scoped resource, so Namespace is not needed.<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 

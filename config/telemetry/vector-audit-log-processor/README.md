@@ -13,7 +13,6 @@ processing hub for the Milo platform. It receives audit logs from the Milo API s
 metadata, and forwards them to downstream observability systems.
 
 ```mermaid
-
 graph TB
     subgraph "Milo API Server"
         MiloAPI["milo-apiserver"]
@@ -62,7 +61,7 @@ graph TB
 - **HTTP Webhook Servers**: Two dedicated endpoints for receiving audit logs
 - **Log Transformers**: VRL (Vector Remap Language) scripts that enrich audit logs with contextual information
 - **Common Log Processor**: Shared processing step that applies IP filtering and API group defaults
-- **Loki Sink**: Forwards processed logs to Loki with rich contextual labels for efficient querying
+- **Loki Sink**: Forwards processed logs to Loki
 - **Prometheus Metrics**: Exposes operational metrics for monitoring
 
 ### Log Transformation Details
@@ -135,9 +134,14 @@ The main configuration is defined in `vector-config.yaml` and includes:
 - **Sources**: HTTP webhook servers for receiving audit logs
 - **Transforms**: VRL scripts for log enrichment and contextualization
 - **Sinks**: Output destinations (Loki, Prometheus metrics)
+- **Buffering**: Buffering is now configured to use disk-based buffers, with buffer data stored in `/var/lib/vector` and a maximum buffer size of 10Gi. This enables reliability during downstream disruptions. Buffer configuration is managed in both the deployment (with an `emptyDir` volume) and Vector configuration:
+  - Mount path: `/var/lib/vector`
+  - Buffer type: `disk`
+  - Buffer size limit: 10Gi
+  - Buffer policy: `when_full: block` (events will be blocked from being dropped when buffer is full)
 
 ### Kubernetes Resources
-- **Deployment**: Single replica Vector container with resource limits
+- **Deployment**: Highly available with 3 replicas. Deploys the Vector container with affinity and anti-affinity settings to maximize fault-tolerance. Updated resource requests and limits.
 - **Service**: Exposes ports 8080, 8081 (webhooks) and 9598 (metrics)
 - **ServiceMonitor**: Prometheus monitoring configuration
 - **ConfigMap**: Vector configuration via ConfigMapGenerator
@@ -157,15 +161,8 @@ The processor adds the following annotations to audit logs:
 - `resourcemanager.miloapis.com/project-name: "{project-name}"`
 
 ### Loki Labels
-Processed logs are sent to Loki with the following labels:
+Processed logs are sent to Loki with the following label:
 - `telemetry_datumapis_com_audit_log: "true"`
-- `resource_api_group: "{objectRef.apiGroup}"`
-- `resource_api_version: "{objectRef.apiVersion}"`
-- `resource_kind: "{objectRef.kind}"`
-- `user_name: "{user.username}"`
-- `organization_name: "{annotations.resourcemanager.miloapis.com/organization-name}"`
-- `project_name: "{annotations.resourcemanager.miloapis.com/project-name}"`
-- `control_plane_type: "{annotations.telemetry.miloapis.com/control-plane-type}"`
 
 ## Monitoring
 
@@ -179,9 +176,10 @@ A Prometheus ServiceMonitor is configured to scrape metrics every 5 seconds.
 
 ## Resource Requirements
 
-- **CPU**: 100m request, 500m limit
-- **Memory**: 256Mi request, 512Mi limit
-- **Replicas**: 1 (single instance)
+- **CPU**: 500m request, 2 CPU limit
+- **Memory**: 1Gi request, 2Gi limit
+- **Replicas**: 3 (highly available deployment with anti-affinity)
+- **Buffer**: 10Gi disk-based buffer (`emptyDir` mounted at `/var/lib/vector` for buffering audit events on disk)
 
 ## Downstream Integration
 
@@ -189,33 +187,17 @@ A Prometheus ServiceMonitor is configured to scrape metrics every 5 seconds.
 By default, processed audit logs are forwarded to:
 - **Endpoint**: `http://loki-single-binary.telemetry-system.svc.cluster.local:3100`
 - **Format**: JSON encoded
-- **Labels**: Rich contextual labels for efficient querying
+- **Labels**: Only the `telemetry_datumapis_com_audit_log` indicator for querying
 
 ### Querying Audit Logs
-Logs can be queried in Loki using the rich label set:
+Logs can be queried in Loki using the label set:
 
 ```logql
 # All audit logs
 {telemetry_datumapis_com_audit_log="true"}
-
-# Core control plane audit logs
-{control_plane_type="core"}
-
-# Project-specific audit logs
-{control_plane_type="project", project_name="my-project"}
-
-# Organization-specific audit logs
-{organization_name="my-org"}
-
-# User-specific audit logs
-{user_name="john.doe"}
-
-# Resource-specific audit logs
-{resource_api_group="resourcemanager.miloapis.com", resource_kind="Project"}
-
-# Combined queries
-{control_plane_type="project", resource_kind="Deployment", user_name="admin"}
 ```
+
+> **Note:** Fields such as `control_plane_type`, `project_name`, `organization_name`, `user_name`, and resource-related labels are present in the log event _body_ but are no longer part of Loki label sets, so queries on these must be performed via full-text or log content search, not as indexed labels.
 
 ## Security Considerations
 
@@ -223,3 +205,5 @@ Logs can be queried in Loki using the rich label set:
 - No service account token is mounted
 - Network policies should restrict access to webhook endpoints
 - TLS termination handled upstream (ingress/service mesh)
+
+   

@@ -19,3 +19,5 @@ spec:
   parentResources:
     - apiGroup: resourcemanager.miloapis.com
       kind: Organization
+    - apiGroup: iam.miloapis.com
+      kind: User

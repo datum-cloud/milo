@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -365,12 +366,18 @@ func (r *GrantCreationController) createOrUpdateGrant(
 		return fmt.Errorf("failed to check existing grant: %w", err)
 	}
 
-	// Update existing grant if needed
-	logger.Info("Updating existing ResourceGrant")
+	original := existingGrant.DeepCopy()
+
 	existingGrant.Spec = grant.Spec
 	existingGrant.Labels = grant.Labels
 	existingGrant.Annotations = grant.Annotations
 
+	if equality.Semantic.DeepEqual(existingGrant, original) {
+		logger.V(1).Info("ResourceGrant unchanged, skipping update")
+		return nil
+	}
+
+	logger.Info("Updating existing ResourceGrant")
 	if err := targetClient.Update(ctx, existingGrant); err != nil {
 		return fmt.Errorf("failed to update grant: %w", err)
 	}
