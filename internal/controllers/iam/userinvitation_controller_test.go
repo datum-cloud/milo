@@ -669,6 +669,10 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	if meta.IsStatusConditionTrue(afterFirst.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
 		t.Fatalf("Ready condition should not be true before acceptance")
 	}
+	// Verify invitee user name is populated
+	if afterFirst.Status.InviteeUser == nil || afterFirst.Status.InviteeUser.Name != user.Name {
+		t.Fatalf("expected InviteeUser name to be %s, got %+v", user.Name, afterFirst.Status.InviteeUser)
+	}
 
 	// Verify organization display name is set
 	if afterFirst.Status.Organization.DisplayName != "Organization Display Name" {
@@ -786,6 +790,15 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 		t.Fatalf("second reconcile error: %v", err)
 	}
 
+	// Verify InviteeUser now populated after user appears (before acceptance)
+	afterSecond := &iamv1alpha1.UserInvitation{}
+	if err := c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, afterSecond); err != nil {
+		t.Fatalf("failed to get UserInvitation after second reconcile: %v", err)
+	}
+	if afterSecond.Status.InviteeUser == nil || afterSecond.Status.InviteeUser.Name == "" {
+		t.Fatalf("InviteeUser should be populated after second reconcile, got %+v", afterSecond.Status.InviteeUser)
+	}
+
 	if err := c.Get(ctx, types.NamespacedName{Name: pbInviteName, Namespace: invitationRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err != nil {
 		t.Fatalf("expected invitation PolicyBinding created after user appears: %v", err)
 	}
@@ -803,6 +816,7 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 		t.Fatalf("third reconcile error: %v", err)
 	}
 
+	// Invitation should be deleted after acceptance; verified later
 	// Verify OrganizationMembership is created with expected roles
 	omNS := fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name)
 	omName := fmt.Sprintf("member-%s", user.Name)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -212,19 +213,24 @@ func (r *GroupController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, nil
 	}
 
-	// Set the group condition to true
+	// Update status if needed
+	originalStatus := group.Status.DeepCopy()
+
 	groupCondition := metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionTrue,
-		Reason:             "Reconciled",
-		Message:            "Group successfully reconciled",
-		LastTransitionTime: metav1.Now(),
+		Type:    "Ready",
+		Status:  metav1.ConditionTrue,
+		Reason:  "Reconciled",
+		Message: "Group successfully reconciled",
 	}
 	meta.SetStatusCondition(&group.Status.Conditions, groupCondition)
 
-	if err := r.Client.Status().Update(ctx, group); err != nil {
-		log.Error(err, "Failed to update Group status")
-		return ctrl.Result{}, err
+	// Only update if status actually changed
+	if !equality.Semantic.DeepEqual(&group.Status, originalStatus) {
+		if err := r.Client.Status().Update(ctx, group); err != nil {
+			log.Error(err, "Failed to update Group status")
+			return ctrl.Result{}, err
+		}
+		log.Info("Group status updated")
 	}
 
 	// Return success

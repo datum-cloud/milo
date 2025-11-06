@@ -32,6 +32,7 @@ const (
 // +kubebuilder:printcolumn:name="Registration Approval",type="string",JSONPath=".status.registrationApproval"
 // +kubebuilder:resource:path=users,scope=Cluster
 // +kubebuilder:selectablefield:JSONPath=".status.registrationApproval"
+// +kubebuilder:selectablefield:JSONPath=".spec.email"
 type User struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

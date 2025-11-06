@@ -38,6 +38,7 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:path=userinvitations,scope=Namespaced
+// +kubebuilder:selectablefield:JSONPath=".status.inviteeUser.name"
 type UserInvitation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -108,6 +109,11 @@ type UserInvitationStatus struct {
 	// InviterUser contains information about the user who invited the user in the invitation.
 	// +kubebuilder:validation:Optional
 	InviterUser UserInvitationUserStatus `json:"inviterUser,omitempty"`
+
+	// InviteeUser contains information about the invitee user in the invitation.
+	// This value may be nil if the invitee user has not been created yet.
+	// +kubebuilder:validation:Optional
+	InviteeUser *UserInvitationInviteeUserStatus `json:"inviteeUser,omitempty"`
 }
 
 // UserInvitationOrganizationStatus contains information about the organization in the invitation.
@@ -126,6 +132,14 @@ type UserInvitationUserStatus struct {
 	// EmailAddress is the email address of the user who invited the user in the invitation.
 	// +kubebuilder:validation:Optional
 	EmailAddress string `json:"emailAddress,omitempty"`
+}
+
+// UserInvitationInviteeUserStatus contains information about the invitee user in the invitation.
+type UserInvitationInviteeUserStatus struct {
+	// Name is the name of the invitee user in the invitation.
+	// Name is a cluster-scoped resource, so Namespace is not needed.
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

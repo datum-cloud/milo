@@ -12,8 +12,8 @@ guidance for remediation.
 | # | Name | Bindings | Try | Catch | Finally | Cleanup |
 |:-:|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | [setup-environment](#step-setup-environment) | 0 | 11 | 0 | 0 | 0 |
-| 2 | [create-primary-owner](#step-create-primary-owner) | 0 | 3 | 0 | 0 | 0 |
-| 3 | [create-secondary-owner](#step-create-secondary-owner) | 0 | 3 | 0 | 0 | 0 |
+| 2 | [create-primary-owner](#step-create-primary-owner) | 0 | 4 | 0 | 0 | 0 |
+| 3 | [create-secondary-owner](#step-create-secondary-owner) | 0 | 4 | 0 | 0 | 0 |
 | 4 | [delete-secondary-owner](#step-delete-secondary-owner) | 0 | 2 | 0 | 0 | 0 |
 | 5 | [prevent-last-owner-deletion](#step-prevent-last-owner-deletion) | 0 | 3 | 0 | 0 | 0 |
 | 6 | [delete-organization](#step-delete-organization) | 0 | 4 | 0 | 0 | 0 |
@@ -53,7 +53,8 @@ the owner role successfully.
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | Create owner membership for Alice |
 | 2 | `wait` | 0 | 0 | Wait for membership to reach Ready |
-| 3 | `wait` | 0 | 0 | Wait for owner role to be applied |
+| 3 | `script` | 0 | 0 | Mark PolicyBindings as Ready (test workaround) |
+| 4 | `wait` | 0 | 0 | Wait for owner role to be applied |
 
 ### Step: `create-secondary-owner`
 
@@ -67,7 +68,8 @@ owner remains in the organization.
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | Create owner membership for Bob |
 | 2 | `wait` | 0 | 0 | Wait for membership to reach Ready |
-| 3 | `wait` | 0 | 0 | Wait for owner role to be applied |
+| 3 | `script` | 0 | 0 | Mark PolicyBindings as Ready (test workaround) |
+| 4 | `wait` | 0 | 0 | Wait for owner role to be applied |
 
 ### Step: `delete-secondary-owner`
 

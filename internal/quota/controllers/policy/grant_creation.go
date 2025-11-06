@@ -6,7 +6,6 @@ package policy
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -94,16 +93,13 @@ func (r *GrantCreationPolicyReconciler) Reconcile(ctx context.Context, req mcrec
 
 // updatePolicyStatus updates the policy status conditions based on validation results.
 func (r *GrantCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1.GrantCreationPolicy, validationErrs field.ErrorList) {
-	now := metav1.NewTime(time.Now())
-
 	if len(validationErrs) > 0 {
 		// Validation failed - format errors with field paths
 		apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
-			Type:               quotav1alpha1.GrantCreationPolicyReady,
-			Status:             metav1.ConditionFalse,
-			Reason:             quotav1alpha1.GrantCreationPolicyValidationFailedReason,
-			Message:            validationErrs.ToAggregate().Error(),
-			LastTransitionTime: now,
+			Type:    quotav1alpha1.GrantCreationPolicyReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  quotav1alpha1.GrantCreationPolicyValidationFailedReason,
+			Message: validationErrs.ToAggregate().Error(),
 		})
 
 		// Clear parent context ready condition if validation failed
@@ -114,11 +110,10 @@ func (r *GrantCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1
 	if policy.Spec.Disabled != nil && *policy.Spec.Disabled {
 		// Policy is disabled
 		apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
-			Type:               quotav1alpha1.GrantCreationPolicyReady,
-			Status:             metav1.ConditionFalse,
-			Reason:             quotav1alpha1.GrantCreationPolicyDisabledReason,
-			Message:            "Policy is disabled",
-			LastTransitionTime: now,
+			Type:    quotav1alpha1.GrantCreationPolicyReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  quotav1alpha1.GrantCreationPolicyDisabledReason,
+			Message: "Policy is disabled",
 		})
 
 		// Clear parent context ready condition if disabled
@@ -128,21 +123,19 @@ func (r *GrantCreationPolicyReconciler) updatePolicyStatus(policy *quotav1alpha1
 
 	// Validation passed and policy is enabled
 	apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
-		Type:               quotav1alpha1.GrantCreationPolicyReady,
-		Status:             metav1.ConditionTrue,
-		Reason:             quotav1alpha1.GrantCreationPolicyReadyReason,
-		Message:            "Policy is ready and active",
-		LastTransitionTime: now,
+		Type:    quotav1alpha1.GrantCreationPolicyReady,
+		Status:  metav1.ConditionTrue,
+		Reason:  quotav1alpha1.GrantCreationPolicyReadyReason,
+		Message: "Policy is ready and active",
 	})
 
 	// Set parent context ready condition
 	if policy.Spec.Target.ParentContext != nil {
 		apimeta.SetStatusCondition(&policy.Status.Conditions, metav1.Condition{
-			Type:               quotav1alpha1.GrantCreationPolicyParentContextReady,
-			Status:             metav1.ConditionTrue,
-			Reason:             quotav1alpha1.GrantCreationPolicyParentContextReadyReason,
-			Message:            "Parent context resolution is ready",
-			LastTransitionTime: now,
+			Type:    quotav1alpha1.GrantCreationPolicyParentContextReady,
+			Status:  metav1.ConditionTrue,
+			Reason:  quotav1alpha1.GrantCreationPolicyParentContextReadyReason,
+			Message: "Parent context resolution is ready",
 		})
 	} else {
 		// No parent context specified - remove the condition
