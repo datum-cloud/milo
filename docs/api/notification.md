@@ -857,14 +857,14 @@ ContactSpec defines the desired state of Contact.
         <td>
           <br/>
         </td>
-        <td>true</td>
+        <td>false</td>
       </tr><tr>
         <td><b>givenName</b></td>
         <td>string</td>
         <td>
           <br/>
         </td>
-        <td>true</td>
+        <td>false</td>
       </tr><tr>
         <td><b><a href="#contactspecsubject">subject</a></b></td>
         <td>object</td>

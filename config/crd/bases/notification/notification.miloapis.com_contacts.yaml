@@ -91,8 +91,6 @@ spec:
                 type: object
             required:
             - email
-            - familyName
-            - givenName
             type: object
           status:
             properties:
