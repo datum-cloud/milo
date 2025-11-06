@@ -61,10 +61,10 @@ type ContactSpec struct {
 	// +kubebuilder:validation:Optional
 	SubjectRef *SubjectReference `json:"subject,omitempty"`
 
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	FamilyName string `json:"familyName,omitempty"`
 
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	GivenName string `json:"givenName,omitempty"`
 
 	// +kubebuilder:validation:Required
