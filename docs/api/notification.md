@@ -32,7 +32,6 @@ Resource Types:
 
 
 
-
 ContactGroupMembershipRemoval is the Schema for the contactgroupmembershipremovals API.
 It represents a removal of a Contact from a ContactGroup, it also prevents the Contact from being added to the ContactGroup.
 
@@ -88,7 +87,6 @@ It represents a removal of a Contact from a ContactGroup, it also prevents the C
 
 
 
-
 <table>
     <thead>
         <tr>
@@ -118,7 +116,6 @@ It represents a removal of a Contact from a ContactGroup, it also prevents the C
 
 ### ContactGroupMembershipRemoval.spec.contactGroupRef
 <sup><sup>[↩ Parent](#contactgroupmembershipremovalspec)</sup></sup>
-
 
 
 ContactGroupRef is a reference to the ContactGroup that the Contact does not want to be a member of.
@@ -152,7 +149,6 @@ ContactGroupRef is a reference to the ContactGroup that the Contact does not wan
 
 ### ContactGroupMembershipRemoval.spec.contactRef
 <sup><sup>[↩ Parent](#contactgroupmembershipremovalspec)</sup></sup>
-
 
 
 ContactRef is a reference to the Contact that prevents the Contact from being part of the ContactGroup.
@@ -189,8 +185,6 @@ ContactRef is a reference to the Contact that prevents the Contact from being pa
 
 
 
-
-
 <table>
     <thead>
         <tr>
@@ -216,7 +210,6 @@ Standard condition is "Ready" which tracks contact group membership removal crea
 
 ### ContactGroupMembershipRemoval.status.conditions[index]
 <sup><sup>[↩ Parent](#contactgroupmembershipremovalstatus)</sup></sup>
-
 
 
 Condition contains details for one aspect of the current state of this API Resource.
@@ -297,7 +290,6 @@ with respect to the current state of the instance.<br/>
 
 
 
-
 ContactGroupMembership is the Schema for the contactgroupmemberships API.
 It represents a membership of a Contact in a ContactGroup.
 
@@ -351,7 +343,6 @@ It represents a membership of a Contact in a ContactGroup.
 <sup><sup>[↩ Parent](#contactgroupmembership)</sup></sup>
 
 
-
 ContactGroupMembershipSpec defines the desired state of ContactGroupMembership.
 
 <table>
@@ -383,7 +374,6 @@ ContactGroupMembershipSpec defines the desired state of ContactGroupMembership.
 
 ### ContactGroupMembership.spec.contactGroupRef
 <sup><sup>[↩ Parent](#contactgroupmembershipspec)</sup></sup>
-
 
 
 ContactGroupRef is a reference to the ContactGroup that the Contact is a member of.
@@ -419,7 +409,6 @@ ContactGroupRef is a reference to the ContactGroup that the Contact is a member 
 <sup><sup>[↩ Parent](#contactgroupmembershipspec)</sup></sup>
 
 
-
 ContactRef is a reference to the Contact that is a member of the ContactGroup.
 
 <table>
@@ -451,7 +440,6 @@ ContactRef is a reference to the Contact that is a member of the ContactGroup.
 
 ### ContactGroupMembership.status
 <sup><sup>[↩ Parent](#contactgroupmembership)</sup></sup>
-
 
 
 
@@ -490,7 +478,6 @@ used to track the contact-group membership creation status (e.g. provider webhoo
 
 ### ContactGroupMembership.status.conditions[index]
 <sup><sup>[↩ Parent](#contactgroupmembershipstatus)</sup></sup>
-
 
 
 Condition contains details for one aspect of the current state of this API Resource.
@@ -571,7 +558,6 @@ with respect to the current state of the instance.<br/>
 
 
 
-
 ContactGroup is the Schema for the contactgroups API.
 It represents a logical grouping of Contacts.
 
@@ -623,7 +609,6 @@ It represents a logical grouping of Contacts.
 <sup><sup>[↩ Parent](#contactgroup)</sup></sup>
 
 
-
 ContactGroupSpec defines the desired state of ContactGroup.
 
 <table>
@@ -663,8 +648,6 @@ ContactGroupSpec defines the desired state of ContactGroup.
 
 
 
-
-
 <table>
     <thead>
         <tr>
@@ -699,7 +682,6 @@ used to track the contact creation status (e.g. provider webhooks).<br/>
 
 ### ContactGroup.status.conditions[index]
 <sup><sup>[↩ Parent](#contactgroupstatus)</sup></sup>
-
 
 
 Condition contains details for one aspect of the current state of this API Resource.
@@ -780,7 +762,6 @@ with respect to the current state of the instance.<br/>
 
 
 
-
 Contact is the Schema for the contacts API.
 It represents a contact for a user.
 
@@ -832,7 +813,6 @@ It represents a contact for a user.
 <sup><sup>[↩ Parent](#contact)</sup></sup>
 
 
-
 ContactSpec defines the desired state of Contact.
 
 <table>
@@ -878,7 +858,6 @@ ContactSpec defines the desired state of Contact.
 
 ### Contact.spec.subject
 <sup><sup>[↩ Parent](#contactspec)</sup></sup>
-
 
 
 Subject is a reference to the subject of the contact.
@@ -935,7 +914,6 @@ Required for namespace-scoped resources. Omitted for cluster-scoped resources.<b
 
 
 
-
 <table>
     <thead>
         <tr>
@@ -970,7 +948,6 @@ used to track the contact creation status (e.g. provider webhooks).<br/>
 
 ### Contact.status.conditions[index]
 <sup><sup>[↩ Parent](#contactstatus)</sup></sup>
-
 
 
 Condition contains details for one aspect of the current state of this API Resource.
@@ -1051,7 +1028,6 @@ with respect to the current state of the instance.<br/>
 
 
 
-
 EmailBroadcast is the Schema for the emailbroadcasts API.
 It represents a broadcast of an email to a set of contacts (ContactGroup).
 If the broadcast needs to be updated, delete and recreate the resource.
@@ -1104,7 +1080,6 @@ If the broadcast needs to be updated, delete and recreate the resource.
 
 ### EmailBroadcast.spec
 <sup><sup>[↩ Parent](#emailbroadcast)</sup></sup>
-
 
 
 EmailBroadcastSpec defines the desired state of EmailBroadcast.
@@ -1161,7 +1136,6 @@ Example: "2024-08-05T11:52:01.858Z"<br/>
 <sup><sup>[↩ Parent](#emailbroadcastspec)</sup></sup>
 
 
-
 ContactGroupRef is a reference to the ContactGroup that the email broadcast is for.
 
 <table>
@@ -1195,7 +1169,6 @@ ContactGroupRef is a reference to the ContactGroup that the email broadcast is f
 <sup><sup>[↩ Parent](#emailbroadcastspec)</sup></sup>
 
 
-
 TemplateRef references the EmailTemplate to render the broadcast message.
 When using the Resend provider you can include the following placeholders
 in HTMLBody or TextBody; they will be substituted by the provider at send time:
@@ -1223,8 +1196,6 @@ in HTMLBody or TextBody; they will be substituted by the provider at send time:
 
 ### EmailBroadcast.status
 <sup><sup>[↩ Parent](#emailbroadcast)</sup></sup>
-
-
 
 
 
@@ -1262,7 +1233,6 @@ used to track the email broadcast creation status (e.g. provider webhooks).<br/>
 
 ### EmailBroadcast.status.conditions[index]
 <sup><sup>[↩ Parent](#emailbroadcaststatus)</sup></sup>
-
 
 
 Condition contains details for one aspect of the current state of this API Resource.
@@ -1343,7 +1313,6 @@ with respect to the current state of the instance.<br/>
 
 
 
-
 Email is the Schema for the emails API.
 It represents a concrete e-mail that should be sent to the referenced users.
 For idempotency purposes, controllers can use metadata.uid as a unique identifier
@@ -1397,7 +1366,6 @@ Uses standard Kubernetes conditions to track both processing and delivery state.
 
 ### Email.spec
 <sup><sup>[↩ Parent](#email)</sup></sup>
-
 
 
 EmailSpec defines the desired state of Email.
@@ -1467,7 +1435,6 @@ Maximum 10 addresses.<br/>
 <sup><sup>[↩ Parent](#emailspec)</sup></sup>
 
 
-
 Recipient contain the recipient of the email.
 
 <table>
@@ -1503,7 +1470,6 @@ It is mutually exclusive with EmailAddress: exactly one of them must be specifie
 <sup><sup>[↩ Parent](#emailspecrecipient)</sup></sup>
 
 
-
 UserRef references the User resource that will receive the message.
 It is mutually exclusive with EmailAddress: exactly one of them must be specified.
 
@@ -1531,7 +1497,6 @@ It is mutually exclusive with EmailAddress: exactly one of them must be specifie
 <sup><sup>[↩ Parent](#emailspec)</sup></sup>
 
 
-
 TemplateRef references the EmailTemplate that should be rendered.
 
 <table>
@@ -1556,7 +1521,6 @@ TemplateRef references the EmailTemplate that should be rendered.
 
 ### Email.spec.variables[index]
 <sup><sup>[↩ Parent](#emailspec)</sup></sup>
-
 
 
 EmailVariable represents a name/value pair that will be injected into the template.
@@ -1630,7 +1594,6 @@ used to track the email delivery status (e.g. provider webhooks).<br/>
 
 ### Email.status.conditions[index]
 <sup><sup>[↩ Parent](#emailstatus)</sup></sup>
-
 
 
 Condition contains details for one aspect of the current state of this API Resource.
@@ -1711,7 +1674,6 @@ with respect to the current state of the instance.<br/>
 
 
 
-
 EmailTemplate is the Schema for the email templates API.
 It represents a reusable e-mail template that can be rendered by substituting
 the declared variables.
@@ -1767,7 +1729,6 @@ determine whether the template is ready for use.<br/>
 <sup><sup>[↩ Parent](#emailtemplate)</sup></sup>
 
 
-
 EmailTemplateSpec defines the desired state of EmailTemplate.
 It contains the subject, content, and declared variables.
 
@@ -1814,7 +1775,6 @@ It contains the subject, content, and declared variables.
 
 ### EmailTemplate.spec.variables[index]
 <sup><sup>[↩ Parent](#emailtemplatespec)</sup></sup>
-
 
 
 TemplateVariable declares a variable that can be referenced in the template body or subject.
@@ -1891,7 +1851,6 @@ determine whether the template is ready for use.
 <sup><sup>[↩ Parent](#emailtemplatestatus)</sup></sup>
 
 
-
 Condition contains details for one aspect of the current state of this API Resource.
 
 <table>
@@ -1962,3 +1921,4 @@ with respect to the current state of the instance.<br/>
         <td>false</td>
       </tr></tbody>
 </table>
+ 
