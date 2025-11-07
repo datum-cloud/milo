@@ -219,6 +219,9 @@ sinks:
       codec: json
     labels:
       telemetry_datumapis_com_audit_log: "true"
+      control_plane_type: '{{ annotations."telemetry.miloapis.com/control-plane-type" }}'
+      organization_name: '{{ annotations."resourcemanager.miloapis.com/organization-name" }}'
+      project_name: '{{ annotations."resourcemanager.miloapis.com/project-name" }}'
     buffer:
       type: disk
       max_size: 10737418240  # 10GB
