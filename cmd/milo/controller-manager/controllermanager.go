@@ -132,6 +132,14 @@ var (
 	UserWaitlistApprovedEmailTemplate string
 	// UserWaitlistRejectedEmailTemplate is the template for the waitlist rejected email.
 	UserWaitlistRejectedEmailTemplate string
+	// PlatformInvitationEmailTemplate is the template for the platform invitation email.
+	PlatformInvitationEmailTemplate string
+
+	// WaitlistRelatedResourcesNamespace is the namespace that contains the waitlist related resources.
+	WaitlistRelatedResourcesNamespace string
+
+	// PlatformInvitationActionUrl is the action url for the platform invitation email.
+	PlatformInvitationEmailVariableActionUrl string
 
 	// AssignableRolesNamespace is an extra namespace that the system allows to be used for assignable roles.
 	AssignableRolesNamespace string
@@ -263,6 +271,9 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&UserWaitlistPendingEmailTemplate, "user-waitlist-pending-email-template", "emailtemplates.notification.miloapis.com-userwaitlistemailtemplate", "The name of the template that will be used to send the waitlist pending email.")
 	fs.StringVar(&UserWaitlistApprovedEmailTemplate, "user-waitlist-approved-email-template", "emailtemplates.notification.miloapis.com-userapprovedemailtemplate", "The name of the template that will be used to send the waitlist approved email.")
 	fs.StringVar(&UserWaitlistRejectedEmailTemplate, "user-waitlist-rejected-email-template", "emailtemplates.notification.miloapis.com-userrejectedemailtemplate", "The name of the template that will be used to send the waitlist rejected email.")
+	fs.StringVar(&PlatformInvitationEmailTemplate, "platform-invitation-email-template", "emailtemplates.notification.miloapis.com-platforminvitationemailtemplate", "The name of the template that will be used to send the platform invitation email.")
+	fs.StringVar(&WaitlistRelatedResourcesNamespace, "waitlist-related-resources-namespace", "milo-system", "The namespace that contains the waitlist related resources.")
+	fs.StringVar(&PlatformInvitationEmailVariableActionUrl, "platform-invitation-email-variable-action-url", "https://cloud.datum.net", "The action url for the platform invitation email.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -495,6 +506,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up contactgroupmembershipremoval webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := iamv1alpha1webhook.SetupPlatformInvitationWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform invitation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 			if err := iamv1alpha1webhook.SetupPlatformAccessApprovalWebhooksWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up platform access approval webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
@@ -534,6 +549,19 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := groupCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up group controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			platformInvitationCtrl := iamcontroller.PlatformInvitationController{
+				Client:                              ctrl.GetClient(),
+				PlatformInvitationEmailTemplateName: PlatformInvitationEmailTemplate,
+				WaitlistRelatedResourcesNamespace:   WaitlistRelatedResourcesNamespace,
+				EmailVariables: iamcontroller.PlatformInvitationEmailVariables{
+					ActionUrl: PlatformInvitationEmailVariableActionUrl,
+				},
+			}
+			if err := platformInvitationCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform invitation controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

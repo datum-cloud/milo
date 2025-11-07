@@ -12,6 +12,7 @@ import (
 
 	"go.miloapis.com/milo/pkg/request"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -389,37 +390,63 @@ type pathPrefixRT struct {
 
 func (p *pathPrefixRT) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
-	parent := trace.SpanFromContext(ctx)
-	var span trace.Span
-	if parent.IsRecording() {
-		_, span = parent.TracerProvider().
-			Tracer("go.miloapis.com/milo/admission/namespace").
-			Start(ctx, "namespace.lifecycle.http.prefix")
-		defer span.End()
+
+	tracer := otel.Tracer("go.miloapis.com/milo/admission/namespace")
+	ctx, span := tracer.Start(ctx, "namespace.lifecycle.http.prefix")
+	defer span.End()
+
+	// 1) defensive checks
+	if p.rt == nil {
+		err := fmt.Errorf("pathPrefixRT: nil RoundTripper")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "nil roundtripper")
+		return nil, err
+	}
+	if req.URL == nil {
+		err := fmt.Errorf("pathPrefixRT: nil URL")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "nil url")
+		return nil, err
 	}
 
+	// 2) clone before mutating (correct way)
+	r := req
 	if !strings.HasPrefix(req.URL.Path, p.prefix+"/") && req.URL.Path != p.prefix {
-		req = cloneReq(req)
+		r = req.Clone(ctx)
 
-		suffix := strings.TrimPrefix(req.URL.Path, "/")
+		// Build new Path from decoded path…
+		suffixPath := strings.TrimPrefix(r.URL.Path, "/")
 		if strings.HasSuffix(p.prefix, "/") {
-			req.URL.Path = p.prefix + suffix
+			r.URL.Path = p.prefix + suffixPath
 		} else {
-			req.URL.Path = p.prefix + "/" + suffix
+			r.URL.Path = p.prefix + "/" + suffixPath
 		}
-		req.URL.RawPath = req.URL.Path
 
-		if req.URL.RawQuery != "" {
-			req.RequestURI = req.URL.Path + "?" + req.URL.RawQuery
+		// …and if the original had an encoded RawPath, preserve it too.
+		if raw := req.URL.RawPath; raw != "" {
+			suffixRaw := strings.TrimPrefix(raw, "/")
+			if strings.HasSuffix(p.prefix, "/") {
+				r.URL.RawPath = p.prefix + suffixRaw
+			} else {
+				r.URL.RawPath = p.prefix + "/" + suffixRaw
+			}
 		} else {
-			req.RequestURI = req.URL.Path
+			// No special encoding to preserve.
+			r.URL.RawPath = ""
+		}
+
+		// optional: trace the full path w/ query, without touching RequestURI
+		full := r.URL.Path
+		if q := r.URL.RawQuery; q != "" {
+			full += "?" + q
 		}
 		span.SetAttributes(
 			attribute.String("prefix", p.prefix),
-			attribute.String("request.path", req.URL.Path),
+			attribute.String("request.path", full),
 		)
 	}
-	resp, err := p.rt.RoundTrip(req)
+
+	resp, err := p.rt.RoundTrip(r)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "roundtrip error")
@@ -428,13 +455,6 @@ func (p *pathPrefixRT) RoundTrip(req *http.Request) (*http.Response, error) {
 		span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
 	}
 	return resp, err
-}
-
-func cloneReq(r *http.Request) *http.Request {
-	r2 := r.Clone(r.Context())
-	// Preserve Host header if set
-	r2.Host = r.Host
-	return r2
 }
 
 // --- helpers ---
