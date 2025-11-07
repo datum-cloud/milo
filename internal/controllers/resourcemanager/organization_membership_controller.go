@@ -116,7 +116,7 @@ func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ct
 				return ctrl.Result{}, fmt.Errorf("failed to update organization membership status: %w", err)
 			}
 		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, fmt.Errorf("failed to get organization: %w", err)
 	}
 
 	// Fetch the referenced User
@@ -143,7 +143,7 @@ func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ct
 				return ctrl.Result{}, fmt.Errorf("failed to update organization membership status: %w", err)
 			}
 		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, fmt.Errorf("failed to get user: %w", err)
 	}
 
 	// Update the status with information from the Organization and User
