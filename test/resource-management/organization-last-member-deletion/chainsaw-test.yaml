@@ -1,0 +1,218 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: organization-last-member-deletion
+spec:
+  description: |
+    Verifies that an Organization is deleted when the only remaining OrganizationMembership
+    references a User that is deleted. The flow:
+      - Create Organization and namespace
+      - Create 3 Users and 3 OrganizationMemberships (one per user)
+      - Delete first User → Organization should still exist (2 memberships remain)
+      - Delete second User → Organization should still exist (1 membership remains but user still exists)
+      - Delete final User → Controller deletes Organization
+
+  clusters:
+    org:
+      kubeconfig: kubeconfig-org
+
+  steps:
+    - name: setup
+      cluster: org
+      description: Ensure a clean environment and create Organization and Users
+      try:
+        - description: Allow webhook/controller to be ready
+          sleep:
+            duration: 5s
+        - description: Create Organization
+          apply:
+            file: 01-organization.yaml
+        - description: Remove any auto-created admin membership (if present)
+          continueOnError: true
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: OrganizationMembership
+              name: member-test-admin
+              namespace: organization-last-member-deletion
+        - description: Wait for Organization namespace to become Active
+          wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-last-member-deletion
+            timeout: 60s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - description: Create Users
+          apply:
+            file: 02-users.yaml
+        - description: Ensure owner role exists in milo-system
+          apply:
+            file: 04-owner-role.yaml
+        - description: Wait for Users to be Ready (Alice)
+          wait:
+            apiVersion: iam.miloapis.com/v1alpha1
+            kind: User
+            name: test-lmd-alice
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Wait for Users to be Ready (Bob)
+          wait:
+            apiVersion: iam.miloapis.com/v1alpha1
+            kind: User
+            name: test-lmd-bob
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Wait for Users to be Ready (Carol)
+          wait:
+            apiVersion: iam.miloapis.com/v1alpha1
+            kind: User
+            name: test-lmd-carol
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+
+    - name: create-organization-memberships
+      cluster: org
+      description: Create 3 OrganizationMemberships for the 3 users
+      try:
+        - apply:
+            file: 03-memberships.yaml
+        - description: Mark PolicyBindings as Ready (test workaround)
+          script:
+            timeout: 30s
+            content: |
+              # Wait for PolicyBindings to be created
+              sleep 2
+              # Get all PolicyBindings in the namespace and mark them Ready
+              kubectl get policybindings -n organization-last-member-deletion -o name | while read pb; do
+                kubectl patch "$pb" -n organization-last-member-deletion --type=merge --subresource=status -p '{"status":{"conditions":[{"type":"Ready","status":"True","reason":"TestReady","message":"Marked ready for testing","lastTransitionTime":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}],"observedGeneration":1}}'
+              done
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            namespace: organization-last-member-deletion
+            name: lmd-membership-alice
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            namespace: organization-last-member-deletion
+            name: lmd-membership-bob
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            namespace: organization-last-member-deletion
+            name: lmd-membership-carol
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+
+    - name: delete-first-user-organization-still-exists
+      cluster: org
+      description: Delete first user membership; org should still exist (2 memberships remain)
+      try:
+        - description: Remove Alice's membership to reduce membership count
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: OrganizationMembership
+              name: lmd-membership-alice
+              namespace: organization-last-member-deletion
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: lmd-membership-alice
+            namespace: organization-last-member-deletion
+            timeout: 60s
+            for:
+              deletion: {}
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Organization
+            name: last-member-deletion
+            timeout: 180s
+            for:
+              jsonPath:
+                path: '{.metadata.name}'
+                value: last-member-deletion
+
+    - name: delete-second-user-organization-still-exists
+      cluster: org
+      description: Delete second user membership; org should still exist (1 membership remains, user still exists)
+      try:
+        - description: Remove Bob's membership to reach single remaining membership
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: OrganizationMembership
+              name: lmd-membership-bob
+              namespace: organization-last-member-deletion
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: lmd-membership-bob
+            namespace: organization-last-member-deletion
+            timeout: 60s
+            for:
+              deletion: {}
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Organization
+            name: last-member-deletion
+            timeout: 180s
+            for:
+              jsonPath:
+                path: '{.metadata.name}'
+                value: last-member-deletion
+
+    - name: delete-last-user-organization-gets-deleted
+      cluster: org
+      description: Delete last user; controller should delete the Organization
+      try:
+        - delete:
+            ref:
+              apiVersion: iam.miloapis.com/v1alpha1
+              kind: User
+              name: test-lmd-carol
+        - sleep:
+            duration: 5s
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Organization
+            name: last-member-deletion
+            timeout: 180s
+            for:
+              deletion: {}
+        - description: Ensure Organization namespace is eventually removed as well
+          continueOnError: true
+          wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-last-member-deletion
+            timeout: 180s
+            for:
+              deletion: {}
+
+

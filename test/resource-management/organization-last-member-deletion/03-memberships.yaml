@@ -1,0 +1,43 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: lmd-membership-alice
+  namespace: organization-last-member-deletion
+spec:
+  organizationRef:
+    name: last-member-deletion
+  userRef:
+    name: test-lmd-alice
+  roles:
+    - name: resourcemanager.miloapis.com-organizationowner
+      namespace: milo-system
+---
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: lmd-membership-bob
+  namespace: organization-last-member-deletion
+spec:
+  organizationRef:
+    name: last-member-deletion
+  userRef:
+    name: test-lmd-bob
+  roles:
+    - name: resourcemanager.miloapis.com-organizationowner
+      namespace: milo-system
+---
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: lmd-membership-carol
+  namespace: organization-last-member-deletion
+spec:
+  organizationRef:
+    name: last-member-deletion
+  userRef:
+    name: test-lmd-carol
+  roles:
+    - name: resourcemanager.miloapis.com-organizationowner
+      namespace: milo-system
+
+

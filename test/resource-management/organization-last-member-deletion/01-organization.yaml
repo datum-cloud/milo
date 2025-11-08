@@ -1,0 +1,10 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: last-member-deletion
+  annotations:
+    kubernetes.io/display-name: "Last Member Deletion Test Org"
+spec:
+  type: Standard
+
+
