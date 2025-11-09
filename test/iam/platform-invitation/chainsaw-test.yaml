@@ -1,0 +1,77 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: platform-invitation
+spec:
+  description: |
+    Validate PlatformInvitation end-to-end:
+    - Load EmailTemplate used by the controller
+    - Create PlatformInvitation
+    - Verify PlatformInvitation Ready=True
+    - Verify Email created in milo-system
+    - Create User with matching email
+    - Verify User registrationApproval=Approved
+  steps:
+  - name: setup-template
+    description: Apply the EmailTemplate required by PlatformInvitation controller
+    try:
+    - apply:
+        file: resources/email-template.yaml
+
+  - name: create-invitation
+    description: Create the PlatformInvitation
+    try:
+    - apply:
+        file: resources/platform-invitation.yaml
+        outputs:
+          - name: pi
+            value: (@)
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: PlatformInvitation
+        name: platform-invitation-e2e
+        timeout: 2m
+        for:
+          condition:
+            name: Ready
+            value: 'True'
+    - assert:
+        file: assertions/assert-platforminvitation-ready.yaml
+
+  - name: verify-email-created
+    description: Verify Email resource was created in milo-system by the controller
+    try:
+    - script:
+        timeout: 2m
+        content: |
+          set -euo pipefail
+          EMAIL_NAME="$(kubectl get platforminvitation platform-invitation-e2e -o jsonpath='{.metadata.uid}')-platform-invitation-e2e"
+          # wait up to 2m for the Email resource to be created
+          for i in $(seq 1 24); do
+            if kubectl get email -n milo-system "${EMAIL_NAME}" >/dev/null 2>&1; then
+              echo "Email ${EMAIL_NAME} found in milo-system"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Email ${EMAIL_NAME} was not created in milo-system within timeout"
+          exit 1
+
+  - name: create-user-and-verify
+    description: Create the User and verify registrationApproval becomes Approved
+    try:
+    - apply:
+        file: resources/user.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: User
+        name: platform-invited-user
+        timeout: 2m
+        for:
+          condition:
+            name: Ready
+            value: 'True'
+    - assert:
+        file: assertions/assert-user-approved.yaml
+
+
