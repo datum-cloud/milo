@@ -37,25 +37,10 @@ spec:
             value: 'True'
     - assert:
         file: assertions/assert-platforminvitation-ready.yaml
-
-  - name: verify-email-created
-    description: Verify Email resource was created in milo-system by the controller
-    try:
-    - script:
-        timeout: 2m
-        content: |
-          set -euo pipefail
-          EMAIL_NAME="$(kubectl get platforminvitation platform-invitation-e2e -o jsonpath='{.metadata.uid}')-platform-invitation-e2e"
-          # wait up to 2m for the Email resource to be created
-          for i in $(seq 1 24); do
-            if kubectl get email -n milo-system "${EMAIL_NAME}" >/dev/null 2>&1; then
-              echo "Email ${EMAIL_NAME} found in milo-system"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Email ${EMAIL_NAME} was not created in milo-system within timeout"
-          exit 1
+    - assert:
+        file: assertions/assert-email-exists.yaml
+    - assert:
+        file: assertions/platformaccessapproval-exists.yaml
 
   - name: create-user-and-verify
     description: Create the User and verify registrationApproval becomes Approved
