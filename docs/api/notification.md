@@ -961,7 +961,16 @@ Standard condition is "Ready" which tracks contact creation status and sync to t
         <td>
           ProviderID is the identifier returned by the underlying contact provider
 (e.g. Resend) when the contact is created. It is usually
-used to track the contact creation status (e.g. provider webhooks).<br/>
+used to track the contact creation status (e.g. provider webhooks).
+Deprecated: Use Providers instead.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#contactstatusprovidersindex">providers</a></b></td>
+        <td>[]object</td>
+        <td>
+          Providers contains the per-provider status for this contact.
+This enables tracking multiple provider backends simultaneously.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -1041,6 +1050,44 @@ with respect to the current state of the instance.<br/>
             <i>Minimum</i>: 0<br/>
         </td>
         <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### Contact.status.providers[index]
+<sup><sup>[↩ Parent](#contactstatus)</sup></sup>
+
+
+
+ContactProviderStatus represents status information for a single contact provider.
+It allows tracking the provider name and the provider-specific identifier.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>id</b></td>
+        <td>string</td>
+        <td>
+          ID is the identifier returned by the specific contact provider for this contact.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>name</b></td>
+        <td>enum</td>
+        <td>
+          Name is the provider handling this contact.
+Allowed values are Resend and Loops.<br/>
+          <br/>
+            <i>Enum</i>: Resend, Loops<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 

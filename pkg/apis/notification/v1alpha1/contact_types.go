@@ -101,6 +101,18 @@ type ContactList struct {
 	Items           []Contact `json:"items"`
 }
 
+// ContactProviderStatus represents status information for a single contact provider.
+// It allows tracking the provider name and the provider-specific identifier.
+type ContactProviderStatus struct {
+	// Name is the provider handling this contact.
+	// Allowed values are Resend and Loops.
+	// +kubebuilder:validation:Enum=Resend;Loops
+	Name string `json:"name"`
+	// ID is the identifier returned by the specific contact provider for this contact.
+	// +kubebuilder:validation:Required
+	ID string `json:"id"`
+}
+
 type ContactStatus struct {
 	// Conditions represent the latest available observations of an object's current state.
 	// Standard condition is "Ready" which tracks contact creation status and sync to the contact provider.
@@ -110,9 +122,15 @@ type ContactStatus struct {
 	// +patchStrategy=merge
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
+	// Providers contains the per-provider status for this contact.
+	// This enables tracking multiple provider backends simultaneously.
+	// +kubebuilder:validation:Optional
+	Providers []ContactProviderStatus `json:"providers,omitempty"`
+
 	// ProviderID is the identifier returned by the underlying contact provider
 	// (e.g. Resend) when the contact is created. It is usually
 	// used to track the contact creation status (e.g. provider webhooks).
+	// Deprecated: Use Providers instead.
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
 }
