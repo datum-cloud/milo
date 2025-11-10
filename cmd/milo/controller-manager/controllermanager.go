@@ -137,6 +137,13 @@ var (
 
 	// AssignableRolesNamespace is an extra namespace that the system allows to be used for assignable roles.
 	AssignableRolesNamespace string
+
+	// OrganizationMembershipSelfDeleteRoleName is the name of the role that will be used to grant organization membership self delete permissions.
+	OrganizationMembershipSelfDeleteRoleName string
+
+	// OrganizationMembershipSelfDeleteRoleNamespace is the namespace where the organization membership self delete role is located.
+	// This allows service providers to configure where self delete roles are stored.
+	OrganizationMembershipSelfDeleteRoleNamespace string
 )
 
 func init() {
@@ -265,6 +272,8 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&PlatformInvitationEmailTemplate, "platform-invitation-email-template", "emailtemplates.notification.miloapis.com-platforminvitationemailtemplate", "The name of the template that will be used to send the platform invitation email.")
 	fs.StringVar(&WaitlistRelatedResourcesNamespace, "waitlist-related-resources-namespace", "milo-system", "The namespace that contains the waitlist related resources.")
 	fs.StringVar(&PlatformInvitationEmailVariableActionUrl, "platform-invitation-email-variable-action-url", "https://cloud.datum.net", "The action url for the platform invitation email.")
+	fs.StringVar(&OrganizationMembershipSelfDeleteRoleName, "organization-membership-self-delete-role-name", "organizationmembership-self-delete", "The name of the role that will be used to grant organization membership self delete actions.")
+	fs.StringVar(&OrganizationMembershipSelfDeleteRoleNamespace, "organization-membership-self-delete-role-namespace", "milo-system", "The namespace where the organization membership self delete role is located. Defaults to system-namespace if not specified.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -528,7 +537,9 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 
 			organizationMembershipCtrl := resourcemanagercontroller.OrganizationMembershipController{
-				Client: ctrl.GetClient(),
+				Client:                  ctrl.GetClient(),
+				SelfDeleteRoleName:      OrganizationMembershipSelfDeleteRoleName,
+				SelfDeleteRoleNamespace: OrganizationMembershipSelfDeleteRoleNamespace,
 			}
 			if err := organizationMembershipCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up organization membership controller")

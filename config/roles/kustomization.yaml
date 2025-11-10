@@ -43,6 +43,7 @@ resources:
   - organizationmembership-reader.yaml
   - organizationmembership-editor.yaml
   - organizationmembership-admin.yaml
+  - organizationmembership-self-delete.yaml
   - iam-role-reader.yaml
   - iam-role-editor.yaml
   - iam-role-admin.yaml
