@@ -129,6 +129,15 @@ rules:
   - iam.miloapis.com
   resources:
   - platforminvitations
+  - users
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
   - userinvitations
   verbs:
   - delete
@@ -144,15 +153,6 @@ rules:
   - get
   - list
   - patch
-  - update
-  - watch
-- apiGroups:
-  - iam.miloapis.com
-  resources:
-  - users
-  verbs:
-  - get
-  - list
   - update
   - watch
 - apiGroups:
