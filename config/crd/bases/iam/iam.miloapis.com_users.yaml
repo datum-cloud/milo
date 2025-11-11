@@ -175,6 +175,7 @@ spec:
         type: object
     selectableFields:
     - jsonPath: .status.registrationApproval
+    - jsonPath: .spec.email
     served: true
     storage: true
     subresources:

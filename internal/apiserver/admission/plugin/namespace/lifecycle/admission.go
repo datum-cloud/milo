@@ -12,6 +12,10 @@ import (
 
 	"go.miloapis.com/milo/pkg/request"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,7 +72,22 @@ var (
 
 func (l *Lifecycle) Admit(ctx context.Context, a admission.Attributes, _ admission.ObjectInterfaces) error {
 	// Log first so we can see calls even if readiness blocks later.
+	// --- tracing: top-level span for this admission call
 	projectID, _ := request.ProjectID(ctx)
+	attrs := []trace.SpanStartOption{
+		trace.WithAttributes(
+			attribute.String("op", string(a.GetOperation())),
+			attribute.String("ns", a.GetNamespace()),
+			attribute.String("gvk.group", a.GetKind().Group),
+			attribute.String("gvk.version", a.GetKind().Version),
+			attribute.String("gvk.kind", a.GetKind().Kind),
+			attribute.String("resource", a.GetResource().Resource),
+			attribute.String("user", a.GetUserInfo().GetName()),
+			attribute.String("project.id", projectID),
+		),
+	}
+	ctx, span := l.startSpan(ctx, "namespace.lifecycle.Admit", attrs...)
+	defer span.End()
 	klog.V(2).InfoS("ProjectNamespaceLifecycle.Admit",
 		"projectID", projectID, "namespace", a.GetNamespace(), "operation", a.GetOperation(), "resource", a.GetResource())
 
@@ -76,7 +95,10 @@ func (l *Lifecycle) Admit(ctx context.Context, a admission.Attributes, _ admissi
 	if a.GetOperation() == admission.Delete &&
 		a.GetKind().GroupKind() == v1.SchemeGroupVersion.WithKind("Namespace").GroupKind() &&
 		l.immortalNamespaces.Has(a.GetName()) {
-		return apierrors.NewForbidden(a.GetResource().GroupResource(), a.GetName(), fmt.Errorf("this namespace may not be deleted"))
+		err := fmt.Errorf("this namespace may not be deleted")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "delete forbidden for immortal namespace")
+		return apierrors.NewForbidden(a.GetResource().GroupResource(), a.GetName(), err)
 	}
 
 	// Always allow non-namespaced resources (except Namespace itself)
@@ -105,15 +127,34 @@ func (l *Lifecycle) Admit(ctx context.Context, a admission.Attributes, _ admissi
 
 	// Gate on readiness for ROOT only. Project path does live lookups and doesn't need the root lister cache.
 	if projectID == "" && !l.WaitForReady() {
-		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
+		err := fmt.Errorf("not yet ready to handle request")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "root informer not ready")
+		return admission.NewForbidden(a, err)
 	}
 
 	clusterKey := cacheKey(ctx, a.GetNamespace())
 
 	// === ROOT path: keep upstream behavior with informer + optional live ===
 	if projectID == "" {
-		// Try lister first (root)
-		ns, exists, err := l.getFromRootLister(a.GetNamespace(), a.GetOperation())
+		// Try lister first (root) with child span
+		var ns *v1.Namespace
+		var exists bool
+		var err error
+		func() {
+			_, sub := l.startSpan(ctx, "namespace.lifecycle.root.listerGet",
+				trace.WithAttributes(
+					attribute.String("ns", a.GetNamespace()),
+					attribute.String("op", string(a.GetOperation())),
+				))
+			defer sub.End()
+			ns, exists, err = l.getFromRootLister(a.GetNamespace(), a.GetOperation())
+			sub.SetAttributes(attribute.Bool("exists", exists))
+			if err != nil {
+				sub.RecordError(err)
+				sub.SetStatus(codes.Error, "lister get failed")
+			}
+		}()
 		if err != nil {
 			return err
 		}
@@ -127,17 +168,31 @@ func (l *Lifecycle) Admit(ctx context.Context, a admission.Attributes, _ admissi
 		}
 
 		if !exists || forceLive {
-			n, err := l.client.CoreV1().Namespaces().Get(ctx, a.GetNamespace(), metav1.GetOptions{})
+			var n *v1.Namespace
+			subCtx, sub := l.startSpan(ctx, "namespace.lifecycle.root.liveGet",
+				trace.WithAttributes(
+					attribute.String("ns", a.GetNamespace()),
+					attribute.Bool("forceLive", forceLive),
+					attribute.Bool("cache.exists", exists),
+				))
+			n, err := l.client.CoreV1().Namespaces().Get(subCtx, a.GetNamespace(), metav1.GetOptions{})
 			switch {
 			case apierrors.IsNotFound(err):
+				sub.RecordError(err)
+				sub.SetStatus(codes.Error, "root live get 404")
+				sub.End()
 				return err
 			case err != nil:
+				sub.RecordError(err)
+				sub.SetStatus(codes.Error, "root live get error")
+				sub.End()
 				return apierrors.NewInternalError(err)
 			default:
+				sub.End()
 				ns = n
 			}
 		}
-		return l.enforceCreateNotInTerminating(a, ns)
+		return l.enforceCreateNotInTerminating(ctx, a, ns)
 	}
 
 	// === PROJECT path: skip root lister; do a live lookup against project-scoped client ===
@@ -151,31 +206,66 @@ func (l *Lifecycle) Admit(ctx context.Context, a admission.Attributes, _ admissi
 	if _, ok := l.forceLiveLookupCache.Get(clusterKey); ok {
 		// we only cache a hint; just force a live lookup below
 		forceLive = true
+		trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("forceLive.hint", true))
+
 	}
 
 	// Live GET against the project virtual cluster
-	nsClient, err := l.projectClient(projectID)
-	if err != nil {
-		return apierrors.NewInternalError(fmt.Errorf("project client init failed: %w", err))
+	var nsClient *kubernetes.Clientset
+	var errClient error
+	func() {
+		_, sub := l.startSpan(ctx, "namespace.lifecycle.project.client",
+			trace.WithAttributes(attribute.String("project.id", projectID)))
+		defer sub.End()
+		nsClient, errClient = l.projectClient(projectID)
+		if errClient != nil {
+			sub.RecordError(errClient)
+			sub.SetStatus(codes.Error, "project client init failed")
+		} else {
+			sub.SetAttributes(attribute.String("status", "ok"))
+		}
+	}()
+	if errClient != nil {
+		return apierrors.NewInternalError(fmt.Errorf("project client init failed: %w", errClient))
 	}
 
+	_, live := l.startSpan(ctx, "namespace.lifecycle.project.liveGet",
+		trace.WithAttributes(
+			attribute.String("ns", a.GetNamespace()),
+			attribute.String("project.id", projectID),
+			attribute.Bool("forceLive", forceLive),
+		))
 	n, err := nsClient.CoreV1().Namespaces().Get(ctx, a.GetNamespace(), metav1.GetOptions{})
 	switch {
 	case apierrors.IsNotFound(err):
+		live.RecordError(err)
+		live.SetStatus(codes.Error, "project live get 404")
+		live.End()
 		// Not found in this project cluster
 		return err
 	case err != nil:
+		live.RecordError(err)
+		live.SetStatus(codes.Error, "project live get error")
+		live.End()
 		return apierrors.NewInternalError(err)
 	default:
+		live.End()
 		// got it
 		if forceLive {
 			klog.V(4).InfoS("Found namespace via project live lookup", "project", projectID, "namespace", klog.KRef("", a.GetNamespace()))
 		}
-		return l.enforceCreateNotInTerminating(a, n)
+		return l.enforceCreateNotInTerminating(ctx, a, n)
 	}
 }
 
-func (l *Lifecycle) enforceCreateNotInTerminating(a admission.Attributes, ns *v1.Namespace) error {
+func (l *Lifecycle) enforceCreateNotInTerminating(ctx context.Context, a admission.Attributes, ns *v1.Namespace) error {
+	_, span := l.startSpan(ctx, "namespace.lifecycle.enforceCreateNotInTerminating",
+		trace.WithAttributes(
+			attribute.String("ns", a.GetNamespace()),
+			attribute.String("op", string(a.GetOperation())),
+			attribute.String("ns.phase", string(ns.Status.Phase)),
+		))
+	defer span.End()
 	if a.GetOperation() != admission.Create {
 		return nil
 	}
@@ -190,6 +280,8 @@ func (l *Lifecycle) enforceCreateNotInTerminating(a admission.Attributes, ns *v1
 			Field:   "metadata.namespace",
 		})
 	}
+	span.RecordError(err)
+	span.SetStatus(codes.Error, "create blocked: namespace terminating")
 	return err
 }
 
@@ -297,31 +389,72 @@ type pathPrefixRT struct {
 }
 
 func (p *pathPrefixRT) RoundTrip(req *http.Request) (*http.Response, error) {
-	if !strings.HasPrefix(req.URL.Path, p.prefix+"/") && req.URL.Path != p.prefix {
-		req = cloneReq(req)
+	ctx := req.Context()
 
-		suffix := strings.TrimPrefix(req.URL.Path, "/")
-		if strings.HasSuffix(p.prefix, "/") {
-			req.URL.Path = p.prefix + suffix
-		} else {
-			req.URL.Path = p.prefix + "/" + suffix
-		}
-		req.URL.RawPath = req.URL.Path
+	tracer := otel.Tracer("go.miloapis.com/milo/admission/namespace")
+	ctx, span := tracer.Start(ctx, "namespace.lifecycle.http.prefix")
+	defer span.End()
 
-		if req.URL.RawQuery != "" {
-			req.RequestURI = req.URL.Path + "?" + req.URL.RawQuery
-		} else {
-			req.RequestURI = req.URL.Path
-		}
+	// 1) defensive checks
+	if p.rt == nil {
+		err := fmt.Errorf("pathPrefixRT: nil RoundTripper")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "nil roundtripper")
+		return nil, err
 	}
-	return p.rt.RoundTrip(req)
-}
+	if req.URL == nil {
+		err := fmt.Errorf("pathPrefixRT: nil URL")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "nil url")
+		return nil, err
+	}
 
-func cloneReq(r *http.Request) *http.Request {
-	r2 := r.Clone(r.Context())
-	// Preserve Host header if set
-	r2.Host = r.Host
-	return r2
+	// 2) clone before mutating (correct way)
+	r := req
+	if !strings.HasPrefix(req.URL.Path, p.prefix+"/") && req.URL.Path != p.prefix {
+		r = req.Clone(ctx)
+
+		// Build new Path from decoded path…
+		suffixPath := strings.TrimPrefix(r.URL.Path, "/")
+		if strings.HasSuffix(p.prefix, "/") {
+			r.URL.Path = p.prefix + suffixPath
+		} else {
+			r.URL.Path = p.prefix + "/" + suffixPath
+		}
+
+		// …and if the original had an encoded RawPath, preserve it too.
+		if raw := req.URL.RawPath; raw != "" {
+			suffixRaw := strings.TrimPrefix(raw, "/")
+			if strings.HasSuffix(p.prefix, "/") {
+				r.URL.RawPath = p.prefix + suffixRaw
+			} else {
+				r.URL.RawPath = p.prefix + "/" + suffixRaw
+			}
+		} else {
+			// No special encoding to preserve.
+			r.URL.RawPath = ""
+		}
+
+		// optional: trace the full path w/ query, without touching RequestURI
+		full := r.URL.Path
+		if q := r.URL.RawQuery; q != "" {
+			full += "?" + q
+		}
+		span.SetAttributes(
+			attribute.String("prefix", p.prefix),
+			attribute.String("request.path", full),
+		)
+	}
+
+	resp, err := p.rt.RoundTrip(r)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "roundtrip error")
+	}
+	if resp != nil {
+		span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
+	}
+	return resp, err
 }
 
 // --- helpers ---
@@ -348,4 +481,10 @@ func newLifecycleWithClock(immortalNamespaces sets.String, _ clock.Clock) (*Life
 		immortalNamespaces:   immortalNamespaces,
 		forceLiveLookupCache: utilcache.NewLRUExpireCache(100),
 	}, nil
+}
+
+// --- tracing helper (same pattern as other plugin) ---
+func (l *Lifecycle) startSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+	tracer := trace.SpanFromContext(ctx).TracerProvider().Tracer("go.miloapis.com/milo/admission/namespace")
+	return tracer.Start(ctx, name, opts...)
 }

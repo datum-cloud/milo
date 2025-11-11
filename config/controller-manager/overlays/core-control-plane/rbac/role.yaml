@@ -93,6 +93,7 @@ rules:
   - iam.miloapis.com
   resources:
   - groups/finalizers
+  - platforminvitations/status
   - userinvitations/status
   - users/status
   verbs:
@@ -109,9 +110,8 @@ rules:
   - iam.miloapis.com
   resources:
   - platformaccessapprovals
-  - roles
-  - userdeactivations
   verbs:
+  - create
   - get
   - list
   - watch
@@ -121,6 +121,25 @@ rules:
   - platformaccessrejections
   verbs:
   - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - platforminvitations
+  - users
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - roles
+  - userdeactivations
+  verbs:
   - get
   - list
   - watch
@@ -142,15 +161,6 @@ rules:
   - get
   - list
   - patch
-  - update
-  - watch
-- apiGroups:
-  - iam.miloapis.com
-  resources:
-  - users
-  verbs:
-  - get
-  - list
   - update
   - watch
 - apiGroups:

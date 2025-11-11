@@ -43,6 +43,7 @@ resources:
   - organizationmembership-reader.yaml
   - organizationmembership-editor.yaml
   - organizationmembership-admin.yaml
+  - organizationmembership-self-delete.yaml
   - iam-role-reader.yaml
   - iam-role-editor.yaml
   - iam-role-admin.yaml
@@ -58,3 +59,6 @@ resources:
   - iam-platform-access-rejections-reader.yaml
   - iam-platform-access-rejections-editor.yaml
   - iam-platform-access-rejections-admin.yaml
+  - iam-platform-invitations-reader.yaml
+  - iam-platform-invitations-editor.yaml
+  - iam-platform-invitations-admin.yaml
