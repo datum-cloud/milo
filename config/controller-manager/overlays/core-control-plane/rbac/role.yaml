@@ -119,9 +119,8 @@ rules:
   - iam.miloapis.com
   resources:
   - platformaccessrejections
-  - roles
-  - userdeactivations
   verbs:
+  - delete
   - get
   - list
   - watch
@@ -134,6 +133,15 @@ rules:
   - get
   - list
   - update
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - roles
+  - userdeactivations
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - iam.miloapis.com
