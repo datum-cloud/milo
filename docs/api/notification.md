@@ -1663,12 +1663,41 @@ Standard condition is "Delivered" which tracks email delivery status.<br/>
         </td>
         <td>false</td>
       </tr><tr>
+        <td><b>emailAddress</b></td>
+        <td>string</td>
+        <td>
+          EmailAddress stores the final recipient address used for delivery,
+after resolving any referenced User.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>htmlBody</b></td>
+        <td>string</td>
+        <td>
+          HTMLBody stores the rendered HTML content of the e-mail.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b>providerID</b></td>
         <td>string</td>
         <td>
           ProviderID is the identifier returned by the underlying email provider
 (e.g. Resend) when the e-mail is accepted for delivery. It is usually
 used to track the email delivery status (e.g. provider webhooks).<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>subject</b></td>
+        <td>string</td>
+        <td>
+          Subject stores the subject line used for the e-mail.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>textBody</b></td>
+        <td>string</td>
+        <td>
+          TextBody stores the rendered plain-text content of the e-mail.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
