@@ -5,13 +5,27 @@ import (
 )
 
 type UserState string
-
 type RegistrationApprovalState string
+type UserWaitlistEmailSentCondition string
 
 const (
 	RegistrationApprovalStatePending  RegistrationApprovalState = "Pending"
 	RegistrationApprovalStateApproved RegistrationApprovalState = "Approved"
 	RegistrationApprovalStateRejected RegistrationApprovalState = "Rejected"
+)
+
+const (
+	// UserWaitlistPendingEmailSentCondition tracks that the pending waitlist email was sent.
+	UserWaitlistPendingEmailSentCondition UserWaitlistEmailSentCondition = "WaitlistPendingEmailSent"
+	// UserWaitlistApprovedEmailSentCondition tracks that the approved waitlist email was sent.
+	UserWaitlistApprovedEmailSentCondition UserWaitlistEmailSentCondition = "WaitlistApprovedEmailSent"
+	// UserWaitlistRejectedEmailSentCondition tracks that the rejected waitlist email was sent.
+	UserWaitlistRejectedEmailSentCondition UserWaitlistEmailSentCondition = "WaitlistRejectedEmailSent"
+)
+
+const (
+	// UserWaitlistEmailSentReason is the condition reason used when a waitlist email was sent successfully.
+	UserWaitlistEmailSentReason = "EmailSent"
 )
 
 const (
