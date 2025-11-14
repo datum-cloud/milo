@@ -126,6 +126,12 @@ var (
 	// UserInvitationEmailTemplate is the template for the user invitation email.
 	UserInvitationEmailTemplate string
 
+	// UserWaitlistPendingEmailTemplate is the template for the waitlist pending email.
+	UserWaitlistPendingEmailTemplate string
+	// UserWaitlistApprovedEmailTemplate is the template for the waitlist approved email.
+	UserWaitlistApprovedEmailTemplate string
+	// UserWaitlistRejectedEmailTemplate is the template for the waitlist rejected email.
+	UserWaitlistRejectedEmailTemplate string
 	// PlatformInvitationEmailTemplate is the template for the platform invitation email.
 	PlatformInvitationEmailTemplate string
 
@@ -137,6 +143,13 @@ var (
 
 	// AssignableRolesNamespace is an extra namespace that the system allows to be used for assignable roles.
 	AssignableRolesNamespace string
+
+	// OrganizationMembershipSelfDeleteRoleName is the name of the role that will be used to grant organization membership self delete permissions.
+	OrganizationMembershipSelfDeleteRoleName string
+
+	// OrganizationMembershipSelfDeleteRoleNamespace is the namespace where the organization membership self delete role is located.
+	// This allows service providers to configure where self delete roles are stored.
+	OrganizationMembershipSelfDeleteRoleNamespace string
 )
 
 func init() {
@@ -262,9 +275,14 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&GetInvitationRoleName, "get-invitation-role-name", "iam.miloapis.com-getinvitation", "The name of the role that will be used to grant get invitation permissions.")
 	fs.StringVar(&AcceptInvitationRoleName, "accept-invitation-role-name", "iam.miloapis.com-acceptinvitation", "The name of the role that will be used to grant accept invitation permissions.")
 	fs.StringVar(&UserInvitationEmailTemplate, "user-invitation-email-template", "emailtemplates.notification.miloapis.com-userinvitationemailtemplate", "The name of the template that will be used to send the user invitation email.")
+	fs.StringVar(&UserWaitlistPendingEmailTemplate, "user-waitlist-pending-email-template", "emailtemplates.notification.miloapis.com-userwaitlistemailtemplate", "The name of the template that will be used to send the waitlist pending email.")
+	fs.StringVar(&UserWaitlistApprovedEmailTemplate, "user-waitlist-approved-email-template", "emailtemplates.notification.miloapis.com-userapprovedemailtemplate", "The name of the template that will be used to send the waitlist approved email.")
+	fs.StringVar(&UserWaitlistRejectedEmailTemplate, "user-waitlist-rejected-email-template", "emailtemplates.notification.miloapis.com-userrejectedemailtemplate", "The name of the template that will be used to send the waitlist rejected email.")
 	fs.StringVar(&PlatformInvitationEmailTemplate, "platform-invitation-email-template", "emailtemplates.notification.miloapis.com-platforminvitationemailtemplate", "The name of the template that will be used to send the platform invitation email.")
 	fs.StringVar(&WaitlistRelatedResourcesNamespace, "waitlist-related-resources-namespace", "milo-system", "The namespace that contains the waitlist related resources.")
 	fs.StringVar(&PlatformInvitationEmailVariableActionUrl, "platform-invitation-email-variable-action-url", "https://cloud.datum.net", "The action url for the platform invitation email.")
+	fs.StringVar(&OrganizationMembershipSelfDeleteRoleName, "organization-membership-self-delete-role-name", "organizationmembership-self-delete", "The name of the role that will be used to grant organization membership self delete actions.")
+	fs.StringVar(&OrganizationMembershipSelfDeleteRoleNamespace, "organization-membership-self-delete-role-namespace", "milo-system", "The namespace where the organization membership self delete role is located. Defaults to system-namespace if not specified.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -528,7 +546,9 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 
 			organizationMembershipCtrl := resourcemanagercontroller.OrganizationMembershipController{
-				Client: ctrl.GetClient(),
+				Client:                  ctrl.GetClient(),
+				SelfDeleteRoleName:      OrganizationMembershipSelfDeleteRoleName,
+				SelfDeleteRoleNamespace: OrganizationMembershipSelfDeleteRoleNamespace,
 			}
 			if err := organizationMembershipCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up organization membership controller")
@@ -634,6 +654,18 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			userWaitlistCtrl := iamcontroller.UserWaitlistController{
+				Client:                    ctrl.GetClient(),
+				SystemNamespace:           SystemNamespace,
+				PendingEmailTemplateName:  UserWaitlistPendingEmailTemplate,
+				ApprovedEmailTemplateName: UserWaitlistApprovedEmailTemplate,
+				RejectedEmailTemplateName: UserWaitlistRejectedEmailTemplate,
+			}
+			if err := userWaitlistCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user waitlist controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

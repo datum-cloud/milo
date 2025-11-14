@@ -55,6 +55,9 @@ const (
 // OrganizationMembershipController reconciles an OrganizationMembership object
 type OrganizationMembershipController struct {
 	Client client.Client
+	// Role that allows a user to delete their own OrganizationMembership
+	SelfDeleteRoleName      string
+	SelfDeleteRoleNamespace string
 }
 
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizationmemberships,verbs=get;list;watch;create
@@ -144,6 +147,12 @@ func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ct
 			}
 		}
 		return ctrl.Result{}, nil
+	} else {
+		// Ensure the self-delete PolicyBinding exists for this membership/user
+		if err := r.ensureSelfDeletePolicyBinding(ctx, &organizationMembership, &user); err != nil {
+			logger.Error(err, "failed to ensure self-delete policy binding")
+			return ctrl.Result{}, fmt.Errorf("failed to ensure self-delete policy binding: %w", err)
+		}
 	}
 
 	// Update the status with information from the Organization and User
@@ -465,6 +474,65 @@ func (r *OrganizationMembershipController) isPolicyBindingReady(binding *iamv1al
 		}
 	}
 	return false
+}
+
+// ensureSelfDeletePolicyBinding makes sure a PolicyBinding exists that allows the referenced
+// user to delete their own OrganizationMembership. It is idempotent.
+func (r *OrganizationMembershipController) ensureSelfDeletePolicyBinding(
+	ctx context.Context,
+	membership *resourcemanagerv1alpha.OrganizationMembership,
+	user *iamv1alpha1.User,
+) error {
+	logger := log.FromContext(ctx)
+
+	bindingName := fmt.Sprintf("usermembership-self-delete-%s", user.Name)
+
+	var existing iamv1alpha1.PolicyBinding
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: bindingName, Namespace: membership.Namespace}, &existing); err == nil {
+		// Already exists – nothing to do.
+		return nil
+	} else if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to get existing self-delete PolicyBinding: %w", err)
+	}
+
+	pb := &iamv1alpha1.PolicyBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      bindingName,
+			Namespace: membership.Namespace,
+		},
+		Spec: iamv1alpha1.PolicyBindingSpec{
+			RoleRef: iamv1alpha1.RoleReference{
+				Name:      r.SelfDeleteRoleName,
+				Namespace: r.SelfDeleteRoleNamespace,
+			},
+			Subjects: []iamv1alpha1.Subject{
+				{
+					Kind: "User",
+					Name: user.Name,
+					UID:  string(user.UID),
+				},
+			},
+			ResourceSelector: iamv1alpha1.ResourceSelector{
+				ResourceRef: &iamv1alpha1.ResourceReference{
+					APIGroup:  "resourcemanager.miloapis.com",
+					Kind:      "OrganizationMembership",
+					Name:      membership.Name,
+					Namespace: membership.Namespace,
+					UID:       string(membership.UID),
+				},
+			},
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(membership, pb, r.Client.Scheme()); err != nil {
+		return fmt.Errorf("failed to set owner reference: %w", err)
+	}
+
+	logger.Info("creating self-delete PolicyBinding", "policyBinding", pb.Name)
+	if err := r.Client.Create(ctx, pb); err != nil {
+		return fmt.Errorf("failed to create self-delete PolicyBinding: %w", err)
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
