@@ -122,6 +122,23 @@ type EmailStatus struct {
 	// used to track the email delivery status (e.g. provider webhooks).
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
+
+	// HTMLBody stores the rendered HTML content of the e-mail.
+	// +optional
+	HTMLBody string `json:"htmlBody,omitempty"`
+
+	// TextBody stores the rendered plain-text content of the e-mail.
+	// +optional
+	TextBody string `json:"textBody,omitempty"`
+
+	// Subject stores the subject line used for the e-mail.
+	// +optional
+	Subject string `json:"subject,omitempty"`
+
+	// EmailAddress stores the final recipient address used for delivery,
+	// after resolving any referenced User.
+	// +optional
+	EmailAddress string `json:"emailAddress,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
