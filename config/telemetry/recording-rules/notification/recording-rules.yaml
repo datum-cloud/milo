@@ -1,0 +1,56 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: notification.miloapis.com-recording-rules
+  labels:
+    app.kubernetes.io/name: milo
+    app.kubernetes.io/component: notification
+    app.kubernetes.io/part-of: milo
+    monitoring.coreos.com/prometheus: kube-prometheus
+spec:
+  groups:
+    # =============================================================================
+    # RESOURCE READINESS
+    # =============================================================================
+    - name: notification.readiness.1m
+      interval: 15s
+      rules:
+        # NOT READY email templates
+        - record: notification.miloapis.com:templates:not_ready
+          expr: |
+            count (
+              milo_email_templates_info{component="notification"}
+              unless on(name, namespace) (
+                milo_email_templates_status_condition{component="notification", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY contacts
+        - record: notification.miloapis.com:contacts:not_ready
+          expr: |
+            count (
+              milo_contacts_info{component="notification"}
+              unless on(name, namespace) (
+                milo_contacts_status_condition{component="notification", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY contact groups
+        - record: notification.miloapis.com:contact_groups:not_ready
+          expr: |
+            count (
+              milo_contact_groups_info{component="notification"}
+              unless on(name, namespace) (
+                milo_contact_groups_status_condition{component="notification", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY email broadcasts
+        - record: notification.miloapis.com:broadcasts:not_ready
+          expr: |
+            count (
+              milo_email_broadcasts_info{component="notification"}
+              unless on(name, namespace) (
+                milo_email_broadcasts_status_condition{component="notification", type="Ready", status="True"} == 1
+              )
+            )

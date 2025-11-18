@@ -1,0 +1,53 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "iam.miloapis.com"
+        kind: "Role"
+        version: "v1alpha1"
+      metricNamePrefix: milo_roles
+      commonLabels:
+        component: iam
+        resource_type: role
+      metrics:
+        - name: "info"
+          help: "Information about roles"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for roles"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the role was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "observed_generation"
+          help: "The observed generation for the role"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, observedGeneration]
+              nilIsZero: true
+
+        - name: "current_generation"
+          help: "The current generation for the role"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]

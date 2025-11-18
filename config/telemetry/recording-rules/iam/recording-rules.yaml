@@ -1,0 +1,116 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: iam.miloapis.com-recording-rules
+  labels:
+    app.kubernetes.io/name: milo
+    app.kubernetes.io/component: iam
+    app.kubernetes.io/part-of: milo
+    monitoring.coreos.com/prometheus: kube-prometheus
+spec:
+  groups:
+    # =============================================================================
+    # RESOURCE READINESS
+    # =============================================================================
+    - name: iam.readiness.1m
+      interval: 15s
+      rules:
+        # NOT READY users
+        - record: iam.miloapis.com:users:not_ready
+          expr: |
+            count (
+              milo_users_info{component="iam"}
+              unless on(name) (
+                milo_users_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY roles
+        - record: iam.miloapis.com:roles:not_ready
+          expr: |
+            count (
+              milo_roles_info{component="iam"}
+              unless on(name, namespace) (
+                milo_roles_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY policy bindings
+        - record: iam.miloapis.com:bindings:not_ready
+          expr: |
+            count (
+              milo_policy_bindings_info{component="iam"}
+              unless on(name, namespace) (
+                milo_policy_bindings_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY protected resources
+        - record: iam.miloapis.com:protected_resources:not_ready
+          expr: |
+            count by (resource_kind) (
+              milo_protected_resources_info{component="iam"}
+              unless on(name, namespace) (
+                milo_protected_resources_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY groups
+        - record: iam.miloapis.com:groups:not_ready
+          expr: |
+            count (
+              milo_groups_info{component="iam"}
+              unless on(name, namespace) (
+                milo_groups_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY group memberships
+        - record: iam.miloapis.com:group_memberships:not_ready
+          expr: |
+            count (
+              milo_group_memberships_info{component="iam"}
+              unless on(name, namespace) (
+                milo_group_memberships_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY machine accounts
+        - record: iam.miloapis.com:machine_accounts:not_ready
+          expr: |
+            count (
+              milo_machine_accounts_info{component="iam"}
+              unless on(name, namespace) (
+                milo_machine_accounts_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY machine account keys
+        - record: iam.miloapis.com:machine_account_keys:not_ready
+          expr: |
+            count (
+              milo_machine_account_keys_info{component="iam"}
+              unless on(name, namespace) (
+                milo_machine_account_keys_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY user invitations
+        - record: iam.miloapis.com:invitations:not_ready
+          expr: |
+            count (
+              milo_user_invitations_info{component="iam"}
+              unless on(name, namespace) (
+                milo_user_invitations_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY user deactivations
+        - record: iam.miloapis.com:deactivations:not_ready
+          expr: |
+            count (
+              milo_user_deactivations_info{component="iam"}
+              unless on(name, namespace) (
+                milo_user_deactivations_status_condition{component="iam", type="Ready", status="True"} == 1
+              )
+            )

@@ -1,0 +1,93 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: notification.miloapis.com-alerting-rules
+  labels:
+    app.kubernetes.io/name: milo
+    app.kubernetes.io/component: notification
+    app.kubernetes.io/part-of: milo
+    monitoring.coreos.com/prometheus: kube-prometheus
+spec:
+  groups:
+    - name: notification.readiness
+      interval: 30s
+      rules:
+        # Email templates not ready (critical for email delivery)
+        - alert: EmailTemplatesNotReady
+          expr: notification.miloapis.com:templates:not_ready > 0
+          for: 2m
+          labels:
+            severity: critical
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} email templates are not ready"
+            description: |
+              Email templates are not in Ready state, blocking email sending.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check template status: kubectl get emailtemplates -o wide
+              2. Review template validation and rendering
+              3. Verify template content and variable substitution
+
+        # Contacts not ready
+        - alert: ContactsNotReady
+          expr: notification.miloapis.com:contacts:not_ready > 0
+          for: 5m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} contacts are not ready"
+            description: |
+              Contacts are not in Ready state, affecting notification delivery.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check contact status: kubectl get contacts -o wide
+              2. Review contact validation (email format, etc.)
+              3. Verify contact provider integration
+
+        # Contact groups not ready
+        - alert: ContactGroupsNotReady
+          expr: notification.miloapis.com:contact_groups:not_ready > 0
+          for: 5m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} contact groups are not ready"
+            description: |
+              Contact groups are not in Ready state, affecting group notifications.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check contact group status: kubectl get contactgroups -o wide
+              2. Review group membership resolution
+              3. Verify contact references are valid
+
+        # Email broadcasts not ready
+        - alert: EmailBroadcastsNotReady
+          expr: notification.miloapis.com:broadcasts:not_ready > 0
+          for: 2m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} email broadcasts are not ready"
+            description: |
+              Email broadcasts are not in Ready state, delaying mass notifications.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check broadcast status: kubectl get emailbroadcasts -o wide
+              2. Review recipient list generation
+              3. Verify template and delivery configuration
