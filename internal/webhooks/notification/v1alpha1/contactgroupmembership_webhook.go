@@ -90,7 +90,6 @@ func (v *ContactGroupMembershipValidator) ValidateCreate(ctx context.Context, ob
 	// Check for duplicate membership (same contact already in the target group)
 	var existing notificationv1alpha1.ContactGroupMembershipList
 	if err := v.Client.List(ctx, &existing,
-		client.InNamespace(cgm.Namespace),
 		client.MatchingFields{contactMembershipCompositeKey: buildContactGroupTupleKey(cgm.Spec.ContactRef, cgm.Spec.ContactGroupRef)}); err != nil {
 		return nil, errors.NewInternalError(fmt.Errorf("failed to list memberships: %w", err))
 	}
@@ -101,7 +100,6 @@ func (v *ContactGroupMembershipValidator) ValidateCreate(ctx context.Context, ob
 	// Check for existing membership removal for the same contact and group
 	var existingRemovals notificationv1alpha1.ContactGroupMembershipRemovalList
 	if err := v.Client.List(ctx, &existingRemovals,
-		client.InNamespace(cgm.Namespace),
 		client.MatchingFields{contactMembershipRemovalCompositeKey: buildContactGroupTupleKey(cgm.Spec.ContactRef, cgm.Spec.ContactGroupRef)}); err != nil {
 		return nil, errors.NewInternalError(fmt.Errorf("failed to list membership removals: %w", err))
 	}

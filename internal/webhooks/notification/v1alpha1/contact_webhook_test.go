@@ -314,6 +314,51 @@ func TestContactValidator_ValidateCreate(t *testing.T) {
 			expectError:   true,
 			errorContains: "already has this subject and email",
 		},
+		"duplicate email across namespaces": {
+			// An existing newsletter contact with the same email in a different namespace
+			// should make the new user-referenced contact invalid
+			contact: &notificationv1alpha1.Contact{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "user-contact-ns2",
+					Namespace: "ns-two",
+				},
+				Spec: notificationv1alpha1.ContactSpec{
+					GivenName:  "Dup",
+					FamilyName: "User",
+					Email:      "global@example.com", // same email as the seeded one
+					SubjectRef: &notificationv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "test-user",
+					},
+				},
+			},
+			seedObjects: []client.Object{
+				// Existing newsletter contact in a different namespace
+				&notificationv1alpha1.Contact{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "newsletter-ns1",
+						Namespace: "ns-one",
+					},
+					Spec: notificationv1alpha1.ContactSpec{
+						GivenName:  "News",
+						FamilyName: "Letter",
+						Email:      "global@example.com",
+					},
+				},
+				// Backing User for the user-referenced contact
+				&iamv1alpha1.User{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-user",
+					},
+					Spec: iamv1alpha1.UserSpec{
+						Email: "user@example.com",
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: "already has this email in the cluster",
+		},
 		"duplicate user contact": {
 			contact: &notificationv1alpha1.Contact{
 				ObjectMeta: metav1.ObjectMeta{Name: "user-dup"},
@@ -357,6 +402,11 @@ func TestContactValidator_ValidateCreate(t *testing.T) {
 				contact := obj.(*notificationv1alpha1.Contact)
 				return []string{buildContactSpecKey(*contact)}
 			})
+			// Register the email index so email-based MatchingFields queries work like the real manager
+			builder = builder.WithIndex(&notificationv1alpha1.Contact{}, contactEmailKey, func(obj client.Object) []string {
+				contact := obj.(*notificationv1alpha1.Contact)
+				return []string{contact.Spec.Email}
+			})
 			if len(tt.seedObjects) > 0 {
 				builder = builder.WithObjects(tt.seedObjects...)
 			}
@@ -380,7 +430,10 @@ func TestContactValidator_ValidateCreate(t *testing.T) {
 func TestContactValidator_ValidateUpdate_Duplicate(t *testing.T) {
 	// Seed two contacts under same subject
 	contactA := &notificationv1alpha1.Contact{
-		ObjectMeta: metav1.ObjectMeta{Name: "contact-a"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "contact-a",
+			Namespace: "ns-one",
+		},
 		Spec: notificationv1alpha1.ContactSpec{
 			GivenName:  "A",
 			FamilyName: "User",
@@ -394,7 +447,10 @@ func TestContactValidator_ValidateUpdate_Duplicate(t *testing.T) {
 	}
 
 	contactBOriginal := &notificationv1alpha1.Contact{
-		ObjectMeta: metav1.ObjectMeta{Name: "contact-b"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "contact-b",
+			Namespace: "ns-two",
+		},
 		Spec: notificationv1alpha1.ContactSpec{
 			GivenName:  "B",
 			FamilyName: "User",
@@ -414,11 +470,15 @@ func TestContactValidator_ValidateUpdate_Duplicate(t *testing.T) {
 	// User resource so validation passes user existence
 	user := &iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "test-user"}, Spec: iamv1alpha1.UserSpec{Email: "user@example.com"}}
 
-	// Build fake client with index
+	// Build fake client with indexes
 	builder := fake.NewClientBuilder().WithScheme(runtimeScheme).WithObjects(user, contactA, contactBOriginal)
 	builder = builder.WithIndex(&notificationv1alpha1.Contact{}, contactSpecKey, func(obj client.Object) []string {
 		c := obj.(*notificationv1alpha1.Contact)
 		return []string{buildContactSpecKey(*c)}
+	})
+	builder = builder.WithIndex(&notificationv1alpha1.Contact{}, contactEmailKey, func(obj client.Object) []string {
+		c := obj.(*notificationv1alpha1.Contact)
+		return []string{c.Spec.Email}
 	})
 	fakeClient := builder.Build()
 
@@ -427,5 +487,5 @@ func TestContactValidator_ValidateUpdate_Duplicate(t *testing.T) {
 	_, err := validator.ValidateUpdate(context.Background(), contactBOriginal, contactBUpdated)
 
 	assert.Error(t, err, "expected duplicate validation error on update")
-	assert.Contains(t, strings.ToLower(err.Error()), "already has this subject and email")
+	assert.Contains(t, strings.ToLower(err.Error()), "already has this email in the same contact cluster")
 }
