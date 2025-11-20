@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -82,28 +81,13 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	// Capture the current status to detect changes later
 	oldUserStatus := user.Status.DeepCopy()
 
-	// TODO: Remove this bootstrap logic after first production run.
-	// Automatically approve users that were created before 22 Oct 2025 14:00 UTC to
-	// avoid blocking legacy user accounts. For newer users, initialise the
-	// RegistrationApproval to Pending if it is not already set.
-	{
-		// Hard-code the migration cutoff to 22 Oct 2025 14:00 UTC.
-		cutoff := metav1.Time{Time: time.Date(2025, time.October, 22, 14, 0, 0, 0, time.UTC)}
-
-		if user.CreationTimestamp.Time.Before(cutoff.Time) {
-			// Auto-approve legacy users.
-			user.Status.RegistrationApproval = iamv1alpha1.RegistrationApprovalStateApproved
-			log.Info("Bootstrap: auto-approving legacy user", "user", user.Name, "created", user.CreationTimestamp.Time)
-		} else {
-			// Get the user access approval status
-			registrationApproval, err := r.getUserAccessApprovalStatus(ctx, user)
-			if err != nil {
-				log.Error(err, "failed to get user access approval status")
-				return ctrl.Result{}, fmt.Errorf("failed to get user access approval status: %w", err)
-			}
-			user.Status.RegistrationApproval = registrationApproval
-		}
+	// Get the user access approval status
+	registrationApproval, err := r.getUserAccessApprovalStatus(ctx, user)
+	if err != nil {
+		log.Error(err, "failed to get user access approval status")
+		return ctrl.Result{}, fmt.Errorf("failed to get user access approval status: %w", err)
 	}
+	user.Status.RegistrationApproval = registrationApproval
 
 	// Defining the desired user state
 	var desiredState iamv1alpha1.UserState
