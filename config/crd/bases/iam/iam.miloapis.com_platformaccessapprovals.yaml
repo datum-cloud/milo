@@ -84,6 +84,9 @@ spec:
             - message: spec is immutable
               rule: self == oldSelf
         type: object
+    selectableFields:
+    - jsonPath: .spec.subjectRef.email
+    - jsonPath: .spec.subjectRef.userRef.name
     served: true
     storage: true
     subresources:
