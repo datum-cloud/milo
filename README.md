@@ -50,6 +50,7 @@ kubectl get organizations
 
 📚 **[Full setup guide →](docs/getting-started.md)**
 📖 **[API documentation →](docs/api/)**
+🧱 **[Manual migrations →](docs/migrations/README.md)**
 
 ## What We Prefer Not to Build
 

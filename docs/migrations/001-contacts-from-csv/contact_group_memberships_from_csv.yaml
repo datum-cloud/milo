@@ -1,0 +1,12 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: ContactGroupMembership
+metadata:
+  name: contact-group-membership-13db4
+  namespace: milo-system
+spec:
+  contactGroupRef:
+    name: emailnewsletter-contact-group-3a3ar9
+    namespace: default
+  contactRef:
+    name: contact-0850a
+    namespace: milo-system
