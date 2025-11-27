@@ -1,6 +1,6 @@
 apiVersion: iam.miloapis.com/v1alpha1
 kind: User
 metadata:
-  name: milo-controller-manager
+  name: note-test
 spec:
-  email: milo-controller-manager@miloapis.com
+  email: jose@gmail.com
