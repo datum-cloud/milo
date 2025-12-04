@@ -21,6 +21,7 @@ import (
 // +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.namespace"
 // +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.kind"
 // +kubebuilder:selectablefield:JSONPath=".spec.nextActionTime"
+// +kubebuilder:selectablefield:JSONPath=".status.createdBy"
 type Note struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

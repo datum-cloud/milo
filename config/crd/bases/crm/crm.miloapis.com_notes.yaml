@@ -197,6 +197,7 @@ spec:
     - jsonPath: .spec.subjectRef.namespace
     - jsonPath: .spec.subjectRef.kind
     - jsonPath: .spec.nextActionTime
+    - jsonPath: .status.createdBy
     served: true
     storage: true
     subresources:
