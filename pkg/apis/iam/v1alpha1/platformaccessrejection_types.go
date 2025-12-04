@@ -17,6 +17,7 @@ const (
 // PlatformAccessRejection is the Schema for the platformaccessrejections API.
 // It represents a formal denial of platform access for a user. Once the rejection is created, a notification can be sent to the user.
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.name"
 type PlatformAccessRejection struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
