@@ -1,0 +1,56 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "notification.miloapis.com"
+        kind: "Email"
+        version: "v1alpha1"
+      metricNamePrefix: milo_emails
+      commonLabels:
+        component: notification
+        resource_type: email
+      labelsFromPath:
+        template_name: [spec, templateRef, name]
+        priority: [spec, priority]
+      metrics:
+        - name: "info"
+          help: "Information about emails"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for emails"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "delivery_attempts"
+          help: "Number of delivery attempts for the email"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, deliveryAttempts]
+              nilIsZero: true
+
+        - name: "created_timestamp"
+          help: "Timestamp when the email was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "current_generation"
+          help: "The current generation for the email"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]
