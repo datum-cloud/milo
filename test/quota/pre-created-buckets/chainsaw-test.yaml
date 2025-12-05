@@ -1,0 +1,167 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: quota-pre-created-buckets
+spec:
+  description: |
+    Tests that allowance buckets are pre-created when ResourceGrants become active,
+    allowing consumers to see their quota limits immediately without waiting for claims.
+
+    This test verifies:
+    - AllowanceBuckets are pre-created when ResourceGrants become active
+    - Pre-created buckets have the correct spec and labels
+    - Pre-created buckets show accurate limits from grants
+    - Claims can use pre-created buckets successfully
+    - Multiple grants contribute to the same bucket's limit
+
+  steps:
+    # Setup base quota infrastructure
+    - name: setup-base-infrastructure
+      description: |
+        Register resource types in the quota system and verify they become active.
+      try:
+        - description: Create ResourceRegistration for projects
+          create:
+            file: 01-resource-registration.yaml
+        - description: Wait for ResourceRegistration to become active
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: pre-created-test-projects-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - description: Create ResourceRegistration for CPU
+          create:
+            file: 02-resource-registration-cpu.yaml
+        - description: Wait for CPU ResourceRegistration to become active
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: pre-created-test-cpu-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Create test organization
+    - name: setup-test-organization
+      description: |
+        Create an Organization that will receive quota grants.
+      try:
+        - description: Create test Organization
+          create:
+            file: 03-test-organization.yaml
+        - description: Wait for Organization namespace to be active
+          wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-pre-created-test-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+
+    # Create first resource grant - this should trigger bucket pre-creation
+    - name: create-first-resource-grant
+      description: |
+        Create a ResourceGrant that allocates resources to the Organization.
+        This should trigger pre-creation of AllowanceBuckets.
+      try:
+        - description: Create ResourceGrant with multiple resource types
+          create:
+            file: 04-resource-grant.yaml
+        - description: Wait for ResourceGrant to become active
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: pre-created-test-org-grant-1
+            namespace: organization-pre-created-test-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Verify buckets were pre-created
+    - name: verify-buckets-pre-created
+      description: |
+        Verify that AllowanceBuckets were pre-created for both resource types
+        when the grant became active, without requiring any claims.
+      try:
+        - description: Verify project bucket exists
+          assert:
+            file: assertions/assert-project-bucket.yaml
+        - description: Verify CPU bucket exists
+          assert:
+            file: assertions/assert-cpu-bucket.yaml
+
+    # Create additional grant to test aggregation
+    - name: create-additional-grant
+      description: |
+        Create an additional ResourceGrant for the same consumer and resource types.
+        The existing buckets should be updated with new limits.
+      try:
+        - description: Create second ResourceGrant
+          create:
+            file: 05-additional-grant.yaml
+        - description: Wait for second ResourceGrant to become active
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: pre-created-test-org-grant-2
+            namespace: organization-pre-created-test-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Verify buckets show aggregated limits
+    - name: verify-aggregated-limits
+      description: |
+        Verify that the pre-created buckets now show aggregated limits
+        from both ResourceGrants.
+      try:
+        - description: Verify project bucket has aggregated limits
+          assert:
+            file: assertions/assert-project-bucket-aggregated.yaml
+        - description: Verify CPU bucket has aggregated limits
+          assert:
+            file: assertions/assert-cpu-bucket-aggregated.yaml
+
+    # Test that claims can use pre-created buckets
+    - name: test-claim-with-pre-created-bucket
+      description: |
+        Create a ResourceClaim and verify it successfully uses the pre-created bucket.
+      try:
+        - description: Create ResourceClaim for projects
+          create:
+            file: test-data/project-claim.yaml
+        - description: Wait for ResourceClaim to be granted
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceClaim
+            name: pre-created-test-project-claim
+            namespace: organization-pre-created-test-org
+            timeout: 30s
+            for:
+              condition:
+                name: Granted
+                value: 'True'
+        - description: Verify claim was granted using pre-created bucket
+          assert:
+            file: assertions/assert-claim-granted.yaml
+
+    # Verify bucket shows usage from claim
+    - name: verify-bucket-usage
+      description: |
+        Verify that the pre-created bucket correctly shows usage from the claim.
+      try:
+        - description: Verify project bucket shows allocated resources
+          assert:
+            file: assertions/assert-bucket-with-usage.yaml

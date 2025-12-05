@@ -1,0 +1,17 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: pre-created-test-projects-per-org
+spec:
+  resourceType: "pre-created-test/projects-per-org"
+  consumerType:
+    kind: Organization
+    apiGroup: resourcemanager.miloapis.com
+  type: Entity
+  description: "Number of projects allowed per organization (pre-created bucket test)"
+  baseUnit: project
+  displayUnit: project
+  unitConversionFactor: 1
+  claimingResources:
+    - apiGroup: resourcemanager.miloapis.com
+      kind: Project
