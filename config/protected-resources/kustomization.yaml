@@ -8,3 +8,4 @@ resources:
   - apiextensions/
   - notification/
   - identity/
+  - crm/
