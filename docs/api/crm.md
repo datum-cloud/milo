@@ -111,6 +111,16 @@ Defaults to the user that created the note.<br/>
         </td>
         <td>false</td>
       </tr><tr>
+        <td><b>followUp</b></td>
+        <td>boolean</td>
+        <td>
+          FollowUp indicates whether this note requires follow-up.
+When true, the note is being actively tracked for further action.<br/>
+          <br/>
+            <i>Default</i>: false<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b>interactionTime</b></td>
         <td>string</td>
         <td>

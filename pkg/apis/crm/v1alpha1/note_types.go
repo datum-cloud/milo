@@ -21,6 +21,7 @@ import (
 // +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.namespace"
 // +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.kind"
 // +kubebuilder:selectablefield:JSONPath=".spec.nextActionTime"
+// +kubebuilder:selectablefield:JSONPath=".spec.followUp"
 // +kubebuilder:selectablefield:JSONPath=".status.createdBy"
 type Note struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -54,6 +55,12 @@ type NoteSpec struct {
 	// NextActionTime is the timestamp for the follow-up action.
 	// +kubebuilder:validation:Optional
 	NextActionTime *metav1.Time `json:"nextActionTime,omitempty"`
+
+	// FollowUp indicates whether this note requires follow-up.
+	// When true, the note is being actively tracked for further action.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	FollowUp bool `json:"followUp,omitempty"`
 
 	// CreatorRef is a reference to the user that created the note.
 	// Defaults to the user that created the note.

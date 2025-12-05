@@ -72,6 +72,12 @@ spec:
                 x-kubernetes-validations:
                 - message: creatorRef type is immutable
                   rule: type(oldSelf) == null_type || self == oldSelf
+              followUp:
+                default: false
+                description: |-
+                  FollowUp indicates whether this note requires follow-up.
+                  When true, the note is being actively tracked for further action.
+                type: boolean
               interactionTime:
                 description: InteractionTime is the timestamp of the interaction with
                   the subject.
@@ -197,6 +203,7 @@ spec:
     - jsonPath: .spec.subjectRef.namespace
     - jsonPath: .spec.subjectRef.kind
     - jsonPath: .spec.nextActionTime
+    - jsonPath: .spec.followUp
     - jsonPath: .status.createdBy
     served: true
     storage: true
