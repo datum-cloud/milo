@@ -1,0 +1,17 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: pre-created-test-cpu-per-org
+spec:
+  resourceType: "pre-created-test/cpu-per-org"
+  consumerType:
+    kind: Organization
+    apiGroup: resourcemanager.miloapis.com
+  type: Allocation
+  description: "CPU allocation per organization (pre-created bucket test)"
+  baseUnit: millicore
+  displayUnit: core
+  unitConversionFactor: 1000
+  claimingResources:
+    - apiGroup: resourcemanager.miloapis.com
+      kind: Project

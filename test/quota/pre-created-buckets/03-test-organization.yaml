@@ -1,0 +1,12 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: pre-created-test-org
+  annotations:
+    kubernetes.io/display-name: "Pre-Created Buckets Test Organization"
+    kubernetes.io/description: "Organization for testing pre-created allowance buckets"
+  labels:
+    test.miloapis.com/quota: "pre-created-buckets"
+    test.miloapis.com/scenario: "bucket-pre-creation"
+spec:
+  type: Standard

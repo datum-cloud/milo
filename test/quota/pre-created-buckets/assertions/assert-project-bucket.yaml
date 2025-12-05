@@ -1,0 +1,19 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: AllowanceBucket
+metadata:
+  namespace: organization-pre-created-test-org
+  labels:
+    quota.miloapis.com/consumer-kind: Organization
+    quota.miloapis.com/consumer-name: pre-created-test-org
+spec:
+  consumerRef:
+    kind: Organization
+    apiGroup: resourcemanager.miloapis.com
+    name: pre-created-test-org
+  resourceType: "pre-created-test/projects-per-org"
+status:
+  limit: 3  # From first grant
+  allocated: 0  # No claims yet
+  available: 3
+  grantCount: 1
+  claimCount: 0

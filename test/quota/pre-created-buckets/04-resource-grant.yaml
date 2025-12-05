@@ -1,0 +1,17 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: pre-created-test-org-grant-1
+  namespace: organization-pre-created-test-org
+spec:
+  consumerRef:
+    kind: Organization
+    apiGroup: resourcemanager.miloapis.com
+    name: pre-created-test-org
+  allowances:
+    - resourceType: "pre-created-test/projects-per-org"
+      buckets:
+        - amount: 3
+    - resourceType: "pre-created-test/cpu-per-org"
+      buckets:
+        - amount: 4000  # 4 cores in millicores
