@@ -33,6 +33,15 @@ spec:
         - apply:
             file: 03-test-notes.yaml
 
+        # Mark PolicyBinding as Ready (test workaround - PolicyBinding controller is in a different repo)
+        - script:
+            timeout: 30s
+            content: |
+              # Wait for PolicyBinding to be created
+              sleep 5
+              # Patch the specific PolicyBinding for test-crm-note-1
+              kubectl patch policybinding note-creator-editor-test-crm-note-1 -n milo-system --type=merge --subresource=status -p '{"status":{"conditions":[{"type":"Ready","status":"True","reason":"TestReady","message":"Marked ready for testing","lastTransitionTime":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}],"observedGeneration":1}}'
+
         # Verify Note1 becomes Ready and status.createdBy is set from the User's email
         - wait:
             apiVersion: crm.miloapis.com/v1alpha1

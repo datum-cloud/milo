@@ -153,6 +153,9 @@ var (
 	// OrganizationMembershipSelfDeleteRoleNamespace is the namespace where the organization membership self delete role is located.
 	// This allows service providers to configure where self delete roles are stored.
 	OrganizationMembershipSelfDeleteRoleNamespace string
+
+	// NoteCreatorEditorRoleName is the name of the role that will be used to grant note creator edit permissions.
+	NoteCreatorEditorRoleName string
 )
 
 func init() {
@@ -287,6 +290,7 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&PlatformInvitationEmailVariableActionUrl, "platform-invitation-email-variable-action-url", "https://cloud.datum.net", "The action url for the platform invitation email.")
 	fs.StringVar(&OrganizationMembershipSelfDeleteRoleName, "organization-membership-self-delete-role-name", "organizationmembership-self-delete", "The name of the role that will be used to grant organization membership self delete actions.")
 	fs.StringVar(&OrganizationMembershipSelfDeleteRoleNamespace, "organization-membership-self-delete-role-namespace", "milo-system", "The namespace where the organization membership self delete role is located. Defaults to system-namespace if not specified.")
+	fs.StringVar(&NoteCreatorEditorRoleName, "note-creator-editor-role-name", "crm-note-creator-editor", "The name of the role that will be used to grant note creator edit permissions.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -705,7 +709,9 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 
 			noteCtrl := crmcontroller.NoteController{
-				Client: ctrl.GetClient(),
+				Client:                     ctrl.GetClient(),
+				CreatorEditorRoleName:      NoteCreatorEditorRoleName,
+				CreatorEditorRoleNamespace: SystemNamespace,
 			}
 			if err := noteCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up note controller")
