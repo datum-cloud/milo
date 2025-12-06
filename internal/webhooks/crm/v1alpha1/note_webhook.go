@@ -115,7 +115,7 @@ func (v *NoteValidator) ValidateCreate(ctx context.Context, obj runtime.Object) 
 	}
 	noteLog.Info("Validating Note creation", "name", note.Name)
 
-	return nil, v.validateNote(ctx, note)
+	return nil, v.validateNote(ctx, note, false)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
@@ -124,9 +124,18 @@ func (v *NoteValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 	if !ok {
 		return nil, errors.NewInternalError(fmt.Errorf("failed to cast object to Note"))
 	}
+	oldNote, ok := oldObj.(*crmv1alpha1.Note)
+	if !ok {
+		return nil, errors.NewInternalError(fmt.Errorf("failed to cast old object to Note"))
+	}
 	noteLog.Info("Validating Note update", "name", note.Name)
 
-	return nil, v.validateNote(ctx, note)
+	// Skip nextActionTime validation if it hasn't changed
+	skipNextActionTimeValidation := oldNote.Spec.NextActionTime != nil &&
+		note.Spec.NextActionTime != nil &&
+		oldNote.Spec.NextActionTime.Time.Equal(note.Spec.NextActionTime.Time)
+
+	return nil, v.validateNote(ctx, note, skipNextActionTimeValidation)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -134,11 +143,11 @@ func (v *NoteValidator) ValidateDelete(ctx context.Context, obj runtime.Object) 
 	return nil, nil
 }
 
-func (v *NoteValidator) validateNote(ctx context.Context, note *crmv1alpha1.Note) error {
+func (v *NoteValidator) validateNote(ctx context.Context, note *crmv1alpha1.Note, skipNextActionTimeValidation bool) error {
 	var allErrs field.ErrorList
 
 	// Validate NextActionTime is not in the past
-	if note.Spec.NextActionTime != nil {
+	if !skipNextActionTimeValidation && note.Spec.NextActionTime != nil {
 		if note.Spec.NextActionTime.Time.Before(time.Now()) {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "nextActionTime"), note.Spec.NextActionTime, "nextActionTime cannot be in the past"))
 		}

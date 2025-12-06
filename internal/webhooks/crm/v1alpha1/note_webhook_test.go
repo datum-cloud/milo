@@ -483,36 +483,346 @@ func TestNoteValidator_ValidateCreate(t *testing.T) {
 	}
 }
 
-func TestNoteValidator_ValidateUpdate_UsesSameLogicAsCreate(t *testing.T) {
-	// Reuse a simple valid case to ensure update path delegates to validateNote
-	existingUser := &iamv1alpha1.User{
-		ObjectMeta: metav1.ObjectMeta{Name: "existing-user"},
-	}
+func TestNoteValidator_ValidateUpdate(t *testing.T) {
+	now := time.Now().UTC()
+	past := metav1.NewTime(now.Add(-1 * time.Hour))
+	past2 := metav1.NewTime(now.Add(-2 * time.Hour))
+	future := metav1.NewTime(now.Add(1 * time.Hour))
+	future2 := metav1.NewTime(now.Add(2 * time.Hour))
 
-	noteOld := &crmv1alpha1.Note{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "update-note",
-		},
-		Spec: crmv1alpha1.NoteSpec{
-			Content: "old content",
-			SubjectRef: crmv1alpha1.SubjectReference{
-				APIGroup: "iam.miloapis.com",
-				Kind:     "User",
-				Name:     "existing-user",
+	tests := map[string]struct {
+		oldNote       *crmv1alpha1.Note
+		newNote       *crmv1alpha1.Note
+		seedObjects   []client.Object
+		expectError   bool
+		errorContains string
+	}{
+		"valid update with no nextActionTime": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "update-note"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "old content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+				},
 			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "update-note"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "new content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "existing-user"}},
+			},
+			expectError: false,
+		},
+		"valid update when nextActionTime unchanged and in the past": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-past-unchanged"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "old content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &past,
+				},
+			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-past-unchanged"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "new content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &past,
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "existing-user"}},
+			},
+			expectError: false,
+		},
+		"valid update when changing nextActionTime from past to future": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-past-to-future"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "old content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &past,
+				},
+			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-past-to-future"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "new content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &future,
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "existing-user"}},
+			},
+			expectError: false,
+		},
+		"valid update when changing nextActionTime from future to different future": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-future-to-future"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "old ontent",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &future,
+				},
+			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-future-to-future"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "new content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &future2,
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "existing-user"}},
+			},
+			expectError: false,
+		},
+		"valid update when removing nextActionTime": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-remove-time"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "old content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &past,
+				},
+			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-remove-time"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "new content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: nil,
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "existing-user"}},
+			},
+			expectError: false,
+		},
+		"error when changing nextActionTime from future to past": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-future-to-past"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "old content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &future,
+				},
+			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-future-to-past"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "new content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &past,
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "existing-user"}},
+			},
+			expectError:   true,
+			errorContains: "nextActionTime cannot be in the past",
+		},
+		"error when changing nextActionTime from one past to different past": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-past-to-past"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &past,
+				},
+			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-past-to-past"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &past2,
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "existing-user"}},
+			},
+			expectError:   true,
+			errorContains: "nextActionTime cannot be in the past",
+		},
+		"error when adding new nextActionTime in the past": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-add-past"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: nil,
+				},
+			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-add-past"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &past,
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "existing-user"}},
+			},
+			expectError:   true,
+			errorContains: "nextActionTime cannot be in the past",
+		},
+		"valid update when adding new nextActionTime in the future": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-add-future"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: nil,
+				},
+			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-add-future"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup: "iam.miloapis.com",
+						Kind:     "User",
+						Name:     "existing-user",
+					},
+					NextActionTime: &future,
+				},
+			},
+			seedObjects: []client.Object{
+				&iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "existing-user"}},
+			},
+			expectError: false,
+		},
+		"valid update with contact subject and unchanged past nextActionTime": {
+			oldNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-contact-past"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "old content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup:  "notification.miloapis.com",
+						Kind:      "Contact",
+						Name:      "contact-1",
+						Namespace: "contacts-ns",
+					},
+					NextActionTime: &past,
+				},
+			},
+			newNote: &crmv1alpha1.Note{
+				ObjectMeta: metav1.ObjectMeta{Name: "note-contact-past"},
+				Spec: crmv1alpha1.NoteSpec{
+					Content: "new content",
+					SubjectRef: crmv1alpha1.SubjectReference{
+						APIGroup:  "notification.miloapis.com",
+						Kind:      "Contact",
+						Name:      "contact-1",
+						Namespace: "contacts-ns",
+					},
+					NextActionTime: &past,
+				},
+			},
+			seedObjects: []client.Object{
+				&notificationv1alpha1.Contact{
+					ObjectMeta: metav1.ObjectMeta{Name: "contact-1", Namespace: "contacts-ns"},
+				},
+			},
+			expectError: false,
 		},
 	}
 
-	noteNew := noteOld.DeepCopy()
-	noteNew.Spec.Content = "new content"
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			builder := fake.NewClientBuilder().WithScheme(runtimeScheme)
+			if len(tt.seedObjects) > 0 {
+				builder = builder.WithObjects(tt.seedObjects...)
+			}
+			fakeClient := builder.Build()
 
-	fakeClient := fake.NewClientBuilder().
-		WithScheme(runtimeScheme).
-		WithObjects(existingUser).
-		Build()
+			validator := &NoteValidator{Client: fakeClient}
+			_, err := validator.ValidateUpdate(context.Background(), tt.oldNote, tt.newNote)
 
-	validator := &NoteValidator{Client: fakeClient}
-	warnings, err := validator.ValidateUpdate(context.Background(), noteOld, noteNew)
-	assert.NoError(t, err)
-	assert.Empty(t, warnings)
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, strings.ToLower(err.Error()), strings.ToLower(tt.errorContains))
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
