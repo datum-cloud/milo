@@ -14,6 +14,7 @@ import (
 // +kubebuilder:printcolumn:name="Subject Kind",type="string",JSONPath=".spec.subjectRef.kind"
 // +kubebuilder:printcolumn:name="Subject Name",type="string",JSONPath=".spec.subjectRef.name"
 // +kubebuilder:printcolumn:name="Creator",type="string",JSONPath=".spec.creatorRef.name"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:selectablefield:JSONPath=".spec.creatorRef.name"

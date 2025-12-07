@@ -24,6 +24,9 @@ spec:
     - jsonPath: .spec.creatorRef.name
       name: Creator
       type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
