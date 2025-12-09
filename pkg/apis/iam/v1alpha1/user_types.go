@@ -98,6 +98,19 @@ type UserStatus struct {
 	// *Pending* and *Rejected* users are prevented for interacting with resources.
 	// +kubebuilder:validation:Enum=Pending;Approved;Rejected
 	RegistrationApproval RegistrationApprovalState `json:"registrationApproval,omitempty"`
+
+	// LastLoginProvider records the identity provider that was most recently used by the
+	// user to log in (e.g., "github" or "google"). This field is set by the auth provider
+	// based on authentication events.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=github;google
+	LastLoginProvider AuthProvider `json:"lastLoginProvider,omitempty"`
+
+	// AvatarURL points to the avatar image associated with the user. This value is
+	// populated by the auth provider or any service that provides a user avatar URL.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Format=uri
+	AvatarURL string `json:"avatarUrl,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -108,3 +121,12 @@ type UserList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []User `json:"items"`
 }
+
+// AuthProvider represents an external identity provider used for user authentication.
+// +kubebuilder:validation:Enum=github;google
+type AuthProvider string
+
+const (
+	AuthProviderGitHub AuthProvider = "github"
+	AuthProviderGoogle AuthProvider = "google"
+)
