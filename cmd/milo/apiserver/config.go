@@ -291,6 +291,10 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator, c.LongRunningFunc)
 	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "audit")
 
+	// Add platform scope annotations to audit events before the audit filter processes them.
+	// This must run AFTER the context decorators below have set user.extra with parent context.
+	handler = datumfilters.AuditScopeAnnotationDecorator(handler)
+
 	// These decorators are added after the audit filter to ensure they're run
 	// prior to the audit filter being run so they will include the user and
 	// organization contexts.
