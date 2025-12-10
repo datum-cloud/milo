@@ -17,6 +17,8 @@ const (
 // PlatformAccessApproval is the Schema for the platformaccessapprovals API.
 // It represents a platform access approval for a user. Once the platform access approval is created, an email will be sent to the user.
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.email"
+// +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.userRef.name"
 type PlatformAccessApproval struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

@@ -1,0 +1,9 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Contact
+metadata:
+  name: contact-0850a
+  namespace: milo-system
+spec:
+  email: jane@example.com
+  givenName: Jane
+  familyName: Doe

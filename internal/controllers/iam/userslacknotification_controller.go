@@ -102,41 +102,29 @@ func (r *UserSlackNotificationController) sendSlackNotification(ctx context.Cont
 		displayName = user.Spec.Email
 	}
 
-	// Example: "12 Jan 2025 14:32 UTC"
-	createdAt := user.CreationTimestamp.Time.UTC().Format("02 Jan 2006 15:04 MST")
-
-	createdText := fmt.Sprintf("*Created At:* %s", createdAt)
-
 	link := fmt.Sprintf("https://staff.datum.net/customers/users/%s", user.Name)
-	createdText = fmt.Sprintf("%s\n\n<%s|View in Staff Portal>", createdText, link)
 
 	payload := map[string]interface{}{
 		"blocks": []map[string]interface{}{
 			{
-				"type": "header",
-				"text": map[string]interface{}{
-					"type": "plain_text",
-					"text": "🎉 New User Created",
-				},
-			},
-			{
-				"type": "section",
-				"fields": []map[string]interface{}{
-					{
-						"type": "mrkdwn",
-						"text": fmt.Sprintf("*Name:* %s", displayName),
-					},
-					{
-						"type": "mrkdwn",
-						"text": fmt.Sprintf("*Email:* %s", user.Spec.Email),
-					},
-				},
-			},
-			{
 				"type": "section",
 				"text": map[string]interface{}{
 					"type": "mrkdwn",
-					"text": createdText,
+					"text": "*User signed up*",
+				},
+			},
+		},
+		"attachments": []map[string]interface{}{
+			{
+				"color": "#f2c744",
+				"blocks": []map[string]interface{}{
+					{
+						"type": "section",
+						"text": map[string]interface{}{
+							"type": "mrkdwn",
+							"text": fmt.Sprintf("Customer: <%s|%s> - %s", link, displayName, user.Spec.Email),
+						},
+					},
 				},
 			},
 		},

@@ -194,6 +194,8 @@ spec:
                 type: array
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.email
     served: true
     storage: true
     subresources:
