@@ -76,6 +76,12 @@ spec:
           status:
             description: UserStatus defines the observed state of User
             properties:
+              avatarUrl:
+                description: |-
+                  AvatarURL points to the avatar image associated with the user. This value is
+                  populated by the auth provider or any service that provides a user avatar URL.
+                format: uri
+                type: string
               conditions:
                 default:
                 - lastTransitionTime: "1970-01-01T00:00:00Z"
@@ -140,6 +146,19 @@ spec:
                   - type
                   type: object
                 type: array
+              lastLoginProvider:
+                allOf:
+                - enum:
+                  - github
+                  - google
+                - enum:
+                  - github
+                  - google
+                description: |-
+                  LastLoginProvider records the identity provider that was most recently used by the
+                  user to log in (e.g., "github" or "google"). This field is set by the auth provider
+                  based on authentication events.
+                type: string
               registrationApproval:
                 description: |-
                   RegistrationApproval represents the administrator’s decision on the user’s registration request.

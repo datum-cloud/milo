@@ -128,7 +128,6 @@ rules:
   - iam.miloapis.com
   resources:
   - platforminvitations
-  - users
   verbs:
   - get
   - list
@@ -157,6 +156,7 @@ rules:
   - iam.miloapis.com
   resources:
   - userpreferences
+  - users
   verbs:
   - get
   - list

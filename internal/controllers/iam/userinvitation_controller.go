@@ -814,15 +814,25 @@ func (r *UserInvitationController) grantAccessApproval(ctx context.Context, user
 		}
 	}
 
+	// Build the SubjectReference for the PlatformAccessApproval
+	subjectRef := iamv1alpha1.SubjectReference{}
+	if user == nil {
+		// Invitee hasn't created an account yet – approve the email address
+		subjectRef.Email = strings.ToLower(ui.Spec.Email)
+	} else {
+		// User exists – approve the specific user object
+		subjectRef.UserRef = &iamv1alpha1.UserReference{
+			Name: user.Name,
+		}
+	}
+
 	// If here, no PlatformAccessApproval exists for the invitee user, create a new one
 	platformAccessApproval := &iamv1alpha1.PlatformAccessApproval{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: getDeterministicResourceName("platform-access-approval", *ui),
 		},
 		Spec: iamv1alpha1.PlatformAccessApprovalSpec{
-			SubjectRef: iamv1alpha1.SubjectReference{
-				Email: strings.ToLower(ui.Spec.Email),
-			},
+			SubjectRef: subjectRef,
 		},
 	}
 	if err := r.Client.Create(ctx, platformAccessApproval); err != nil {
