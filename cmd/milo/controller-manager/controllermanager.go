@@ -657,6 +657,21 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			// TODO: remove entire controller init once ArgoCD sensor is deployed.
+			userSlackWebhookURL := os.Getenv("MILO_USER_SLACK_WEBHOOK_URL")
+			if userSlackWebhookURL == "" {
+				logger.Info("MILO_USER_SLACK_WEBHOOK_URL not set; user Slack notification controller will be disabled")
+			} else {
+				userSlackCtrl := iamcontroller.UserSlackNotificationController{
+					Client:          ctrl.GetClient(),
+					SlackWebhookURL: userSlackWebhookURL,
+				}
+				if err := userSlackCtrl.SetupWithManager(ctrl); err != nil {
+					logger.Error(err, "Error setting up user Slack notification controller")
+					klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+				}
+			}
+
 			userWaitlistCtrl := iamcontroller.UserWaitlistController{
 				Client:                    ctrl.GetClient(),
 				SystemNamespace:           SystemNamespace,

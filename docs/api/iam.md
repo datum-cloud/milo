@@ -3809,12 +3809,31 @@ UserStatus defines the observed state of User
         </tr>
     </thead>
     <tbody><tr>
+        <td><b>avatarUrl</b></td>
+        <td>string</td>
+        <td>
+          AvatarURL points to the avatar image associated with the user. This value is
+populated by the auth provider or any service that provides a user avatar URL.<br/>
+          <br/>
+            <i>Format</i>: uri<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b><a href="#userstatusconditionsindex">conditions</a></b></td>
         <td>[]object</td>
         <td>
           Conditions provide conditions that represent the current status of the User.<br/>
           <br/>
             <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for control plane to reconcile reason:Unknown status:Unknown type:Ready]]<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>lastLoginProvider</b></td>
+        <td>string</td>
+        <td>
+          LastLoginProvider records the identity provider that was most recently used by the
+user to log in (e.g., "github" or "google"). This field is set by the auth provider
+based on authentication events.<br/>
         </td>
         <td>false</td>
       </tr><tr>
