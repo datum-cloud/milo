@@ -3,3 +3,4 @@ resources:
 - ../../bases/resourcemanager/
 - ../../bases/notification/
 - ../../bases/quota/
+- ../../bases/crm/

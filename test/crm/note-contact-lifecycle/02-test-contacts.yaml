@@ -1,0 +1,29 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Contact
+metadata:
+  name: test-crm-note-contact-1
+  namespace: ($namespace)
+  labels:
+    test.miloapis.com/scenario: "crm-note-contact-lifecycle"
+spec:
+  subject:
+    apiGroup: iam.miloapis.com
+    kind: User
+    name: test-crm-note-user
+  familyName: CrmNote
+  givenName: ContactOne
+  email: contact-one@example.com
+
+---
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Contact
+metadata:
+  name: test-crm-note-contact-2
+  namespace: ($namespace)
+  labels:
+    test.miloapis.com/scenario: "crm-note-contact-lifecycle"
+spec:
+  familyName: CrmNote
+  givenName: ContactTwo
+  email: contact-two@example.com
+
