@@ -20,9 +20,9 @@ spec:
         name: test-gc-user
         timeout: 30s
         for:
-          jsonPath:
-            path: '{.status.conditions[?(@.type=="Ready")].status}'
-            value: "True"
+          condition:
+            name: Ready
+            value: 'True'
     - wait:
         apiVersion: iam.miloapis.com/v1alpha1
         kind: PolicyBinding
