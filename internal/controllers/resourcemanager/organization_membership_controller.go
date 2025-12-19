@@ -172,6 +172,7 @@ func (r *OrganizationMembershipController) Reconcile(ctx context.Context, req ct
 		Email:      user.Spec.Email,
 		GivenName:  user.Spec.GivenName,
 		FamilyName: user.Spec.FamilyName,
+		AvatarURL:  user.Status.AvatarURL,
 	}
 
 	// Set ready condition to true
