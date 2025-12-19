@@ -134,6 +134,12 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 							Format: "",
 						},
 					},
+					"fingerprintID": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 					"createdAt": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},

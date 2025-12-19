@@ -4,25 +4,25 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: users.iam.miloapis.com
+  name: notes.crm.miloapis.com
 spec:
-  group: iam.miloapis.com
+  group: crm.miloapis.com
   names:
-    kind: User
-    listKind: UserList
-    plural: users
-    singular: user
+    kind: Note
+    listKind: NoteList
+    plural: notes
+    singular: note
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.email
-      name: Email
+    - jsonPath: .spec.subjectRef.kind
+      name: Subject Kind
       type: string
-    - jsonPath: .spec.givenName
-      name: Given Name
+    - jsonPath: .spec.subjectRef.name
+      name: Subject Name
       type: string
-    - jsonPath: .spec.familyName
-      name: Family Name
+    - jsonPath: .spec.creatorRef.name
+      name: Creator
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -30,16 +30,12 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .status.state
-      name: State
-      type: string
-    - jsonPath: .status.registrationApproval
-      name: Registration Approval
-      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: User is the Schema for the users API
+        description: |-
+          Note is the Schema for the notes API.
+          It represents a note attached to a subject (e.g. Contact or User).
         properties:
           apiVersion:
             description: |-
@@ -59,29 +55,82 @@ spec:
           metadata:
             type: object
           spec:
-            description: UserSpec defines the desired state of User
+            description: NoteSpec defines the desired state of Note.
             properties:
-              email:
-                description: The email of the user.
+              content:
+                description: Content is the text content of the note.
+                maxLength: 1000
                 type: string
-              familyName:
-                description: The last name of the user.
+              creatorRef:
+                description: |-
+                  CreatorRef is a reference to the user that created the note.
+                  Defaults to the user that created the note.
+                properties:
+                  name:
+                    description: Name is the name of the User being referenced.
+                    type: string
+                required:
+                - name
+                type: object
+                x-kubernetes-validations:
+                - message: creatorRef type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
+              followUp:
+                default: false
+                description: |-
+                  FollowUp indicates whether this note requires follow-up.
+                  When true, the note is being actively tracked for further action.
+                type: boolean
+              interactionTime:
+                description: InteractionTime is the timestamp of the interaction with
+                  the subject.
+                format: date-time
                 type: string
-              givenName:
-                description: The first name of the user.
+              nextAction:
+                description: NextAction is an optional follow-up action.
                 type: string
+              nextActionTime:
+                description: NextActionTime is the timestamp for the follow-up action.
+                format: date-time
+                type: string
+              subjectRef:
+                description: Subject is a reference to the subject of the note.
+                properties:
+                  apiGroup:
+                    description: APIGroup is the group for the resource being referenced.
+                    enum:
+                    - iam.miloapis.com
+                    - notification.miloapis.com
+                    type: string
+                  kind:
+                    description: Kind is the type of resource being referenced.
+                    enum:
+                    - User
+                    - Contact
+                    type: string
+                  name:
+                    description: Name is the name of resource being referenced.
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace is the namespace of resource being referenced.
+                      Required for namespace-scoped resources. Omitted for cluster-scoped resources.
+                    type: string
+                required:
+                - apiGroup
+                - kind
+                - name
+                type: object
+                x-kubernetes-validations:
+                - message: subject type is immutable
+                  rule: type(oldSelf) == null_type || self == oldSelf
             required:
-            - email
+            - content
+            - subjectRef
             type: object
           status:
-            description: UserStatus defines the observed state of User
+            description: NoteStatus defines the observed state of Note
             properties:
-              avatarUrl:
-                description: |-
-                  AvatarURL points to the avatar image associated with the user. This value is
-                  populated by the auth provider or any service that provides a user avatar URL.
-                format: uri
-                type: string
               conditions:
                 default:
                 - lastTransitionTime: "1970-01-01T00:00:00Z"
@@ -90,7 +139,7 @@ spec:
                   status: Unknown
                   type: Ready
                 description: Conditions provide conditions that represent the current
-                  status of the User.
+                  status of the Note.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -146,55 +195,19 @@ spec:
                   - type
                   type: object
                 type: array
-              lastLoginProvider:
-                allOf:
-                - enum:
-                  - github
-                  - google
-                - enum:
-                  - github
-                  - google
-                description: |-
-                  LastLoginProvider records the identity provider that was most recently used by the
-                  user to log in (e.g., "github" or "google"). This field is set by the auth provider
-                  based on authentication events.
-                type: string
-              registrationApproval:
-                description: |-
-                  RegistrationApproval represents the administrator’s decision on the user’s registration request.
-                  States:
-                    - Pending:  The user is awaiting review by an administrator.
-                    - Approved: The user registration has been approved.
-                    - Rejected: The user registration has been rejected.
-                  The User resource is always created regardless of this value, but the
-                  ability for the person to sign into the platform and access resources is
-                  governed by this status: only *Approved* users are granted access, while
-                  *Pending* and *Rejected* users are prevented for interacting with resources.
-                enum:
-                - Pending
-                - Approved
-                - Rejected
-                type: string
-              state:
-                default: Active
-                description: |-
-                  State represents the current activation state of the user account from the
-                  auth provider. This field is managed exclusively by the UserDeactivation CRD
-                  and cannot be changed directly by the user. When a UserDeactivation resource
-                  is created for the user, the user is deactivated in the auth provider; when
-                  the UserDeactivation is deleted, the user is reactivated.
-                  States:
-                    - Active: The user can be used to authenticate.
-                    - Inactive: The user is prohibited to be used to authenticate, and revokes all existing sessions.
-                enum:
-                - Active
-                - Inactive
+              createdBy:
+                description: CreatedBy is the email of the user that created the note.
                 type: string
             type: object
         type: object
     selectableFields:
-    - jsonPath: .status.registrationApproval
-    - jsonPath: .spec.email
+    - jsonPath: .spec.creatorRef.name
+    - jsonPath: .spec.subjectRef.name
+    - jsonPath: .spec.subjectRef.namespace
+    - jsonPath: .spec.subjectRef.kind
+    - jsonPath: .spec.nextActionTime
+    - jsonPath: .spec.followUp
+    - jsonPath: .status.createdBy
     served: true
     storage: true
     subresources:
