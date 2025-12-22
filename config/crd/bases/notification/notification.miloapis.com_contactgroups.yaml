@@ -54,6 +54,36 @@ spec:
               displayName:
                 description: DisplayName is the display name of the contact group.
                 type: string
+              providers:
+                description: Providers defines the providers this group should be
+                  synced to.
+                items:
+                  description: ContactGroupProviderSpec defines the desired state
+                    of a contact group in a specific provider.
+                  properties:
+                    id:
+                      description: |-
+                        ID is the identifier of the contact group in the external provider.
+                        This field is used when a provider does not expose an API for creating mailing lists,
+                        requiring an existing ContactList ID to be provided for synchronization purposes (e.g. Loops).
+                        If not provided, a new group will be created if supported by the provider.
+                      type: string
+                    name:
+                      description: |-
+                        Name is the provider handling this contact group.
+                        Allowed values is Loops.
+                      enum:
+                      - Loops
+                      type: string
+                  required:
+                  - id
+                  - name
+                  type: object
+                maxItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               visibility:
                 description: |-
                   Visibility determines whether members are allowed opt-in or opt-out of the contactgroup.
@@ -70,6 +100,13 @@ spec:
             - displayName
             - visibility
             type: object
+            x-kubernetes-validations:
+            - message: providers can only be added, not removed, and their IDs are
+                immutable. In order to update or remove, delete the ContactGroup and
+                create a new one.
+              rule: '!has(oldSelf.providers) || (has(self.providers) && oldSelf.providers.all(o,
+                self.providers.exists(n, n.name == o.name)) && !self.providers.exists(n,
+                oldSelf.providers.exists(o, o.name == n.name && o.id != n.id)))'
           status:
             properties:
               conditions:
@@ -142,7 +179,34 @@ spec:
                   ProviderID is the identifier returned by the underlying contact groupprovider
                   (e.g. Resend) when the contact groupis created. It is usually
                   used to track the contact creation status (e.g. provider webhooks).
+                  Deprecated: Use Providers instead.
                 type: string
+              providers:
+                description: |-
+                  Providers contains the per-provider status for this contact group.
+                  This enables tracking multiple provider backends simultaneously.
+                items:
+                  description: |-
+                    ContactProviderStatus represents status information for a single contact provider.
+                    It allows tracking the provider name and the provider-specific identifier.
+                  properties:
+                    id:
+                      description: ID is the identifier returned by the specific contact
+                        provider for this contact.
+                      type: string
+                    name:
+                      description: |-
+                        Name is the provider handling this contact.
+                        Allowed values are Resend and Loops.
+                      enum:
+                      - Resend
+                      - Loops
+                      type: string
+                  required:
+                  - id
+                  - name
+                  type: object
+                type: array
             type: object
         type: object
     served: true
