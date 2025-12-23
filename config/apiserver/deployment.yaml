@@ -51,6 +51,8 @@ spec:
           - --audit-webhook-config-file=$(AUDIT_WEBHOOK_CONFIG_FILE)
           - --audit-webhook-mode=$(AUDIT_WEBHOOK_MODE)
           - --audit-webhook-initial-backoff=$(AUDIT_WEBHOOK_INITIAL_BACKOFF)
+          - --proxy-client-cert-file=$(PROXY_CLIENT_CERT_FILE)
+          - --proxy-client-key-file=$(PROXY_CLIENT_KEY_FILE)
           - --feature-sessions=true
           - --sessions-provider-url=$(SESSIONS_PROVIDER_URL)
           - --sessions-provider-ca-file=$(SESSIONS_PROVIDER_CA_FILE)
@@ -111,6 +113,10 @@ spec:
           - name: AUDIT_WEBHOOK_MODE
             value: ""
           - name: AUDIT_WEBHOOK_INITIAL_BACKOFF
+            value: ""
+          - name: PROXY_CLIENT_CERT_FILE
+            value: ""
+          - name: PROXY_CLIENT_KEY_FILE
             value: ""
           - name: SESSIONS_PROVIDER_URL
             value: ""
