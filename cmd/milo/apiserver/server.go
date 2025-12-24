@@ -49,6 +49,7 @@ func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 	// Enable JSON logging support by default
 	utilfeature.DefaultMutableFeatureGate.Set("LoggingBetaOptions=true")
+	utilfeature.DefaultMutableFeatureGate.Set("RemoteRequestHeaderUID=true")
 }
 
 var (
