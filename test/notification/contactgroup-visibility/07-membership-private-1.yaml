@@ -1,0 +1,12 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: ContactGroupMembership
+metadata:
+  name: test-visibility-membership-1
+  namespace: default
+spec:
+  contactRef:
+    name: test-visibility-contact
+    namespace: default
+  contactGroupRef:
+    name: test-private-group-1
+    namespace: milo-system
