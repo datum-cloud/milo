@@ -483,7 +483,16 @@ Standard condition is "Ready" which tracks contact group membership creation sta
         <td>
           ProviderID is the identifier returned by the underlying contact provider
 (e.g. Resend) when the membership is created in the associated audience. It is usually
-used to track the contact-group membership creation status (e.g. provider webhooks).<br/>
+used to track the contact-group membership creation status (e.g. provider webhooks).
+Deprecated: Use Providers instead.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#contactgroupmembershipstatusprovidersindex">providers</a></b></td>
+        <td>[]object</td>
+        <td>
+          Providers contains the per-provider status for this contact group membership.
+This enables tracking multiple provider backends simultaneously.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -566,6 +575,44 @@ with respect to the current state of the instance.<br/>
       </tr></tbody>
 </table>
 
+
+### ContactGroupMembership.status.providers[index]
+<sup><sup>[↩ Parent](#contactgroupmembershipstatus)</sup></sup>
+
+
+
+ContactProviderStatus represents status information for a single contact provider.
+It allows tracking the provider name and the provider-specific identifier.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>id</b></td>
+        <td>string</td>
+        <td>
+          ID is the identifier returned by the specific contact provider for this contact.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>name</b></td>
+        <td>enum</td>
+        <td>
+          Name is the provider handling this contact.
+Allowed values are Resend and Loops.<br/>
+          <br/>
+            <i>Enum</i>: Resend, Loops<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
 ## ContactGroup
 <sup><sup>[↩ Parent](#notificationmiloapiscomv1alpha1 )</sup></sup>
 
@@ -608,6 +655,8 @@ It represents a logical grouping of Contacts.
         <td>object</td>
         <td>
           ContactGroupSpec defines the desired state of ContactGroup.<br/>
+          <br/>
+            <i>Validations</i>:<li>!has(oldSelf.providers) || (has(self.providers) && oldSelf.providers.all(o, self.providers.exists(n, n.name == o.name)) && !self.providers.exists(n, oldSelf.providers.exists(o, o.name == n.name && o.id != n.id))): providers can only be added, not removed, and their IDs are immutable. In order to update or remove, delete the ContactGroup and create a new one.</li>
         </td>
         <td>false</td>
       </tr><tr>
@@ -656,6 +705,53 @@ ContactGroupSpec defines the desired state of ContactGroup.
             <i>Enum</i>: public, private<br/>
         </td>
         <td>true</td>
+      </tr><tr>
+        <td><b><a href="#contactgroupspecprovidersindex">providers</a></b></td>
+        <td>[]object</td>
+        <td>
+          Providers defines the providers this group should be synced to.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### ContactGroup.spec.providers[index]
+<sup><sup>[↩ Parent](#contactgroupspec)</sup></sup>
+
+
+
+ContactGroupProviderSpec defines the desired state of a contact group in a specific provider.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>id</b></td>
+        <td>string</td>
+        <td>
+          ID is the identifier of the contact group in the external provider.
+This field is used when a provider does not expose an API for creating mailing lists,
+requiring an existing ContactList ID to be provided for synchronization purposes (e.g. Loops).
+If not provided, a new group will be created if supported by the provider.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>name</b></td>
+        <td>enum</td>
+        <td>
+          Name is the provider handling this contact group.
+Allowed values is Loops.<br/>
+          <br/>
+            <i>Enum</i>: Loops<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 
@@ -692,7 +788,16 @@ Standard condition is "Ready" which tracks contact group creation status and syn
         <td>
           ProviderID is the identifier returned by the underlying contact groupprovider
 (e.g. Resend) when the contact groupis created. It is usually
-used to track the contact creation status (e.g. provider webhooks).<br/>
+used to track the contact creation status (e.g. provider webhooks).
+Deprecated: Use Providers instead.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#contactgroupstatusprovidersindex">providers</a></b></td>
+        <td>[]object</td>
+        <td>
+          Providers contains the per-provider status for this contact group.
+This enables tracking multiple provider backends simultaneously.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
@@ -772,6 +877,44 @@ with respect to the current state of the instance.<br/>
             <i>Minimum</i>: 0<br/>
         </td>
         <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### ContactGroup.status.providers[index]
+<sup><sup>[↩ Parent](#contactgroupstatus)</sup></sup>
+
+
+
+ContactProviderStatus represents status information for a single contact provider.
+It allows tracking the provider name and the provider-specific identifier.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>id</b></td>
+        <td>string</td>
+        <td>
+          ID is the identifier returned by the specific contact provider for this contact.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>name</b></td>
+        <td>enum</td>
+        <td>
+          Name is the provider handling this contact.
+Allowed values are Resend and Loops.<br/>
+          <br/>
+            <i>Enum</i>: Resend, Loops<br/>
+        </td>
+        <td>true</td>
       </tr></tbody>
 </table>
 

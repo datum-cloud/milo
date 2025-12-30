@@ -58,7 +58,7 @@ func TestDetermineScopeAnnotations(t *testing.T) {
 		{
 			name: "global scope (no parent)",
 			userInfo: &user.DefaultInfo{
-				Name: "test-user",
+				Name:  "test-user",
 				Extra: map[string][]string{},
 			},
 			want: map[string]string{
