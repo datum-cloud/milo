@@ -158,6 +158,8 @@ spec:
                 type: array
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.contactRef.name
     served: true
     storage: true
     subresources:
