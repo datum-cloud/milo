@@ -1,0 +1,13 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Contact
+metadata:
+  name: admin
+  namespace: default
+spec:
+  subject:
+    apiGroup: iam.miloapis.com
+    kind: User
+    name: admin
+  familyName: Admin
+  givenName: Test
+  email: admin-filter@test.local

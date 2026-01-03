@@ -16,3 +16,6 @@ spec:
     - delete
     - patch
     - watch
+  parentResources:
+    - apiGroup: iam.miloapis.com
+      kind: User

@@ -22,7 +22,7 @@ Create a User resource and verify webhook creates associated resources
 | # | Operation | Bindings | Outputs | Description |
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | *No description* |
-| 2 | `assert` | 0 | 0 | *No description* |
+| 2 | `wait` | 0 | 0 | *No description* |
 | 3 | `wait` | 0 | 0 | *No description* |
 | 4 | `wait` | 0 | 0 | *No description* |
 | 5 | `wait` | 0 | 0 | *No description* |

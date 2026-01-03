@@ -1,0 +1,84 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: contacts-filter
+spec:
+  description: |
+    End-to-end tests for Contact filtering.
+
+    This test verifies:
+    - User can only see their own contacts when listing
+    - User cannot see contacts belonging to other users
+    - Manual field selectors are overridden to enforce user scope
+
+  clusters:
+    user:
+      kubeconfig: kubeconfig-user
+  concurrent: false
+  steps:
+  - name: setup-admin-contact
+    description: Create the contact for admin user
+    try:
+    - apply:
+        file: 01-admin-contact.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: admin-contacts-test
+            namespace: default
+
+  - name: setup-test-user-contact
+    description: Create the contact for test-user
+    try:
+    - apply:
+        file: 02-test-user-contact.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: testuser-contacts-test
+            namespace: default
+
+  - name: verify-filter-only-shows-test-user-contact
+    description: Verify that test-user can only see their own contact
+    try:
+    - script:
+        timeout: 30s
+        content: |
+          count=$(kubectl --kubeconfig=kubeconfig-user get contacts -A -o json | jq '.items | length')
+          if [ "$count" -ne 1 ]; then
+            echo "Expected 1 contact (test-user's own), got $count"
+            kubectl --kubeconfig=kubeconfig-user get contacts -A -o json | jq '.items[].metadata.name'
+            exit 1
+          fi
+          
+          name=$(kubectl --kubeconfig=kubeconfig-user get contacts -A -o json | jq -r '.items[0].metadata.name')
+          if [ "$name" != "testuser-contacts-test" ]; then
+            echo "Expected testuser-contacts-test, got $name"
+            exit 1
+          fi
+          echo "Test-user can only see their own contact as expected"
+
+  - name: verify-field-selector-override
+    description: Verify that attempting to spy on other users is blocked by filter override
+    try:
+    - script:
+        timeout: 30s
+        content: |
+          # Attempt to list contacts for admin - the filter should override this
+          count=$(kubectl --kubeconfig=kubeconfig-user get contacts -A --field-selector spec.subject.name=admin -o json | jq '.items | length')
+          if [ "$count" -ne 1 ]; then
+            echo "Expected filter override to return 1 (test-user's contact), got $count"
+            exit 1
+          fi
+          
+          name=$(kubectl --kubeconfig=kubeconfig-user get contacts -A --field-selector spec.subject.name=admin -o json | jq -r '.items[0].metadata.name')
+          if [ "$name" != "testuser-contacts-test" ]; then
+            echo "Expected testuser-contacts-test (filter override), got $name"
+            exit 1
+          fi
+          echo "Field selector override working correctly - test-user cannot spy on other users"
+          echo "Test completed successfully!"

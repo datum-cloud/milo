@@ -1,0 +1,170 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: contactgroupmemberships-filter
+spec:
+  description: |
+    End-to-end tests for ContactGroupMembership and ContactGroupMembershipRemoval filtering.
+
+    This test verifies:
+    - User can only see their own memberships when listing
+    - User can only see their own membership removals when listing
+    - User cannot see memberships/removals belonging to other users
+    - Manual field selectors are overridden to enforce user scope
+
+  clusters:
+    user:
+      kubeconfig: kubeconfig-user
+  concurrent: false
+  steps:
+  - name: setup-contact-group
+    description: Create the contact group for testing
+    try:
+    - apply:
+        file: 01-contact-group.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroup
+          metadata:
+            name: test-filter-group
+            namespace: milo-system
+
+  - name: setup-admin-contact
+    description: Create the contact for admin user
+    try:
+    - apply:
+        file: 02-admin-contact.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: admin
+            namespace: default
+
+  - name: setup-test-user-contact
+    description: Create the contact for test-user
+    try:
+    - apply:
+        file: 03-test-user-contact.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: test-user
+            namespace: default
+
+  - name: create-admin-membership
+    description: Create membership for admin user
+    try:
+    - apply:
+        file: 04-admin-membership.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroupMembership
+          metadata:
+            name: admin-filter-membership
+            namespace: default
+
+  - name: create-test-user-membership
+    description: Create membership for test-user
+    try:
+    - apply:
+        file: 05-test-user-membership.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroupMembership
+          metadata:
+            name: test-user-filter-membership
+            namespace: default
+
+  - name: verify-membership-filter
+    description: Verify that admin user can only see their own membership
+    try:
+    - script:
+        timeout: 30s
+        content: |
+          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmemberships -A -o json | jq '.items | length')
+          if [ "$count" -ne 1 ]; then
+            echo "Expected 1 membership (admin's own), got $count"
+            kubectl --kubeconfig=kubeconfig-user get contactgroupmemberships -A -o json | jq '.items[].metadata.name'
+            exit 1
+          fi
+          
+          name=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmemberships -A -o json | jq -r '.items[0].metadata.name')
+          if [ "$name" != "admin-filter-membership" ]; then
+            echo "Expected admin-filter-membership, got $name"
+            exit 1
+          fi
+          echo "Admin user can only see their own membership as expected"
+
+  - name: verify-membership-field-selector-override
+    description: Verify that attempting to spy on other users memberships is blocked
+    try:
+    - script:
+        timeout: 30s
+        content: |
+          # Attempt to list memberships for test-user - the filter should override this
+          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmemberships -A --field-selector spec.contactRef.name=test-user -o json | jq '.items | length')
+          if [ "$count" -ne 1 ]; then
+            echo "Expected filter override to return 1 (admin's membership), got $count"
+            exit 1
+          fi
+          
+          name=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmemberships -A --field-selector spec.contactRef.name=test-user -o json | jq -r '.items[0].metadata.name')
+          if [ "$name" != "admin-filter-membership" ]; then
+            echo "Expected admin-filter-membership (filter override), got $name"
+            exit 1
+          fi
+          echo "Membership field selector override working correctly"
+
+  - name: create-admin-removal
+    description: Create removal request for admin user
+    try:
+    - apply:
+        file: 06-admin-removal.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroupMembershipRemoval
+          metadata:
+            name: admin-filter-removal
+            namespace: default
+
+  - name: create-test-user-removal
+    description: Create removal request for test-user
+    try:
+    - apply:
+        file: 07-test-user-removal.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroupMembershipRemoval
+          metadata:
+            name: test-user-filter-removal
+            namespace: default
+
+  - name: verify-removal-filter
+    description: Verify that admin user can only see their own removal request
+    try:
+    - script:
+        timeout: 30s
+        content: |
+          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmembershipremovals -A -o json | jq '.items | length')
+          if [ "$count" -ne 1 ]; then
+            echo "Expected 1 removal (admin's own), got $count"
+            kubectl --kubeconfig=kubeconfig-user get contactgroupmembershipremovals -A -o json | jq '.items[].metadata.name'
+            exit 1
+          fi
+          
+          name=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmembershipremovals -A -o json | jq -r '.items[0].metadata.name')
+          if [ "$name" != "admin-filter-removal" ]; then
+            echo "Expected admin-filter-removal, got $name"
+            exit 1
+          fi
+          echo "Admin user can only see their own removal request as expected"
+          echo "Test completed successfully!"
