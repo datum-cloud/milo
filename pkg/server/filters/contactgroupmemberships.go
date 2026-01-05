@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	// ContactGroupMembershipContactFieldSelector is the field selector for the contact in a contact group membership.
-	// This field contains the name of the contact in the membership.
-	ContactGroupMembershipContactFieldSelector = "spec.contactRef.name"
+	// ContactGroupMembershipUsernameFieldSelector is the field selector for the username in a contact group membership.
+	// This field contains the username of the user that owns the membership.
+	ContactGroupMembershipUsernameFieldSelector = "status.username"
 )
 
 // UserContactGroupMembershipListConstraintDecorator intercepts requests to list
@@ -45,7 +45,7 @@ func UserContactGroupMembershipListConstraintDecorator(handler http.Handler) htt
 				// in the request by rebuilding the selector without them.
 				filteredSelector := fields.Nothing()
 				for _, r := range currentSelector.Requirements() {
-					if r.Field == ContactGroupMembershipContactFieldSelector {
+					if r.Field == ContactGroupMembershipUsernameFieldSelector {
 						// Skip any pre-existing contact constraint so we can
 						// replace it with the authenticated user's ID.
 						continue
@@ -59,7 +59,7 @@ func UserContactGroupMembershipListConstraintDecorator(handler http.Handler) htt
 				// Build new selector, filtering out any user-id constraint that
 				// may have been provided in the request
 				newSelector := fields.AndSelectors(currentSelector, fields.SelectorFromSet(fields.Set{
-					ContactGroupMembershipContactFieldSelector: userID,
+					ContactGroupMembershipUsernameFieldSelector: userID,
 				}))
 
 				// Set the new field selector on the request info.

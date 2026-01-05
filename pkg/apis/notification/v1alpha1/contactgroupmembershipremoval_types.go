@@ -25,6 +25,7 @@ const (
 // +kubebuilder:resource:scope=Namespaced
 // +kubebuilder:validation:Type=object
 // +kubebuilder:selectablefield:JSONPath=".spec.contactRef.name"
+// +kubebuilder:selectablefield:JSONPath=".status.username"
 type ContactGroupMembershipRemoval struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -62,4 +63,9 @@ type ContactGroupMembershipRemovalStatus struct {
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Username is the username of the user that owns the ContactGroupMembershipRemoval.
+	// This is populated by the controller based on the referenced Contact's subject.
+	// +optional
+	Username string `json:"username,omitempty"`
 }

@@ -156,10 +156,16 @@ spec:
                   - type
                   type: object
                 type: array
+              username:
+                description: |-
+                  Username is the username of the user that owns the ContactGroupMembershipRemoval.
+                  This is populated by the controller based on the referenced Contact's subject.
+                type: string
             type: object
         type: object
     selectableFields:
     - jsonPath: .spec.contactRef.name
+    - jsonPath: .status.username
     served: true
     storage: true
     subresources:

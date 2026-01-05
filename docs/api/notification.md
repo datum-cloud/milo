@@ -212,6 +212,14 @@ Standard condition is "Ready" which tracks contact group membership removal crea
             <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for contact group membership removal to be created reason:CreatePending status:Unknown type:Ready]]<br/>
         </td>
         <td>false</td>
+      </tr><tr>
+        <td><b>username</b></td>
+        <td>string</td>
+        <td>
+          Username is the username of the user that owns the ContactGroupMembershipRemoval.
+This is populated by the controller based on the referenced Contact's subject.<br/>
+        </td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -484,6 +492,14 @@ Standard condition is "Ready" which tracks contact group membership creation sta
           ProviderID is the identifier returned by the underlying contact provider
 (e.g. Resend) when the membership is created in the associated audience. It is usually
 used to track the contact-group membership creation status (e.g. provider webhooks).<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>username</b></td>
+        <td>string</td>
+        <td>
+          Username is the username of the user that owns the ContactGroupMembership.
+This is populated by the controller based on the referenced Contact's subject.<br/>
         </td>
         <td>false</td>
       </tr></tbody>

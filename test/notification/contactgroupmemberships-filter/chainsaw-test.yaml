@@ -57,7 +57,7 @@ spec:
             namespace: default
 
   - name: create-admin-membership
-    description: Create membership for admin user
+    description: Create membership for admin user and set status.username
     try:
     - apply:
         file: 04-admin-membership.yaml
@@ -68,9 +68,14 @@ spec:
           metadata:
             name: admin-filter-membership
             namespace: default
+    # Patch status.username since controller is not running
+    - script:
+        timeout: 10s
+        content: |
+          kubectl patch contactgroupmembership admin-filter-membership -n default --type=merge --subresource=status -p '{"status":{"username":"admin"}}'
 
   - name: create-test-user-membership
-    description: Create membership for test-user
+    description: Create membership for test-user and set status.username
     try:
     - apply:
         file: 05-test-user-membership.yaml
@@ -81,6 +86,11 @@ spec:
           metadata:
             name: test-user-filter-membership
             namespace: default
+    # Patch status.username since controller is not running
+    - script:
+        timeout: 10s
+        content: |
+          kubectl patch contactgroupmembership test-user-filter-membership -n default --type=merge --subresource=status -p '{"status":{"username":"test-user"}}'
 
   - name: verify-membership-filter
     description: Verify that admin user can only see their own membership
@@ -109,13 +119,13 @@ spec:
         timeout: 30s
         content: |
           # Attempt to list memberships for test-user - the filter should override this
-          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmemberships -A --field-selector spec.contactRef.name=test-user -o json | jq '.items | length')
+          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmemberships -A --field-selector status.username=test-user -o json | jq '.items | length')
           if [ "$count" -ne 1 ]; then
             echo "Expected filter override to return 1 (admin's membership), got $count"
             exit 1
           fi
           
-          name=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmemberships -A --field-selector spec.contactRef.name=test-user -o json | jq -r '.items[0].metadata.name')
+          name=$(kubectl --kubeconfig=kubeconfig-user get contactgroupmemberships -A --field-selector status.username=test-user -o json | jq -r '.items[0].metadata.name')
           if [ "$name" != "admin-filter-membership" ]; then
             echo "Expected admin-filter-membership (filter override), got $name"
             exit 1
@@ -123,7 +133,7 @@ spec:
           echo "Membership field selector override working correctly"
 
   - name: create-admin-removal
-    description: Create removal request for admin user
+    description: Create removal request for admin user and set status.username
     try:
     - apply:
         file: 06-admin-removal.yaml
@@ -134,9 +144,14 @@ spec:
           metadata:
             name: admin-filter-removal
             namespace: default
+    # Patch status.username since controller is not running
+    - script:
+        timeout: 10s
+        content: |
+          kubectl patch contactgroupmembershipremoval admin-filter-removal -n default --type=merge --subresource=status -p '{"status":{"username":"admin"}}'
 
   - name: create-test-user-removal
-    description: Create removal request for test-user
+    description: Create removal request for test-user and set status.username
     try:
     - apply:
         file: 07-test-user-removal.yaml
@@ -147,6 +162,11 @@ spec:
           metadata:
             name: test-user-filter-removal
             namespace: default
+    # Patch status.username since controller is not running
+    - script:
+        timeout: 10s
+        content: |
+          kubectl patch contactgroupmembershipremoval test-user-filter-removal -n default --type=merge --subresource=status -p '{"status":{"username":"test-user"}}'
 
   - name: verify-removal-filter
     description: Verify that admin user can only see their own removal request

@@ -29,7 +29,7 @@ func TestUserContactGroupMembershipListConstraintDecorator(t *testing.T) {
 			verb:                  "list",
 			userID:                "test-user",
 			existingFieldSelector: "",
-			expectedFieldSelector: ",spec.contactRef.name=test-user",
+			expectedFieldSelector: ",status.username=test-user",
 		},
 		{
 			name:                  "contactgroupmemberships list with existing field selector",
@@ -38,7 +38,7 @@ func TestUserContactGroupMembershipListConstraintDecorator(t *testing.T) {
 			verb:                  "list",
 			userID:                "test-user",
 			existingFieldSelector: "metadata.name=test-membership",
-			expectedFieldSelector: ",metadata.name=test-membership,spec.contactRef.name=test-user",
+			expectedFieldSelector: ",metadata.name=test-membership,status.username=test-user",
 		},
 		{
 			name:                  "existing contact user filter replaced",
@@ -47,8 +47,8 @@ func TestUserContactGroupMembershipListConstraintDecorator(t *testing.T) {
 			resource:              "contactgroupmemberships",
 			verb:                  "list",
 			userID:                "test-user",
-			existingFieldSelector: "spec.contactRef.name=other-user",
-			expectedFieldSelector: ",spec.contactRef.name=test-user",
+			existingFieldSelector: "status.username=other-user",
+			expectedFieldSelector: ",status.username=test-user",
 		},
 		{
 			name:        "non-contactgroupmemberships request",
