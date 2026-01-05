@@ -74,6 +74,39 @@ spec:
         content: |
           kubectl patch contactgroupmembership admin-filter-membership -n default --type=merge --subresource=status -p '{"status":{"username":"admin"}}'
 
+
+  - name: verify-webhook-blocks-wrong-user-membership
+    description: Verify that admin cannot create membership for test-user's contact via user context
+    try:
+    - script:
+        timeout: 10s
+        content: |
+          # Try to create using admin's user context - should be blocked by webhook
+          if kubectl --kubeconfig=kubeconfig-user apply -f 08-invalid-membership.yaml 2>&1 | grep -i "forbidden"; then
+            echo "✅ Webhook correctly blocked admin from creating membership for test-user's contact"
+            exit 0
+          else
+            echo "❌ Webhook should have blocked this operation with Forbidden error"
+            kubectl --kubeconfig=kubeconfig-user apply -f 08-invalid-membership.yaml 2>&1
+            exit 1
+          fi
+
+  - name: verify-webhook-blocks-wrong-user-removal
+    description: Verify that admin cannot create removal for test-user's contact via user context
+    try:
+    - script:
+        timeout: 10s
+        content: |
+          # Try to create using admin's user context - should be blocked by webhook
+          if kubectl --kubeconfig=kubeconfig-user apply -f 09-invalid-removal.yaml 2>&1 | grep -i "forbidden"; then
+            echo "✅ Webhook correctly blocked admin from creating removal for test-user's contact"
+            exit 0
+          else
+            echo "❌ Webhook should have blocked this operation with Forbidden error"
+            kubectl --kubeconfig=kubeconfig-user apply -f 09-invalid-removal.yaml 2>&1
+            exit 1
+          fi
+  
   - name: create-test-user-membership
     description: Create membership for test-user and set status.username
     try:

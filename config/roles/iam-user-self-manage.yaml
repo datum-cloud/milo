@@ -23,3 +23,6 @@ spec:
   - notification.miloapis.com/contactgroups.list
   - notification.miloapis.com/contactgroupmemberships.list
   - notification.miloapis.com/contactgroupmembershipremovals.list  
+  - notification.miloapis.com/contactgroupmemberships.create
+  - notification.miloapis.com/contactgroupmembershipremovals.create
+  - notification.miloapis.com/contactgroupmemberships.delete

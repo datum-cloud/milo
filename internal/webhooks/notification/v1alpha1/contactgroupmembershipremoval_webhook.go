@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -50,11 +51,29 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 	var errs field.ErrorList
 
 	// Ensure Contact exists
-	if err := v.Client.Get(ctx, client.ObjectKey{Namespace: removal.Spec.ContactRef.Namespace, Name: removal.Spec.ContactRef.Name}, &notificationv1alpha1.Contact{}); err != nil {
+	contact := &notificationv1alpha1.Contact{}
+	if err := v.Client.Get(ctx, client.ObjectKey{Namespace: removal.Spec.ContactRef.Namespace, Name: removal.Spec.ContactRef.Name}, contact); err != nil {
 		if errors.IsNotFound(err) {
 			errs = append(errs, field.NotFound(field.NewPath("spec", "contactRef", "name"), removal.Spec.ContactRef.Name))
 		} else {
 			return nil, errors.NewInternalError(fmt.Errorf("failed to get Contact: %w", err))
+		}
+	} else {
+		// Only enforce ownership validation if the request was made through a user context
+		// (i.e., via /apis/iam.miloapis.com/v1alpha1/users/{user}/control-plane)
+		if req, err := admission.RequestFromContext(ctx); err == nil {
+			if _, hasUserContext := req.UserInfo.Extra[iamv1alpha1.ParentNameExtraKey]; hasUserContext {
+				// Validate that the user can only create membership removals for their own contact
+				// The Contact's subject.name should match the authenticated user's UID
+				if contact.Spec.SubjectRef != nil {
+					if contact.Spec.SubjectRef.Name != string(req.UserInfo.UID) {
+						errs = append(errs, field.Forbidden(
+							field.NewPath("spec", "contactRef"),
+							fmt.Sprintf("cannot create membership removal for contact '%s' owned by user '%s': you can only create membership removals for your own contacts",
+								contact.Name, contact.Spec.SubjectRef.Name)))
+					}
+				}
+			}
 		}
 	}
 	// Ensure ContactGroup exists
@@ -90,5 +109,35 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateUpdate(ctx context.Cont
 }
 
 func (v *ContactGroupMembershipRemovalValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	removal, ok := obj.(*notificationv1alpha1.ContactGroupMembershipRemoval)
+	if !ok {
+		return nil, errors.NewInternalError(fmt.Errorf("failed to cast object to ContactGroupMembershipRemoval"))
+	}
+
+	// Only enforce ownership validation if the request was made through a user context
+	if req, err := admission.RequestFromContext(ctx); err == nil {
+		if _, hasUserContext := req.UserInfo.Extra[iamv1alpha1.ParentNameExtraKey]; hasUserContext {
+			// Retrieve the referenced Contact to check its ownership
+			contact := &notificationv1alpha1.Contact{}
+			if err := v.Client.Get(ctx, client.ObjectKey{Namespace: removal.Spec.ContactRef.Namespace, Name: removal.Spec.ContactRef.Name}, contact); err != nil {
+				if errors.IsNotFound(err) {
+					return nil, errors.NewInternalError(fmt.Errorf("failed to get Contact for validation: %w", err))
+				}
+				return nil, errors.NewInternalError(fmt.Errorf("failed to get Contact: %w", err))
+			}
+
+			// Validate matches
+			if contact.Spec.SubjectRef != nil {
+				if contact.Spec.SubjectRef.Name != string(req.UserInfo.UID) {
+					return nil, errors.NewForbidden(
+						notificationv1alpha1.SchemeGroupVersion.WithResource("contactgroupmembershipremovals").GroupResource(),
+						removal.Name,
+						fmt.Errorf("cannot delete membership removal for contact '%s' owned by user '%s': you can only delete membership removals for your own contacts",
+							contact.Name, contact.Spec.SubjectRef.Name),
+					)
+				}
+			}
+		}
+	}
 	return nil, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -74,6 +75,23 @@ func (v *ContactGroupMembershipValidator) ValidateCreate(ctx context.Context, ob
 			errs = append(errs, field.NotFound(field.NewPath("spec", "contactRef", "name"), cgm.Spec.ContactRef.Name))
 		} else {
 			return nil, errors.NewInternalError(fmt.Errorf("failed to get Contact: %w", err))
+		}
+	} else {
+		// Only enforce ownership validation if the request was made through a user context
+		// (i.e., via /apis/iam.miloapis.com/v1alpha1/users/{user}/control-plane)
+		if req, err := admission.RequestFromContext(ctx); err == nil {
+			if _, hasUserContext := req.UserInfo.Extra[iamv1alpha1.ParentNameExtraKey]; hasUserContext {
+				// Validate that the user can only create memberships for their own contact
+				// The Contact's subject.name should match the authenticated user's UID
+				if contact.Spec.SubjectRef != nil {
+					if contact.Spec.SubjectRef.Name != string(req.UserInfo.UID) {
+						errs = append(errs, field.Forbidden(
+							field.NewPath("spec", "contactRef"),
+							fmt.Sprintf("cannot create membership for contact '%s' owned by user '%s': you can only create memberships for your own contacts",
+								contact.Name, contact.Spec.SubjectRef.Name)))
+					}
+				}
+			}
 		}
 	}
 

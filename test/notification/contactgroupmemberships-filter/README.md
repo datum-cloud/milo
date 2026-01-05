@@ -17,12 +17,14 @@ This test verifies:
 | 2 | [setup-admin-contact](#step-setup-admin-contact) | 0 | 2 | 0 | 0 | 0 |
 | 3 | [setup-test-user-contact](#step-setup-test-user-contact) | 0 | 2 | 0 | 0 | 0 |
 | 4 | [create-admin-membership](#step-create-admin-membership) | 0 | 3 | 0 | 0 | 0 |
-| 5 | [create-test-user-membership](#step-create-test-user-membership) | 0 | 3 | 0 | 0 | 0 |
-| 6 | [verify-membership-filter](#step-verify-membership-filter) | 0 | 1 | 0 | 0 | 0 |
-| 7 | [verify-membership-field-selector-override](#step-verify-membership-field-selector-override) | 0 | 1 | 0 | 0 | 0 |
-| 8 | [create-admin-removal](#step-create-admin-removal) | 0 | 3 | 0 | 0 | 0 |
-| 9 | [create-test-user-removal](#step-create-test-user-removal) | 0 | 3 | 0 | 0 | 0 |
-| 10 | [verify-removal-filter](#step-verify-removal-filter) | 0 | 1 | 0 | 0 | 0 |
+| 5 | [verify-webhook-blocks-wrong-user-membership](#step-verify-webhook-blocks-wrong-user-membership) | 0 | 1 | 0 | 0 | 0 |
+| 6 | [verify-webhook-blocks-wrong-user-removal](#step-verify-webhook-blocks-wrong-user-removal) | 0 | 1 | 0 | 0 | 0 |
+| 7 | [create-test-user-membership](#step-create-test-user-membership) | 0 | 3 | 0 | 0 | 0 |
+| 8 | [verify-membership-filter](#step-verify-membership-filter) | 0 | 1 | 0 | 0 | 0 |
+| 9 | [verify-membership-field-selector-override](#step-verify-membership-field-selector-override) | 0 | 1 | 0 | 0 | 0 |
+| 10 | [create-admin-removal](#step-create-admin-removal) | 0 | 3 | 0 | 0 | 0 |
+| 11 | [create-test-user-removal](#step-create-test-user-removal) | 0 | 3 | 0 | 0 | 0 |
+| 12 | [verify-removal-filter](#step-verify-removal-filter) | 0 | 1 | 0 | 0 | 0 |
 
 ### Step: `setup-contact-group`
 
@@ -68,6 +70,26 @@ Create membership for admin user and set status.username
 | 1 | `apply` | 0 | 0 | *No description* |
 | 2 | `assert` | 0 | 0 | *No description* |
 | 3 | `script` | 0 | 0 | *No description* |
+
+### Step: `verify-webhook-blocks-wrong-user-membership`
+
+Verify that admin cannot create membership for test-user's contact via user context
+
+#### Try
+
+| # | Operation | Bindings | Outputs | Description |
+|:-:|---|:-:|:-:|---|
+| 1 | `script` | 0 | 0 | *No description* |
+
+### Step: `verify-webhook-blocks-wrong-user-removal`
+
+Verify that admin cannot create removal for test-user's contact via user context
+
+#### Try
+
+| # | Operation | Bindings | Outputs | Description |
+|:-:|---|:-:|:-:|---|
+| 1 | `script` | 0 | 0 | *No description* |
 
 ### Step: `create-test-user-membership`
 
