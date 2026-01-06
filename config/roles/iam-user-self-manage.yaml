@@ -25,4 +25,4 @@ spec:
   - notification.miloapis.com/contactgroupmembershipremovals.list  
   - notification.miloapis.com/contactgroupmemberships.create
   - notification.miloapis.com/contactgroupmembershipremovals.create
-  - notification.miloapis.com/contactgroupmemberships.delete
+  - notification.miloapis.com/contactgroupmembershipremovals.delete
