@@ -154,6 +154,8 @@ type EmailStatus struct {
 // +kubebuilder:printcolumn:name="Delivered",type="string",JSONPath=".status.conditions[?(@.type=='Delivered')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Namespaced
+// +kubebuilder:selectablefield:JSONPath=".spec.recipient.userRef.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.recipient.emailAddress"
 type Email struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
