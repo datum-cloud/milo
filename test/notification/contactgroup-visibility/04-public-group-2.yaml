@@ -1,0 +1,8 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: ContactGroup
+metadata:
+  name: test-public-group-2
+  namespace: milo-system
+spec:
+  displayName: Test Public Group 2
+  visibility: public

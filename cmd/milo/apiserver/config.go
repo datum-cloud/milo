@@ -184,10 +184,13 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 
+	// Capture the loopback config for use in filters that need it
+	loopbackClientConfig := genericConfig.LoopbackClientConfig
+
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
 		return datumfilters.ProjectRouterWithRequestInfo(
-			DefaultBuildHandlerChain(h, c), // build stock chain first
-			c.RequestInfoResolver,          // then wrap with router
+			DefaultBuildHandlerChain(h, c, loopbackClientConfig), // build stock chain first
+			c.RequestInfoResolver,                                // then wrap with router
 		)
 	}
 
@@ -220,7 +223,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 	apiExtensions.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
 		return datumfilters.ProjectRouterWithRequestInfo(
-			DefaultBuildHandlerChain(h, c),
+			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
 		)
 	}
@@ -245,7 +248,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 	aggregator.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
 		return datumfilters.ProjectRouterWithRequestInfo(
-			DefaultBuildHandlerChain(h, c),
+			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
 		)
 	}
@@ -263,13 +266,14 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 //   - datumfilters.OrganizationContextAuthorizationDecorator
 //   - datumfilters.ProjectListOrganizationConstraintDecorator
 //   - datumfilters.OrganizationContextHandler
+//   - datumfilters.ContactGroupVisibilityDecorator
 //
 // This is done to improve the UX that customers will experience while
 // interacting with the Milo API server.
 //
 // Some handlers have not been added as a result of not having access to
 // lifecycleSignals in server.Config. TODO(jreese) need to look into this more
-func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Handler {
+func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config, loopbackConfig *rest.Config) http.Handler {
 	handler := apiHandler
 
 	handler = filterlatency.TrackCompleted(handler)
@@ -356,6 +360,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	handler = datumfilters.UserContactListConstraintDecorator(handler)
 	handler = datumfilters.UserContactGroupMembershipListConstraintDecorator(handler)
 	handler = datumfilters.UserContactGroupMembershipRemovalListConstraintDecorator(handler)
+	handler = datumfilters.ContactGroupVisibilityDecorator(loopbackConfig)(handler)
 	handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
 	handler = genericapifilters.WithRequestReceivedTimestamp(handler)
 	// handler = genericapifilters.WithMuxAndDiscoveryComplete(handler, c.lifecycleSignals.MuxAndDiscoveryComplete.Signaled())

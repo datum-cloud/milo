@@ -1,0 +1,149 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: contactgroup-visibility
+spec:
+  description: |
+    End-to-end tests for ContactGroup visibility filtering.
+
+    This test verifies:
+    - Public groups are visible to all users when listing
+    - Private groups are NOT visible to users without membership
+    - Private groups become visible once the user has a ContactGroupMembership
+
+  clusters:
+    user:
+      kubeconfig: kubeconfig-user
+  steps:
+  - name: setup-contact
+    description: Create the contact associated with admin user
+    try:
+    - apply:
+        file: 02-test-contact.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: test-visibility-contact
+            namespace: default
+
+  - name: create-first-public-group-and-verify-visible
+    description: Create first public group and verify user can see it
+    try:
+    - apply:
+        file: 03-public-group-1.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroup
+          metadata:
+            name: test-public-group-1
+            namespace: milo-system
+    - script:
+        timeout: 30s
+        content: |
+          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroups -A -o json | jq '.items | length')
+          if [ "$count" -ne 1 ]; then
+            echo "Expected 1 group, got $count"
+            exit 1
+          fi
+          echo "User can see 1 public group as expected"
+
+  - name: create-second-public-group-and-verify-both-visible
+    description: Create second public group and verify user can see both
+    try:
+    - apply:
+        file: 04-public-group-2.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroup
+          metadata:
+            name: test-public-group-2
+            namespace: milo-system
+    - script:
+        timeout: 30s
+        content: |
+          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroups -A -o json | jq '.items | length')
+          if [ "$count" -ne 2 ]; then
+            echo "Expected 2 groups, got $count"
+            exit 1
+          fi
+          echo "User can see 2 public groups as expected"
+
+  - name: create-private-groups-and-verify-not-visible
+    description: Create two private groups and verify user cannot see them (only public groups)
+    try:
+    - apply:
+        file: 05-private-group-1.yaml
+    - apply:
+        file: 06-private-group-2.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroup
+          metadata:
+            name: test-private-group-1
+            namespace: milo-system
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroup
+          metadata:
+            name: test-private-group-2
+            namespace: milo-system
+    - script:
+        timeout: 30s
+        content: |
+          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroups -A -o json | jq '.items | length')
+          if [ "$count" -ne 2 ]; then
+            echo "Expected 2 groups (private groups should be hidden), got $count"
+            exit 1
+          fi
+          echo "User can see 2 groups (private groups correctly filtered)"
+
+  - name: create-first-membership-and-verify-one-private-visible
+    description: Create membership for first private group and verify user can now see it
+    try:
+    - apply:
+        file: 07-membership-private-1.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroupMembership
+          metadata:
+            name: test-visibility-membership-1
+            namespace: default
+    - script:
+        timeout: 30s
+        content: |
+          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroups -A -o json | jq '.items | length')
+          if [ "$count" -ne 3 ]; then
+            echo "Expected 3 groups (2 public + 1 private with membership), got $count"
+            exit 1
+          fi
+          echo "User can see 3 groups as expected"
+
+  - name: create-second-membership-and-verify-both-private-visible
+    description: Create membership for second private group and verify user can now see all groups
+    try:
+    - apply:
+        file: 08-membership-private-2.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: ContactGroupMembership
+          metadata:
+            name: test-visibility-membership-2
+            namespace: default
+    - script:
+        timeout: 30s
+        content: |
+          count=$(kubectl --kubeconfig=kubeconfig-user get contactgroups -A -o json | jq '.items | length')
+          if [ "$count" -ne 4 ]; then
+            echo "Expected 4 groups (2 public + 2 private with memberships), got $count"
+            exit 1
+          fi
+          echo "User can see all 4 groups as expected"
+          echo "Test completed successfully!"
