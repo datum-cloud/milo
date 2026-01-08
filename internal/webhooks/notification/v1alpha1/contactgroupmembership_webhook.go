@@ -77,8 +77,8 @@ func (v *ContactGroupMembershipValidator) ValidateCreate(ctx context.Context, ob
 		}
 	} else {
 		// Validate contact ownership when in user context
-		if err := ValidateContactOwnership(ctx, contact, field.NewPath("spec", "contactRef"), "create membership"); err != nil {
-			errs = append(errs, err)
+		if err := ValidateContactOwnership(ctx, contact, notificationv1alpha1.SchemeGroupVersion.WithResource("contactgroupmemberships").GroupResource(), cgm.Name, "create membership"); err != nil {
+			return nil, err
 		}
 	}
 

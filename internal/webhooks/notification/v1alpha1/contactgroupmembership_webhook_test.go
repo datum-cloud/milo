@@ -194,7 +194,7 @@ func TestContactGroupMembershipValidator_UserContext(t *testing.T) {
 			userID:        "alice",
 			hasUserCtx:    true,
 			expectError:   true,
-			errorContains: "you can only create memberships for your own contacts",
+			errorContains: "you do not have permission to create membership for this contact",
 		},
 		"no user context: admin creates membership for any user": {
 			newObj:      makeMembership("m3", "bob-contact", "g1"),

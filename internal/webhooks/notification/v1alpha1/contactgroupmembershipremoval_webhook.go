@@ -59,8 +59,8 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 		}
 	} else {
 		// Validate contact ownership when in user context
-		if err := ValidateContactOwnership(ctx, contact, field.NewPath("spec", "contactRef"), "create membership removal"); err != nil {
-			errs = append(errs, err)
+		if err := ValidateContactOwnership(ctx, contact, notificationv1alpha1.SchemeGroupVersion.WithResource("contactgroupmembershipremovals").GroupResource(), removal.Name, "create membership removal"); err != nil {
+			return nil, err
 		}
 	}
 	// Ensure ContactGroup exists
@@ -111,12 +111,8 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateDelete(ctx context.Cont
 		return nil, errors.NewInternalError(fmt.Errorf("failed to get Contact: %w", err))
 	}
 
-	if err := ValidateContactOwnership(ctx, contact, field.NewPath("spec", "contactRef"), "delete membership removal"); err != nil {
-		return nil, errors.NewForbidden(
-			notificationv1alpha1.SchemeGroupVersion.WithResource("contactgroupmembershipremovals").GroupResource(),
-			removal.Name,
-			fmt.Errorf("%s", err.ErrorBody()),
-		)
+	if err := ValidateContactOwnership(ctx, contact, notificationv1alpha1.SchemeGroupVersion.WithResource("contactgroupmembershipremovals").GroupResource(), removal.Name, "delete membership removal"); err != nil {
+		return nil, err
 	}
 	return nil, nil
 }

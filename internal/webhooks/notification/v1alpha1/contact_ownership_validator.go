@@ -6,7 +6,8 @@ import (
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
-	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -17,13 +18,14 @@ import (
 // Parameters:
 //   - ctx: the request context
 //   - contact: the Contact resource to validate ownership for
-//   - fieldPath: the field path to use in the error message (e.g., "spec", "contactRef")
+//   - resource: the GroupResource for the error message (e.g., "contactgroupmemberships")
+//   - resourceName: the name of the resource being validated
 //   - operation: description of the operation being performed (e.g., "create membership", "delete membership removal")
 //
 // Returns:
-//   - A field.Error if the ownership check fails
+//   - A Forbidden error if the ownership check fails
 //   - nil if the ownership is valid or no user context is present
-func ValidateContactOwnership(ctx context.Context, contact *notificationv1alpha1.Contact, fieldPath *field.Path, operation string) *field.Error {
+func ValidateContactOwnership(ctx context.Context, contact *notificationv1alpha1.Contact, resource schema.GroupResource, resourceName string, operation string) error {
 	// Only enforce ownership validation if the request was made through a user context
 	// (i.e., via /apis/iam.miloapis.com/v1alpha1/users/{user}/control-plane)
 	req, err := admission.RequestFromContext(ctx)
@@ -45,10 +47,11 @@ func ValidateContactOwnership(ctx context.Context, contact *notificationv1alpha1
 	}
 
 	if contact.Spec.SubjectRef.Name != string(req.UserInfo.UID) {
-		return field.Forbidden(
-			fieldPath,
-			fmt.Sprintf("cannot %s for contact '%s' owned by user '%s': you can only %ss for your own contacts",
-				operation, contact.Name, contact.Spec.SubjectRef.Name, operation))
+		return errors.NewForbidden(
+			resource,
+			resourceName,
+			fmt.Errorf("you do not have permission to %s for this contact", operation),
+		)
 	}
 
 	return nil

@@ -170,7 +170,7 @@ func TestContactGroupMembershipRemovalValidator_UserContext(t *testing.T) {
 			userID:        "alice",
 			hasUserCtx:    true,
 			expectError:   true,
-			errorContains: "you can only create membership removals for your own contacts",
+			errorContains: "you do not have permission to create membership removal for this contact",
 		},
 		"no user context: admin creates removal for any user": {
 			newObj:      makeRemoval("rm3", "bob-contact", "g1"),
@@ -269,7 +269,7 @@ func TestContactGroupMembershipRemovalValidator_ValidateDelete(t *testing.T) {
 			userID:        "alice",
 			hasUserCtx:    true,
 			expectError:   true,
-			errorContains: "you can only delete membership removals for your own contacts",
+			errorContains: "you do not have permission to delete membership removal for this contact",
 		},
 		"no user context: admin deletes any removal request": {
 			removal:     makeRemoval("rm3", "bob-contact", "g1"),
