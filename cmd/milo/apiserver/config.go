@@ -125,55 +125,58 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 		discoveryrest.StorageProvider{},
 	}
 
-	if c.ExtraConfig.FeatureSessions {
-		// Build identity sessions storage provider
-		providers = append(providers, newIdentitySessionsProvider(c))
-	}
-
-	if c.ExtraConfig.FeatureUserIdentities {
-		// Build identity useridentities storage provider
-		providers = append(providers, newIdentityUserIdentitiesProvider(c))
+	// Build identity storage provider with both Sessions and UserIdentities
+	if c.ExtraConfig.FeatureSessions || c.ExtraConfig.FeatureUserIdentities {
+		providers = append(providers, newIdentityStorageProvider(c))
 	}
 
 	return providers, nil
 }
 
-func newIdentitySessionsProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
-	allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ForwardExtras))
-	for _, k := range c.ExtraConfig.SessionsProvider.ForwardExtras {
-		allow[k] = struct{}{}
-	}
-	cfg := sessionsbackend.Config{
-		BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
-		ProviderURL:    c.ExtraConfig.SessionsProvider.URL,
-		CAFile:         c.ExtraConfig.SessionsProvider.CAFile,
-		ClientCertFile: c.ExtraConfig.SessionsProvider.ClientCertFile,
-		ClientKeyFile:  c.ExtraConfig.SessionsProvider.ClientKeyFile,
-		Timeout:        time.Duration(c.ExtraConfig.SessionsProvider.TimeoutSeconds) * time.Second,
-		Retries:        c.ExtraConfig.SessionsProvider.Retries,
-		ExtrasAllow:    allow,
-	}
-	backend, _ := sessionsbackend.NewDynamicProvider(cfg)
-	return identitystorage.StorageProvider{Sessions: backend}
-}
+func newIdentityStorageProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
+	provider := identitystorage.StorageProvider{}
 
-func newIdentityUserIdentitiesProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
-	allow := make(map[string]struct{}, len(c.ExtraConfig.UserIdentitiesProvider.ForwardExtras))
-	for _, k := range c.ExtraConfig.UserIdentitiesProvider.ForwardExtras {
-		allow[k] = struct{}{}
+	// Initialize Sessions backend if enabled
+	if c.ExtraConfig.FeatureSessions {
+		allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ForwardExtras))
+		for _, k := range c.ExtraConfig.SessionsProvider.ForwardExtras {
+			allow[k] = struct{}{}
+		}
+		cfg := sessionsbackend.Config{
+			BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
+			ProviderURL:    c.ExtraConfig.SessionsProvider.URL,
+			CAFile:         c.ExtraConfig.SessionsProvider.CAFile,
+			ClientCertFile: c.ExtraConfig.SessionsProvider.ClientCertFile,
+			ClientKeyFile:  c.ExtraConfig.SessionsProvider.ClientKeyFile,
+			Timeout:        time.Duration(c.ExtraConfig.SessionsProvider.TimeoutSeconds) * time.Second,
+			Retries:        c.ExtraConfig.SessionsProvider.Retries,
+			ExtrasAllow:    allow,
+		}
+		backend, _ := sessionsbackend.NewDynamicProvider(cfg)
+		provider.Sessions = backend
 	}
-	cfg := useridentitiesbackend.Config{
-		BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
-		ProviderURL:    c.ExtraConfig.UserIdentitiesProvider.URL,
-		CAFile:         c.ExtraConfig.UserIdentitiesProvider.CAFile,
-		ClientCertFile: c.ExtraConfig.UserIdentitiesProvider.ClientCertFile,
-		ClientKeyFile:  c.ExtraConfig.UserIdentitiesProvider.ClientKeyFile,
-		Timeout:        time.Duration(c.ExtraConfig.UserIdentitiesProvider.TimeoutSeconds) * time.Second,
-		Retries:        c.ExtraConfig.UserIdentitiesProvider.Retries,
-		ExtrasAllow:    allow,
+
+	// Initialize UserIdentities backend if enabled
+	if c.ExtraConfig.FeatureUserIdentities {
+		allow := make(map[string]struct{}, len(c.ExtraConfig.UserIdentitiesProvider.ForwardExtras))
+		for _, k := range c.ExtraConfig.UserIdentitiesProvider.ForwardExtras {
+			allow[k] = struct{}{}
+		}
+		cfg := useridentitiesbackend.Config{
+			BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
+			ProviderURL:    c.ExtraConfig.UserIdentitiesProvider.URL,
+			CAFile:         c.ExtraConfig.UserIdentitiesProvider.CAFile,
+			ClientCertFile: c.ExtraConfig.UserIdentitiesProvider.ClientCertFile,
+			ClientKeyFile:  c.ExtraConfig.UserIdentitiesProvider.ClientKeyFile,
+			Timeout:        time.Duration(c.ExtraConfig.UserIdentitiesProvider.TimeoutSeconds) * time.Second,
+			Retries:        c.ExtraConfig.UserIdentitiesProvider.Retries,
+			ExtrasAllow:    allow,
+		}
+		backend, _ := useridentitiesbackend.NewDynamicProvider(cfg)
+		provider.UserIdentities = backend
 	}
-	backend, _ := useridentitiesbackend.NewDynamicProvider(cfg)
-	return identitystorage.StorageProvider{UserIdentities: backend}
+
+	return provider
 }
 
 func (c *Config) Complete() (CompletedConfig, error) {
