@@ -1,0 +1,12 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: ContactGroupMembership
+metadata:
+  name: admin-filter-membership
+  namespace: default
+spec:
+  contactRef:
+    name: admin
+    namespace: default
+  contactGroupRef:
+    name: test-filter-group
+    namespace: milo-system
