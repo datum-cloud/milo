@@ -14,9 +14,12 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.Session":       schema_pkg_apis_identity_v1alpha1_Session(ref),
-		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.SessionList":   schema_pkg_apis_identity_v1alpha1_SessionList(ref),
-		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.SessionStatus": schema_pkg_apis_identity_v1alpha1_SessionStatus(ref),
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.Session":            schema_pkg_apis_identity_v1alpha1_Session(ref),
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.SessionList":        schema_pkg_apis_identity_v1alpha1_SessionList(ref),
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.SessionStatus":      schema_pkg_apis_identity_v1alpha1_SessionStatus(ref),
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentity":       schema_pkg_apis_identity_v1alpha1_UserIdentity(ref),
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentityList":   schema_pkg_apis_identity_v1alpha1_UserIdentityList(ref),
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentityStatus": schema_pkg_apis_identity_v1alpha1_UserIdentityStatus(ref),
 	}
 }
 
@@ -157,5 +160,141 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_identity_v1alpha1_UserIdentity(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "UserIdentity represents a user's linked identity within an external identity provider.\n\nThis resource describes the connection between a Milo user and their account in an external authentication provider (e.g., GitHub, Google, Microsoft). It is NOT the identity provider itself, but rather the user's specific identity within that provider.\n\nUse cases:\n  - Display all authentication methods linked to a user account in the UI\n  - Show which external accounts a user has connected\n  - Provide visibility into federated identity mappings\n\nImportant notes:\n  - This is a read-only resource for display purposes only\n  - Identity management (linking/unlinking providers) is handled by the external\n    authentication provider (e.g., Zitadel), not through this API\n  - No sensitive credentials or tokens are exposed through this resource",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentityStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentityStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_identity_v1alpha1_UserIdentityList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "UserIdentityList is a list of UserIdentity resources.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentity"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentity", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_identity_v1alpha1_UserIdentityStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "UserIdentityStatus contains the details of a user's identity within an external provider. All fields are read-only and populated by the authentication provider.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"userUID": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UserUID is the unique identifier of the Milo user who owns this identity.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"providerID": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ProviderID is the unique identifier of the external identity provider instance. This is typically an internal ID from the authentication system.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"providerName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ProviderName is the human-readable name of the identity provider. Examples: \"GitHub\", \"Google\", \"Microsoft\", \"GitLab\"",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"username": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Username is the user's username or identifier within the external identity provider. This is the name the user is known by in the external system (e.g., GitHub username).",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"userUID", "providerID", "providerName", "username"},
+			},
+		},
 	}
 }

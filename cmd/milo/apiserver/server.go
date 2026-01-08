@@ -49,6 +49,7 @@ func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 	// Enable JSON logging support by default
 	utilfeature.DefaultMutableFeatureGate.Set("LoggingBetaOptions=true")
+	utilfeature.DefaultMutableFeatureGate.Set("RemoteRequestHeaderUID=true")
 }
 
 var (
@@ -140,7 +141,23 @@ func NewCommand() *cobra.Command {
 	s.Metrics.AddFlags(namedFlagSets.FlagSet("metrics"))
 	logsapi.AddFlags(s.Logs, namedFlagSets.FlagSet("logs"))
 	s.Traces.AddFlags(namedFlagSets.FlagSet("traces"))
-	// Add misc flags for event ttl
+
+	// Add misc flags for event ttl, proxy client certs, etc.
+	miscfs := namedFlagSets.FlagSet("misc")
+	miscfs.DurationVar(&s.EventTTL, "event-ttl", s.EventTTL,
+		"Amount of time to retain events.")
+	miscfs.StringVar(&s.ProxyClientCertFile, "proxy-client-cert-file", s.ProxyClientCertFile,
+		"Client certificate used to prove the identity of the aggregator or kube-apiserver "+
+			"when it must call out during a request. This includes proxying requests to a user "+
+			"api-server and calling out to webhook admission plugins. It is expected that this "+
+			"cert includes a signature from the CA in the --requestheader-client-ca-file flag. "+
+			"That CA is published in the 'extension-apiserver-authentication' configmap in "+
+			"the kube-system namespace. Components receiving calls from kube-aggregator should "+
+			"use that CA to perform their half of the mutual TLS verification.")
+	miscfs.StringVar(&s.ProxyClientKeyFile, "proxy-client-key-file", s.ProxyClientKeyFile,
+		"Private key for the client certificate used to prove the identity of the aggregator or kube-apiserver "+
+			"when it must call out during a request. This includes proxying requests to a user "+
+			"api-server and calling out to webhook admission plugins.")
 
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())

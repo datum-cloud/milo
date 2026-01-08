@@ -373,6 +373,9 @@ spec:
                   User contains cached information about the user in this membership.
                   This information is populated by the controller from the referenced user.
                 properties:
+                  avatarUrl:
+                    description: AvatarURL is the avatar URL of the user in the membership.
+                    type: string
                   email:
                     description: Email is the email of the user in the membership.
                     type: string

@@ -212,6 +212,14 @@ Standard condition is "Ready" which tracks contact group membership removal crea
             <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for contact group membership removal to be created reason:CreatePending status:Unknown type:Ready]]<br/>
         </td>
         <td>false</td>
+      </tr><tr>
+        <td><b>username</b></td>
+        <td>string</td>
+        <td>
+          Username is the username of the user that owns the ContactGroupMembershipRemoval.
+This is populated by the controller based on the referenced Contact's subject.<br/>
+        </td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -493,6 +501,14 @@ Deprecated: Use Providers instead.<br/>
         <td>
           Providers contains the per-provider status for this contact group membership.
 This enables tracking multiple provider backends simultaneously.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>username</b></td>
+        <td>string</td>
+        <td>
+          Username is the username of the user that owns the ContactGroupMembership.
+This is populated by the controller based on the referenced Contact's subject.<br/>
         </td>
         <td>false</td>
       </tr></tbody>

@@ -51,6 +51,7 @@ const (
 // +kubebuilder:resource:scope=Namespaced
 // +kubebuilder:selectablefield:JSONPath=".spec.contactRef.name"
 // +kubebuilder:selectablefield:JSONPath=".spec.contactGroupRef.name"
+// +kubebuilder:selectablefield:JSONPath=".status.username"
 type ContactGroupMembership struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -124,4 +125,9 @@ type ContactGroupMembershipStatus struct {
 	// Deprecated: Use Providers instead.
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
+
+	// Username is the username of the user that owns the ContactGroupMembership.
+	// This is populated by the controller based on the referenced Contact's subject.
+	// +optional
+	Username string `json:"username,omitempty"`
 }

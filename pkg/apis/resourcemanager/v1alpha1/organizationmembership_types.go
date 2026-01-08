@@ -303,6 +303,9 @@ type OrganizationMembershipUserStatus struct {
 	// FamilyName is the family name of the user in the membership.
 	// +kubebuilder:validation:Optional
 	FamilyName string `json:"familyName,omitempty"`
+	// AvatarURL is the avatar URL of the user in the membership.
+	// +kubebuilder:validation:Optional
+	AvatarURL string `json:"avatarUrl,omitempty"`
 }
 
 // OrganizationMembershipOrganizationStatus defines the observed state of an organization in a membership.
