@@ -230,6 +230,9 @@ spec:
                 type: string
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.recipient.userRef.name
+    - jsonPath: .spec.recipient.emailAddress
     served: true
     storage: true
     subresources:
