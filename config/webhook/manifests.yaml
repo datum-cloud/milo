@@ -281,6 +281,7 @@ webhooks:
     - v1alpha1
     operations:
     - CREATE
+    - UPDATE
     resources:
     - users
   sideEffects: NoneOnDryRun
@@ -325,6 +326,27 @@ webhooks:
     - CREATE
     resources:
     - userinvitations
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-identity-miloapis-com-v1alpha1-useridentity
+      port: 9443
+  failurePolicy: Fail
+  name: vuseridentity.identity.miloapis.com
+  rules:
+  - apiGroups:
+    - identity.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - DELETE
+    resources:
+    - useridentities
   sideEffects: None
 - admissionReviewVersions:
   - v1

@@ -12,16 +12,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 )
 
 // log is for logging in this package.
 var userlog = logf.Log.WithName("user-resource")
 
-// +kubebuilder:webhook:path=/validate-iam-miloapis-com-v1alpha1-user,mutating=false,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=iam.miloapis.com,resources=users,verbs=create,versions=v1alpha1,name=vuser.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
+// +kubebuilder:webhook:path=/validate-iam-miloapis-com-v1alpha1-user,mutating=false,failurePolicy=fail,sideEffects=NoneOnDryRun,groups=iam.miloapis.com,resources=users,verbs=create;update,versions=v1alpha1,name=vuser.iam.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 // SetupWebhooksWithManager sets up all iam.miloapis.com webhooks
 func SetupUserWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, userSelfManageRoleName string) error {
 	userlog.Info("Setting up iam.miloapis.com user webhooks")
+
+	// Index UserIdentity by userUID for efficient lookups during email validation
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &identityv1alpha1.UserIdentity{}, "status.userUID", func(rawObj client.Object) []string {
+		identity := rawObj.(*identityv1alpha1.UserIdentity)
+		return []string{identity.Status.UserUID}
+	}); err != nil {
+		return err
+	}
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.User{}).
@@ -74,7 +83,67 @@ func (v *UserValidator) ValidateCreate(ctx context.Context, obj runtime.Object) 
 }
 
 func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	return nil, nil
+	oldUser := oldObj.(*iamv1alpha1.User)
+	newUser := newObj.(*iamv1alpha1.User)
+
+	// If email hasn't changed, allow the update
+	if oldUser.Spec.Email == newUser.Spec.Email {
+		return nil, nil
+	}
+
+	userlog.Info("Email change detected",
+		"user", newUser.Name,
+		"oldEmail", oldUser.Spec.Email,
+		"newEmail", newUser.Spec.Email)
+
+	// Get all UserIdentities for this user
+	identityList := &identityv1alpha1.UserIdentityList{}
+	err := v.client.List(ctx, identityList, client.MatchingFields{
+		"status.userUID": string(newUser.GetUID()),
+	})
+	if err != nil {
+		userlog.Error(err, "Failed to list user identities", "user", newUser.Name)
+		return nil, fmt.Errorf("failed to list user identities: %w", err)
+	}
+
+	// If no identities are linked, reject the change
+	if len(identityList.Items) == 0 {
+		userlog.Info("User has no linked identities, rejecting email change", "user", newUser.Name)
+		return nil, fmt.Errorf(
+			"cannot change email: no verified identity providers linked to this account. " +
+				"Please link an identity provider (GitHub, Google, etc.) first")
+	}
+
+	// Validate that the new email exists in any of the linked identities
+	// The email is stored in the Username field of UserIdentity
+	for _, identity := range identityList.Items {
+		if identity.Status.Username == newUser.Spec.Email {
+			userlog.Info("Email validated against identity provider",
+				"email", newUser.Spec.Email,
+				"provider", identity.Status.ProviderName,
+				"providerID", identity.Status.ProviderID)
+			return nil, nil // Email is valid
+		}
+	}
+
+	// Build list of available emails for error message
+	availableEmails := make([]string, 0, len(identityList.Items))
+	for _, identity := range identityList.Items {
+		if identity.Status.Username != "" {
+			availableEmails = append(availableEmails, identity.Status.Username)
+		}
+	}
+
+	// Email not found in any linked identity
+	userlog.Info("Email not found in linked identities",
+		"requestedEmail", newUser.Spec.Email,
+		"availableEmails", availableEmails)
+
+	return nil, fmt.Errorf(
+		"email %q is not linked to any verified identity provider. "+
+			"Available verified emails: %v",
+		newUser.Spec.Email,
+		availableEmails)
 }
 
 func (v *UserValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
