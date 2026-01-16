@@ -99,10 +99,11 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 
 	// Only allow users to update their own email (self-service only)
 	// This ensures that the UserIdentity list will be scoped to the correct user
-	if req.UserInfo.UID != string(newUser.GetUID()) {
+	// Note: req.UserInfo.UID is the Milo user ID, which matches the User resource name
+	if req.UserInfo.UID != newUser.Name {
 		userlog.Info("Rejecting email update from different user",
 			"requestingUser", req.UserInfo.UID,
-			"targetUser", newUser.GetUID())
+			"targetUser", newUser.Name)
 		return nil, errors.NewForbidden(
 			schema.GroupResource{Group: iamv1alpha1.SchemeGroupVersion.Group, Resource: "users"},
 			newUser.Name,
