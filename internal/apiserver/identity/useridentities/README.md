@@ -38,7 +38,13 @@ Naming & structure
 - internal/apiserver/identity/useridentities/rest.go — REST storage
 - internal/apiserver/identity/useridentities/dynamic.go — provider implementation
 
-Read-only resource
+Read-only resource and admission webhook for deletion
 Unlike sessions, useridentities is a read-only resource. Users cannot create,
 update, or delete user identities through the Kubernetes API. Identity linking
 and unlinking is managed through the external identity provider (e.g., Zitadel).
+
+If a user attempts to delete a UserIdentity via the Kubernetes API, the operation will be explicitly rejected by an admission webhook, which returns an error similar to:
+
+    deleting UserIdentity resources is not currently supported. Identity provider links must be managed through the authentication provider (e.g., Zitadel). Automatic email synchronization logic is required before deletion can be enabled
+
+This error response ensures deletions are consistently blocked at the API layer, clarifying current support and intended usage.
