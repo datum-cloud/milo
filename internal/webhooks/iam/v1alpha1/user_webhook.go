@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -26,19 +28,12 @@ var userlog = logf.Log.WithName("user-resource")
 func SetupUserWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, userSelfManageRoleName string) error {
 	userlog.Info("Setting up iam.miloapis.com user webhooks")
 
-	// Create a direct API client for UserIdentity queries (bypasses cache)
-	apiReader, err := client.New(mgr.GetConfig(), client.Options{
-		Scheme: mgr.GetScheme(),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create API reader: %w", err)
-	}
-
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.User{}).
 		WithValidator(&UserValidator{
 			client:                 mgr.GetClient(),
-			apiReader:              apiReader,
+			restConfig:             mgr.GetConfig(),
+			scheme:                 mgr.GetScheme(),
 			systemNamespace:        systemNamespace,
 			userSelfManageRoleName: userSelfManageRoleName,
 		}).
@@ -48,7 +43,8 @@ func SetupUserWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, user
 // UserValidator validates Users
 type UserValidator struct {
 	client                 client.Client
-	apiReader              client.Reader // Direct API client (no cache) for UserIdentity queries
+	restConfig             *rest.Config
+	scheme                 *runtime.Scheme
 	decoder                admission.Decoder
 	systemNamespace        string
 	userSelfManageRoleName string
@@ -120,10 +116,16 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 			fmt.Errorf("cannot update email address of another user. Email updates are restricted to self-service only"))
 	}
 
-	// Get UserIdentities for the requesting user using direct API client (no cache)
-	// UserIdentity is a dynamic REST API, so we use apiReader to bypass the cache
+	// Get UserIdentities for the requesting user using impersonated client
+	// UserIdentity is a dynamic REST API that requires proper user context
+	impersonatedClient, err := v.createImpersonatedClient(req.UserInfo)
+	if err != nil {
+		userlog.Error(err, "Failed to create impersonated client", "user", newUser.Name)
+		return nil, errors.NewInternalError(fmt.Errorf("failed to create impersonated client: %w", err))
+	}
+
 	identityList := &identityv1alpha1.UserIdentityList{}
-	if err := v.apiReader.List(ctx, identityList); err != nil {
+	if err := impersonatedClient.List(ctx, identityList); err != nil {
 		userlog.Error(err, "Failed to list user identities", "user", newUser.Name)
 		return nil, errors.NewInternalError(fmt.Errorf("failed to list user identities: %w", err))
 	}
@@ -171,6 +173,30 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 
 func (v *UserValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return nil, nil
+}
+
+// createImpersonatedClient creates a client that impersonates the requesting user
+// This is necessary for UserIdentity API calls which require proper user context
+func (v *UserValidator) createImpersonatedClient(userInfo authenticationv1.UserInfo) (client.Client, error) {
+	// Convert Extra from authenticationv1.ExtraValue to map[string][]string
+	extra := make(map[string][]string)
+	for k, v := range userInfo.Extra {
+		extra[k] = []string(v)
+	}
+
+	// Create a copy of the REST config with impersonation
+	impersonatedConfig := rest.CopyConfig(v.restConfig)
+	impersonatedConfig.Impersonate = rest.ImpersonationConfig{
+		UserName: userInfo.Username,
+		UID:      userInfo.UID,
+		Groups:   userInfo.Groups,
+		Extra:    extra,
+	}
+
+	// Create a new client with the impersonated config
+	return client.New(impersonatedConfig, client.Options{
+		Scheme: v.scheme,
+	})
 }
 
 // createSelfManagePolicyBinding creates a PolicyBinding for the organization owner
