@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -92,7 +94,7 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 	req, err := admission.RequestFromContext(ctx)
 	if err != nil {
 		userlog.Error(err, "Failed to get request from context")
-		return nil, fmt.Errorf("failed to get request from context: %w", err)
+		return nil, errors.NewInternalError(fmt.Errorf("failed to get request from context: %w", err))
 	}
 
 	// Only allow users to update their own email (self-service only)
@@ -101,9 +103,10 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 		userlog.Info("Rejecting email update from different user",
 			"requestingUser", req.UserInfo.UID,
 			"targetUser", newUser.GetUID())
-		return nil, fmt.Errorf(
-			"forbidden: cannot update email address of another user. " +
-				"Email updates are restricted to self-service only")
+		return nil, errors.NewForbidden(
+			schema.GroupResource{Group: iamv1alpha1.SchemeGroupVersion.Group, Resource: "users"},
+			newUser.Name,
+			fmt.Errorf("cannot update email address of another user. Email updates are restricted to self-service only"))
 	}
 
 	// Get UserIdentities for the requesting user
@@ -112,13 +115,13 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 	identityList := &identityv1alpha1.UserIdentityList{}
 	if err := v.client.List(ctx, identityList); err != nil {
 		userlog.Error(err, "Failed to list user identities", "user", newUser.Name)
-		return nil, fmt.Errorf("failed to list user identities: %w", err)
+		return nil, errors.NewInternalError(fmt.Errorf("failed to list user identities: %w", err))
 	}
 
 	// If no identities are linked, reject the change
 	if len(identityList.Items) == 0 {
 		userlog.Info("User has no linked identities, rejecting email change", "user", newUser.Name)
-		return nil, fmt.Errorf(
+		return nil, errors.NewBadRequest(
 			"cannot change email: no verified identity providers linked to this account. " +
 				"Please link an identity provider (GitHub, Google, etc.) first")
 	}
@@ -148,11 +151,12 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 		"requestedEmail", newUser.Spec.Email,
 		"availableEmails", availableEmails)
 
-	return nil, fmt.Errorf(
-		"email %q is not linked to any verified identity provider. "+
-			"Available verified emails: %v",
-		newUser.Spec.Email,
-		availableEmails)
+	return nil, errors.NewBadRequest(
+		fmt.Sprintf(
+			"email %q is not linked to any verified identity provider. "+
+				"Available verified emails: %v",
+			newUser.Spec.Email,
+			availableEmails))
 }
 
 func (v *UserValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
