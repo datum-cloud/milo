@@ -67,6 +67,7 @@ func TestUserContactController_CreateContactForNewUser(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(user).
+		WithStatusSubresource(&notificationv1alpha1.Contact{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
@@ -130,6 +131,7 @@ func TestUserContactController_UpdateExistingContactWithUserReference(t *testing
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(user, existingContact).
+		WithStatusSubresource(&notificationv1alpha1.Contact{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
@@ -194,6 +196,7 @@ func TestUserContactController_OverwriteContactWithDifferentUserReference(t *tes
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(user, existingContact).
+		WithStatusSubresource(&notificationv1alpha1.Contact{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
@@ -246,6 +249,7 @@ func TestUserContactController_CleanupDanglingReferenceOnContactReconcile(t *tes
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(contact). // No user!
+		WithStatusSubresource(&notificationv1alpha1.Contact{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
@@ -308,6 +312,7 @@ func TestUserContactController_SyncEmailOnUserEmailChange(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(user, existingContact).
+		WithStatusSubresource(&notificationv1alpha1.Contact{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
@@ -392,6 +397,7 @@ func TestUserContactController_UpdateContactInDifferentNamespace(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(user, existingContact).
+		WithStatusSubresource(&notificationv1alpha1.Contact{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()

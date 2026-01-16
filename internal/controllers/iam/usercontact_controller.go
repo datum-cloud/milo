@@ -116,7 +116,13 @@ func (r *UserContactController) ReconcileContact(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, fmt.Errorf("failed to get User: %w", err)
 	}
 
-	// User exists - no cleanup needed
+	// Also treat a user being deleted as "no longer exists"
+	if !user.DeletionTimestamp.IsZero() {
+		log.Info("Referenced user is being deleted, removing SubjectRef", "user", contact.Spec.SubjectRef.Name)
+		return r.removeSubjectRefFromContact(ctx, contact)
+	}
+
+	// User exists and is not being deleted - no cleanup needed
 	return ctrl.Result{}, nil
 }
 
