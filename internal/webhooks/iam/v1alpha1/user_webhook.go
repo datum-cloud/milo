@@ -24,14 +24,6 @@ var userlog = logf.Log.WithName("user-resource")
 func SetupUserWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, userSelfManageRoleName string) error {
 	userlog.Info("Setting up iam.miloapis.com user webhooks")
 
-	// Index UserIdentity by userUID for efficient lookups during email validation
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &identityv1alpha1.UserIdentity{}, "status.userUID", func(rawObj client.Object) []string {
-		identity := rawObj.(*identityv1alpha1.UserIdentity)
-		return []string{identity.Status.UserUID}
-	}); err != nil {
-		return err
-	}
-
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.User{}).
 		WithValidator(&UserValidator{
@@ -96,14 +88,21 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 		"oldEmail", oldUser.Spec.Email,
 		"newEmail", newUser.Spec.Email)
 
-	// Get all UserIdentities for this user
-	identityList := &identityv1alpha1.UserIdentityList{}
-	err := v.client.List(ctx, identityList, client.MatchingFields{
-		"status.userUID": string(newUser.GetUID()),
-	})
-	if err != nil {
+	// Get all UserIdentities and filter by userUID
+	// Note: UserIdentity is a dynamic REST API (not cached), so we cannot use field selectors
+	// We must list all and filter manually
+	allIdentities := &identityv1alpha1.UserIdentityList{}
+	if err := v.client.List(ctx, allIdentities); err != nil {
 		userlog.Error(err, "Failed to list user identities", "user", newUser.Name)
 		return nil, fmt.Errorf("failed to list user identities: %w", err)
+	}
+
+	// Filter identities for this user
+	identityList := &identityv1alpha1.UserIdentityList{}
+	for _, identity := range allIdentities.Items {
+		if identity.Status.UserUID == string(newUser.GetUID()) {
+			identityList.Items = append(identityList.Items, identity)
+		}
 	}
 
 	// If no identities are linked, reject the change
