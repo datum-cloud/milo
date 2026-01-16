@@ -88,21 +88,31 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 		"oldEmail", oldUser.Spec.Email,
 		"newEmail", newUser.Spec.Email)
 
-	// Get all UserIdentities and filter by userUID
-	// Note: UserIdentity is a dynamic REST API (not cached), so we cannot use field selectors
-	// We must list all and filter manually
-	allIdentities := &identityv1alpha1.UserIdentityList{}
-	if err := v.client.List(ctx, allIdentities); err != nil {
-		userlog.Error(err, "Failed to list user identities", "user", newUser.Name)
-		return nil, fmt.Errorf("failed to list user identities: %w", err)
+	// Get the requesting user from admission request
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil {
+		userlog.Error(err, "Failed to get request from context")
+		return nil, fmt.Errorf("failed to get request from context: %w", err)
 	}
 
-	// Filter identities for this user
+	// Only allow users to update their own email (self-service only)
+	// This ensures that the UserIdentity list will be scoped to the correct user
+	if req.UserInfo.UID != string(newUser.GetUID()) {
+		userlog.Info("Rejecting email update from different user",
+			"requestingUser", req.UserInfo.UID,
+			"targetUser", newUser.GetUID())
+		return nil, fmt.Errorf(
+			"forbidden: cannot update email address of another user. " +
+				"Email updates are restricted to self-service only")
+	}
+
+	// Get UserIdentities for the requesting user
+	// Note: UserIdentity is a dynamic REST API that automatically scopes results
+	// to the authenticated user (from context), so we don't need manual filtering
 	identityList := &identityv1alpha1.UserIdentityList{}
-	for _, identity := range allIdentities.Items {
-		if identity.Status.UserUID == string(newUser.GetUID()) {
-			identityList.Items = append(identityList.Items, identity)
-		}
+	if err := v.client.List(ctx, identityList); err != nil {
+		userlog.Error(err, "Failed to list user identities", "user", newUser.Name)
+		return nil, fmt.Errorf("failed to list user identities: %w", err)
 	}
 
 	// If no identities are linked, reject the change
