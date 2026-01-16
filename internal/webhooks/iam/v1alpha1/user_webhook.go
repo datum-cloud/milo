@@ -26,10 +26,19 @@ var userlog = logf.Log.WithName("user-resource")
 func SetupUserWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, userSelfManageRoleName string) error {
 	userlog.Info("Setting up iam.miloapis.com user webhooks")
 
+	// Create a direct API client for UserIdentity queries (bypasses cache)
+	apiReader, err := client.New(mgr.GetConfig(), client.Options{
+		Scheme: mgr.GetScheme(),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create API reader: %w", err)
+	}
+
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&iamv1alpha1.User{}).
 		WithValidator(&UserValidator{
 			client:                 mgr.GetClient(),
+			apiReader:              apiReader,
 			systemNamespace:        systemNamespace,
 			userSelfManageRoleName: userSelfManageRoleName,
 		}).
@@ -39,6 +48,7 @@ func SetupUserWebhooksWithManager(mgr ctrl.Manager, systemNamespace string, user
 // UserValidator validates Users
 type UserValidator struct {
 	client                 client.Client
+	apiReader              client.Reader // Direct API client (no cache) for UserIdentity queries
 	decoder                admission.Decoder
 	systemNamespace        string
 	userSelfManageRoleName string
@@ -110,11 +120,10 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 			fmt.Errorf("cannot update email address of another user. Email updates are restricted to self-service only"))
 	}
 
-	// Get UserIdentities for the requesting user
-	// Note: UserIdentity is a dynamic REST API that automatically scopes results
-	// to the authenticated user (from context), so we don't need manual filtering
+	// Get UserIdentities for the requesting user using direct API client (no cache)
+	// UserIdentity is a dynamic REST API, so we use apiReader to bypass the cache
 	identityList := &identityv1alpha1.UserIdentityList{}
-	if err := v.client.List(ctx, identityList); err != nil {
+	if err := v.apiReader.List(ctx, identityList); err != nil {
 		userlog.Error(err, "Failed to list user identities", "user", newUser.Name)
 		return nil, errors.NewInternalError(fmt.Errorf("failed to list user identities: %w", err))
 	}
