@@ -225,6 +225,16 @@ func (r *UserContactController) syncContactWithUser(ctx context.Context, contact
 		needsUpdate = true
 	}
 
+	// Check given name
+	if contact.Spec.GivenName != user.Spec.GivenName {
+		needsUpdate = true
+	}
+
+	// Check family name
+	if contact.Spec.FamilyName != user.Spec.FamilyName {
+		needsUpdate = true
+	}
+
 	if !needsUpdate {
 		log.Info("Contact already in sync with user, no update needed", "contact", contact.Name)
 		return nil
@@ -239,6 +249,8 @@ func (r *UserContactController) syncContactWithUser(ctx context.Context, contact
 		// Namespace is omitted for cluster-scoped resources like User
 	}
 	contact.Spec.Email = user.Spec.Email
+	contact.Spec.GivenName = user.Spec.GivenName
+	contact.Spec.FamilyName = user.Spec.FamilyName
 
 	if err := r.Client.Patch(ctx, contact, client.MergeFrom(before), client.FieldOwner(userContactFieldOwner)); err != nil {
 		return fmt.Errorf("failed to sync contact with user: %w", err)

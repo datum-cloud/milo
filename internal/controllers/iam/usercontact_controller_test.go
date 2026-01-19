@@ -157,9 +157,9 @@ func TestUserContactController_UpdateExistingContactWithUserReference(t *testing
 	assert.NotNil(t, updatedContact.Spec.SubjectRef)
 	assert.Equal(t, "User", updatedContact.Spec.SubjectRef.Kind)
 	assert.Equal(t, user.Name, updatedContact.Spec.SubjectRef.Name)
-	// Original contact fields should be preserved
-	assert.Equal(t, "Existing", updatedContact.Spec.GivenName)
-	assert.Equal(t, "Contact", updatedContact.Spec.FamilyName)
+	// Contact fields should be synced with user data
+	assert.Equal(t, user.Spec.GivenName, updatedContact.Spec.GivenName)
+	assert.Equal(t, user.Spec.FamilyName, updatedContact.Spec.FamilyName)
 }
 
 func TestUserContactController_OverwriteContactWithDifferentUserReference(t *testing.T) {
