@@ -86,10 +86,12 @@ import (
 	quotacontroller "go.miloapis.com/milo/internal/quota/controllers"
 	crmv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/crm/v1alpha1"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
+	identityv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/identity/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	crmv1alpha1 "go.miloapis.com/milo/pkg/apis/crm/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
@@ -173,6 +175,7 @@ func init() {
 	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(identityv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(crmv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(quotav1alpha1.AddToScheme(Scheme))
@@ -497,6 +500,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := iamv1alpha1webhook.SetupUserDeactivationWebhooksWithManager(ctrl, SystemNamespace); err != nil {
 				logger.Error(err, "Error setting up userdeactivation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := identityv1alpha1webhook.SetupUserIdentityWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up useridentity webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 			if err := notificationv1alpha1webhook.SetupEmailTemplateWebhooksWithManager(ctrl, SystemNamespace); err != nil {
