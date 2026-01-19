@@ -35,6 +35,15 @@ const (
 
 	// ContactUserUnlinkedReason indicates the contact's user reference was removed.
 	ContactUserUnlinkedReason = "UserUnlinked"
+
+	// UserContactSyncedCondition is the condition type that tracks sync status with a Contact.
+	UserContactSyncedCondition = "ContactSynced"
+
+	// UserContactSyncedReason indicates the user was successfully synced with a contact.
+	UserContactSyncedReason = "SyncedWithContact"
+
+	// UserContactSyncFailedReason indicates the user sync with a contact failed.
+	UserContactSyncFailedReason = "SyncFailed"
 )
 
 // UserContactController reconciles User objects and ensures corresponding Contacts exist.
@@ -52,7 +61,8 @@ type UserContactController struct {
 }
 
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
-// +kubebuilder:rbac:groups=notification.miloapis.com,resources=contacts,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=users/status,verbs=update;patch
+// +kubebuilder:rbac:groups=notification.miloapis.com,resources=contacts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=notification.miloapis.com,resources=contacts/status,verbs=update
 
 // Reconcile is the main reconciliation loop for the UserContactController.
@@ -76,8 +86,18 @@ func (r *UserContactController) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Ensure a Contact exists for this User
-	if err := r.ensureContactForUser(ctx, user); err != nil {
+	contact, err := r.ensureContactForUser(ctx, user)
+	if err != nil {
 		log.Error(err, "Failed to ensure contact for user")
+		if statusErr := r.updateUserStatus(ctx, user, nil, err); statusErr != nil {
+			log.Error(statusErr, "Failed to update user status on error")
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Update the User status with the Contact status
+	if err := r.updateUserStatus(ctx, user, contact, nil); err != nil {
+		log.Error(err, "Failed to update user status")
 		return ctrl.Result{}, err
 	}
 
@@ -159,11 +179,51 @@ func (r *UserContactController) removeSubjectRefFromContact(ctx context.Context,
 	return ctrl.Result{}, nil
 }
 
+// updateUserStatus updates the User's status based on the result of the contact sync.
+func (r *UserContactController) updateUserStatus(ctx context.Context, user *iamv1alpha1.User, contact *notificationv1alpha1.Contact, syncErr error) error {
+	log := log.FromContext(ctx).WithName("update-user-status")
+
+	// Capture original state for patching
+	patch := client.MergeFrom(user.DeepCopy())
+
+	var condition metav1.Condition
+
+	if syncErr != nil {
+		condition = metav1.Condition{
+			Type:               UserContactSyncedCondition,
+			Status:             metav1.ConditionFalse,
+			Reason:             UserContactSyncFailedReason,
+			Message:            fmt.Sprintf("Failed to sync contact: %v", syncErr),
+			LastTransitionTime: metav1.Now(),
+		}
+		log.Info("Updating User status with error info", "user", user.Name)
+	} else {
+		condition = metav1.Condition{
+			Type:               UserContactSyncedCondition,
+			Status:             metav1.ConditionTrue,
+			Reason:             UserContactSyncedReason,
+			Message:            fmt.Sprintf("Contact %s is synced", contact.Name),
+			LastTransitionTime: metav1.Now(),
+		}
+		log.Info("Updating User status with contact sync info", "user", user.Name)
+	}
+
+	// Calculate changes
+	if meta.SetStatusCondition(&user.Status.Conditions, condition) {
+		if err := r.Client.Status().Patch(ctx, user, patch, client.FieldOwner(userContactFieldOwner)); err != nil {
+			return fmt.Errorf("failed to patch user status: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // ensureContactForUser ensures that a Contact exists for the given User and keeps it in sync.
 // It first searches for Contacts that already reference this User (by SubjectRef.Name).
 // If found, it syncs the email address if it has changed.
 // If not found, it searches by email or creates a new Contact.
-func (r *UserContactController) ensureContactForUser(ctx context.Context, user *iamv1alpha1.User) error {
+// It also cleans up any unlinked contacts with the same email to prevent duplicates.
+func (r *UserContactController) ensureContactForUser(ctx context.Context, user *iamv1alpha1.User) (*notificationv1alpha1.Contact, error) {
 	log := log.FromContext(ctx).WithName("ensure-contact-for-user").WithValues("user", user.Name, "email", user.Spec.Email)
 
 	// First, search for Contacts that already reference this user (by SubjectRef.Name).
@@ -171,7 +231,7 @@ func (r *UserContactController) ensureContactForUser(ctx context.Context, user *
 	existingContactList := &notificationv1alpha1.ContactList{}
 	if err := r.Client.List(ctx, existingContactList,
 		client.MatchingFields{contactSubjectNameIndexKey: user.Name}); err != nil {
-		return fmt.Errorf("failed to list contacts by subject name: %w", err)
+		return nil, fmt.Errorf("failed to list contacts by subject name: %w", err)
 	}
 
 	// Filter to only contacts that reference this User (Kind=User check)
@@ -181,7 +241,17 @@ func (r *UserContactController) ensureContactForUser(ctx context.Context, user *
 			contact.Spec.SubjectRef.Kind == "User" &&
 			contact.Spec.SubjectRef.Name == user.Name {
 			log.Info("Found existing contact referencing this user", "contact", contact.Name)
-			return r.syncContactWithUser(ctx, contact, user)
+
+			// Before syncing, delete any unlinked contacts with the user's new email
+			// to prevent duplicate emails across contacts
+			if err := r.deleteUnlinkedContactsWithEmail(ctx, user.Spec.Email, contact.Name); err != nil {
+				return nil, err
+			}
+
+			if err := r.syncContactWithUser(ctx, contact, user); err != nil {
+				return nil, err
+			}
+			return contact, nil
 		}
 	}
 
@@ -190,19 +260,56 @@ func (r *UserContactController) ensureContactForUser(ctx context.Context, user *
 	contactList := &notificationv1alpha1.ContactList{}
 	if err := r.Client.List(ctx, contactList,
 		client.MatchingFields{contactEmailIndexKey: user.Spec.Email}); err != nil {
-		return fmt.Errorf("failed to list contacts by email: %w", err)
+		return nil, fmt.Errorf("failed to list contacts by email: %w", err)
 	}
 
 	if len(contactList.Items) > 0 {
 		// Contact with same email exists, update it with SubjectRef
 		contact := &contactList.Items[0]
 		log.Info("Found existing contact with same email", "contact", contact.Name)
-		return r.syncContactWithUser(ctx, contact, user)
+		if err := r.syncContactWithUser(ctx, contact, user); err != nil {
+			return nil, err
+		}
+		return contact, nil
 	}
 
 	// No Contact found, create a new one
 	log.Info("No contact found, creating new contact")
 	return r.createContactForUser(ctx, user)
+}
+
+// deleteUnlinkedContactsWithEmail deletes any contacts with the given email that don't have a SubjectRef.
+// This is used to clean up newsletter contacts when a user changes their email to match.
+// The excludeContactName parameter is used to skip the user's own contact.
+func (r *UserContactController) deleteUnlinkedContactsWithEmail(ctx context.Context, email string, excludeContactName string) error {
+	log := log.FromContext(ctx).WithName("delete-unlinked-contacts")
+
+	contactList := &notificationv1alpha1.ContactList{}
+	if err := r.Client.List(ctx, contactList,
+		client.MatchingFields{contactEmailIndexKey: email}); err != nil {
+		return fmt.Errorf("failed to list contacts by email: %w", err)
+	}
+
+	for i := range contactList.Items {
+		contact := &contactList.Items[i]
+
+		// Skip the user's own contact
+		if contact.Name == excludeContactName {
+			continue
+		}
+
+		// Only delete contacts without a SubjectRef (unlinked newsletter contacts)
+		if contact.Spec.SubjectRef == nil {
+			log.Info("Deleting unlinked contact with same email", "contact", contact.Name, "namespace", contact.Namespace, "email", email)
+			if err := r.Client.Delete(ctx, contact); err != nil {
+				if !apierrors.IsNotFound(err) {
+					return fmt.Errorf("failed to delete unlinked contact %s: %w", contact.Name, err)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // syncContactWithUser synchronizes the Contact with the User's data.
@@ -274,7 +381,7 @@ func (r *UserContactController) syncContactWithUser(ctx context.Context, contact
 }
 
 // createContactForUser creates a new Contact for the given User.
-func (r *UserContactController) createContactForUser(ctx context.Context, user *iamv1alpha1.User) error {
+func (r *UserContactController) createContactForUser(ctx context.Context, user *iamv1alpha1.User) (*notificationv1alpha1.Contact, error) {
 	log := log.FromContext(ctx).WithName("create-contact-for-user")
 
 	contactName := fmt.Sprintf("user-%s", user.Name)
@@ -303,11 +410,14 @@ func (r *UserContactController) createContactForUser(ctx context.Context, user *
 			log.Info("Contact already exists, attempting to update", "contact", contactName)
 			existingContact := &notificationv1alpha1.Contact{}
 			if getErr := r.Client.Get(ctx, types.NamespacedName{Name: contactName, Namespace: r.ContactNamespace}, existingContact); getErr != nil {
-				return fmt.Errorf("failed to get existing contact: %w", getErr)
+				return nil, fmt.Errorf("failed to get existing contact: %w", getErr)
 			}
-			return r.syncContactWithUser(ctx, existingContact, user)
+			if err := r.syncContactWithUser(ctx, existingContact, user); err != nil {
+				return nil, err
+			}
+			return existingContact, nil
 		}
-		return fmt.Errorf("failed to create contact: %w", err)
+		return nil, fmt.Errorf("failed to create contact: %w", err)
 	}
 
 	// Update the status with UserSynced condition
@@ -320,11 +430,11 @@ func (r *UserContactController) createContactForUser(ctx context.Context, user *
 	})
 
 	if err := r.Client.Status().Update(ctx, contact); err != nil {
-		return fmt.Errorf("failed to update contact status: %w", err)
+		return nil, fmt.Errorf("failed to update contact status: %w", err)
 	}
 
 	log.Info("Created contact for user", "contact", contactName, "user", user.Name)
-	return nil
+	return contact, nil
 }
 
 // findContactsForDeletedUser finds all Contacts that reference a given User.
@@ -373,6 +483,9 @@ func (r *UserContactController) findContactsForDeletedUser(ctx context.Context, 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *UserContactController) SetupWithManager(mgr ctrl.Manager) error {
+	log := log.Log.WithName("user-contact-controller")
+	log.Info("Setting up UserContactController with Manager")
+
 	// Create an index on Contact.spec.email for efficient lookups when creating contacts
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.Contact{}, contactEmailIndexKey, func(obj client.Object) []string {
 		contact, ok := obj.(*notificationv1alpha1.Contact)

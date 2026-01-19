@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -68,6 +69,7 @@ func TestUserContactController_CreateContactForNewUser(t *testing.T) {
 		WithScheme(scheme).
 		WithObjects(user).
 		WithStatusSubresource(&notificationv1alpha1.Contact{}).
+		WithStatusSubresource(&iamv1alpha1.User{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
@@ -132,6 +134,7 @@ func TestUserContactController_UpdateExistingContactWithUserReference(t *testing
 		WithScheme(scheme).
 		WithObjects(user, existingContact).
 		WithStatusSubresource(&notificationv1alpha1.Contact{}).
+		WithStatusSubresource(&iamv1alpha1.User{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
@@ -197,6 +200,7 @@ func TestUserContactController_OverwriteContactWithDifferentUserReference(t *tes
 		WithScheme(scheme).
 		WithObjects(user, existingContact).
 		WithStatusSubresource(&notificationv1alpha1.Contact{}).
+		WithStatusSubresource(&iamv1alpha1.User{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
@@ -313,6 +317,7 @@ func TestUserContactController_SyncEmailOnUserEmailChange(t *testing.T) {
 		WithScheme(scheme).
 		WithObjects(user, existingContact).
 		WithStatusSubresource(&notificationv1alpha1.Contact{}).
+		WithStatusSubresource(&iamv1alpha1.User{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
@@ -338,6 +343,88 @@ func TestUserContactController_SyncEmailOnUserEmailChange(t *testing.T) {
 	assert.Equal(t, "new-email@example.com", updatedContact.Spec.Email, "Contact email should be updated")
 	assert.NotNil(t, updatedContact.Spec.SubjectRef)
 	assert.Equal(t, user.Name, updatedContact.Spec.SubjectRef.Name)
+}
+
+func TestUserContactController_DeleteUnlinkedContactOnEmailChange(t *testing.T) {
+	// This test verifies that when a user changes their email to match an existing
+	// unlinked newsletter contact, the unlinked contact is deleted to prevent duplicates.
+	scheme := setupUserContactTestScheme()
+
+	// User with a NEW email address that matches an unlinked contact
+	user := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-user",
+			UID:  "test-user-uid",
+		},
+		Spec: iamv1alpha1.UserSpec{
+			Email:      "newsletter@example.com", // New email that matches unlinked contact
+			GivenName:  "Test",
+			FamilyName: "User",
+		},
+	}
+
+	// Existing contact linked to the user with OLD email
+	userContact := &notificationv1alpha1.Contact{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "user-test-user",
+			Namespace: testContactNamespace,
+		},
+		Spec: notificationv1alpha1.ContactSpec{
+			Email: "old-email@example.com", // Old email
+			SubjectRef: &notificationv1alpha1.SubjectReference{
+				APIGroup: iamv1alpha1.SchemeGroupVersion.Group,
+				Kind:     "User",
+				Name:     user.Name,
+			},
+		},
+	}
+
+	// Unlinked newsletter contact with the email the user is changing to
+	newsletterContact := &notificationv1alpha1.Contact{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "newsletter-signup",
+			Namespace: testContactNamespace,
+		},
+		Spec: notificationv1alpha1.ContactSpec{
+			Email:      "newsletter@example.com", // Same email as user's new email
+			GivenName:  "Newsletter",
+			FamilyName: "Subscriber",
+			// No SubjectRef - this is an unlinked newsletter signup
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(user, userContact, newsletterContact).
+		WithStatusSubresource(&notificationv1alpha1.Contact{}).
+		WithStatusSubresource(&iamv1alpha1.User{}).
+		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
+		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
+		Build()
+
+	controller := &UserContactController{
+		Client:           fakeClient,
+		ContactNamespace: testContactNamespace,
+	}
+
+	ctx := context.Background()
+
+	result, err := controller.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: user.Name},
+	})
+	require.NoError(t, err)
+	assert.False(t, result.Requeue)
+
+	// Verify the user's contact was updated with the new email
+	updatedContact := &notificationv1alpha1.Contact{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "user-test-user", Namespace: testContactNamespace}, updatedContact)
+	require.NoError(t, err)
+	assert.Equal(t, "newsletter@example.com", updatedContact.Spec.Email)
+
+	// Verify the unlinked newsletter contact was deleted
+	deletedContact := &notificationv1alpha1.Contact{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "newsletter-signup", Namespace: testContactNamespace}, deletedContact)
+	assert.True(t, apierrors.IsNotFound(err), "Unlinked newsletter contact should be deleted")
 }
 
 func TestUserContactController_UserNotFound(t *testing.T) {
@@ -398,6 +485,7 @@ func TestUserContactController_UpdateContactInDifferentNamespace(t *testing.T) {
 		WithScheme(scheme).
 		WithObjects(user, existingContact).
 		WithStatusSubresource(&notificationv1alpha1.Contact{}).
+		WithStatusSubresource(&iamv1alpha1.User{}).
 		WithIndex(&notificationv1alpha1.Contact{}, contactEmailIndexKey, contactEmailIndexFunc).
 		WithIndex(&notificationv1alpha1.Contact{}, contactSubjectNameIndexKey, contactSubjectNameIndexFunc).
 		Build()
