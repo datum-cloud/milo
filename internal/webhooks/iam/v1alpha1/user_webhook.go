@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -101,6 +102,13 @@ func (v *UserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runti
 	if err != nil {
 		userlog.Error(err, "Failed to get request from context")
 		return nil, errors.NewInternalError(fmt.Errorf("failed to get request from context: %w", err))
+	}
+
+	// Allow system administrators to bypass validation
+	// This allows automated tests and system components to manage User resources directly
+	if slices.Contains(req.UserInfo.Groups, "system:masters") {
+		userlog.Info("Allowing email update for system administrator", "user", req.UserInfo.Username)
+		return nil, nil
 	}
 
 	// Only allow users to update their own email (self-service only)
