@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -86,36 +87,26 @@ func (r *AllowanceBucketController) Reconcile(ctx context.Context, req mcreconci
 		}
 	}
 
-	// Update observed generation
+	originalStatus := bucket.Status.DeepCopy()
+
 	bucket.Status.ObservedGeneration = bucket.Generation
 
-	// Calculate limits from ResourceGrants
 	if err := r.updateLimitsFromGrants(ctx, clusterClient, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update limits from grants: %w", err)
 	}
 
-	// Calculate usage from ResourceClaims
 	if err := r.updateUsageFromClaims(ctx, clusterClient, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update usage from claims: %w", err)
 	}
 
-	// Try to grant pending claims by reserving capacity
+	// processPendingClaims performs intermediate status updates for atomic quota reservation.
 	if err := r.processPendingClaims(ctx, clusterClient, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed processing pending grants: %w", err)
 	}
 
-	// Enforce non-negative Available quota (validation constraint)
 	bucket.Status.Available = max(0, bucket.Status.Limit-bucket.Status.Allocated)
 
-	// Update last reconciliation time
-	bucket.Status.LastReconciliation = ptr.To(metav1.Now())
-
-	// API server handles no-op updates efficiently
-	if err := clusterClient.Status().Update(ctx, &bucket); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update AllowanceBucket status: %w", err)
-	}
-
-	return ctrl.Result{}, nil
+	return r.updateStatusIfChanged(ctx, clusterClient, &bucket, originalStatus)
 }
 
 // updateLimitsFromGrants calculates total quota limits from active ResourceGrants.
@@ -404,6 +395,24 @@ func (r *AllowanceBucketController) updateResourceClaimAllocation(ctx context.Co
 	}
 
 	return nil
+}
+
+// updateStatusIfChanged updates the bucket status if it changed.
+// Skips the update if the status is semantically identical to prevent unnecessary
+// API server writes and audit log entries. Updates the LastReconciliation timestamp
+// only when status changes.
+func (r *AllowanceBucketController) updateStatusIfChanged(ctx context.Context, clusterClient client.Client, bucket *quotav1alpha1.AllowanceBucket, originalStatus *quotav1alpha1.AllowanceBucketStatus) (ctrl.Result, error) {
+	if equality.Semantic.DeepEqual(&bucket.Status, originalStatus) {
+		return ctrl.Result{}, nil
+	}
+
+	bucket.Status.LastReconciliation = ptr.To(metav1.Now())
+
+	if err := clusterClient.Status().Update(ctx, bucket); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update AllowanceBucket status: %w", err)
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // generateAllowanceBucketName creates a deterministic name for an AllowanceBucket.
