@@ -86,7 +86,16 @@ func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context,
 
 	if validationErrs := r.GrantValidator.Validate(ctx, grant, validation.ControllerValidationOptions()); len(validationErrs) > 0 {
 		logger.Info("ResourceGrant validation failed", "errors", validationErrs.ToAggregate())
-		return r.setValidationFailedCondition(ctx, clusterClient, grant, validationErrs.ToAggregate())
+
+		apimeta.SetStatusCondition(&grant.Status.Conditions, metav1.Condition{
+			Type:    quotav1alpha1.ResourceGrantActive,
+			Status:  metav1.ConditionFalse,
+			Reason:  quotav1alpha1.ResourceGrantValidationFailedReason,
+			Message: fmt.Sprintf("Validation failed: %v", validationErrs.ToAggregate()),
+		})
+
+		// Use the same change detection for validation failures
+		return r.updateStatusIfChanged(ctx, clusterClient, grant, originalStatus)
 	}
 
 	// Set active condition
@@ -94,22 +103,6 @@ func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context,
 
 	// Only update the status if it has changed
 	return r.updateStatusIfChanged(ctx, clusterClient, grant, originalStatus)
-}
-
-// setValidationFailedCondition sets the validation failed condition and updates status.
-func (r *ResourceGrantController) setValidationFailedCondition(ctx context.Context, clusterClient client.Client, grant *quotav1alpha1.ResourceGrant, validationErr error) error {
-	condition := metav1.Condition{
-		Type:    quotav1alpha1.ResourceGrantActive,
-		Status:  metav1.ConditionFalse,
-		Reason:  quotav1alpha1.ResourceGrantValidationFailedReason,
-		Message: fmt.Sprintf("Validation failed: %v", validationErr),
-	}
-	apimeta.SetStatusCondition(&grant.Status.Conditions, condition)
-
-	if err := clusterClient.Status().Update(ctx, grant); err != nil {
-		return fmt.Errorf("failed to update ResourceGrant status: %w", err)
-	}
-	return nil
 }
 
 // setActiveCondition sets the active condition on the grant.
