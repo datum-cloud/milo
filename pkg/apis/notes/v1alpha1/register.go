@@ -7,7 +7,7 @@ import (
 )
 
 // SchemeGroupVersion is group version used to register these objects.
-var SchemeGroupVersion = schema.GroupVersion{Group: "crm.miloapis.com", Version: "v1alpha1"}
+var SchemeGroupVersion = schema.GroupVersion{Group: "notes.miloapis.com", Version: "v1alpha1"}
 
 var (
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
@@ -18,7 +18,12 @@ var (
 
 // addKnownTypes adds the set of types defined in this package to the supplied scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(SchemeGroupVersion)
+	scheme.AddKnownTypes(SchemeGroupVersion,
+		&Note{},
+		&NoteList{},
+		&ClusterNote{},
+		&ClusterNoteList{},
+	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
 }

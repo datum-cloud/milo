@@ -78,21 +78,22 @@ import (
 	_ "k8s.io/component-base/logs/json/register"
 
 	controlplane "go.miloapis.com/milo/internal/control-plane"
-	crmcontroller "go.miloapis.com/milo/internal/controllers/crm"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
+	notescontroller "go.miloapis.com/milo/internal/controllers/notes"
 	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	quotacontroller "go.miloapis.com/milo/internal/quota/controllers"
-	crmv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/crm/v1alpha1"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
 	identityv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/identity/v1alpha1"
+	notesv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notes/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	crmv1alpha1 "go.miloapis.com/milo/pkg/apis/crm/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
+	notesv1alpha1 "go.miloapis.com/milo/pkg/apis/notes/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
@@ -172,6 +173,7 @@ func init() {
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(identityv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(notesv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(crmv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(quotav1alpha1.AddToScheme(Scheme))
@@ -542,8 +544,12 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up platform access rejection webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-			if err := crmv1alpha1webhook.SetupNoteWebhooksWithManager(ctrl); err != nil {
+			if err := notesv1alpha1webhook.SetupNoteWebhooksWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up note webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := notesv1alpha1webhook.SetupClusterNoteWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up clusternote webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
@@ -715,13 +721,23 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			noteCtrl := crmcontroller.NoteController{
+			noteCtrl := notescontroller.NoteController{
 				Client:                     ctrl.GetClient(),
 				CreatorEditorRoleName:      NoteCreatorEditorRoleName,
 				CreatorEditorRoleNamespace: SystemNamespace,
 			}
 			if err := noteCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up note controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			clusterNoteCtrl := notescontroller.ClusterNoteController{
+				Client:                     ctrl.GetClient(),
+				CreatorEditorRoleName:      NoteCreatorEditorRoleName,
+				CreatorEditorRoleNamespace: SystemNamespace,
+			}
+			if err := clusterNoteCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up clusternote controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

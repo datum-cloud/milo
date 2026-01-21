@@ -10,13 +10,13 @@ import (
 // +kubebuilder:subresource:status
 
 // Note is the Schema for the notes API.
-// It represents a note attached to a subject (e.g. Contact or User).
+// It represents a namespaced note attached to a subject resource.
 // +kubebuilder:printcolumn:name="Subject Kind",type="string",JSONPath=".spec.subjectRef.kind"
 // +kubebuilder:printcolumn:name="Subject Name",type="string",JSONPath=".spec.subjectRef.name"
 // +kubebuilder:printcolumn:name="Creator",type="string",JSONPath=".spec.creatorRef.name"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:resource:scope=Namespaced
 // +kubebuilder:selectablefield:JSONPath=".spec.creatorRef.name"
 // +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.name"
 // +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.namespace"
@@ -25,6 +25,32 @@ import (
 // +kubebuilder:selectablefield:JSONPath=".spec.followUp"
 // +kubebuilder:selectablefield:JSONPath=".status.createdBy"
 type Note struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   NoteSpec   `json:"spec,omitempty"`
+	Status NoteStatus `json:"status,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+
+// ClusterNote is the Schema for the cluster-scoped notes API.
+// It represents a note attached to a cluster-scoped subject resource.
+// +kubebuilder:printcolumn:name="Subject Kind",type="string",JSONPath=".spec.subjectRef.kind"
+// +kubebuilder:printcolumn:name="Subject Name",type="string",JSONPath=".spec.subjectRef.name"
+// +kubebuilder:printcolumn:name="Creator",type="string",JSONPath=".spec.creatorRef.name"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:selectablefield:JSONPath=".spec.creatorRef.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.subjectRef.kind"
+// +kubebuilder:selectablefield:JSONPath=".spec.nextActionTime"
+// +kubebuilder:selectablefield:JSONPath=".spec.followUp"
+// +kubebuilder:selectablefield:JSONPath=".status.createdBy"
+type ClusterNote struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -74,12 +100,10 @@ type NoteSpec struct {
 // +kubebuilder:validation:Type=object
 type SubjectReference struct {
 	// APIGroup is the group for the resource being referenced.
-	// +kubebuilder:validation:Enum=iam.miloapis.com;notification.miloapis.com
 	// +kubebuilder:validation:Required
 	APIGroup string `json:"apiGroup"`
 
 	// Kind is the type of resource being referenced.
-	// +kubebuilder:validation:Enum=User;Contact
 	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 
@@ -101,6 +125,16 @@ type NoteList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Note `json:"items"`
+}
+
+// +kubebuilder:object:root=true
+
+// ClusterNoteList contains a list of ClusterNote.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ClusterNoteList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ClusterNote `json:"items"`
 }
 
 // NoteStatus defines the observed state of Note
