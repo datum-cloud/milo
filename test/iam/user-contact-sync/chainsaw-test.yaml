@@ -1,0 +1,228 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: user-contact-sync
+spec:
+  description: |
+    End-to-end tests for the UserContactController.
+
+    This test verifies the following scenarios:
+    1. Creating a new User creates a corresponding Contact with SubjectRef
+    2. Creating a User with an existing newsletter Contact (same email) links them together
+    3. When a User changes email, their linked Contact is updated
+    4. When a User changes email to match an unlinked Contact, the unlinked Contact is deleted
+    5. When a User is deleted, the Contact's SubjectRef is cleaned up
+
+  concurrent: false
+  steps:
+  # Scenario 1: Create a new User and verify a Contact is created
+  - name: create-new-user-creates-contact
+    description: Create a new User and verify a corresponding Contact is created
+    try:
+    - apply:
+        file: 01-new-user.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: User
+        name: test-contact-user
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'True'
+    - wait:
+        apiVersion: notification.miloapis.com/v1alpha1
+        kind: Contact
+        name: user-test-contact-user
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.spec.subject.name}'
+            value: test-contact-user
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: user-test-contact-user
+            namespace: milo-system
+          spec:
+            email: new-user@example.com
+            givenName: New
+            familyName: User
+            subject:
+              apiGroup: iam.miloapis.com
+              kind: User
+              name: test-contact-user
+
+  # Scenario 2: Create a newsletter Contact first, then a User with same email
+  - name: setup-newsletter-contact
+    description: Create a newsletter Contact without a SubjectRef
+    try:
+    - apply:
+        file: 02-newsletter-contact.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: newsletter-subscriber
+            namespace: milo-system
+          spec:
+            email: newsletter@example.com
+
+  - name: create-user-links-existing-contact
+    description: Create a User with the same email as the newsletter Contact
+    try:
+    - apply:
+        file: 03-user-with-newsletter-email.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: User
+        name: newsletter-user
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'True'
+    - wait:
+        apiVersion: notification.miloapis.com/v1alpha1
+        kind: Contact
+        name: newsletter-subscriber
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.spec.subject.name}'
+            value: newsletter-user
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: newsletter-subscriber
+            namespace: milo-system
+          spec:
+            email: newsletter@example.com
+            subject:
+              apiGroup: iam.miloapis.com
+              kind: User
+              name: newsletter-user
+
+  # Scenario 3: Update User email and verify Contact is updated
+  - name: update-user-email-syncs-contact
+    description: Update User email and verify Contact is synced
+    try:
+    - apply:
+        file: 04-updated-user-email.yaml
+    - wait:
+        apiVersion: notification.miloapis.com/v1alpha1
+        kind: Contact
+        name: user-test-contact-user
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.spec.email}'
+            value: updated-email@example.com
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: user-test-contact-user
+            namespace: milo-system
+          spec:
+            email: updated-email@example.com
+            subject:
+              name: test-contact-user
+
+  # Scenario 4: Update User email to match unlinked Contact (should delete unlinked Contact)
+  - name: setup-unlinked-contact-for-collision
+    description: Create an unlinked Contact that will collide with user email change
+    try:
+    - apply:
+        file: 05-collision-contact.yaml
+    - assert:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: collision-contact
+            namespace: milo-system
+          spec:
+            email: collision@example.com
+
+  - name: update-user-email-deletes-unlinked-contact
+    description: Update User email to match unlinked Contact and verify it is deleted
+    try:
+    - apply:
+        file: 06-user-email-collision.yaml
+    - wait:
+        apiVersion: notification.miloapis.com/v1alpha1
+        kind: Contact
+        name: user-test-contact-user
+        namespace: milo-system
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.spec.email}'
+            value: collision@example.com
+    # Verify the unlinked contact is deleted
+    - error:
+        resource:
+          apiVersion: notification.miloapis.com/v1alpha1
+          kind: Contact
+          metadata:
+            name: collision-contact
+            namespace: milo-system
+        timeout: 30s
+
+  # Scenario 5: Delete User and verify Contact SubjectRef is cleaned up
+  - name: delete-user-cleans-contact-subjectref
+    description: Delete User and verify Contact's SubjectRef is removed
+    try:
+    - delete:
+        ref:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: User
+          name: test-contact-user
+    - error:
+        resource:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: User
+          metadata:
+            name: test-contact-user
+        timeout: 30s
+    # Wait for the Contact's SubjectRef to be cleaned up
+    - script:
+        timeout: 60s
+        content: |
+          for i in $(seq 1 30); do
+            subject=$(kubectl get contact user-test-contact-user -n milo-system -o jsonpath='{.spec.subject}' 2>/dev/null || echo "")
+            if [ -z "$subject" ] || [ "$subject" = "null" ]; then
+              echo "SubjectRef successfully cleaned up"
+              exit 0
+            fi
+            echo "Waiting for SubjectRef cleanup... (attempt $i)"
+            sleep 2
+          done
+          echo "SubjectRef was not cleaned up in time"
+          exit 1
+
+  # Cleanup: Delete remaining resources
+  - name: cleanup
+    description: Clean up all test resources
+    try:
+    - delete:
+        ref:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: User
+          name: newsletter-user
+    - script:
+        timeout: 30s
+        content: |
+          kubectl delete contact user-test-contact-user -n milo-system --ignore-not-found
+          kubectl delete contact newsletter-subscriber -n milo-system --ignore-not-found
+          echo "Cleanup completed"
