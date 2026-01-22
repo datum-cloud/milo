@@ -8,13 +8,16 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notesv1alpha1 "go.miloapis.com/milo/pkg/apis/notes/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var clusterNoteLog = logf.Log.WithName("clusternote-resource")
@@ -61,6 +64,47 @@ func (m *ClusterNoteMutator) Default(ctx context.Context, obj runtime.Object) er
 
 	clusterNote.Spec.CreatorRef = iamv1alpha1.UserReference{
 		Name: creatorUser.Name,
+	}
+
+	// Set owner reference to the subject resource for automatic garbage collection
+	if err := m.setSubjectOwnerReference(ctx, clusterNote); err != nil {
+		clusterNoteLog.Error(err, "Failed to set owner reference to subject", "clusternote", clusterNote.Name)
+		// Don't fail the webhook if we can't set the owner reference
+		// The note will still be created, just without automatic garbage collection
+	}
+
+	return nil
+}
+
+// setSubjectOwnerReference sets the owner reference to the subject resource if it's cluster-scoped
+func (m *ClusterNoteMutator) setSubjectOwnerReference(ctx context.Context, clusterNote *notesv1alpha1.ClusterNote) error {
+	// ClusterNote can only have owner references to other cluster-scoped resources
+	if clusterNote.Spec.SubjectRef.Namespace != "" {
+		return nil // Subject is namespaced, can't set owner reference on cluster-scoped resource
+	}
+
+	// Get the subject resource
+	gvk := schema.GroupVersionKind{
+		Group:   clusterNote.Spec.SubjectRef.APIGroup,
+		Version: "v1alpha1", // Assuming v1alpha1, this could be made more flexible
+		Kind:    clusterNote.Spec.SubjectRef.Kind,
+	}
+
+	subject := &unstructured.Unstructured{}
+	subject.SetGroupVersionKind(gvk)
+
+	if err := m.Client.Get(ctx, types.NamespacedName{
+		Name: clusterNote.Spec.SubjectRef.Name,
+	}, subject); err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("subject resource not found: %w", err)
+		}
+		return fmt.Errorf("failed to get subject resource: %w", err)
+	}
+
+	// Set owner reference
+	if err := controllerutil.SetOwnerReference(subject, clusterNote, m.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference: %w", err)
 	}
 
 	return nil

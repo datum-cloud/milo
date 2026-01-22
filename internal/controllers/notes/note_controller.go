@@ -14,16 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-)
-
-const (
-	noteReadyConditionType   = "Ready"
-	noteReadyConditionReason = "Reconciled"
-
-	noteManagedByLabel = "notes.miloapis.com/managed-by"
-	noteManagedByValue = "note-controller"
 )
 
 type NoteController struct {
@@ -65,7 +56,7 @@ func (r *NoteController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, fmt.Errorf("failed to get User: %w", err)
 	}
 
-	policyBindingReady, policyBindingMessage, err := r.ensureCreatorEditorPolicyBinding(ctx, note, noteCreator)
+	policyBindingReady, policyBindingMessage, err := ensureCreatorEditorPolicyBinding(ctx, r.Client, r.Client.Scheme(), note, noteCreator, r.CreatorEditorRoleName, r.CreatorEditorRoleNamespace)
 	if err != nil {
 		log.Error(err, "failed to ensure creator PolicyBinding")
 		return ctrl.Result{}, fmt.Errorf("failed to ensure creator PolicyBinding: %w", err)
@@ -109,76 +100,6 @@ func (r *NoteController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *NoteController) ensureCreatorEditorPolicyBinding(ctx context.Context, note *notesv1alpha1.Note, creator *iamv1alpha1.User) (bool, string, error) {
-	log := log.FromContext(ctx)
-
-	bindingName := fmt.Sprintf("note-creator-editor-%s", note.Name)
-	if note.Namespace != "" {
-		bindingName = fmt.Sprintf("note-creator-editor-%s-%s", note.Namespace, note.Name)
-	}
-
-	var existing iamv1alpha1.PolicyBinding
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: bindingName, Namespace: r.CreatorEditorRoleNamespace}, &existing); err == nil {
-		return r.isPolicyBindingReady(&existing)
-	} else if !apierrors.IsNotFound(err) {
-		return false, "", fmt.Errorf("failed to get existing creator PolicyBinding: %w", err)
-	}
-
-	policyBinding := &iamv1alpha1.PolicyBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      bindingName,
-			Namespace: r.CreatorEditorRoleNamespace,
-			Labels: map[string]string{
-				noteManagedByLabel: noteManagedByValue,
-			},
-		},
-		Spec: iamv1alpha1.PolicyBindingSpec{
-			RoleRef: iamv1alpha1.RoleReference{
-				Name:      r.CreatorEditorRoleName,
-				Namespace: r.CreatorEditorRoleNamespace,
-			},
-			Subjects: []iamv1alpha1.Subject{
-				{
-					Kind: "User",
-					Name: creator.Name,
-					UID:  string(creator.UID),
-				},
-			},
-			ResourceSelector: iamv1alpha1.ResourceSelector{
-				ResourceRef: &iamv1alpha1.ResourceReference{
-					APIGroup: "notes.miloapis.com",
-					Kind:     "Note",
-					Name:     note.Name,
-					UID:      string(note.UID),
-				},
-			},
-		},
-	}
-
-	if err := controllerutil.SetOwnerReference(note, policyBinding, r.Client.Scheme()); err != nil {
-		return false, "", fmt.Errorf("failed to set owner reference on PolicyBinding: %w", err)
-	}
-
-	log.Info("Creating creator PolicyBinding", "policyBinding", bindingName, "user", creator.Name)
-	if err := r.Client.Create(ctx, policyBinding); err != nil {
-		return false, "", fmt.Errorf("failed to create creator PolicyBinding: %w", err)
-	}
-
-	return false, "Waiting for PolicyBinding to become ready", nil
-}
-
-func (r *NoteController) isPolicyBindingReady(binding *iamv1alpha1.PolicyBinding) (bool, string, error) {
-	for _, condition := range binding.Status.Conditions {
-		if condition.Type == "Ready" {
-			if condition.Status == metav1.ConditionTrue {
-				return true, "", nil
-			}
-			return false, fmt.Sprintf("PolicyBinding not ready: %s", condition.Message), nil
-		}
-	}
-	return false, "Waiting for PolicyBinding to be reconciled", nil
 }
 
 func (r *NoteController) SetupWithManager(mgr ctrl.Manager) error {

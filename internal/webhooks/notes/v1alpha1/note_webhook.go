@@ -8,13 +8,16 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notesv1alpha1 "go.miloapis.com/milo/pkg/apis/notes/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var noteLog = logf.Log.WithName("note-resource")
@@ -61,6 +64,48 @@ func (m *NoteMutator) Default(ctx context.Context, obj runtime.Object) error {
 
 	note.Spec.CreatorRef = iamv1alpha1.UserReference{
 		Name: creatorUser.Name,
+	}
+
+	// Set owner reference to the subject resource for automatic garbage collection
+	if err := m.setSubjectOwnerReference(ctx, note); err != nil {
+		noteLog.Error(err, "Failed to set owner reference to subject", "note", note.Name)
+		// Don't fail the webhook if we can't set the owner reference
+		// The note will still be created, just without automatic garbage collection
+	}
+
+	return nil
+}
+
+// setSubjectOwnerReference sets the owner reference to the subject resource if it's in the same namespace
+func (m *NoteMutator) setSubjectOwnerReference(ctx context.Context, note *notesv1alpha1.Note) error {
+	// Only set owner reference if the subject is in the same namespace
+	if note.Spec.SubjectRef.Namespace == "" || note.Spec.SubjectRef.Namespace != note.Namespace {
+		return nil
+	}
+
+	// Get the subject resource
+	gvk := schema.GroupVersionKind{
+		Group:   note.Spec.SubjectRef.APIGroup,
+		Version: "v1alpha1", // Assuming v1alpha1, this could be made more flexible
+		Kind:    note.Spec.SubjectRef.Kind,
+	}
+
+	subject := &unstructured.Unstructured{}
+	subject.SetGroupVersionKind(gvk)
+
+	if err := m.Client.Get(ctx, types.NamespacedName{
+		Name:      note.Spec.SubjectRef.Name,
+		Namespace: note.Spec.SubjectRef.Namespace,
+	}, subject); err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("subject resource not found: %w", err)
+		}
+		return fmt.Errorf("failed to get subject resource: %w", err)
+	}
+
+	// Set owner reference
+	if err := controllerutil.SetOwnerReference(subject, note, m.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference: %w", err)
 	}
 
 	return nil

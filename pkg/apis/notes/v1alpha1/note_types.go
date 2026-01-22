@@ -148,3 +148,23 @@ type NoteStatus struct {
 	// +kubebuilder:validation:Optional
 	CreatedBy string `json:"createdBy,omitempty"`
 }
+
+// GetCreatorRef returns the creator reference for the Note
+func (n *Note) GetCreatorRef() iamv1alpha1.UserReference {
+	return n.Spec.CreatorRef
+}
+
+// GetNoteKind returns the kind string for Note
+func (n *Note) GetNoteKind() string {
+	return "Note"
+}
+
+// GetCreatorRef returns the creator reference for the ClusterNote
+func (cn *ClusterNote) GetCreatorRef() iamv1alpha1.UserReference {
+	return cn.Spec.CreatorRef
+}
+
+// GetNoteKind returns the kind string for ClusterNote
+func (cn *ClusterNote) GetNoteKind() string {
+	return "ClusterNote"
+}
