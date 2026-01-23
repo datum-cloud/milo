@@ -67,3 +67,4 @@ resources:
   - crm-note-editor.yaml
   - crm-note-creator-editor.yaml
   - crm-note-admin.yaml
+  - identity-user-session-viewer.yaml
