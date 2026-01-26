@@ -196,13 +196,6 @@ rules:
 - apiGroups:
   - notes.miloapis.com
   resources:
-  - clusternotes/finalizers
-  - notes/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - notes.miloapis.com
-  resources:
   - clusternotes/status
   - notes/status
   verbs:
