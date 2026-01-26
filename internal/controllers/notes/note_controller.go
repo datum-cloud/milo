@@ -26,10 +26,12 @@ type NoteController struct {
 
 // +kubebuilder:rbac:groups=notes.miloapis.com,resources=notes,verbs=get;list;watch;update;patch;delete
 // +kubebuilder:rbac:groups=notes.miloapis.com,resources=notes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=notes.miloapis.com,resources=notes/finalizers,verbs=update
 // +kubebuilder:rbac:groups=notes.miloapis.com,resources=clusternotes,verbs=get;list;watch;update;patch;delete
 // +kubebuilder:rbac:groups=notes.miloapis.com,resources=clusternotes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=notes.miloapis.com,resources=clusternotes/finalizers,verbs=update
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
-// +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;create
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;create;delete
 
 func (r *NoteController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx).WithName("note-controller").WithValues("note", req.Name)
@@ -41,9 +43,35 @@ func (r *NoteController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	log.Info("reconciling Note", "note", note.Name, "namespace", note.Namespace)
 
+	// Handle deletion
 	if !note.DeletionTimestamp.IsZero() {
-		log.Info("Note is being deleted, skipping reconciliation", "note", note.Name)
+		if containsString(note.Finalizers, noteFinalizer) {
+			log.Info("Note is being deleted, cleaning up PolicyBindings", "note", note.Name)
+
+			// Clean up PolicyBindings
+			if err := cleanupPolicyBindings(ctx, r.Client, note, r.CreatorEditorRoleNamespace); err != nil {
+				log.Error(err, "failed to cleanup PolicyBindings")
+				return ctrl.Result{}, fmt.Errorf("failed to cleanup PolicyBindings: %w", err)
+			}
+
+			// Remove finalizer
+			note.Finalizers = removeString(note.Finalizers, noteFinalizer)
+			if err := r.Client.Update(ctx, note); err != nil {
+				log.Error(err, "failed to remove finalizer")
+				return ctrl.Result{}, fmt.Errorf("failed to remove finalizer: %w", err)
+			}
+		}
 		return ctrl.Result{}, nil
+	}
+
+	// Add finalizer if not present
+	if !containsString(note.Finalizers, noteFinalizer) {
+		note.Finalizers = append(note.Finalizers, noteFinalizer)
+		if err := r.Client.Update(ctx, note); err != nil {
+			log.Error(err, "failed to add finalizer")
+			return ctrl.Result{}, fmt.Errorf("failed to add finalizer: %w", err)
+		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	noteCreator := &iamv1alpha1.User{}

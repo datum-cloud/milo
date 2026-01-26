@@ -26,8 +26,9 @@ type ClusterNoteController struct {
 
 // +kubebuilder:rbac:groups=notes.miloapis.com,resources=clusternotes,verbs=get;list;watch;update;patch;delete
 // +kubebuilder:rbac:groups=notes.miloapis.com,resources=clusternotes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=notes.miloapis.com,resources=clusternotes/finalizers,verbs=update
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
-// +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;create
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;create;delete
 
 func (r *ClusterNoteController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx).WithName("clusternote-controller").WithValues("clusternote", req.Name)
@@ -39,9 +40,35 @@ func (r *ClusterNoteController) Reconcile(ctx context.Context, req ctrl.Request)
 
 	log.Info("reconciling ClusterNote", "clusternote", clusterNote.Name)
 
+	// Handle deletion
 	if !clusterNote.DeletionTimestamp.IsZero() {
-		log.Info("ClusterNote is being deleted, skipping reconciliation", "clusternote", clusterNote.Name)
+		if containsString(clusterNote.Finalizers, noteFinalizer) {
+			log.Info("ClusterNote is being deleted, cleaning up PolicyBindings", "clusternote", clusterNote.Name)
+
+			// Clean up PolicyBindings
+			if err := cleanupPolicyBindings(ctx, r.Client, clusterNote, r.CreatorEditorRoleNamespace); err != nil {
+				log.Error(err, "failed to cleanup PolicyBindings")
+				return ctrl.Result{}, fmt.Errorf("failed to cleanup PolicyBindings: %w", err)
+			}
+
+			// Remove finalizer
+			clusterNote.Finalizers = removeString(clusterNote.Finalizers, noteFinalizer)
+			if err := r.Client.Update(ctx, clusterNote); err != nil {
+				log.Error(err, "failed to remove finalizer")
+				return ctrl.Result{}, fmt.Errorf("failed to remove finalizer: %w", err)
+			}
+		}
 		return ctrl.Result{}, nil
+	}
+
+	// Add finalizer if not present
+	if !containsString(clusterNote.Finalizers, noteFinalizer) {
+		clusterNote.Finalizers = append(clusterNote.Finalizers, noteFinalizer)
+		if err := r.Client.Update(ctx, clusterNote); err != nil {
+			log.Error(err, "failed to add finalizer")
+			return ctrl.Result{}, fmt.Errorf("failed to add finalizer: %w", err)
+		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	noteCreator := &iamv1alpha1.User{}
