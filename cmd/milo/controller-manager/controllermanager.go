@@ -159,6 +159,10 @@ var (
 
 	// NoteCreatorEditorRoleName is the name of the role that will be used to grant note creator edit permissions.
 	NoteCreatorEditorRoleName string
+
+	// UserContactNamespace is the namespace where user contacts will be created/managed.
+	// When a User is created, the UserContactController will create or update Contacts in this namespace.
+	UserContactNamespace string
 )
 
 func init() {
@@ -706,6 +710,21 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userWaitlistCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user waitlist controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// UserContactController manages the relationship between Users and Contacts.
+			// It ensures that when a User is created, a corresponding Contact exists with a reference to the User.
+			userContactNamespace := UserContactNamespace
+			if userContactNamespace == "" {
+				userContactNamespace = SystemNamespace
+			}
+			userContactCtrl := iamcontroller.UserContactController{
+				Client:           ctrl.GetClient(),
+				ContactNamespace: userContactNamespace,
+			}
+			if err := userContactCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user contact controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

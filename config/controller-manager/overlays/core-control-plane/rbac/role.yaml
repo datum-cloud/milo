@@ -95,7 +95,6 @@ rules:
   - groups/finalizers
   - platforminvitations/status
   - userinvitations/status
-  - users/status
   verbs:
   - update
 - apiGroups:
@@ -164,6 +163,13 @@ rules:
   - update
   - watch
 - apiGroups:
+  - iam.miloapis.com
+  resources:
+  - users/status
+  verbs:
+  - patch
+  - update
+- apiGroups:
   - infrastructure.miloapis.com
   resources:
   - projectcontrolplanes
@@ -195,6 +201,24 @@ rules:
   verbs:
   - get
   - patch
+  - update
+- apiGroups:
+  - notification.miloapis.com
+  resources:
+  - contacts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - notification.miloapis.com
+  resources:
+  - contacts/status
+  verbs:
   - update
 - apiGroups:
   - notification.miloapis.com
