@@ -67,10 +67,10 @@ func (m *ClusterNoteMutator) Default(ctx context.Context, obj runtime.Object) er
 	}
 
 	// Set owner reference to the subject resource for automatic garbage collection
+	// This is critical for the ClusterNote to be garbage collected when the subject is deleted
 	if err := m.setSubjectOwnerReference(ctx, clusterNote); err != nil {
 		clusterNoteLog.Error(err, "Failed to set owner reference to subject", "clusternote", clusterNote.Name)
-		// Don't fail the webhook if we can't set the owner reference
-		// The note will still be created, just without automatic garbage collection
+		return errors.NewInternalError(fmt.Errorf("failed to set owner reference to subject: %w", err))
 	}
 
 	return nil
@@ -152,6 +152,15 @@ func (v *ClusterNoteValidator) ValidateDelete(ctx context.Context, obj runtime.O
 
 func (v *ClusterNoteValidator) validateClusterNote(ctx context.Context, clusterNote *notesv1alpha1.ClusterNote, skipNextActionTimeValidation bool) error {
 	var allErrs field.ErrorList
+
+	// Validate that the subject reference is cluster-scoped (no namespace)
+	if clusterNote.Spec.SubjectRef.Namespace != "" {
+		allErrs = append(allErrs, field.Invalid(
+			field.NewPath("spec", "subjectRef", "namespace"),
+			clusterNote.Spec.SubjectRef.Namespace,
+			"ClusterNote can only reference cluster-scoped resources (subjectRef.namespace must be empty)",
+		))
+	}
 
 	if !skipNextActionTimeValidation && clusterNote.Spec.NextActionTime != nil {
 		if clusterNote.Spec.NextActionTime.Time.Before(time.Now()) {

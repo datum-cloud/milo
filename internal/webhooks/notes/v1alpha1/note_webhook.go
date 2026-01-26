@@ -67,10 +67,10 @@ func (m *NoteMutator) Default(ctx context.Context, obj runtime.Object) error {
 	}
 
 	// Set owner reference to the subject resource for automatic garbage collection
+	// This is critical for the Note to be garbage collected when the subject is deleted
 	if err := m.setSubjectOwnerReference(ctx, note); err != nil {
 		noteLog.Error(err, "Failed to set owner reference to subject", "note", note.Name)
-		// Don't fail the webhook if we can't set the owner reference
-		// The note will still be created, just without automatic garbage collection
+		return errors.NewInternalError(fmt.Errorf("failed to set owner reference to subject: %w", err))
 	}
 
 	return nil
@@ -153,6 +153,22 @@ func (v *NoteValidator) ValidateDelete(ctx context.Context, obj runtime.Object) 
 
 func (v *NoteValidator) validateNote(ctx context.Context, note *notesv1alpha1.Note, skipNextActionTimeValidation bool) error {
 	var allErrs field.ErrorList
+
+	// Validate that the subject reference is namespaced
+	if note.Spec.SubjectRef.Namespace == "" {
+		allErrs = append(allErrs, field.Invalid(
+			field.NewPath("spec", "subjectRef", "namespace"),
+			note.Spec.SubjectRef.Namespace,
+			"Note can only reference namespaced resources (subjectRef.namespace must be set)",
+		))
+	} else if note.Spec.SubjectRef.Namespace != note.Namespace {
+		// Validate that the subject is in the same namespace as the Note
+		allErrs = append(allErrs, field.Invalid(
+			field.NewPath("spec", "subjectRef", "namespace"),
+			note.Spec.SubjectRef.Namespace,
+			fmt.Sprintf("Note must be in the same namespace as its subject (expected: %s)", note.Namespace),
+		))
+	}
 
 	if !skipNextActionTimeValidation && note.Spec.NextActionTime != nil {
 		if note.Spec.NextActionTime.Time.Before(time.Now()) {
