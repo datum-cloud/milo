@@ -15,6 +15,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -36,6 +37,7 @@ type ResourceGrantController struct {
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourcegrants/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=quota.miloapis.com,resources=resourceregistrations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=quota.miloapis.com,resources=allowancebuckets,verbs=get;create
 
 // Reconcile manages the lifecycle of ResourceGrant objects across all control planes.
 func (r *ResourceGrantController) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
@@ -65,6 +67,12 @@ func (r *ResourceGrantController) Reconcile(ctx context.Context, req mcreconcile
 		return ctrl.Result{}, err
 	}
 
+	if apimeta.IsStatusConditionTrue(grant.Status.Conditions, quotav1alpha1.ResourceGrantActive) {
+		if err := r.ensureBucketsFromGrant(ctx, clusterClient, &grant); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to pre-create allowance buckets: %w", err)
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -78,7 +86,16 @@ func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context,
 
 	if validationErrs := r.GrantValidator.Validate(ctx, grant, validation.ControllerValidationOptions()); len(validationErrs) > 0 {
 		logger.Info("ResourceGrant validation failed", "errors", validationErrs.ToAggregate())
-		return r.setValidationFailedCondition(ctx, clusterClient, grant, validationErrs.ToAggregate())
+
+		apimeta.SetStatusCondition(&grant.Status.Conditions, metav1.Condition{
+			Type:    quotav1alpha1.ResourceGrantActive,
+			Status:  metav1.ConditionFalse,
+			Reason:  quotav1alpha1.ResourceGrantValidationFailedReason,
+			Message: fmt.Sprintf("Validation failed: %v", validationErrs.ToAggregate()),
+		})
+
+		// Use the same change detection for validation failures
+		return r.updateStatusIfChanged(ctx, clusterClient, grant, originalStatus)
 	}
 
 	// Set active condition
@@ -86,22 +103,6 @@ func (r *ResourceGrantController) updateResourceGrantStatus(ctx context.Context,
 
 	// Only update the status if it has changed
 	return r.updateStatusIfChanged(ctx, clusterClient, grant, originalStatus)
-}
-
-// setValidationFailedCondition sets the validation failed condition and updates status.
-func (r *ResourceGrantController) setValidationFailedCondition(ctx context.Context, clusterClient client.Client, grant *quotav1alpha1.ResourceGrant, validationErr error) error {
-	condition := metav1.Condition{
-		Type:    quotav1alpha1.ResourceGrantActive,
-		Status:  metav1.ConditionFalse,
-		Reason:  quotav1alpha1.ResourceGrantValidationFailedReason,
-		Message: fmt.Sprintf("Validation failed: %v", validationErr),
-	}
-	apimeta.SetStatusCondition(&grant.Status.Conditions, condition)
-
-	if err := clusterClient.Status().Update(ctx, grant); err != nil {
-		return fmt.Errorf("failed to update ResourceGrant status: %w", err)
-	}
-	return nil
 }
 
 // setActiveCondition sets the active condition on the grant.
@@ -147,4 +148,95 @@ func (r *ResourceGrantController) SetupWithManager(mgr mcmanager.Manager) error 
 		).
 		Named("resource-grant").
 		Complete(r)
+}
+
+// ensureBucketsFromGrant pre-creates dimensionless allowance buckets when a grant becomes active.
+// This allows consumers to see their quota limits immediately without waiting for the first claim.
+// These buckets are identical to claim-created buckets and follow the same naming convention.
+func (r *ResourceGrantController) ensureBucketsFromGrant(ctx context.Context, clusterClient client.Client, grant *quotav1alpha1.ResourceGrant) error {
+	logger := log.FromContext(ctx).WithValues(
+		"grant", grant.Name,
+		"grantNamespace", grant.Namespace,
+		"consumerKind", grant.Spec.ConsumerRef.Kind,
+		"consumerName", grant.Spec.ConsumerRef.Name,
+	)
+
+	logger.Info("Pre-creating AllowanceBuckets from active grant",
+		"allowanceCount", len(grant.Spec.Allowances))
+
+	// For each allowance in the grant, create a dimensionless bucket if it doesn't exist
+	for _, allowance := range grant.Spec.Allowances {
+		// Generate bucket name using helper functions from bucket controller
+		bucketName := generateAllowanceBucketName(allowance.ResourceType, grant.Spec.ConsumerRef)
+		bucketNamespace := getBucketNamespace(grant.Spec.ConsumerRef)
+
+		logger.Info("Checking if bucket needs pre-creation",
+			"bucket", bucketName,
+			"namespace", bucketNamespace,
+			"resourceType", allowance.ResourceType)
+
+		// Check if bucket already exists
+		var existingBucket quotav1alpha1.AllowanceBucket
+		err := clusterClient.Get(ctx, types.NamespacedName{
+			Name:      bucketName,
+			Namespace: bucketNamespace,
+		}, &existingBucket)
+
+		if err == nil {
+			// Bucket already exists, skip
+			logger.V(2).Info("Bucket already exists, skipping pre-creation",
+				"bucket", bucketName,
+				"namespace", bucketNamespace)
+			continue
+		}
+
+		if !apierrors.IsNotFound(err) {
+			logger.Error(err, "Failed to check bucket existence",
+				"bucket", bucketName,
+				"namespace", bucketNamespace)
+			return fmt.Errorf("failed to check bucket existence: %w", err)
+		}
+
+		// Create dimensionless bucket
+		bucket := &quotav1alpha1.AllowanceBucket{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      bucketName,
+				Namespace: bucketNamespace,
+				Labels: map[string]string{
+					"quota.miloapis.com/consumer-kind": grant.Spec.ConsumerRef.Kind,
+					"quota.miloapis.com/consumer-name": grant.Spec.ConsumerRef.Name,
+				},
+			},
+			Spec: quotav1alpha1.AllowanceBucketSpec{
+				ConsumerRef:  grant.Spec.ConsumerRef,
+				ResourceType: allowance.ResourceType,
+				// No dimensions specified - this is a dimensionless bucket
+			},
+		}
+
+		logger.Info("Creating pre-created AllowanceBucket",
+			"bucket", bucketName,
+			"namespace", bucketNamespace,
+			"resourceType", allowance.ResourceType)
+
+		if err := clusterClient.Create(ctx, bucket); err != nil {
+			if !apierrors.IsAlreadyExists(err) {
+				logger.Error(err, "Failed to create bucket",
+					"bucket", bucketName,
+					"namespace", bucketNamespace)
+				return fmt.Errorf("failed to pre-create bucket %s: %w", bucketName, err)
+			}
+			logger.Info("Bucket already exists (race condition)",
+				"bucket", bucketName,
+				"namespace", bucketNamespace)
+		} else {
+			logger.Info("Successfully pre-created dimensionless AllowanceBucket",
+				"bucket", bucketName,
+				"namespace", bucketNamespace,
+				"resourceType", allowance.ResourceType,
+				"consumer", grant.Spec.ConsumerRef.Name)
+		}
+	}
+
+	return nil
 }

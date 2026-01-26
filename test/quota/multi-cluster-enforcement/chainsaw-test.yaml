@@ -96,6 +96,24 @@ spec:
                 name: Active
                 value: 'True'
 
+    - name: verify-bucket-pre-created
+      description: Verify AllowanceBucket is pre-created in project control plane when grant becomes active
+      cluster: project1
+      try:
+        - assert:
+            resource:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: AllowanceBucket
+              metadata:
+                namespace: milo-system
+                labels:
+                  quota.miloapis.com/consumer-kind: Project
+                  quota.miloapis.com/consumer-name: mc-test-project-1
+              status:
+                limit: 5
+                allocated: 0
+                available: 5
+
     - name: setup-claim-creation-policy
       description: Register ClaimCreationPolicy for Secrets
       cluster: main

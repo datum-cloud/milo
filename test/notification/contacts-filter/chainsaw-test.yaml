@@ -49,18 +49,26 @@ spec:
         timeout: 30s
         content: |
           count=$(kubectl --kubeconfig=kubeconfig-user get contacts -A -o json | jq '.items | length')
-          if [ "$count" -ne 1 ]; then
-            echo "Expected 1 contact (test-user's own), got $count"
+          if [ "$count" -ne 2 ]; then
+            echo "Expected 2 contacts (test-user's manually created contact + auto-created contact from the iam usercontact_controller), got $count"
             kubectl --kubeconfig=kubeconfig-user get contacts -A -o json | jq '.items[].metadata.name'
             exit 1
           fi
+
+          names=$(kubectl --kubeconfig=kubeconfig-user get contacts -A -o json | jq -r '.items[].metadata.name' | sort)
+          expected_names="testuser-contacts-test
+          user-test-user"
           
-          name=$(kubectl --kubeconfig=kubeconfig-user get contacts -A -o json | jq -r '.items[0].metadata.name')
-          if [ "$name" != "testuser-contacts-test" ]; then
-            echo "Expected testuser-contacts-test, got $name"
+          # Normalize whitespace for comparison
+          names=$(echo "$names" | tr -d '[:space:]')
+          expected_names=$(echo "$expected_names" | tr -d '[:space:]')
+
+          if [ "$names" != "$expected_names" ]; then
+            echo "Expected contacts: testuser-contacts-test and user-test-user"
+            echo "Got: $names"
             exit 1
           fi
-          echo "Test-user can only see their own contact as expected"
+          echo "Test-user can only see their own contacts as expected"
 
   - name: verify-field-selector-override
     description: Verify that attempting to spy on other users is blocked by filter override
@@ -70,14 +78,22 @@ spec:
         content: |
           # Attempt to list contacts for admin - the filter should override this
           count=$(kubectl --kubeconfig=kubeconfig-user get contacts -A --field-selector spec.subject.name=admin -o json | jq '.items | length')
-          if [ "$count" -ne 1 ]; then
-            echo "Expected filter override to return 1 (test-user's contact), got $count"
+          if [ "$count" -ne 2 ]; then
+            echo "Expected filter override to return 2 (test-user's contacts), got $count"
             exit 1
           fi
           
-          name=$(kubectl --kubeconfig=kubeconfig-user get contacts -A --field-selector spec.subject.name=admin -o json | jq -r '.items[0].metadata.name')
-          if [ "$name" != "testuser-contacts-test" ]; then
-            echo "Expected testuser-contacts-test (filter override), got $name"
+          names=$(kubectl --kubeconfig=kubeconfig-user get contacts -A --field-selector spec.subject.name=admin -o json | jq -r '.items[].metadata.name' | sort)
+          expected_names="testuser-contacts-test
+          user-test-user"
+          
+          # Normalize whitespace for comparison
+          names=$(echo "$names" | tr -d '[:space:]')
+          expected_names=$(echo "$expected_names" | tr -d '[:space:]')
+
+          if [ "$names" != "$expected_names" ]; then
+            echo "Expected testuser-contacts-test and user-test-user (filter override)"
+            echo "Got: $names"
             exit 1
           fi
           echo "Field selector override working correctly - test-user cannot spy on other users"

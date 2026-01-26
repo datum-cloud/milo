@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -86,36 +87,26 @@ func (r *AllowanceBucketController) Reconcile(ctx context.Context, req mcreconci
 		}
 	}
 
-	// Update observed generation
+	originalStatus := bucket.Status.DeepCopy()
+
 	bucket.Status.ObservedGeneration = bucket.Generation
 
-	// Calculate limits from ResourceGrants
 	if err := r.updateLimitsFromGrants(ctx, clusterClient, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update limits from grants: %w", err)
 	}
 
-	// Calculate usage from ResourceClaims
 	if err := r.updateUsageFromClaims(ctx, clusterClient, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update usage from claims: %w", err)
 	}
 
-	// Try to grant pending claims by reserving capacity
+	// processPendingClaims performs intermediate status updates for atomic quota reservation.
 	if err := r.processPendingClaims(ctx, clusterClient, &bucket); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed processing pending grants: %w", err)
 	}
 
-	// Enforce non-negative Available quota (validation constraint)
 	bucket.Status.Available = max(0, bucket.Status.Limit-bucket.Status.Allocated)
 
-	// Update last reconciliation time
-	bucket.Status.LastReconciliation = ptr.To(metav1.Now())
-
-	// API server handles no-op updates efficiently
-	if err := clusterClient.Status().Update(ctx, &bucket); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update AllowanceBucket status: %w", err)
-	}
-
-	return ctrl.Result{}, nil
+	return r.updateStatusIfChanged(ctx, clusterClient, &bucket, originalStatus)
 }
 
 // updateLimitsFromGrants calculates total quota limits from active ResourceGrants.
@@ -406,73 +397,22 @@ func (r *AllowanceBucketController) updateResourceClaimAllocation(ctx context.Co
 	return nil
 }
 
-// ensureBucketsFromGrants pre-creates dimensionless allowance buckets when grants become active.
-// This allows consumers to see their quota limits immediately without waiting for the first claim.
-// These buckets are identical to claim-created buckets and follow the same naming convention.
-func (r *AllowanceBucketController) ensureBucketsFromGrants(ctx context.Context, clusterClient client.Client, grant *quotav1alpha1.ResourceGrant) error {
-	logger := log.FromContext(ctx)
-
-	// Only process active grants
-	if !r.isResourceGrantActive(grant) {
-		return nil
+// updateStatusIfChanged updates the bucket status if it changed.
+// Skips the update if the status is semantically identical to prevent unnecessary
+// API server writes and audit log entries. Updates the LastReconciliation timestamp
+// only when status changes.
+func (r *AllowanceBucketController) updateStatusIfChanged(ctx context.Context, clusterClient client.Client, bucket *quotav1alpha1.AllowanceBucket, originalStatus *quotav1alpha1.AllowanceBucketStatus) (ctrl.Result, error) {
+	if equality.Semantic.DeepEqual(&bucket.Status, originalStatus) {
+		return ctrl.Result{}, nil
 	}
 
-	// For each allowance in the grant, create a dimensionless bucket if it doesn't exist
-	for _, allowance := range grant.Spec.Allowances {
-		// Generate bucket name using existing function
-		bucketName := generateAllowanceBucketName(allowance.ResourceType, grant.Spec.ConsumerRef)
-		bucketNamespace := getBucketNamespace(grant.Spec.ConsumerRef)
+	bucket.Status.LastReconciliation = ptr.To(metav1.Now())
 
-		// Check if bucket already exists
-		var existingBucket quotav1alpha1.AllowanceBucket
-		err := clusterClient.Get(ctx, types.NamespacedName{
-			Name:      bucketName,
-			Namespace: bucketNamespace,
-		}, &existingBucket)
-
-		if err == nil {
-			// Bucket already exists, skip
-			logger.V(2).Info("Bucket already exists, skipping pre-creation",
-				"bucket", bucketName,
-				"namespace", bucketNamespace)
-			continue
-		}
-
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to check bucket existence: %w", err)
-		}
-
-		// Create dimensionless bucket
-		bucket := &quotav1alpha1.AllowanceBucket{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      bucketName,
-				Namespace: bucketNamespace,
-				Labels: map[string]string{
-					"quota.miloapis.com/consumer-kind": grant.Spec.ConsumerRef.Kind,
-					"quota.miloapis.com/consumer-name": grant.Spec.ConsumerRef.Name,
-				},
-			},
-			Spec: quotav1alpha1.AllowanceBucketSpec{
-				ConsumerRef:  grant.Spec.ConsumerRef,
-				ResourceType: allowance.ResourceType,
-				// No dimensions specified - this is a dimensionless bucket
-			},
-		}
-
-		if err := clusterClient.Create(ctx, bucket); err != nil {
-			if !apierrors.IsAlreadyExists(err) {
-				return fmt.Errorf("failed to pre-create bucket %s: %w", bucketName, err)
-			}
-		}
-
-		logger.Info("Pre-created dimensionless allowance bucket",
-			"bucket", bucketName,
-			"namespace", bucketNamespace,
-			"resourceType", allowance.ResourceType,
-			"consumer", grant.Spec.ConsumerRef.Name)
+	if err := clusterClient.Status().Update(ctx, bucket); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update AllowanceBucket status: %w", err)
 	}
 
-	return nil
+	return ctrl.Result{}, nil
 }
 
 // generateAllowanceBucketName creates a deterministic name for an AllowanceBucket.
@@ -606,21 +546,6 @@ func (r *AllowanceBucketController) enqueueAffectedBuckets(ctx context.Context, 
 
 	switch o := obj.(type) {
 	case *quotav1alpha1.ResourceGrant:
-		// When a grant becomes active, pre-create buckets for better UX
-		// This is done here rather than in Reconcile to ensure it happens immediately
-		// when grants are created or become active
-		if r.isResourceGrantActive(o) {
-			cluster, err := r.Manager.GetCluster(ctx, clusterName)
-			if err == nil {
-				clusterClient := cluster.GetClient()
-				// Pre-create buckets (errors are logged but don't block enqueueing)
-				if err := r.ensureBucketsFromGrants(ctx, clusterClient, o); err != nil {
-					log.FromContext(ctx).Error(err, "Failed to pre-create buckets from grant",
-						"grant", o.Name, "consumer", o.Spec.ConsumerRef.Name)
-				}
-			}
-		}
-
 		// For each allowance in the grant, enqueue the corresponding bucket
 		// Bucket namespace is determined by consumer type (Organization namespace or milo-system)
 		for _, allowance := range o.Spec.Allowances {
