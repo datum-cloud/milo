@@ -10,4 +10,4 @@ spec:
     name: admin
   familyName: Visibility
   givenName: Test
-  email: admin@test.local
+  email: visibility-test@test.local
