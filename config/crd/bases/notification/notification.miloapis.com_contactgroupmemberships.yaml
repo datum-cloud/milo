@@ -162,9 +162,45 @@ spec:
                   ProviderID is the identifier returned by the underlying contact provider
                   (e.g. Resend) when the membership is created in the associated audience. It is usually
                   used to track the contact-group membership creation status (e.g. provider webhooks).
+                  Deprecated: Use Providers instead.
+                type: string
+              providers:
+                description: |-
+                  Providers contains the per-provider status for this contact group membership.
+                  This enables tracking multiple provider backends simultaneously.
+                items:
+                  description: |-
+                    ContactProviderStatus represents status information for a single contact provider.
+                    It allows tracking the provider name and the provider-specific identifier.
+                  properties:
+                    id:
+                      description: ID is the identifier returned by the specific contact
+                        provider for this contact.
+                      type: string
+                    name:
+                      description: |-
+                        Name is the provider handling this contact.
+                        Allowed values are Resend and Loops.
+                      enum:
+                      - Resend
+                      - Loops
+                      type: string
+                  required:
+                  - id
+                  - name
+                  type: object
+                type: array
+              username:
+                description: |-
+                  Username is the username of the user that owns the ContactGroupMembership.
+                  This is populated by the controller based on the referenced Contact's subject.
                 type: string
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.contactRef.name
+    - jsonPath: .spec.contactGroupRef.name
+    - jsonPath: .status.username
     served: true
     storage: true
     subresources:

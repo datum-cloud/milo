@@ -46,6 +46,9 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Namespaced
+// +kubebuilder:selectablefield:JSONPath=".spec.email"
+// +kubebuilder:selectablefield:JSONPath=".spec.subject.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.subject.kind"
 type Contact struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -61,10 +64,10 @@ type ContactSpec struct {
 	// +kubebuilder:validation:Optional
 	SubjectRef *SubjectReference `json:"subject,omitempty"`
 
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	FamilyName string `json:"familyName,omitempty"`
 
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	GivenName string `json:"givenName,omitempty"`
 
 	// +kubebuilder:validation:Required
@@ -75,11 +78,11 @@ type ContactSpec struct {
 // +kubebuilder:validation:Type=object
 type SubjectReference struct {
 	// APIGroup is the group for the resource being referenced.
-	// +kubebuilder:validation:Enum=iam.miloapis.com;resourcemanager.miloapis.com
+	// +kubebuilder:validation:Enum=iam.miloapis.com
 	// +kubebuilder:validation:Required
 	APIGroup string `json:"apiGroup,omitempty"`
 	// Kind is the type of resource being referenced.
-	// +kubebuilder:validation:Enum=User;Organization;Project
+	// +kubebuilder:validation:Enum=User
 	// +kubebuilder:validation:Required
 	Kind string `json:"kind"`
 	// Name is the name of resource being referenced.
@@ -101,6 +104,18 @@ type ContactList struct {
 	Items           []Contact `json:"items"`
 }
 
+// ContactProviderStatus represents status information for a single contact provider.
+// It allows tracking the provider name and the provider-specific identifier.
+type ContactProviderStatus struct {
+	// Name is the provider handling this contact.
+	// Allowed values are Resend and Loops.
+	// +kubebuilder:validation:Enum=Resend;Loops
+	Name string `json:"name"`
+	// ID is the identifier returned by the specific contact provider for this contact.
+	// +kubebuilder:validation:Required
+	ID string `json:"id"`
+}
+
 type ContactStatus struct {
 	// Conditions represent the latest available observations of an object's current state.
 	// Standard condition is "Ready" which tracks contact creation status and sync to the contact provider.
@@ -110,9 +125,15 @@ type ContactStatus struct {
 	// +patchStrategy=merge
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
+	// Providers contains the per-provider status for this contact.
+	// This enables tracking multiple provider backends simultaneously.
+	// +kubebuilder:validation:Optional
+	Providers []ContactProviderStatus `json:"providers,omitempty"`
+
 	// ProviderID is the identifier returned by the underlying contact provider
 	// (e.g. Resend) when the contact is created. It is usually
 	// used to track the contact creation status (e.g. provider webhooks).
+	// Deprecated: Use Providers instead.
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
 }

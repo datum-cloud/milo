@@ -1,0 +1,13 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Project
+metadata:
+  name: test-over-limit-project
+  labels:
+    test.miloapis.com/quota: "true"
+    test.miloapis.com/scenario: "over-limit"
+spec:
+  ownerRef:
+    kind: Organization
+    name: edge-test-quota-enforcement-org
+  displayName: "Test Over Limit Project"
+  description: "Project that should fail due to quota enforcement"

@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -108,7 +109,7 @@ func TestUserInvitationController_createPolicyBinding(t *testing.T) {
 	}
 }
 
-// TestUserInvitationController_createOrganizationMembership verifies that createOrganizationMembership creates an OrganizationMembership CR.
+// TestUserInvitationController_createOrganizationMembership verifies that createOrganizationMembership creates an OrganizationMembership CR with roles.
 func TestUserInvitationController_createOrganizationMembership(t *testing.T) {
 	ctx := context.TODO()
 	scheme := getTestScheme()
@@ -134,6 +135,10 @@ func TestUserInvitationController_createOrganizationMembership(t *testing.T) {
 			Email: user.Spec.Email,
 			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
 				Name: "test-org",
+			},
+			Roles: []iamv1alpha1.RoleReference{
+				{Name: "org-admin", Namespace: "milo-system"},
+				{Name: "billing-manager", Namespace: "milo-system"},
 			},
 		},
 	}
@@ -170,6 +175,17 @@ func TestUserInvitationController_createOrganizationMembership(t *testing.T) {
 	}
 	if om.Spec.OrganizationRef.Name != ui.Spec.OrganizationRef.Name {
 		t.Errorf("OrganizationMembership has unexpected OrganizationRef: %+v", om.Spec.OrganizationRef)
+	}
+
+	// Verify roles are set
+	if len(om.Spec.Roles) != 2 {
+		t.Errorf("expected 2 roles, got %d", len(om.Spec.Roles))
+	}
+	if om.Spec.Roles[0].Name != "org-admin" || om.Spec.Roles[0].Namespace != "milo-system" {
+		t.Errorf("unexpected first role: %+v", om.Spec.Roles[0])
+	}
+	if om.Spec.Roles[1].Name != "billing-manager" || om.Spec.Roles[1].Namespace != "milo-system" {
+		t.Errorf("unexpected second role: %+v", om.Spec.Roles[1])
 	}
 
 	// Call createOrganizationMembership again to ensure idempotency
@@ -590,7 +606,7 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 		Spec:       iamv1alpha1.UserSpec{Email: "test@example.com"},
 	}
 
-	inviter := &iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "inviter", UID: types.UID("inviter-uid")}, Spec: iamv1alpha1.UserSpec{Email: "inviter@example.com"}}
+	inviter := &iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "inviter", UID: types.UID("inviter-uid")}, Spec: iamv1alpha1.UserSpec{GivenName: "John", FamilyName: "Doe", Email: "inviter@example.com"}}
 
 	ui := &iamv1alpha1.UserInvitation{
 		ObjectMeta: metav1.ObjectMeta{Name: "inv", Namespace: "default", UID: types.UID("ui-uid")},
@@ -604,7 +620,7 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	}
 
 	org := &resourcemanagerv1alpha1.Organization{
-		ObjectMeta: metav1.ObjectMeta{Name: "org", UID: types.UID("org-uid")},
+		ObjectMeta: metav1.ObjectMeta{Name: "org", UID: types.UID("org-uid"), Annotations: map[string]string{"kubernetes.io/display-name": "Organization Display Name"}},
 	}
 
 	// Invitation-related role needed so that controller grants access to accept invitation.
@@ -624,6 +640,17 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 		inv := obj.(*iamv1alpha1.UserInvitation)
 		return []string{strings.ToLower(inv.Spec.Email)}
 	})
+
+	// Field indexes required by grantAccessApproval logic
+	builder = builder.
+		WithIndex(&iamv1alpha1.PlatformAccessRejection{}, uiPlatformAccessRejectionKey, func(obj client.Object) []string {
+			par := obj.(*iamv1alpha1.PlatformAccessRejection)
+			return []string{par.Spec.UserRef.Name}
+		}).
+		WithIndex(&iamv1alpha1.PlatformAccessApproval{}, uiPlatformAccessApprovalKey, func(obj client.Object) []string {
+			paa := obj.(*iamv1alpha1.PlatformAccessApproval)
+			return []string{buildPlatformAccessApprovalIndexKey(&paa.Spec.SubjectRef)}
+		})
 
 	c := builder.Build()
 
@@ -653,12 +680,29 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 	if meta.IsStatusConditionTrue(afterFirst.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
 		t.Fatalf("Ready condition should not be true before acceptance")
 	}
+	// Verify invitee user name is populated
+	if afterFirst.Status.InviteeUser == nil || afterFirst.Status.InviteeUser.Name != user.Name {
+		t.Fatalf("expected InviteeUser name to be %s, got %+v", user.Name, afterFirst.Status.InviteeUser)
+	}
 
-	// Ensure organization role PolicyBinding does NOT exist yet
-	orgRoleRef := ui.Spec.Roles[0]
-	pbOrgName := getDeterministicRoleName(&orgRoleRef, *ui)
-	if err := c.Get(ctx, types.NamespacedName{Name: pbOrgName, Namespace: orgRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err == nil {
-		t.Fatalf("organization PolicyBinding should not exist before acceptance")
+	// Verify organization display name is set
+	if afterFirst.Status.Organization.DisplayName != "Organization Display Name" {
+		t.Fatalf("expected organization display name to be Organization Display Name, got %s", afterFirst.Status.Organization.DisplayName)
+	}
+	// Verify inviter user display name is set
+	if afterFirst.Status.InviterUser.DisplayName != "John Doe" {
+		t.Fatalf("expected inviter user display name to be John Doe, got %s", afterFirst.Status.InviterUser.DisplayName)
+	}
+	// Verify inviter user email address is set
+	if afterFirst.Status.InviterUser.EmailAddress != "inviter@example.com" {
+		t.Fatalf("expected inviter user email address to be inviter@example.com, got %s", afterFirst.Status.InviterUser.EmailAddress)
+	}
+
+	// Ensure OrganizationMembership does NOT exist yet
+	omName := "member-" + user.Name
+	omNamespace := "organization-" + ui.Spec.OrganizationRef.Name
+	if err := c.Get(ctx, types.NamespacedName{Name: omName, Namespace: omNamespace}, &resourcemanagerv1alpha1.OrganizationMembership{}); err == nil {
+		t.Fatalf("OrganizationMembership should not exist before acceptance")
 	}
 
 	// Update state to Accepted
@@ -674,16 +718,25 @@ func TestUserInvitationController_Reconcile_StateTransitionCreatesBindings(t *te
 		t.Fatalf("second reconcile error: %v", err)
 	}
 
-	// Verify organization role PolicyBinding created
-	if err := c.Get(ctx, types.NamespacedName{Name: pbOrgName, Namespace: orgRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err != nil {
-		t.Fatalf("expected organization PolicyBinding created: %v", err)
+	// Verify OrganizationMembership created with roles
+	om := &resourcemanagerv1alpha1.OrganizationMembership{}
+	if err := c.Get(ctx, types.NamespacedName{Name: omName, Namespace: omNamespace}, om); err != nil {
+		t.Fatalf("expected OrganizationMembership created: %v", err)
 	}
 
-	// Ready condition should now be true, Pending may remain true
-	final := &iamv1alpha1.UserInvitation{}
-	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
-	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
-		t.Fatalf("Ready condition should be true after acceptance")
+	// Verify roles are set on OrganizationMembership
+	if len(om.Spec.Roles) != 1 {
+		t.Fatalf("expected 1 role on OrganizationMembership, got %d", len(om.Spec.Roles))
+	}
+	if om.Spec.Roles[0].Name != "org-admin" || om.Spec.Roles[0].Namespace != "milo-system" {
+		t.Fatalf("unexpected role on OrganizationMembership: %+v", om.Spec.Roles[0])
+	}
+
+	// The UserInvitation should now be deleted
+	if err := c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, &iamv1alpha1.UserInvitation{}); err == nil {
+		t.Fatalf("UserInvitation should be deleted after acceptance")
+	} else if !apierr.IsNotFound(err) {
+		t.Fatalf("unexpected error getting UserInvitation: %v", err)
 	}
 }
 
@@ -722,6 +775,14 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 		inv := obj.(*iamv1alpha1.UserInvitation)
 		return []string{strings.ToLower(inv.Spec.Email)}
 	})
+	builder = builder.WithIndex(&iamv1alpha1.PlatformAccessRejection{}, uiPlatformAccessRejectionKey, func(obj client.Object) []string {
+		par := obj.(*iamv1alpha1.PlatformAccessRejection)
+		return []string{par.Spec.UserRef.Name}
+	}).
+		WithIndex(&iamv1alpha1.PlatformAccessApproval{}, uiPlatformAccessApprovalKey, func(obj client.Object) []string {
+			paa := obj.(*iamv1alpha1.PlatformAccessApproval)
+			return []string{buildPlatformAccessApprovalIndexKey(&paa.Spec.SubjectRef)}
+		})
 	c := builder.Build()
 
 	uic := &UserInvitationController{Client: c, SystemNamespace: "milo-system", uiRelatedRoles: []iamv1alpha1.RoleReference{invitationRoleRef}}
@@ -748,6 +809,15 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 		t.Fatalf("second reconcile error: %v", err)
 	}
 
+	// Verify InviteeUser now populated after user appears (before acceptance)
+	afterSecond := &iamv1alpha1.UserInvitation{}
+	if err := c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, afterSecond); err != nil {
+		t.Fatalf("failed to get UserInvitation after second reconcile: %v", err)
+	}
+	if afterSecond.Status.InviteeUser == nil || afterSecond.Status.InviteeUser.Name == "" {
+		t.Fatalf("InviteeUser should be populated after second reconcile, got %+v", afterSecond.Status.InviteeUser)
+	}
+
 	if err := c.Get(ctx, types.NamespacedName{Name: pbInviteName, Namespace: invitationRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err != nil {
 		t.Fatalf("expected invitation PolicyBinding created after user appears: %v", err)
 	}
@@ -765,16 +835,28 @@ func TestUserInvitationController_Reconcile_UserCreatedLater(t *testing.T) {
 		t.Fatalf("third reconcile error: %v", err)
 	}
 
-	orgRoleRef := ui.Spec.Roles[0]
-	pbOrgName := getDeterministicRoleName(&orgRoleRef, *ui)
-	if err := c.Get(ctx, types.NamespacedName{Name: pbOrgName, Namespace: orgRoleRef.Namespace}, &iamv1alpha1.PolicyBinding{}); err != nil {
-		t.Fatalf("expected org role PolicyBinding after acceptance: %v", err)
+	// Invitation should be deleted after acceptance; verified later
+	// Verify OrganizationMembership is created with expected roles
+	omNS := fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name)
+	omName := fmt.Sprintf("member-%s", user.Name)
+	om := &resourcemanagerv1alpha1.OrganizationMembership{}
+	if err := c.Get(ctx, types.NamespacedName{Name: omName, Namespace: omNS}, om); err != nil {
+		t.Fatalf("expected OrganizationMembership %s/%s: %v", omNS, omName, err)
+	}
+	if len(om.Spec.Roles) != len(ui.Spec.Roles) {
+		t.Fatalf("expected %d roles in OrganizationMembership, got %d", len(ui.Spec.Roles), len(om.Spec.Roles))
+	}
+	for i, r := range ui.Spec.Roles {
+		if om.Spec.Roles[i].Name != r.Name || om.Spec.Roles[i].Namespace != r.Namespace {
+			t.Fatalf("role mismatch at index %d: expected %+v, got %+v", i, r, om.Spec.Roles[i])
+		}
 	}
 
-	final := &iamv1alpha1.UserInvitation{}
-	_ = c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, final)
-	if !meta.IsStatusConditionTrue(final.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
-		t.Fatalf("Ready condition should be true after acceptance")
+	// UserInvitation should be deleted
+	if err := c.Get(ctx, types.NamespacedName{Name: ui.Name, Namespace: ui.Namespace}, &iamv1alpha1.UserInvitation{}); err == nil {
+		t.Fatalf("UserInvitation should be deleted after acceptance")
+	} else if !apierr.IsNotFound(err) {
+		t.Fatalf("unexpected error getting UserInvitation: %v", err)
 	}
 }
 
@@ -808,6 +890,10 @@ func TestUserInvitationController_createInvitationEmail(t *testing.T) {
 			Roles:           []iamv1alpha1.RoleReference{{Name: "org-admin", Namespace: "milo-system"}},
 		},
 	}
+
+	// Populate status fields required by createInvitationEmail
+	ui.Status.Organization.DisplayName = "Test Org"
+	ui.Status.InviterUser.DisplayName = "Invite E"
 
 	template := &notificationv1alpha1.EmailTemplate{ObjectMeta: metav1.ObjectMeta{Name: "template"}}
 
@@ -865,5 +951,112 @@ func TestUserInvitationController_createInvitationEmail(t *testing.T) {
 	}
 	if len(emailList.Items) != 1 {
 		t.Errorf("expected 1 Email after idempotent call, got %d", len(emailList.Items))
+	}
+}
+
+// TestUserInvitationController_grantAccessApproval verifies grantAccessApproval logic around existing
+// PlatformAccessApproval / PlatformAccessRejection resources.
+func TestUserInvitationController_grantAccessApproval(t *testing.T) {
+	ctx := context.TODO()
+	scheme := getTestScheme()
+
+	email := "invitee@example.com"
+
+	baseUI := &iamv1alpha1.UserInvitation{
+		ObjectMeta: metav1.ObjectMeta{Name: "inv", Namespace: "default", UID: types.UID("ui-uid")},
+		Spec:       iamv1alpha1.UserInvitationSpec{Email: email, OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "org"}},
+	}
+
+	user := &iamv1alpha1.User{ObjectMeta: metav1.ObjectMeta{Name: "invitee"}, Spec: iamv1alpha1.UserSpec{Email: email}}
+
+	makeApproval := func(refEmail string) *iamv1alpha1.PlatformAccessApproval {
+		return &iamv1alpha1.PlatformAccessApproval{
+			ObjectMeta: metav1.ObjectMeta{Name: "existing-approval"},
+			Spec:       iamv1alpha1.PlatformAccessApprovalSpec{SubjectRef: iamv1alpha1.SubjectReference{Email: refEmail}},
+		}
+	}
+
+	makeApprovalForUser := func(u *iamv1alpha1.User) *iamv1alpha1.PlatformAccessApproval {
+		return &iamv1alpha1.PlatformAccessApproval{
+			ObjectMeta: metav1.ObjectMeta{Name: "existing-approval-user"},
+			Spec:       iamv1alpha1.PlatformAccessApprovalSpec{SubjectRef: iamv1alpha1.SubjectReference{UserRef: &iamv1alpha1.UserReference{Name: u.Name}}},
+		}
+	}
+
+	makeRejection := func(u *iamv1alpha1.User) *iamv1alpha1.PlatformAccessRejection {
+		return &iamv1alpha1.PlatformAccessRejection{
+			ObjectMeta: metav1.ObjectMeta{Name: "reject"},
+			Spec:       iamv1alpha1.PlatformAccessRejectionSpec{UserRef: iamv1alpha1.UserReference{Name: u.Name}, Reason: "some"},
+		}
+	}
+
+	cases := []struct {
+		name            string
+		preObjects      []client.Object
+		expectCreate    bool
+		expectRejection bool // whether a rejection is pre-created and should be deleted
+	}{
+		{name: "create when none exist", preObjects: []client.Object{user, baseUI}, expectCreate: true},
+		{name: "approval exists by email", preObjects: []client.Object{user, baseUI, makeApproval(strings.ToLower(email))}, expectCreate: false},
+		{name: "approval exists by email uppercase variant", preObjects: []client.Object{user, baseUI, makeApproval(strings.ToUpper(email))}, expectCreate: false},
+		{name: "approval exists by user ref", preObjects: []client.Object{user, baseUI, makeApprovalForUser(user)}, expectCreate: false},
+		{name: "approvals exist by email and user", preObjects: []client.Object{user, baseUI, makeApproval(strings.ToLower(email)), makeApprovalForUser(user)}, expectCreate: false},
+		{name: "no user resource present", preObjects: []client.Object{baseUI}, expectCreate: true},
+		{name: "rejection deleted and approval created", preObjects: []client.Object{user, baseUI, makeRejection(user)}, expectCreate: true, expectRejection: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := fake.NewClientBuilder().WithScheme(scheme)
+			if len(tc.preObjects) > 0 {
+				builder = builder.WithObjects(tc.preObjects...)
+			}
+
+			// Field indexes required by grantAccessApproval
+			builder = builder.
+				WithIndex(&iamv1alpha1.PlatformAccessRejection{}, uiPlatformAccessRejectionKey, func(obj client.Object) []string {
+					par := obj.(*iamv1alpha1.PlatformAccessRejection)
+					return []string{par.Spec.UserRef.Name}
+				}).
+				WithIndex(&iamv1alpha1.PlatformAccessApproval{}, uiPlatformAccessApprovalKey, func(obj client.Object) []string {
+					paa := obj.(*iamv1alpha1.PlatformAccessApproval)
+					return []string{buildPlatformAccessApprovalIndexKey(&paa.Spec.SubjectRef)}
+				})
+
+			c := builder.Build()
+
+			uic := &UserInvitationController{Client: c}
+
+			// Fetch pointers used in invocation
+			var uObj *iamv1alpha1.User
+			if err := c.Get(ctx, types.NamespacedName{Name: user.Name}, &iamv1alpha1.User{}); err == nil {
+				uObj = user
+			}
+
+			if err := uic.grantAccessApproval(ctx, uObj, baseUI); err != nil {
+				t.Fatalf("grantAccessApproval returned error: %v", err)
+			}
+
+			// Verify expectations
+			approval := &iamv1alpha1.PlatformAccessApproval{}
+			err := c.Get(ctx, types.NamespacedName{Name: getDeterministicResourceName("platform-access-approval", *baseUI)}, approval)
+			if tc.expectCreate {
+				if err != nil {
+					t.Fatalf("expected PlatformAccessApproval created: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("did not expect new PlatformAccessApproval, but one was found")
+				}
+			}
+
+			if tc.expectRejection {
+				// Rejection should have been deleted
+				rej := &iamv1alpha1.PlatformAccessRejection{}
+				if err := c.Get(ctx, types.NamespacedName{Name: "reject"}, rej); err == nil {
+					t.Fatalf("PlatformAccessRejection should have been deleted")
+				}
+			}
+		})
 	}
 }

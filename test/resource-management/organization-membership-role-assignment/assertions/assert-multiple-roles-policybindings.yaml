@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: iam.miloapis.com/v1alpha1
+    kind: PolicyBinding
+    metadata:
+      namespace: organization-test-membership-roles
+      labels:
+        resourcemanager.miloapis.com/membership: alice-membership-multiple
+        resourcemanager.miloapis.com/managed-by: organization-membership-controller
+    spec:
+      roleRef:
+        name: organization-admin
+        namespace: organization-test-membership-roles
+      subjects:
+        - kind: User
+          name: test-user-alice
+      resourceSelector:
+        resourceRef:
+          apiGroup: resourcemanager.miloapis.com
+          kind: Organization
+          name: test-membership-roles
+  - apiVersion: iam.miloapis.com/v1alpha1
+    kind: PolicyBinding
+    metadata:
+      namespace: organization-test-membership-roles
+      labels:
+        resourcemanager.miloapis.com/membership: alice-membership-multiple
+        resourcemanager.miloapis.com/managed-by: organization-membership-controller
+    spec:
+      roleRef:
+        name: billing-manager
+        namespace: organization-test-membership-roles
+      subjects:
+        - kind: User
+          name: test-user-alice
+      resourceSelector:
+        resourceRef:
+          apiGroup: resourcemanager.miloapis.com
+          kind: Organization
+          name: test-membership-roles

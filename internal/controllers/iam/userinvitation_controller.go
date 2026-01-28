@@ -9,10 +9,12 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/finalizer"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -26,7 +28,13 @@ import (
 )
 
 const (
-	userInvitationFinalizerKey = "iam.miloapis.com/userinvitation"
+	userInvitationFinalizerKey   = "iam.miloapis.com/userinvitation"
+	uiPlatformAccessApprovalKey  = "iam.miloapis.com/ui-platform-access-approval"
+	uiPlatformAccessRejectionKey = "iam.miloapis.com/ui-platform-access-rejection"
+)
+
+const (
+	inviteeUserStatusUpdateConditionType = "InviteeUserStatusUpdate"
 )
 
 type UserInvitationController struct {
@@ -81,7 +89,7 @@ const (
 	userEmailIndexKey = "spec.email"
 )
 
-// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations,verbs=get;list;watch;update
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations,verbs=get;list;watch;update;delete
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=userinvitations/status,verbs=update
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=users,verbs=get;list;watch
 // +kubebuilder:rbac:groups=iam.miloapis.com,resources=policybindings,verbs=get;list;watch;create;delete
@@ -89,6 +97,8 @@ const (
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=organizations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=notification.miloapis.com,resources=emails,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=notification.miloapis.com,resources=emailtemplates,verbs=get;list;watch
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=platformaccessrejections,verbs=get;list;watch;delete
+// +kubebuilder:rbac:groups=iam.miloapis.com,resources=platformaccessapprovals,verbs=get;list;watch
 
 func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx).WithName("userinvitation-reconciler")
@@ -107,6 +117,13 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 
 	log.Info("reconciling UserInvitation", "name", ui.Name, "email", ui.Spec.Email)
 
+	// Update the UserInvitation status with the invitee user information
+	// Done here for migration purposes, to ensure that the UserInvitation status is updated with the invitee user information.
+	if err := r.updateUserInvitationInviteeUserStatus(ctx, ui); err != nil {
+		log.Error(err, "Failed to update UserInvitation status with invitee user information")
+		return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status with invitee user information: %w", err)
+	}
+
 	// Check if the UserInvitation is ready
 	if meta.IsStatusConditionTrue(ui.Status.Conditions, string(iamv1alpha1.UserInvitationReadyCondition)) {
 		log.Info("UserInvitation is ready, skipping reconciliation")
@@ -119,6 +136,27 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	// Get the display name of the Organization referenced by the UserInvitation
+	organizationDisplayName, err := r.getReferencedOrganizationDisplayName(ctx, ui.Spec.OrganizationRef)
+	if err != nil {
+		log.Error(err, "Failed to get Organization Display Name")
+		return ctrl.Result{}, fmt.Errorf("failed to get Organization Display Name: %w", err)
+	}
+	// Get the display name and email address of the User who invited the user in the invitation
+	inviterDisplayName, inviterEmailAddress, err := r.getReferencedInviterUserInfo(ctx, ui.Spec.InvitedBy)
+	if err != nil {
+		log.Error(err, "Failed to get Inviter Display Name")
+		return ctrl.Result{}, fmt.Errorf("failed to get Inviter Display Name: %w", err)
+	}
+	// Update the UserInvitation status with the organization and inviter user information
+	ui.Status.Organization = iamv1alpha1.UserInvitationOrganizationStatus{
+		DisplayName: organizationDisplayName,
+	}
+	ui.Status.InviterUser = iamv1alpha1.UserInvitationUserStatus{
+		DisplayName:  inviterDisplayName,
+		EmailAddress: inviterEmailAddress,
+	}
+
 	// Check that the UserInvitation is not expired
 	// Expiration is checked in the validationwebhook, but we check here in case some UserInvitation got
 	// stuck in the controller loop for a long time, and we want to prevent giving roles to a user that is no longer valid.
@@ -127,13 +165,26 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			Type:    string(iamv1alpha1.UserInvitationExpiredCondition),
 			Status:  metav1.ConditionTrue,
 			Reason:  string(iamv1alpha1.UserInvitationStateExpiredReason),
-			Message: fmt.Sprintf("UserInvitation %s is expired", ui.GetName()),
+			Message: "User Invitation is expired",
 		}); err != nil {
 			log.Error(err, "Failed to update expired UserInvitation status")
 			return ctrl.Result{}, fmt.Errorf("failed to update expired UserInvitation status: %w", err)
 		}
 		log.Info("ExpiredUserInvitation status updated", "name", ui.Name)
 		return ctrl.Result{}, nil
+	}
+
+	// Get the User that was invited by the UserInvitation
+	user, err := r.getInviteeUser(ctx, ui.Spec.Email)
+	if err != nil {
+		log.Error(err, "Failed to get Invitee User")
+		return ctrl.Result{}, fmt.Errorf("failed to get Invitee User: %w", err)
+	}
+
+	// Grant the access approval to the invitee user
+	if err := r.grantAccessApproval(ctx, user, ui); err != nil {
+		log.Error(err, "Failed to grant access approval to invitee user")
+		return ctrl.Result{}, fmt.Errorf("failed to grant access approval to invitee user: %w", err)
 	}
 
 	// Send an email to the invitee user to accept the invitation
@@ -143,12 +194,6 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, fmt.Errorf("failed to send invitation email to user: %w", err)
 	}
 
-	// Get the User that was invited by the UserInvitation
-	user, err := r.getInviteeUser(ctx, ui.Spec.Email)
-	if err != nil {
-		log.Error(err, "Failed to get Invitee User")
-		return ctrl.Result{}, fmt.Errorf("failed to get Invitee User: %w", err)
-	}
 	if user == nil {
 		log.Info("Invitee User not found, skipping reconciliation. Reconciliation will be triggered again when the User is created.")
 		return ctrl.Result{}, nil
@@ -165,37 +210,21 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, fmt.Errorf("failed to delete PolicyBinding for accepting the invitation: %w", err)
 		}
 
-		log.Info("Granting roles to the invitee user for the organization, as the invitation is accepted", "user", user.Name, "roles", ui.Spec.Roles)
+		log.Info("Creating OrganizationMembership with roles for the invitee user, as the invitation is accepted", "user", user.Name, "roles", ui.Spec.Roles)
 
-		// Create the OrganizationMembership
+		// Create the OrganizationMembership with roles
 		if err := r.createOrganizationMembership(ctx, user, ui); err != nil {
 			log.Error(err, "Failed to create OrganizationMembership for userInvitation")
 			return ctrl.Result{}, fmt.Errorf("failed to create OrganizationMembership for userInvitation: %w", err)
 		}
 
-		// Create the PolicyBindings
-		for _, roleRef := range ui.Spec.Roles {
-			err := r.createPolicyBinding(ctx, user, ui, &iamv1alpha1.RoleReference{
-				Name:      roleRef.Name,
-				Namespace: roleRef.Namespace,
-			})
-			if err != nil {
-				log.Error(err, "Failed to create policy binding with %s role", roleRef.Name)
-				return ctrl.Result{}, fmt.Errorf("failed to create policy binding with %s role: %w", roleRef.Name, err)
-			}
+		// Delete the UserInvitation now that it has been fully processed and accepted.
+		if err := r.Client.Delete(ctx, ui); err != nil && !errors.IsNotFound(err) {
+			log.Error(err, "Failed to delete UserInvitation after acceptance")
+			return ctrl.Result{}, fmt.Errorf("failed to delete UserInvitation after acceptance: %w", err)
 		}
 
-		// Update the UserInvitation status
-		if err := r.updateUserInvitationStatus(ctx, ui.DeepCopy(), metav1.Condition{
-			Type:    string(iamv1alpha1.UserInvitationReadyCondition),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(iamv1alpha1.UserInvitationStateAcceptedReason),
-			Message: fmt.Sprintf("User accepted the invitation %s", ui.GetName()),
-		}); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status: %w", err)
-		}
-
-		log.Info("UserInvitation reconciled. User accepted the invitation", "userInvitation", ui.GetName())
+		log.Info("UserInvitation accepted and deleted", "userInvitation", ui.GetName())
 		return ctrl.Result{}, nil
 	}
 
@@ -215,7 +244,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 			Type:    string(iamv1alpha1.UserInvitationReadyCondition),
 			Status:  metav1.ConditionTrue,
 			Reason:  string(iamv1alpha1.UserInvitationStateDeclinedReason),
-			Message: fmt.Sprintf("User declined the invitation %s", ui.GetName()),
+			Message: "User declined the invitation",
 		}); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status: %w", err)
 		}
@@ -247,7 +276,7 @@ func (r *UserInvitationController) Reconcile(ctx context.Context, req ctrl.Reque
 		Type:    string(iamv1alpha1.UserInvitationPendingCondition),
 		Status:  metav1.ConditionTrue,
 		Reason:  string(iamv1alpha1.UserInvitationStatePendingReason),
-		Message: fmt.Sprintf("User invitation is pending, ui: %s", ui.GetName()),
+		Message: "Waiting for user to accept the invitation",
 	}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update UserInvitation status: %w", err)
 	}
@@ -299,6 +328,26 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 		return fmt.Errorf("failed to set field index on UserInvitation by .spec.email: %w", err)
 	}
 
+	// Register field indexer for PlatformAccessApproval for efficient lookup
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(),
+		&iamv1alpha1.PlatformAccessApproval{}, uiPlatformAccessApprovalKey,
+		func(obj client.Object) []string {
+			paa := obj.(*iamv1alpha1.PlatformAccessApproval)
+			return []string{buildPlatformAccessApprovalIndexKey(&paa.Spec.SubjectRef)}
+		}); err != nil {
+		return fmt.Errorf("failed to set field index on PlatformAccessApproval by .spec.subjectRef.userRef.name: %w", err)
+	}
+
+	// Register field indexer for PlatformAccessRejection for efficient lookup
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(),
+		&iamv1alpha1.PlatformAccessRejection{}, uiPlatformAccessRejectionKey,
+		func(obj client.Object) []string {
+			par := obj.(*iamv1alpha1.PlatformAccessRejection)
+			return []string{par.Spec.UserRef.Name}
+		}); err != nil {
+		return fmt.Errorf("failed to set field index on PlatformAccessRejection by .spec.userRef.name: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&iamv1alpha1.UserInvitation{}).
 		Watches(
@@ -313,10 +362,17 @@ func (r *UserInvitationController) SetupWithManager(mgr ctrl.Manager) error {
 // updateUserInvitationStatus updates the status of the UserInvitation
 func (r *UserInvitationController) updateUserInvitationStatus(ctx context.Context, ui *iamv1alpha1.UserInvitation, condition metav1.Condition) error {
 	log := logf.FromContext(ctx).WithName("userinvitation-update-status")
-	log.Info("Updating UserInvitation status", "status", ui.Status)
 
+	originalStatus := ui.Status.DeepCopy()
 	meta.SetStatusCondition(&ui.Status.Conditions, condition)
 
+	// Only update if status actually changed
+	if equality.Semantic.DeepEqual(&ui.Status, originalStatus) {
+		log.V(1).Info("UserInvitation status unchanged, skipping update")
+		return nil
+	}
+
+	log.Info("Updating UserInvitation status", "status", ui.Status)
 	if err := r.Client.Status().Update(ctx, ui); err != nil {
 		log.Error(err, "failed to update UserInvitation status", "userInvitation", ui.Name)
 		return fmt.Errorf("failed to update UserInvitation status: %w", err)
@@ -464,26 +520,22 @@ func deletePolicyBinding(ctx context.Context, c client.Client, roleRef *iamv1alp
 	return nil
 }
 
-// createOrganizationMembership creates an OrganizationMembership for the invitee user. This is an idempotent operation.
+// createOrganizationMembership creates an OrganizationMembership for the invitee user with roles from the invitation. This is an idempotent operation.
 func (r *UserInvitationController) createOrganizationMembership(ctx context.Context, user *iamv1alpha1.User, ui *iamv1alpha1.UserInvitation) error {
 	log := logf.FromContext(ctx).WithName("userinvitation-create-organization-membership")
 	log.Info("Creating OrganizationMembership for userInvitation", "userInvitation", ui.GetName(), "user", user.GetName())
 
-	// Check if the OrganizationMembership already exists
-	organizationMembership := &resourcemanagerv1alpha1.OrganizationMembership{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: fmt.Sprintf("member-%s", user.Name), Namespace: fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name)}, organizationMembership); err != nil {
-		if errors.IsNotFound(err) {
-			log.Info("OrganizationMembership not found, creating")
-		} else {
-			return fmt.Errorf("failed to get OrganizationMembership: %w", err)
-		}
-	} else {
-		log.Info("OrganizationMembership found, skipping creation")
-		return nil
+	// Convert IAM RoleReferences to ResourceManager RoleReferences
+	roles := make([]resourcemanagerv1alpha1.RoleReference, 0, len(ui.Spec.Roles))
+	for _, roleRef := range ui.Spec.Roles {
+		roles = append(roles, resourcemanagerv1alpha1.RoleReference{
+			Name:      roleRef.Name,
+			Namespace: roleRef.Namespace,
+		})
 	}
 
-	// Build the OrganizationMembership
-	organizationMembership = &resourcemanagerv1alpha1.OrganizationMembership{
+	// Build the OrganizationMembership with roles
+	organizationMembership := &resourcemanagerv1alpha1.OrganizationMembership{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("member-%s", user.Name),
 			Namespace: fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name),
@@ -496,22 +548,26 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 				},
 			},
 		},
-		Spec: resourcemanagerv1alpha1.OrganizationMembershipSpec{
+	}
+
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, organizationMembership, func() error {
+		log.Info("Creating or updating invitation-related organization membership", "organization", organizationMembership.Spec.OrganizationRef.Name)
+		organizationMembership.Spec = resourcemanagerv1alpha1.OrganizationMembershipSpec{
 			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
 				Name: ui.Spec.OrganizationRef.Name,
 			},
 			UserRef: resourcemanagerv1alpha1.MemberReference{
 				Name: user.Name,
 			},
-		},
+			Roles: roles,
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create or update organization membership: %w", err)
 	}
 
-	// Create the OrganizationMembership
-	if err := r.Client.Create(ctx, organizationMembership); err != nil {
-		return fmt.Errorf("failed to create organization membership resource: %w", err)
-	}
-
-	log.Info("OrganizationMembership created", "name", organizationMembership.GetName())
+	log.Info("OrganizationMembership created with roles", "name", organizationMembership.GetName(), "roles", roles)
 
 	return nil
 }
@@ -577,29 +633,10 @@ func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui
 		return fmt.Errorf("failed to check existing Email: %w", err)
 	}
 
-	// Build variables required by the template
-	// UserName
-	username := strings.TrimSpace(ui.Spec.GivenName + " " + ui.Spec.FamilyName)
-	if username == "" {
-		username = ui.Name
-	}
-
-	// OrganizationDisplayName: fetch Organization resource to get display name
-	org := &resourcemanagerv1alpha1.Organization{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: ui.Spec.OrganizationRef.Name}, org); err != nil {
-		log.Info("Failed to get Organization", "organization", ui.Spec.OrganizationRef.Name)
-		return fmt.Errorf("failed to get Organization: %w", err)
-	}
-	organizationDisplayName := org.Annotations["kubernetes.io/display-name"]
-	if organizationDisplayName == "" {
-		organizationDisplayName = org.Name
-	}
-
 	variables := []notificationv1alpha1.EmailVariable{
-
 		{
 			Name:  "OrganizationDisplayName",
-			Value: organizationDisplayName,
+			Value: ui.Status.Organization.DisplayName,
 		},
 		{
 			Name:  "UserInvitationName",
@@ -607,7 +644,7 @@ func (r *UserInvitationController) createInvitationEmail(ctx context.Context, ui
 		},
 		{
 			Name:  "InviterDisplayName",
-			Value: username,
+			Value: ui.Status.InviterUser.DisplayName,
 		},
 	}
 
@@ -672,20 +709,34 @@ func (r *UserInvitationController) getInviteeUser(ctx context.Context, email str
 	return &users.Items[0], nil
 }
 
-func (r *UserInvitationController) getInviterUser(ctx context.Context, email string) (*iamv1alpha1.User, error) {
-	log := logf.FromContext(ctx).WithName("userinvitation-get-inviter-user")
-	log.Info("Getting Inviter User by email", "email", email)
+// getReferencedInviterUserInfo gets the display name and email address of the user who invited the user in the invitation.
+func (r *UserInvitationController) getReferencedInviterUserInfo(ctx context.Context, inviterUserRef iamv1alpha1.UserReference) (string, string, error) {
+	user := &iamv1alpha1.User{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: inviterUserRef.Name}, user); err != nil {
+		return "", "", fmt.Errorf("failed to get inviterUser: %w", err)
+	}
 
-	users, err := r.getUsersByEmail(ctx, email)
-	if err != nil {
-		log.Error(err, "Failed to get Inviter User by email")
-		return nil, fmt.Errorf("failed to get Inviter User by email: %w", err)
+	displayName := strings.TrimSpace(user.Spec.GivenName + " " + user.Spec.FamilyName)
+	if displayName == "" {
+		displayName = user.Name
 	}
-	if len(users.Items) == 0 {
-		log.Info("Inviter User not found.")
-		return nil, fmt.Errorf("inviter user %s not found", email)
+
+	return displayName, user.Spec.Email, nil
+}
+
+// getOrganizationDisplayName gets the display name of the Organization referenced by the UserInvitation.
+func (r *UserInvitationController) getReferencedOrganizationDisplayName(ctx context.Context, organizationRef resourcemanagerv1alpha1.OrganizationReference) (string, error) {
+	// OrganizationDisplayName: fetch Organization resource to get display name
+	org := &resourcemanagerv1alpha1.Organization{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: organizationRef.Name}, org); err != nil {
+		return "", fmt.Errorf("failed to get Organization: %w", err)
 	}
-	return &users.Items[0], nil
+	organizationDisplayName := org.Annotations["kubernetes.io/display-name"]
+	if organizationDisplayName == "" {
+		organizationDisplayName = org.Name
+	}
+
+	return organizationDisplayName, nil
 }
 
 // getDeterministicEmailName generates a deterministic name for the Email resource to create based on the UserInvitation.
@@ -716,4 +767,124 @@ func isUserInvitationExpired(ui *iamv1alpha1.UserInvitation) bool {
 		return true
 	}
 	return false
+}
+
+// grantAccessApproval grants the access to the invitee user for the organization.
+func (r *UserInvitationController) grantAccessApproval(ctx context.Context, user *iamv1alpha1.User, ui *iamv1alpha1.UserInvitation) error {
+	log := logf.FromContext(ctx).WithName("userinvitation-grant-access-approval").WithValues("userInvitation", ui.GetName())
+	log.Info("Granting access approval to user", "userInvitation", ui.GetName(), "user")
+
+	// ================================
+	// WARNING: User may by nil
+	// ================================
+
+	// Look for existant PlatformAccessRejection for the invitee user
+	if user != nil {
+		// Only existant users can have a PlatformAccessRejection
+		platformAccessRejection := &iamv1alpha1.PlatformAccessRejectionList{}
+		if err := r.Client.List(ctx, platformAccessRejection, client.MatchingFields{uiPlatformAccessRejectionKey: user.GetName()}); err != nil {
+			log.Error(err, "Failed to list PlatformAccessRejections")
+			return fmt.Errorf("failed to list PlatformAccessRejections: %w", err)
+		}
+		if len(platformAccessRejection.Items) > 0 {
+			// Remove the PlatformAccessRejection
+			log.Info("PlatformAccessRejection already exists, removing it")
+			if err := r.Client.Delete(ctx, &platformAccessRejection.Items[0]); err != nil && !errors.IsNotFound(err) {
+				log.Error(err, "Failed to delete PlatformAccessRejection")
+				return fmt.Errorf("failed to delete PlatformAccessRejection: %w", err)
+			}
+		}
+	}
+
+	// Look for existant PlatformAccessApproval for the invitee user
+	// The user can already have a PlatformAccessApproval for the email address or the user reference
+	userReferences := []string{strings.ToLower(ui.Spec.Email)}
+	if user != nil {
+		userReferences = append(userReferences, user.Name)
+	}
+	for _, reference := range userReferences {
+		platformAccessApproval := &iamv1alpha1.PlatformAccessApprovalList{}
+		if err := r.Client.List(ctx, platformAccessApproval, client.MatchingFields{uiPlatformAccessApprovalKey: reference}); err != nil {
+			log.Error(err, "Failed to list PlatformAccessApprovals")
+			return fmt.Errorf("failed to list PlatformAccessApprovals: %w", err)
+		}
+		if len(platformAccessApproval.Items) > 0 {
+			log.Info("PlatformAccessApproval already exists, skipping grant access approval")
+			return nil
+		}
+	}
+
+	// Build the SubjectReference for the PlatformAccessApproval
+	subjectRef := iamv1alpha1.SubjectReference{}
+	if user == nil {
+		// Invitee hasn't created an account yet – approve the email address
+		subjectRef.Email = strings.ToLower(ui.Spec.Email)
+	} else {
+		// User exists – approve the specific user object
+		subjectRef.UserRef = &iamv1alpha1.UserReference{
+			Name: user.Name,
+		}
+	}
+
+	// If here, no PlatformAccessApproval exists for the invitee user, create a new one
+	platformAccessApproval := &iamv1alpha1.PlatformAccessApproval{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: getDeterministicResourceName("platform-access-approval", *ui),
+		},
+		Spec: iamv1alpha1.PlatformAccessApprovalSpec{
+			SubjectRef: subjectRef,
+		},
+	}
+	if err := r.Client.Create(ctx, platformAccessApproval); err != nil {
+		log.Error(err, "Failed to create PlatformAccessApproval")
+		return fmt.Errorf("failed to create PlatformAccessApproval: %w", err)
+	}
+
+	return nil
+}
+
+func (r *UserInvitationController) updateUserInvitationInviteeUserStatus(ctx context.Context, ui *iamv1alpha1.UserInvitation) error {
+	log := logf.FromContext(ctx).WithName("userinvitation-update-invitee-user-status")
+	log.Info("Updating UserInvitationInviteeUserStatus status", "name", ui.GetName())
+
+	if ui.Status.InviteeUser != nil {
+		log.Info("Invitee User status already set, skipping update", "name", ui.GetName())
+		return nil
+	}
+
+	// Attempt to resolve the invitee user
+	user, err := r.getInviteeUser(ctx, ui.Spec.Email)
+	if err != nil {
+		return fmt.Errorf("failed to get Invitee User: %w", err)
+	}
+
+	// Condition to update the UserInvitation status
+	var cond metav1.Condition
+
+	if user == nil {
+		// Invitee user not found yet
+		cond = metav1.Condition{
+			Type:    inviteeUserStatusUpdateConditionType,
+			Status:  metav1.ConditionFalse,
+			Reason:  "InvitedUserNotRegistered",
+			Message: "The invited user has not registered their account yet.",
+		}
+	} else {
+		// Invitee user found – update the Status field on the invitation
+		ui.Status.InviteeUser = &iamv1alpha1.UserInvitationInviteeUserStatus{
+			Name: user.Name,
+		}
+		cond = metav1.Condition{
+			Type:    inviteeUserStatusUpdateConditionType,
+			Status:  metav1.ConditionTrue,
+			Reason:  "InvitedUserRegistered",
+			Message: "Confirmed the invited user has an account registered with the platform.",
+		}
+	}
+
+	if updateErr := r.updateUserInvitationStatus(ctx, ui, cond); updateErr != nil {
+		return fmt.Errorf("failed to update UserInvitation status: %w", updateErr)
+	}
+
+	return nil
 }

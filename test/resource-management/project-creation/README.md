@@ -1,74 +1,57 @@
-# Project Ready Status Test
+# Test: `project-creation`
 
-This end-to-end test focuses specifically on validating that projects can be created successfully and reach the `Ready` status condition.
-
-## Test Scope
+Tests basic Project creation and multi-cluster visibility.
 
 This test verifies:
+- Projects can be created within an Organization namespace
+- Projects reach Ready status
+- Projects are visible in both organization and main cluster contexts
+- User and OrganizationMembership setup works correctly
 
-1. **Project Creation via Organizational Context**: Projects can be created through the organizational control-plane API endpoint
-2. **Project Controller Functionality**: The project controller processes projects correctly without TLS certificate issues
-3. **Ready Status Condition**: Projects reach the `Ready` status condition with `status: "True"`
-4. **Cross-Cluster Visibility**: Projects created via organizational context are visible in the main cluster
 
-## Test Structure
+## Steps
 
-### Setup Phase
-- Creates a test organization (`test-project-ready-org`)
-- Creates a test user (`1001`)
-- Creates organization membership to link user to organization
+| # | Name | Bindings | Try | Catch | Finally | Cleanup |
+|:-:|---|:-:|:-:|:-:|:-:|:-:|
+| 1 | [setup-organization](#step-setup-organization) | 0 | 5 | 0 | 0 | 0 |
+| 2 | [test-project-creation-and-ready-status](#step-test-project-creation-and-ready-status) | 0 | 3 | 0 | 0 | 0 |
+| 3 | [verify-project-in-main-cluster](#step-verify-project-in-main-cluster) | 0 | 1 | 0 | 0 | 0 |
 
-### Test Phase
-- Creates a project through the organizational context API (using `kubeconfig-org-template`)
-- Waits for the project to reach `Ready` status condition (60-second timeout)
-- Verifies the project status using assertions
-- Confirms the project is visible from the main cluster context
+### Step: `setup-organization`
 
-### Cleanup Phase
-- Deletes the test project
-- Waits for proper deletion
+Create Organization, User, and OrganizationMembership for project testing
 
-## Key Differences from Other Tests
+#### Try
 
-Unlike the quota enforcement tests which focus on resource allocation and limits, this test:
+| # | Operation | Bindings | Outputs | Description |
+|:-:|---|:-:|:-:|---|
+| 1 | `apply` | 0 | 0 | *No description* |
+| 2 | `wait` | 0 | 0 | *No description* |
+| 3 | `apply` | 0 | 0 | *No description* |
+| 4 | `wait` | 0 | 0 | *No description* |
+| 5 | `apply` | 0 | 0 | *No description* |
 
-- **Focuses solely on project lifecycle**: Creation → Ready → Deletion
-- **Uses correct status format**: Tests for `status.conditions[].type: Ready` instead of deprecated `status.phase`
-- **Validates TLS fix**: Ensures project controller can communicate with project control-plane endpoints
-- **Tests organizational context**: Verifies the organizational control-plane API endpoints work correctly
+### Step: `test-project-creation-and-ready-status`
 
-## Files
+Create Project in organization context and verify it reaches Ready status
 
-- `01-test-organization.yaml`: Test organization resource
-- `02-test-user.yaml`: Test user resource
-- `03-organization-membership.yaml`: Organization membership linking user to org
-- `04-test-project.yaml`: Test project to be created
-- `kubeconfig-org-template`: Kubeconfig for organizational context access
-- `kubeconfig-main`: Kubeconfig for main cluster access
-- `assertions/assert-project-ready.yaml`: Validates project reaches Ready status
-- `assertions/assert-project-exists-main.yaml`: Validates project visibility in main cluster
+#### Try
 
-## Running the Test
+| # | Operation | Bindings | Outputs | Description |
+|:-:|---|:-:|:-:|---|
+| 1 | `apply` | 0 | 0 | *No description* |
+| 2 | `wait` | 0 | 0 | *No description* |
+| 3 | `assert` | 0 | 0 | *No description* |
 
-```bash
-# Run the project-ready test specifically
-task test:end-to-end -- project-ready
+### Step: `verify-project-in-main-cluster`
 
-# Or run with chainsaw directly
-chainsaw test test/project-ready/ --test-timeout=120s
-```
+Verify Project is visible in main cluster with correct status
 
-## Expected Results
+#### Try
 
-✅ **Success Criteria:**
-- Project is created successfully through organizational context
-- Project reaches `Ready` status within 60 seconds
-- No TLS certificate errors in controller logs
-- Project is visible and accessible from both organizational and main cluster contexts
-- Clean deletion of test resources
+| # | Operation | Bindings | Outputs | Description |
+|:-:|---|:-:|:-:|---|
+| 1 | `assert` | 0 | 0 | *No description* |
 
-❌ **Failure Scenarios:**
-- Project creation fails (admission webhook issues)
-- Project never reaches Ready status (controller issues, TLS problems)
-- Timeout waiting for Ready condition
-- Cross-cluster visibility issues
+---
+

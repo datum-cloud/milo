@@ -1,0 +1,91 @@
+name: Fix Missing Newlines
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  fix-newlines:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            **/*
+          files_ignore: |
+            **/*.png
+            **/*.jpg
+            **/*.jpeg
+            **/*.gif
+            **/*.svg
+            **/*.ico
+            **/*.pdf
+            **/*.bin
+            **/*.exe
+
+      - name: Fix newlines in changed files
+        id: fix
+        run: |
+          fixed_files=()
+
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            # Skip if file doesn't exist or is a directory
+            if [ ! -f "$file" ]; then
+              continue
+            fi
+
+            # Check if file is missing final newline
+            if [ -n "$(tail -c 1 "$file")" ]; then
+              echo "Fixing: $file"
+              echo "" >> "$file"
+              fixed_files+=("$file")
+            fi
+          done
+
+          # Output results
+          if [ ${#fixed_files[@]} -eq 0 ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "✅ All files have proper newlines"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "fixed_count=${#fixed_files[@]}" >> $GITHUB_OUTPUT
+            echo "✅ Fixed ${#fixed_files[@]} file(s):"
+            printf '%s\n' "${fixed_files[@]}"
+          fi
+
+      - name: Commit changes
+        if: steps.fix.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .
+          git commit -m "chore: add missing newlines at end of files
+
+          🤖 Automatically added newlines to ${{ steps.fix.outputs.fixed_count }} file(s)
+
+          Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          git push
+
+      - name: Comment on PR
+        if: steps.fix.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🤖 I automatically added missing newlines at the end of ${{ steps.fix.outputs.fixed_count }} file(s) in this PR.\n\nAll files should now end with a newline character as per coding standards.'
+            })

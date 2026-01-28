@@ -174,7 +174,7 @@ func TestContactValidator_ValidateCreate(t *testing.T) {
 		},
 		"valid organization contact": {
 			contact: &notificationv1alpha1.Contact{
-				ObjectMeta: metav1.ObjectMeta{Name: "org-contact"},
+				ObjectMeta: metav1.ObjectMeta{Name: "org-contact", Namespace: "organization-org1"},
 				Spec: notificationv1alpha1.ContactSpec{
 					GivenName:  "Org",
 					FamilyName: "Member",
@@ -229,7 +229,7 @@ func TestContactValidator_ValidateCreate(t *testing.T) {
 		},
 		"valid project contact": {
 			contact: &notificationv1alpha1.Contact{
-				ObjectMeta: metav1.ObjectMeta{Name: "proj-contact"},
+				ObjectMeta: metav1.ObjectMeta{Name: "proj-contact", Namespace: "organization-org1"},
 				Spec: notificationv1alpha1.ContactSpec{
 					GivenName:  "Proj",
 					FamilyName: "Member",

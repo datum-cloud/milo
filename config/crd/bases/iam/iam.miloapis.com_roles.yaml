@@ -161,6 +161,15 @@ spec:
                   - type
                   type: object
                 type: array
+              effectivePermissions:
+                description: |-
+                  EffectivePermissions is the complete flattened list of all permissions
+                  granted by this role, including permissions from inheritedRoles and
+                  directly specified includedPermissions. This is computed by the controller
+                  and provides a single source of truth for all permissions this role grants.
+                items:
+                  type: string
+                type: array
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
                   by the controller.

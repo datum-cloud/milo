@@ -49,6 +49,9 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Namespaced
+// +kubebuilder:selectablefield:JSONPath=".spec.contactRef.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.contactGroupRef.name"
+// +kubebuilder:selectablefield:JSONPath=".status.username"
 type ContactGroupMembership struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -111,9 +114,20 @@ type ContactGroupMembershipStatus struct {
 	// +patchStrategy=merge
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
+	// Providers contains the per-provider status for this contact group membership.
+	// This enables tracking multiple provider backends simultaneously.
+	// +kubebuilder:validation:Optional
+	Providers []ContactProviderStatus `json:"providers,omitempty"`
+
 	// ProviderID is the identifier returned by the underlying contact provider
 	// (e.g. Resend) when the membership is created in the associated audience. It is usually
 	// used to track the contact-group membership creation status (e.g. provider webhooks).
+	// Deprecated: Use Providers instead.
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
+
+	// Username is the username of the user that owns the ContactGroupMembership.
+	// This is populated by the controller based on the referenced Contact's subject.
+	// +optional
+	Username string `json:"username,omitempty"`
 }

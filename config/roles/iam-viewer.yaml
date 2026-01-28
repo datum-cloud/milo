@@ -1,7 +1,10 @@
 apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
-  name: iam-reader
+  name: iam-viewer
+  annotations:
+    kubernetes.io/display-name: IAM Viewer
+    kubernetes.io/description: "View IAM resources"
 spec:
   launchStage: Beta
   includedPermissions:

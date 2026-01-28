@@ -1,0 +1,17 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceClaim
+metadata:
+  name: pre-created-test-project-claim
+  namespace: organization-pre-created-test-org
+spec:
+  consumerRef:
+    kind: Organization
+    apiGroup: resourcemanager.miloapis.com
+    name: pre-created-test-org
+  requests:
+    - resourceType: "pre-created-test/projects-per-org"
+      amount: 1
+  resourceRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Project
+    name: pre-created-test-project

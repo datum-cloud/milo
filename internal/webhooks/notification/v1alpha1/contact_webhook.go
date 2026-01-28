@@ -198,7 +198,11 @@ func (v *ContactValidator) ValidateCreate(ctx context.Context, obj runtime.Objec
 
 	// Validate Organization reference
 	if contact.Spec.SubjectRef.Kind == "Organization" {
-		if contact.Spec.SubjectRef.Namespace != fmt.Sprintf("organization-%s", contact.Spec.SubjectRef.Name) {
+		expectedOrganizationNamespace := fmt.Sprintf("organization-%s", contact.Spec.SubjectRef.Name)
+		if expectedOrganizationNamespace != contact.Namespace {
+			errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef", "namespace"), contact.Spec.SubjectRef.Namespace, "namespace must be the same as the referenced organization namespace"))
+		}
+		if contact.Spec.SubjectRef.Namespace != expectedOrganizationNamespace {
 			errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef", "namespace"), contact.Spec.SubjectRef.Namespace, "namespace must be the organization namespace (organization-<organization-name>)"))
 		}
 		// Validate Organization exists
@@ -224,8 +228,12 @@ func (v *ContactValidator) ValidateCreate(ctx context.Context, obj runtime.Objec
 				return nil, errors.NewInternalError(fmt.Errorf("failed to get project: %w", err))
 			}
 		}
+		expectedProjectNamespace := fmt.Sprintf("organization-%s", project.Spec.OwnerRef.Name)
+		if expectedProjectNamespace != contact.Namespace {
+			errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef", "namespace"), contact.Spec.SubjectRef.Namespace, "namespace must be the same as the referenced project owner's namespace"))
+		}
 		// Validate Namespace
-		if contact.Spec.SubjectRef.Namespace != fmt.Sprintf("organization-%s", project.Spec.OwnerRef.Name) {
+		if contact.Spec.SubjectRef.Namespace != expectedProjectNamespace {
 			errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef", "namespace"), contact.Spec.SubjectRef.Namespace, "namespace must be the project owner's namespace (organization-<organization-name>)"))
 			return nil, contactValidationResult(errs, contact)
 		}
@@ -258,7 +266,10 @@ func (v *ContactValidator) ValidateUpdate(ctx context.Context, oldObj, newObj ru
 
 	// If the SubjectRef changed, reject the update.
 	if !reflect.DeepEqual(contactNew.Spec.SubjectRef, contactOld.Spec.SubjectRef) {
-		errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef"), contactNew.Spec.SubjectRef, "subjectRef is immutable and cannot be updated"))
+		// Allow updating SubjectRef only if it was previously nil (e.g., user claiming a newsletter contact)
+		if contactOld.Spec.SubjectRef != nil {
+			errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef"), contactNew.Spec.SubjectRef, "subjectRef is immutable once set"))
+		}
 	}
 
 	// Validate Email format

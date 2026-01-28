@@ -17,3 +17,14 @@ spec:
   - identity.miloapis.com/sessions.list
   - identity.miloapis.com/sessions.get
   - identity.miloapis.com/sessions.delete
+  - identity.miloapis.com/useridentities.list
+  - identity.miloapis.com/useridentities.get
+  - iam.miloapis.com/userinvitations.get
+  - iam.miloapis.com/userinvitations.list
+  - notification.miloapis.com/contacts.list
+  - notification.miloapis.com/contactgroups.list
+  - notification.miloapis.com/contactgroupmemberships.list
+  - notification.miloapis.com/contactgroupmembershipremovals.list  
+  - notification.miloapis.com/contactgroupmemberships.create
+  - notification.miloapis.com/contactgroupmembershipremovals.create
+  - notification.miloapis.com/contactgroupmembershipremovals.delete

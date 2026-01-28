@@ -1,0 +1,313 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: quota-grant-creation-policy
+spec:
+  description: |
+    Tests GrantCreationPolicy functionality for automatic ResourceGrant generation.
+
+    This test verifies:
+    - GrantCreationPolicies automatically create ResourceGrants when matching resources are created
+    - CEL template expressions correctly render grant specifications
+    - CEL name expressions generate dynamic grant names
+    - Condition evaluation updates grants when trigger resources change
+    - Owner references ensure grants are cleaned up when triggers are deleted
+    - Production-style label validation works correctly
+    - Invalid policy configurations are rejected
+
+  # Define clusters for organizational context testing
+  clusters:
+    main:
+      kubeconfig: kubeconfig-main
+    org:
+      kubeconfig: kubeconfig-org-template
+
+  steps:
+    # Setup base quota infrastructure - MUST be first
+    - name: setup-base-infrastructure
+      description: Register the resource type for grant creation testing
+      try:
+        - apply:
+            file: 01-resource-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: grant-policy-test-projects-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - assert:
+            file: assertions/assert-resource-registration.yaml
+
+    # Create and validate grant creation policy
+    - name: setup-grant-creation-policy
+      description: |
+        Create GrantCreationPolicy that automatically generates ResourceGrants for Organizations.
+        The policy uses CEL templates to compute grant amounts based on organization attributes.
+      try:
+        - apply:
+            file: grant-creation-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: GrantCreationPolicy
+            name: test-organization-grant-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        - assert:
+            file: assertions/assert-grant-creation-policy.yaml
+
+    # Create basic organization that will trigger grant creation
+    - name: setup-test-organization
+      description: |
+        Create an Organization that matches the GrantCreationPolicy selector.
+        This should trigger automatic ResourceGrant creation.
+      try:
+        - apply:
+            file: 02-test-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-grant-policy-test-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - assert:
+            file: assertions/assert-organization.yaml
+
+    # Verify automatic grant creation
+    - name: verify-automatic-grant-creation
+      description: |
+        Verify that ResourceGrant was automatically created by the GrantCreationController.
+        The grant should be Active and have the correct spec from the policy template.
+      try:
+        # Wait for ResourceGrant to be created by GrantCreationController
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: auto-grant-grant-policy-test-org
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - assert:
+            file: assertions/assert-automatic-grant.yaml
+
+    # Test policy condition evaluation with organization update
+    - name: test-condition-evaluation
+      description: |
+        Update the Organization's attributes to trigger grant recalculation.
+        The policy should update the grant based on the new CEL template evaluation.
+      try:
+        # Update organization to change condition
+        - apply:
+            file: test-data/organization-update-tier.yaml
+        # Wait for grant to be updated (check generation or observedGeneration)
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: auto-grant-grant-policy-test-org
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Verify grant was updated based on new condition
+        - assert:
+            file: assertions/assert-updated-grant.yaml
+
+    # Test template rendering with different context
+    - name: test-template-rendering
+      description: |
+        Create an Organization with different attributes (premium tier).
+        Verify that the policy generates a grant with different values based on CEL template evaluation.
+      try:
+        # Create organization with different attributes
+        - apply:
+            file: test-data/premium-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-premium-test-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        # Wait for ResourceGrant to be created for premium organization
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: auto-grant-premium-test-org
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Verify grant created with premium template values
+        - assert:
+            file: assertions/assert-premium-grant.yaml
+
+    # Test policy with CEL name expression
+    - name: test-cel-name-expression
+      description: |
+        Test GrantCreationPolicy with CEL expression for dynamic grant naming.
+        The grant name should be generated from CEL template evaluation.
+      try:
+        - apply:
+            file: cel-name-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: GrantCreationPolicy
+            name: test-cel-name-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        # Create organization to trigger CEL-based grant
+        - apply:
+            file: test-data/cel-trigger-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-cel-trigger-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        # Wait for ResourceGrant to be created with template-generated name
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: premium-grant-cel-trigger-org-standard
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Verify grant created with template-generated name
+        - assert:
+            file: assertions/assert-cel-named-grant.yaml
+
+    # Test grant cleanup when trigger is deleted
+    - name: test-grant-cleanup
+      description: |
+        Verify that ResourceGrants are automatically deleted when their trigger resource is removed.
+        This validates owner reference-based garbage collection.
+      try:
+        # Delete one of the test organizations
+        - delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: Organization
+              name: grant-policy-test-org
+        # Wait for ResourceGrant to be deleted (owner reference cleanup)
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: auto-grant-grant-policy-test-org
+            namespace: milo-system
+            timeout: 30s
+            for:
+              deletion: {}
+        # Verify associated grants are cleaned up
+        - assert:
+            file: assertions/assert-grant-cleanup.yaml
+
+    # Test policy validation errors
+    - name: test-policy-validation
+      description: |
+        Test that invalid GrantCreationPolicy configurations are rejected by validation.
+      try:
+        # Try to create invalid policy
+        - apply:
+            file: test-data/invalid-policy.yaml
+            expect:
+              - check:
+                  ($error != null): true
+        # Verify original policy remains valid
+        - assert:
+            file: assertions/assert-grant-creation-policy.yaml
+
+    # Test production-style labels (the bug fix validation)
+    - name: test-production-style-labels
+      description: |
+        Test that GrantCreationPolicy accepts production-style label selectors with prefixes.
+        This validates a bug fix for label validation in CEL expressions.
+      try:
+        # Apply policy with production-style prefixed labels that previously failed
+        - apply:
+            file: production-style-labels-policy.yaml
+        # Wait for the policy to become Ready - this proves label validation passed
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: GrantCreationPolicy
+            name: test-production-style-labels-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        # Assert the policy is Ready with the production-style labels
+        - assert:
+            file: assertions/assert-production-style-labels-ready.yaml
+
+    # Test namespace template grant creation
+    - name: test-namespace-template-grant
+      description: |
+        Test that GrantCreationPolicy can create grants in organization-specific namespaces
+        using namespace templates like 'organization-{{.trigger.metadata.name}}'.
+        This validates the fix for namespace template rendering in grant creation.
+      try:
+        # Apply policy that creates grants in organization namespace
+        - apply:
+            file: namespace-template-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: GrantCreationPolicy
+            name: test-namespace-template-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        # Create organization that triggers namespace-template grant
+        - apply:
+            file: test-data/namespace-template-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-namespace-template-test-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        # Wait for ResourceGrant to be created in organization namespace
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: grant-namespace-template-test-org-default-org
+            namespace: organization-namespace-template-test-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        # Assert grant was created in correct namespace with correct spec
+        - assert:
+            file: assertions/assert-namespace-template-grant.yaml
+

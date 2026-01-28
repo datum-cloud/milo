@@ -30,6 +30,7 @@ import (
 	"k8s.io/apiserver/pkg/server/mux"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/metadata"
@@ -66,29 +67,37 @@ import (
 	kubectrlmgrconfig "k8s.io/kubernetes/pkg/controller/apis/config"
 	garbagecollector "k8s.io/kubernetes/pkg/controller/garbagecollector"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
 
 	// Register JSON logging format
 	_ "k8s.io/component-base/logs/json/register"
 
-	// Datum webhook and API type imports
 	controlplane "go.miloapis.com/milo/internal/control-plane"
+	crmcontroller "go.miloapis.com/milo/internal/controllers/crm"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
 	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
+	quotacontroller "go.miloapis.com/milo/internal/quota/controllers"
+	crmv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/crm/v1alpha1"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
+	identityv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/identity/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
+	crmv1alpha1 "go.miloapis.com/milo/pkg/apis/crm/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
+	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
+	miloprovider "go.miloapis.com/milo/pkg/multicluster-runtime/milo"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
-	controllerruntime "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 var (
@@ -102,8 +111,16 @@ var (
 	// OrganizationOwnerRoleName is the name of the role that will be used to grant organization owner permissions.
 	OrganizationOwnerRoleName string
 
+	// OrganizationOwnerRoleNamespace is the namespace where the organization owner role is located.
+	// This allows service providers to configure where owner roles are stored.
+	OrganizationOwnerRoleNamespace string
+
 	// ProjectOwnerRoleName is the name of the role that will be used to grant project owner permissions.
 	ProjectOwnerRoleName string
+
+	// ProjectOwnerRoleNamespace is the namespace where the project owner role is located.
+	// This allows service providers to configure where owner roles are stored.
+	ProjectOwnerRoleNamespace string
 
 	// GetInvitationRoleName is the name of the role that will be used to grant get invitation permissions.
 	GetInvitationRoleName string
@@ -113,6 +130,38 @@ var (
 
 	// UserInvitationEmailTemplate is the template for the user invitation email.
 	UserInvitationEmailTemplate string
+
+	// UserWaitlistPendingEmailTemplate is the template for the waitlist pending email.
+	UserWaitlistPendingEmailTemplate string
+	// UserWaitlistApprovedEmailTemplate is the template for the waitlist approved email.
+	UserWaitlistApprovedEmailTemplate string
+	// UserWaitlistRejectedEmailTemplate is the template for the waitlist rejected email.
+	UserWaitlistRejectedEmailTemplate string
+	// PlatformInvitationEmailTemplate is the template for the platform invitation email.
+	PlatformInvitationEmailTemplate string
+
+	// WaitlistRelatedResourcesNamespace is the namespace that contains the waitlist related resources.
+	WaitlistRelatedResourcesNamespace string
+
+	// PlatformInvitationActionUrl is the action url for the platform invitation email.
+	PlatformInvitationEmailVariableActionUrl string
+
+	// AssignableRolesNamespace is an extra namespace that the system allows to be used for assignable roles.
+	AssignableRolesNamespace string
+
+	// OrganizationMembershipSelfDeleteRoleName is the name of the role that will be used to grant organization membership self delete permissions.
+	OrganizationMembershipSelfDeleteRoleName string
+
+	// OrganizationMembershipSelfDeleteRoleNamespace is the namespace where the organization membership self delete role is located.
+	// This allows service providers to configure where self delete roles are stored.
+	OrganizationMembershipSelfDeleteRoleNamespace string
+
+	// NoteCreatorEditorRoleName is the name of the role that will be used to grant note creator edit permissions.
+	NoteCreatorEditorRoleName string
+
+	// UserContactNamespace is the namespace where user contacts will be created/managed.
+	// When a User is created, the UserContactController will create or update Contacts in this namespace.
+	UserContactNamespace string
 )
 
 func init() {
@@ -126,7 +175,10 @@ func init() {
 	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(identityv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(crmv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(quotav1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(apiregistrationv1.AddToScheme(Scheme))
 }
 
@@ -182,6 +234,14 @@ func NewCommand() *cobra.Command {
 			}
 			cliflag.PrintFlags(cmd.Flags())
 
+			// Default owner role namespaces to SystemNamespace if not explicitly set
+			if OrganizationOwnerRoleNamespace == "" {
+				OrganizationOwnerRoleNamespace = SystemNamespace
+			}
+			if ProjectOwnerRoleNamespace == "" {
+				ProjectOwnerRoleNamespace = SystemNamespace
+			}
+
 			c, err := s.Config(KnownControllers(), nil, ControllerAliases())
 			if err != nil {
 				return err
@@ -213,7 +273,6 @@ func NewCommand() *cobra.Command {
 	// s.CSRSigningController.AddFlags(fss.FlagSet(names.CertificateSigningRequestSigningController))
 	s.GarbageCollectorController.AddFlags(namedFlagSets.FlagSet(names.GarbageCollectorController))
 	s.NamespaceController.AddFlags(namedFlagSets.FlagSet(names.NamespaceController))
-	s.ResourceQuotaController.AddFlags(namedFlagSets.FlagSet(names.ResourceQuotaController))
 	s.ValidatingAdmissionPolicyStatusController.AddFlags(namedFlagSets.FlagSet(names.ValidatingAdmissionPolicyStatusController))
 	s.Metrics.AddFlags(namedFlagSets.FlagSet("metrics"))
 	logsapi.AddFlags(s.Logs, namedFlagSets.FlagSet("logs"))
@@ -224,12 +283,25 @@ func NewCommand() *cobra.Command {
 	// TODO: Investigate why these aren't showing up in the help output
 	fs.StringVar(&SystemNamespace, "system-namespace", "milo-system", "The namespace to use for system components and resources that are automatically created to run the system.")
 	fs.StringVar(&OrganizationOwnerRoleName, "organization-owner-role-name", "resourcemanager.miloapis.com-organizationowner", "The name of the role that will be used to grant organization owner permissions.")
+	fs.StringVar(&OrganizationOwnerRoleNamespace, "organization-owner-role-namespace", "", "The namespace where the organization owner role is located. Defaults to system-namespace if not specified.")
 	fs.StringVar(&ProjectOwnerRoleName, "project-owner-role-name", "resourcemanager.miloapis.com-projectowner", "The name of the role that will be used to grant project owner permissions.")
+	fs.StringVar(&ProjectOwnerRoleNamespace, "project-owner-role-namespace", "", "The namespace where the project owner role is located. Defaults to system-namespace if not specified.")
 	fs.StringVar(&GetInvitationRoleName, "get-invitation-role-name", "iam.miloapis.com-getinvitation", "The name of the role that will be used to grant get invitation permissions.")
 	fs.StringVar(&AcceptInvitationRoleName, "accept-invitation-role-name", "iam.miloapis.com-acceptinvitation", "The name of the role that will be used to grant accept invitation permissions.")
 	fs.StringVar(&UserInvitationEmailTemplate, "user-invitation-email-template", "emailtemplates.notification.miloapis.com-userinvitationemailtemplate", "The name of the template that will be used to send the user invitation email.")
+	fs.StringVar(&UserWaitlistPendingEmailTemplate, "user-waitlist-pending-email-template", "emailtemplates.notification.miloapis.com-userwaitlistemailtemplate", "The name of the template that will be used to send the waitlist pending email.")
+	fs.StringVar(&UserWaitlistApprovedEmailTemplate, "user-waitlist-approved-email-template", "emailtemplates.notification.miloapis.com-userapprovedemailtemplate", "The name of the template that will be used to send the waitlist approved email.")
+	fs.StringVar(&UserWaitlistRejectedEmailTemplate, "user-waitlist-rejected-email-template", "emailtemplates.notification.miloapis.com-userrejectedemailtemplate", "The name of the template that will be used to send the waitlist rejected email.")
+	fs.StringVar(&PlatformInvitationEmailTemplate, "platform-invitation-email-template", "emailtemplates.notification.miloapis.com-platforminvitationemailtemplate", "The name of the template that will be used to send the platform invitation email.")
+	fs.StringVar(&WaitlistRelatedResourcesNamespace, "waitlist-related-resources-namespace", "milo-system", "The namespace that contains the waitlist related resources.")
+	fs.StringVar(&PlatformInvitationEmailVariableActionUrl, "platform-invitation-email-variable-action-url", "https://cloud.datum.net", "The action url for the platform invitation email.")
+	fs.StringVar(&OrganizationMembershipSelfDeleteRoleName, "organization-membership-self-delete-role-name", "organizationmembership-self-delete", "The name of the role that will be used to grant organization membership self delete actions.")
+	fs.StringVar(&OrganizationMembershipSelfDeleteRoleNamespace, "organization-membership-self-delete-role-namespace", "milo-system", "The namespace where the organization membership self delete role is located. Defaults to system-namespace if not specified.")
+	fs.StringVar(&NoteCreatorEditorRoleName, "note-creator-editor-role-name", "crm-note-creator-editor", "The name of the role that will be used to grant note creator edit permissions.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
+
+	fs.StringVar(&AssignableRolesNamespace, "assignable-roles-namespace", "datum-cloud", "An extra namespace that the system allows to be used for assignable roles.")
 
 	s.InfraCluster.AddFlags(namedFlagSets.FlagSet("Infrastructure Cluster"))
 	s.ControlPlane.AddFlags(namedFlagSets.FlagSet("Control Plane"))
@@ -282,6 +354,7 @@ func NewOptions() (*Options, error) {
 		},
 		ControlPlane: &controlplane.Options{},
 	}
+
 	return opts, nil
 }
 
@@ -353,6 +426,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error building infrastructure cluster client")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+
 			infraCluster, err := cluster.New(infraClient, func(o *cluster.Options) {
 				o.Scheme = Scheme
 			})
@@ -369,6 +443,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			// Increase rate limits for controller-runtime manager to handle quota system load
+			ctrlConfig.QPS = 100
+			ctrlConfig.Burst = 200
+
 			// TODO: This is a hack to get the controller manager to start. We should
 			//       find a better way to use the controller manager framework to manage
 			//       controllers.
@@ -383,7 +461,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					HealthProbeBindAddress: "0",
 					// The existing controller manage endpoint already exposes a metrics
 					// endpoint. We can disable this one to avoid conflicts.
-					Metrics: server.Options{
+					Metrics: metricsserver.Options{
 						BindAddress: "0",
 					},
 					WebhookServer: webhook.NewServer(webhook.Options{
@@ -404,12 +482,16 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			if err := resourcemanagerv1alpha1webhook.SetupProjectWebhooksWithManager(ctrl, SystemNamespace, ProjectOwnerRoleName); err != nil {
+			if err := resourcemanagerv1alpha1webhook.SetupProjectWebhooksWithManager(ctrl, SystemNamespace, ProjectOwnerRoleName, ProjectOwnerRoleNamespace); err != nil {
 				logger.Error(err, "Error setting up project webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-			if err := resourcemanagerv1alpha1webhook.SetupOrganizationWebhooksWithManager(ctrl, SystemNamespace, OrganizationOwnerRoleName); err != nil {
+			if err := resourcemanagerv1alpha1webhook.SetupOrganizationWebhooksWithManager(ctrl, SystemNamespace, OrganizationOwnerRoleName, OrganizationOwnerRoleNamespace); err != nil {
 				logger.Error(err, "Error setting up organization webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := resourcemanagerv1alpha1webhook.SetupOrganizationMembershipWebhooksWithManager(ctrl, OrganizationOwnerRoleName, OrganizationOwnerRoleNamespace); err != nil {
+				logger.Error(err, "Error setting up organizationmembership webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 			if err := iamv1alpha1webhook.SetupUserWebhooksWithManager(ctrl, SystemNamespace, "iam-user-self-manage"); err != nil {
@@ -420,6 +502,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up userdeactivation webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := identityv1alpha1webhook.SetupUserIdentityWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up useridentity webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 			if err := notificationv1alpha1webhook.SetupEmailTemplateWebhooksWithManager(ctrl, SystemNamespace); err != nil {
 				logger.Error(err, "Error setting up emailtemplate webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
@@ -428,7 +514,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "unable to setup email webhook", "error", err)
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-			if err := iamv1alpha1webhook.SetupUserInvitationWebhooksWithManager(ctrl, SystemNamespace); err != nil {
+			if err := iamv1alpha1webhook.SetupUserInvitationWebhooksWithManager(ctrl, SystemNamespace, AssignableRolesNamespace); err != nil {
 				logger.Error(err, "Error setting up user invitation webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
@@ -446,6 +532,22 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := notificationv1alpha1webhook.SetupContactGroupMembershipRemovalWebhooksWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up contactgroupmembershipremoval webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := iamv1alpha1webhook.SetupPlatformInvitationWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform invitation webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := iamv1alpha1webhook.SetupPlatformAccessApprovalWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform access approval webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := iamv1alpha1webhook.SetupPlatformAccessRejectionWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform access rejection webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := crmv1alpha1webhook.SetupNoteWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up note webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
@@ -467,7 +569,9 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 
 			organizationMembershipCtrl := resourcemanagercontroller.OrganizationMembershipController{
-				Client: ctrl.GetClient(),
+				Client:                  ctrl.GetClient(),
+				SelfDeleteRoleName:      OrganizationMembershipSelfDeleteRoleName,
+				SelfDeleteRoleNamespace: OrganizationMembershipSelfDeleteRoleNamespace,
 			}
 			if err := organizationMembershipCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up organization membership controller")
@@ -482,11 +586,139 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			platformInvitationCtrl := iamcontroller.PlatformInvitationController{
+				Client:                              ctrl.GetClient(),
+				PlatformInvitationEmailTemplateName: PlatformInvitationEmailTemplate,
+				WaitlistRelatedResourcesNamespace:   WaitlistRelatedResourcesNamespace,
+				EmailVariables: iamcontroller.PlatformInvitationEmailVariables{
+					ActionUrl: PlatformInvitationEmailVariableActionUrl,
+				},
+			}
+			if err := platformInvitationCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up platform invitation controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Quota enforcement requires cross-cluster coordination
+			logger.Info("Creating multicluster manager for quota system")
+
+			// Quota operations require higher rate limits to handle cross-cluster coordination
+			quotaDynamicConfig := *ctrlConfig
+			quotaDynamicConfig.QPS = 500
+			quotaDynamicConfig.Burst = 1000
+
+			dynamicClient, err := dynamic.NewForConfig(&quotaDynamicConfig)
+			if err != nil {
+				logger.Error(err, "Error creating dynamic client for quota controllers")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Provider enables dynamic discovery of project control planes for cross-cluster quota enforcement
+			provider, err := miloprovider.New(ctrl, miloprovider.Options{
+				ClusterOptions: []cluster.Option{
+					func(o *cluster.Options) {
+						o.Scheme = Scheme
+					},
+				},
+				InternalServiceDiscovery: false, // Use Project resources for user-facing API
+				ProjectRestConfig:        ctrlConfig,
+			})
+			if err != nil {
+				logger.Error(err, "Error creating Milo provider for multicluster quota")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			mcMgr, err := mcmanager.New(ctrlConfig, provider, mcmanager.Options{
+				Scheme: Scheme,
+				Logger: logger.WithName("multicluster"),
+				Metrics: metricsserver.Options{
+					BindAddress: "0", // Avoid port conflict with main manager
+				},
+			})
+			if err != nil {
+				logger.Error(err, "Error creating multicluster manager")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			if err := quotacontroller.SetupQuotaControllers(mcMgr, dynamicClient, logger.WithName("quota")); err != nil {
+				logger.Error(err, "Error setting up quota controllers")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// Engage local cluster before starting to prevent race conditions with informer initialization.
+			// Local cluster ("") hosts ResourceRegistrations and core quota resources.
+			logger.Info("Engaging local cluster for quota controllers")
+			localCluster := mcMgr.GetLocalManager()
+			if err := mcMgr.Engage(ctx, "", localCluster); err != nil {
+				logger.Error(err, "Error engaging local cluster")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			logger.Info("Local cluster engaged successfully")
+
+			// Start concurrently to resolve circular dependency between provider and manager
+			go func() {
+				logger.Info("Starting Datum cluster provider")
+				if err := provider.Run(ctx, mcMgr); err != nil {
+					logger.Error(err, "Datum cluster provider failed")
+					panic(err)
+				}
+			}()
+
+			go func() {
+				logger.Info("Starting multicluster manager for quota system")
+				if err := mcMgr.Start(ctx); err != nil {
+					logger.Error(err, "Multicluster manager failed")
+					panic(err)
+				}
+			}()
+
 			userCtrl := iamcontroller.UserController{
 				Client: ctrl.GetClient(),
 			}
 			if err := userCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// TODO: remove entire controller init once ArgoCD sensor is deployed.
+			userSlackWebhookURL := os.Getenv("MILO_USER_SLACK_WEBHOOK_URL")
+			if userSlackWebhookURL == "" {
+				logger.Info("MILO_USER_SLACK_WEBHOOK_URL not set; user Slack notification controller will be disabled")
+			} else {
+				userSlackCtrl := iamcontroller.UserSlackNotificationController{
+					Client:          ctrl.GetClient(),
+					SlackWebhookURL: userSlackWebhookURL,
+				}
+				if err := userSlackCtrl.SetupWithManager(ctrl); err != nil {
+					logger.Error(err, "Error setting up user Slack notification controller")
+					klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+				}
+			}
+
+			userWaitlistCtrl := iamcontroller.UserWaitlistController{
+				Client:                    ctrl.GetClient(),
+				SystemNamespace:           SystemNamespace,
+				PendingEmailTemplateName:  UserWaitlistPendingEmailTemplate,
+				ApprovedEmailTemplateName: UserWaitlistApprovedEmailTemplate,
+				RejectedEmailTemplateName: UserWaitlistRejectedEmailTemplate,
+			}
+			if err := userWaitlistCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user waitlist controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			// UserContactController manages the relationship between Users and Contacts.
+			// It ensures that when a User is created, a corresponding Contact exists with a reference to the User.
+			userContactNamespace := UserContactNamespace
+			if userContactNamespace == "" {
+				userContactNamespace = SystemNamespace
+			}
+			userContactCtrl := iamcontroller.UserContactController{
+				Client:           ctrl.GetClient(),
+				ContactNamespace: userContactNamespace,
+			}
+			if err := userContactCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user contact controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
@@ -499,6 +731,16 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userInvitationCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user invitation controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			noteCtrl := crmcontroller.NoteController{
+				Client:                     ctrl.GetClient(),
+				CreatorEditorRoleName:      NoteCreatorEditorRoleName,
+				CreatorEditorRoleNamespace: SystemNamespace,
+			}
+			if err := noteCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up note controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
@@ -798,7 +1040,6 @@ func NewControllerDescriptors() map[string]*ControllerDescriptor {
 
 	register(newNamespaceControllerDescriptor())
 	register(newGarbageCollectorControllerDescriptor())
-	register(newResourceQuotaControllerDescriptor())
 	// register(newCertificateSigningRequestSigningControllerDescriptor())
 	// register(newCertificateSigningRequestApprovingControllerDescriptor())
 	// register(newCertificateSigningRequestCleanerControllerDescriptor())

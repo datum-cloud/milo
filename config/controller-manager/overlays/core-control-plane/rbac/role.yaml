@@ -17,6 +17,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - apiregistration.k8s.io
   resources:
   - apiservices
@@ -31,6 +39,43 @@ rules:
   verbs:
   - patch
   - update
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+- apiGroups:
+  - crm.miloapis.com
+  resources:
+  - notes
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crm.miloapis.com
+  resources:
+  - notes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - dns.networking.miloapis.com
+  resources:
+  - dnszoneclasses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
@@ -67,8 +112,8 @@ rules:
   - iam.miloapis.com
   resources:
   - groups/finalizers
+  - platforminvitations/status
   - userinvitations/status
-  - users/status
   verbs:
   - update
 - apiGroups:
@@ -82,6 +127,34 @@ rules:
 - apiGroups:
   - iam.miloapis.com
   resources:
+  - platformaccessapprovals
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - platformaccessrejections
+  verbs:
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - platforminvitations
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - roles
   - userdeactivations
   verbs:
   - get
@@ -91,8 +164,8 @@ rules:
   - iam.miloapis.com
   resources:
   - userinvitations
-  - users
   verbs:
+  - delete
   - get
   - list
   - update
@@ -101,12 +174,20 @@ rules:
   - iam.miloapis.com
   resources:
   - userpreferences
+  - users
   verbs:
   - get
   - list
   - patch
   - update
   - watch
+- apiGroups:
+  - iam.miloapis.com
+  resources:
+  - users/status
+  verbs:
+  - patch
+  - update
 - apiGroups:
   - infrastructure.miloapis.com
   resources:
@@ -119,6 +200,24 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - notification.miloapis.com
+  resources:
+  - contacts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - notification.miloapis.com
+  resources:
+  - contacts/status
+  verbs:
+  - update
 - apiGroups:
   - notification.miloapis.com
   resources:
@@ -135,6 +234,46 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - quota.miloapis.com
+  resources:
+  - allowancebuckets
+  - claimcreationpolicies
+  - grantcreationpolicies
+  - resourceclaims
+  - resourcegrants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - quota.miloapis.com
+  resources:
+  - allowancebuckets/status
+  - claimcreationpolicies/status
+  - grantcreationpolicies/status
+  - resourceclaims/status
+  - resourcegrants/status
+  - resourceregistrations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - quota.miloapis.com
+  resources:
+  - resourceregistrations
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - resourcemanager.miloapis.com

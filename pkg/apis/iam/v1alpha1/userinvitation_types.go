@@ -38,6 +38,7 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:path=userinvitations,scope=Namespaced
+// +kubebuilder:selectablefield:JSONPath=".status.inviteeUser.name"
 type UserInvitation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -69,7 +70,9 @@ type UserInvitationSpec struct {
 	FamilyName string `json:"familyName,omitempty"`
 
 	// The roles that will be assigned to the user when they accept the invitation.
-	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=100
 	// +kubebuilder:validation:XValidation:rule="type(oldSelf) == null_type || self == oldSelf",message="roles type is immutable"
 	Roles []RoleReference `json:"roles,omitempty"`
 
@@ -98,6 +101,45 @@ type UserInvitationStatus struct {
 	// +kubebuilder:default={{type: "Unknown", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Organization contains information about the organization in the invitation.
+	// +kubebuilder:validation:Optional
+	Organization UserInvitationOrganizationStatus `json:"organization,omitempty"`
+
+	// InviterUser contains information about the user who invited the user in the invitation.
+	// +kubebuilder:validation:Optional
+	InviterUser UserInvitationUserStatus `json:"inviterUser,omitempty"`
+
+	// InviteeUser contains information about the invitee user in the invitation.
+	// This value may be nil if the invitee user has not been created yet.
+	// +kubebuilder:validation:Optional
+	InviteeUser *UserInvitationInviteeUserStatus `json:"inviteeUser,omitempty"`
+}
+
+// UserInvitationOrganizationStatus contains information about the organization in the invitation.
+type UserInvitationOrganizationStatus struct {
+	// DisplayName is the display name of the organization in the invitation.
+	// +kubebuilder:validation:Optional
+	DisplayName string `json:"displayName,omitempty"`
+}
+
+// UserInvitationInviterUserStatus contains information about the user who invited the user in the invitation.
+type UserInvitationUserStatus struct {
+	// DisplayName is the display name of the user who invited the user in the invitation.
+	// +kubebuilder:validation:Optional
+	DisplayName string `json:"displayName,omitempty"`
+
+	// EmailAddress is the email address of the user who invited the user in the invitation.
+	// +kubebuilder:validation:Optional
+	EmailAddress string `json:"emailAddress,omitempty"`
+}
+
+// UserInvitationInviteeUserStatus contains information about the invitee user in the invitation.
+type UserInvitationInviteeUserStatus struct {
+	// Name is the name of the invitee user in the invitation.
+	// Name is a cluster-scoped resource, so Namespace is not needed.
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

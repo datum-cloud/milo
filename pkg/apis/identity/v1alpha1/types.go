@@ -13,11 +13,12 @@ type Session struct {
 }
 
 type SessionStatus struct {
-	UserUID   string       `json:"userUID"`
-	Provider  string       `json:"provider"`
-	IP        string       `json:"ip,omitempty"`
-	CreatedAt metav1.Time  `json:"createdAt"`
-	ExpiresAt *metav1.Time `json:"expiresAt,omitempty"`
+	UserUID       string       `json:"userUID"`
+	Provider      string       `json:"provider"`
+	IP            string       `json:"ip,omitempty"`
+	FingerprintID string       `json:"fingerprintID,omitempty"`
+	CreatedAt     metav1.Time  `json:"createdAt"`
+	ExpiresAt     *metav1.Time `json:"expiresAt,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

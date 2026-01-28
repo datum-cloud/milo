@@ -1,0 +1,217 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: quota-core-functionality
+spec:
+  description: |
+    Tests the core functionality of the quota system including resource registration,
+    claim creation policies, automatic claim generation, quota enforcement, and cleanup.
+
+    This test verifies:
+    - ResourceRegistrations become active and track claiming resources
+    - ClaimCreationPolicies configure automatic claim generation
+    - Projects automatically create ResourceClaims when created
+    - Quota limits are enforced (projects beyond quota are denied)
+    - Denied claims are automatically cleaned up
+    - Successful claims are cleaned up when resources are deleted
+
+  # Define clusters for organizational context testing
+  clusters:
+    main:
+      kubeconfig: kubeconfig-main
+    org:
+      kubeconfig: kubeconfig-org-template
+
+  steps:
+    # Setup base quota infrastructure - MUST be first
+    - name: setup-base-infrastructure
+      description: |
+        Register the 'projects-per-org' resource type in the quota system and verify it becomes active.
+        This ResourceRegistration defines what resource is being tracked and how claims are evaluated.
+      try:
+        - description: Create ResourceRegistration for projects
+          create:
+            file: 01-resource-registration.yaml
+        - description: Wait for ResourceRegistration to become active
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: core-test-projects-per-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+        - description: Verify ResourceRegistration status and configuration
+          assert:
+            file: assertions/assert-resource-registration.yaml
+
+    # Setup claim creation policy - depends on ResourceRegistration being active
+    - name: setup-claim-creation-policy
+      description: |
+        Create a ClaimCreationPolicy that automatically generates ResourceClaims when Projects are created.
+        The policy specifies which resource to claim and the parent context for quota enforcement.
+      try:
+        - description: Create ClaimCreationPolicy for automatic project claim generation
+          create:
+            file: project-creation-policy.yaml
+        - description: Wait for ClaimCreationPolicy to be ready
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ClaimCreationPolicy
+            name: core-test-project-quota-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+
+    # Create basic organization for testing
+    - name: setup-basic-organization
+      description: |
+        Create an Organization with a test User and OrganizationMembership.
+        The Organization will serve as the parent context for quota enforcement.
+      try:
+        - description: Create test Organization
+          create:
+            file: 02-basic-quota-organization.yaml
+        - description: Wait for Organization namespace to be active
+          wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-core-test-basic-quota-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - description: Verify Organization was created successfully
+          assert:
+            file: assertions/assert-organization.yaml
+
+    # Create resource grant for the organization
+    - name: create-basic-resource-grant
+      description: |
+        Create a ResourceGrant that allocates 2 projects to the Organization.
+        This grant establishes the quota limit that will be enforced.
+      try:
+        - description: Create ResourceGrant with quota allowance
+          create:
+            file: basic-quota-grant.yaml
+        - description: Wait for ResourceGrant to become active
+          wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: core-test-basic-quota-org-grant
+            namespace: organization-core-test-basic-quota-org
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    # Test project creation within quota limits
+    - name: test-projects-within-quota
+      description: |
+        Create 2 projects within the quota limit (grant allows 2 projects).
+        Verify that both projects are created successfully and ResourceClaims are auto-generated.
+      cluster: org
+      try:
+        - description: Create 2 projects within quota limit
+          create:
+            file: test-data/projects-within-quota.yaml
+        - description: Wait for first project to be ready
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Project
+            name: core-test-basic-project-1
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        - description: Wait for second project to be ready
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Project
+            name: core-test-basic-project-2
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+        - description: Verify both projects were created successfully
+          assert:
+            file: assertions/assert-projects-created.yaml
+
+    # Verify resource claims were created automatically
+    - name: verify-resource-claims
+      description: |
+        Verify that ResourceClaims were automatically created for both projects.
+        Claims should be in Granted state and linked to the ResourceGrant.
+      try:
+        - description: Verify ResourceClaims exist and are granted
+          assert:
+            file: assertions/assert-resource-claims.yaml
+
+    # Test basic quota enforcement - this should create a denied auto-created ResourceClaim
+    - name: test-quota-enforcement
+      description: |
+        Attempt to create a 3rd project that exceeds the quota limit.
+        The admission webhook should deny the project creation.
+      cluster: org
+      try:
+        - description: Attempt to create project beyond quota (should fail)
+          create:
+            file: test-data/project-exceeds-quota.yaml
+            expect:
+              - check:
+                  ($error != null): true
+
+    # Wait for denied auto-created ResourceClaim to be created and then automatically deleted
+    - name: verify-denied-claim-cleanup
+      description: |
+        Verify that no ResourceClaim exists for the denied project.
+        The system should not create claims for resources that fail admission.
+      try:
+        - description: Verify no ResourceClaim exists for denied project
+          error:
+            resource:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: ResourceClaim
+              namespace: organization-core-test-basic-quota-org
+              selector: quota.miloapis.com/resource-name=core-test-exceeds-project-1
+
+    # Delete the successful projects to test automatic ResourceClaim cleanup
+    - name: delete-successful-projects
+      description: |
+        Delete the 2 successful projects to verify ResourceClaim cleanup.
+        Claims should be automatically deleted when their owning resources are removed.
+      cluster: org
+      try:
+        - description: Delete first project
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: Project
+              name: core-test-basic-project-1
+        - description: Delete second project
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: Project
+              name: core-test-basic-project-2
+
+    # Verify all ResourceClaims are automatically cleaned up
+    - name: verify-complete-cleanup
+      description: |
+        Verify that all ResourceClaims for the test scenario have been cleaned up.
+        This confirms garbage collection works correctly via owner references.
+      try:
+        - description: Verify no ResourceClaims remain for this test
+          error:
+            resource:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: ResourceClaim
+              namespace: organization-core-test-basic-quota-org
+              selector: quota.miloapis.com/test-scenario=core-functionality
