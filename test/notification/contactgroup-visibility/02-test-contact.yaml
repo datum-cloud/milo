@@ -1,0 +1,13 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Contact
+metadata:
+  name: test-visibility-contact
+  namespace: default
+spec:
+  subject:
+    apiGroup: iam.miloapis.com
+    kind: User
+    name: admin
+  familyName: Visibility
+  givenName: Test
+  email: visibility-test@test.local

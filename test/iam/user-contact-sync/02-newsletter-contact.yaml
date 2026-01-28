@@ -1,0 +1,9 @@
+apiVersion: notification.miloapis.com/v1alpha1
+kind: Contact
+metadata:
+  name: newsletter-subscriber
+  namespace: milo-system
+spec:
+  email: newsletter@example.com
+  givenName: Newsletter
+  familyName: Subscriber

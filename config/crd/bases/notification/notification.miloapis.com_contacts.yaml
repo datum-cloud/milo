@@ -196,6 +196,8 @@ spec:
         type: object
     selectableFields:
     - jsonPath: .spec.email
+    - jsonPath: .spec.subject.name
+    - jsonPath: .spec.subject.kind
     served: true
     storage: true
     subresources:

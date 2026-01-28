@@ -639,6 +639,13 @@ This information is populated by the controller from the referenced user.
         </tr>
     </thead>
     <tbody><tr>
+        <td><b>avatarUrl</b></td>
+        <td>string</td>
+        <td>
+          AvatarURL is the avatar URL of the user in the membership.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b>email</b></td>
         <td>string</td>
         <td>

@@ -11,6 +11,27 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
+      path: /mutate-crm-miloapis-com-v1alpha1-note
+      port: 9443
+  failurePolicy: Fail
+  name: mnote.crm.miloapis.com
+  rules:
+  - apiGroups:
+    - crm.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    resources:
+    - notes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
       path: /mutate-iam-miloapis-com-v1alpha1-platformaccessapproval
       port: 9443
   failurePolicy: Fail
@@ -164,6 +185,28 @@ webhooks:
     service:
       name: milo-controller-manager
       namespace: milo-system
+      path: /validate-crm-miloapis-com-v1alpha1-note
+      port: 9443
+  failurePolicy: Fail
+  name: vnote.crm.miloapis.com
+  rules:
+  - apiGroups:
+    - crm.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - notes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
       path: /validate-iam-miloapis-com-v1alpha1-platformaccessapproval
       port: 9443
   failurePolicy: Fail
@@ -238,6 +281,7 @@ webhooks:
     - v1alpha1
     operations:
     - CREATE
+    - UPDATE
     resources:
     - users
   sideEffects: NoneOnDryRun
@@ -282,6 +326,27 @@ webhooks:
     - CREATE
     resources:
     - userinvitations
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: milo-controller-manager
+      namespace: milo-system
+      path: /validate-identity-miloapis-com-v1alpha1-useridentity
+      port: 9443
+  failurePolicy: Fail
+  name: vuseridentity.identity.miloapis.com
+  rules:
+  - apiGroups:
+    - identity.miloapis.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - DELETE
+    resources:
+    - useridentities
   sideEffects: None
 - admissionReviewVersions:
   - v1

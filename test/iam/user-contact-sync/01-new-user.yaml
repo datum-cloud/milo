@@ -1,0 +1,8 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: User
+metadata:
+  name: test-contact-user
+spec:
+  email: new-user@example.com
+  givenName: New
+  familyName: User

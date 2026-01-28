@@ -49,6 +49,7 @@ func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 	// Enable JSON logging support by default
 	utilfeature.DefaultMutableFeatureGate.Set("LoggingBetaOptions=true")
+	utilfeature.DefaultMutableFeatureGate.Set("RemoteRequestHeaderUID=true")
 }
 
 var (
@@ -65,6 +66,12 @@ var (
 	providerTimeoutSeconds     int
 	providerRetries            int
 	forwardExtras              []string
+	// UserIdentities feature/config flags
+	featureUserIdentities            bool
+	userIdentitiesProviderURL        string
+	userIdentitiesProviderCAFile     string
+	userIdentitiesProviderClientCert string
+	userIdentitiesProviderClientKey  string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters
@@ -140,7 +147,23 @@ func NewCommand() *cobra.Command {
 	s.Metrics.AddFlags(namedFlagSets.FlagSet("metrics"))
 	logsapi.AddFlags(s.Logs, namedFlagSets.FlagSet("logs"))
 	s.Traces.AddFlags(namedFlagSets.FlagSet("traces"))
-	// Add misc flags for event ttl
+
+	// Add misc flags for event ttl, proxy client certs, etc.
+	miscfs := namedFlagSets.FlagSet("misc")
+	miscfs.DurationVar(&s.EventTTL, "event-ttl", s.EventTTL,
+		"Amount of time to retain events.")
+	miscfs.StringVar(&s.ProxyClientCertFile, "proxy-client-cert-file", s.ProxyClientCertFile,
+		"Client certificate used to prove the identity of the aggregator or kube-apiserver "+
+			"when it must call out during a request. This includes proxying requests to a user "+
+			"api-server and calling out to webhook admission plugins. It is expected that this "+
+			"cert includes a signature from the CA in the --requestheader-client-ca-file flag. "+
+			"That CA is published in the 'extension-apiserver-authentication' configmap in "+
+			"the kube-system namespace. Components receiving calls from kube-aggregator should "+
+			"use that CA to perform their half of the mutual TLS verification.")
+	miscfs.StringVar(&s.ProxyClientKeyFile, "proxy-client-key-file", s.ProxyClientKeyFile,
+		"Private key for the client certificate used to prove the identity of the aggregator or kube-apiserver "+
+			"when it must call out during a request. This includes proxying requests to a user "+
+			"api-server and calling out to webhook admission plugins.")
 
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
@@ -165,6 +188,11 @@ func NewCommand() *cobra.Command {
 	fs.IntVar(&providerTimeoutSeconds, "provider-timeout", 3, "Provider request timeout in seconds")
 	fs.IntVar(&providerRetries, "provider-retries", 2, "Provider request retries")
 	fs.StringSliceVar(&forwardExtras, "forward-extras", []string{"iam.miloapis.com/parent-api-group", "iam.miloapis.com/parent-type", "iam.miloapis.com/parent-name"}, "User extras keys to forward during impersonation")
+	fs.BoolVar(&featureUserIdentities, "feature-useridentities", false, "Enable identity useridentities virtual API")
+	fs.StringVar(&userIdentitiesProviderURL, "useridentities-provider-url", "", "Direct provider base URL for useridentities (e.g., https://zitadel-apiserver:8443)")
+	fs.StringVar(&userIdentitiesProviderCAFile, "useridentities-provider-ca-file", "", "Path to CA file to validate useridentities provider TLS")
+	fs.StringVar(&userIdentitiesProviderClientCert, "useridentities-provider-client-cert", "", "Client certificate for mTLS to useridentities provider")
+	fs.StringVar(&userIdentitiesProviderClientKey, "useridentities-provider-client-key", "", "Client private key for mTLS to useridentities provider")
 
 	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cliflag.SetUsageAndHelpFunc(cmd, namedFlagSets, cols)
@@ -227,6 +255,15 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 	config.ExtraConfig.SessionsProvider.TimeoutSeconds = providerTimeoutSeconds
 	config.ExtraConfig.SessionsProvider.Retries = providerRetries
 	config.ExtraConfig.SessionsProvider.ForwardExtras = forwardExtras
+
+	config.ExtraConfig.FeatureUserIdentities = featureUserIdentities
+	config.ExtraConfig.UserIdentitiesProvider.URL = userIdentitiesProviderURL
+	config.ExtraConfig.UserIdentitiesProvider.CAFile = userIdentitiesProviderCAFile
+	config.ExtraConfig.UserIdentitiesProvider.ClientCertFile = userIdentitiesProviderClientCert
+	config.ExtraConfig.UserIdentitiesProvider.ClientKeyFile = userIdentitiesProviderClientKey
+	config.ExtraConfig.UserIdentitiesProvider.TimeoutSeconds = providerTimeoutSeconds
+	config.ExtraConfig.UserIdentitiesProvider.Retries = providerRetries
+	config.ExtraConfig.UserIdentitiesProvider.ForwardExtras = forwardExtras
 
 	completed, err := config.Complete()
 	if err != nil {

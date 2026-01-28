@@ -11,5 +11,4 @@ spec:
     - name: organizationmembership-reader
   includedPermissions:
     - resourcemanager.miloapis.com/organizations.get
-    - resourcemanager.miloapis.com/organizations.list
     - resourcemanager.miloapis.com/organizations.watch

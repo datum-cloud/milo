@@ -44,6 +44,7 @@ import (
 
 	"go.miloapis.com/milo/internal/apiserver/admission/initializer"
 	sessionsbackend "go.miloapis.com/milo/internal/apiserver/identity/sessions"
+	useridentitiesbackend "go.miloapis.com/milo/internal/apiserver/identity/useridentities"
 	identitystorage "go.miloapis.com/milo/internal/apiserver/storage/identity"
 	admissionquota "go.miloapis.com/milo/internal/quota/admission"
 	identityapi "go.miloapis.com/milo/pkg/apis/identity"
@@ -64,12 +65,26 @@ type Config struct {
 }
 
 type ExtraConfig struct {
-	FeatureSessions  bool
-	SessionsProvider SessionsProviderConfig
+	FeatureSessions        bool
+	SessionsProvider       SessionsProviderConfig
+	FeatureUserIdentities  bool
+	UserIdentitiesProvider UserIdentitiesProviderConfig
 }
 
 // SessionsProviderConfig groups configuration for the sessions backend provider.
 type SessionsProviderConfig struct {
+	// Direct provider connection (standalone upstream serving Milo public GVK)
+	URL            string
+	CAFile         string
+	ClientCertFile string
+	ClientKeyFile  string
+	TimeoutSeconds int
+	Retries        int
+	ForwardExtras  []string
+}
+
+// UserIdentitiesProviderConfig groups configuration for the useridentities backend provider.
+type UserIdentitiesProviderConfig struct {
 	// Direct provider connection (standalone upstream serving Milo public GVK)
 	URL            string
 	CAFile         string
@@ -110,31 +125,58 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 		discoveryrest.StorageProvider{},
 	}
 
-	if c.ExtraConfig.FeatureSessions {
-		// Build identity sessions storage provider
-		providers = append(providers, newIdentitySessionsProvider(c))
+	// Build identity storage provider with both Sessions and UserIdentities
+	if c.ExtraConfig.FeatureSessions || c.ExtraConfig.FeatureUserIdentities {
+		providers = append(providers, newIdentityStorageProvider(c))
 	}
 
 	return providers, nil
 }
 
-func newIdentitySessionsProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
-	allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ForwardExtras))
-	for _, k := range c.ExtraConfig.SessionsProvider.ForwardExtras {
-		allow[k] = struct{}{}
+func newIdentityStorageProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
+	provider := identitystorage.StorageProvider{}
+
+	// Initialize Sessions backend if enabled
+	if c.ExtraConfig.FeatureSessions {
+		allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ForwardExtras))
+		for _, k := range c.ExtraConfig.SessionsProvider.ForwardExtras {
+			allow[k] = struct{}{}
+		}
+		cfg := sessionsbackend.Config{
+			BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
+			ProviderURL:    c.ExtraConfig.SessionsProvider.URL,
+			CAFile:         c.ExtraConfig.SessionsProvider.CAFile,
+			ClientCertFile: c.ExtraConfig.SessionsProvider.ClientCertFile,
+			ClientKeyFile:  c.ExtraConfig.SessionsProvider.ClientKeyFile,
+			Timeout:        time.Duration(c.ExtraConfig.SessionsProvider.TimeoutSeconds) * time.Second,
+			Retries:        c.ExtraConfig.SessionsProvider.Retries,
+			ExtrasAllow:    allow,
+		}
+		backend, _ := sessionsbackend.NewDynamicProvider(cfg)
+		provider.Sessions = backend
 	}
-	cfg := sessionsbackend.Config{
-		BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
-		ProviderURL:    c.ExtraConfig.SessionsProvider.URL,
-		CAFile:         c.ExtraConfig.SessionsProvider.CAFile,
-		ClientCertFile: c.ExtraConfig.SessionsProvider.ClientCertFile,
-		ClientKeyFile:  c.ExtraConfig.SessionsProvider.ClientKeyFile,
-		Timeout:        time.Duration(c.ExtraConfig.SessionsProvider.TimeoutSeconds) * time.Second,
-		Retries:        c.ExtraConfig.SessionsProvider.Retries,
-		ExtrasAllow:    allow,
+
+	// Initialize UserIdentities backend if enabled
+	if c.ExtraConfig.FeatureUserIdentities {
+		allow := make(map[string]struct{}, len(c.ExtraConfig.UserIdentitiesProvider.ForwardExtras))
+		for _, k := range c.ExtraConfig.UserIdentitiesProvider.ForwardExtras {
+			allow[k] = struct{}{}
+		}
+		cfg := useridentitiesbackend.Config{
+			BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
+			ProviderURL:    c.ExtraConfig.UserIdentitiesProvider.URL,
+			CAFile:         c.ExtraConfig.UserIdentitiesProvider.CAFile,
+			ClientCertFile: c.ExtraConfig.UserIdentitiesProvider.ClientCertFile,
+			ClientKeyFile:  c.ExtraConfig.UserIdentitiesProvider.ClientKeyFile,
+			Timeout:        time.Duration(c.ExtraConfig.UserIdentitiesProvider.TimeoutSeconds) * time.Second,
+			Retries:        c.ExtraConfig.UserIdentitiesProvider.Retries,
+			ExtrasAllow:    allow,
+		}
+		backend, _ := useridentitiesbackend.NewDynamicProvider(cfg)
+		provider.UserIdentities = backend
 	}
-	backend, _ := sessionsbackend.NewDynamicProvider(cfg)
-	return identitystorage.StorageProvider{Sessions: backend}
+
+	return provider
 }
 
 func (c *Config) Complete() (CompletedConfig, error) {
@@ -184,10 +226,13 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 
+	// Capture the loopback config for use in filters that need it
+	loopbackClientConfig := genericConfig.LoopbackClientConfig
+
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
 		return datumfilters.ProjectRouterWithRequestInfo(
-			DefaultBuildHandlerChain(h, c), // build stock chain first
-			c.RequestInfoResolver,          // then wrap with router
+			DefaultBuildHandlerChain(h, c, loopbackClientConfig), // build stock chain first
+			c.RequestInfoResolver,                                // then wrap with router
 		)
 	}
 
@@ -220,7 +265,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 	apiExtensions.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
 		return datumfilters.ProjectRouterWithRequestInfo(
-			DefaultBuildHandlerChain(h, c),
+			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
 		)
 	}
@@ -245,7 +290,7 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 	aggregator.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
 		return datumfilters.ProjectRouterWithRequestInfo(
-			DefaultBuildHandlerChain(h, c),
+			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
 		)
 	}
@@ -263,13 +308,14 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 //   - datumfilters.OrganizationContextAuthorizationDecorator
 //   - datumfilters.ProjectListOrganizationConstraintDecorator
 //   - datumfilters.OrganizationContextHandler
+//   - datumfilters.ContactGroupVisibilityDecorator
 //
 // This is done to improve the UX that customers will experience while
 // interacting with the Milo API server.
 //
 // Some handlers have not been added as a result of not having access to
 // lifecycleSignals in server.Config. TODO(jreese) need to look into this more
-func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Handler {
+func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config, loopbackConfig *rest.Config) http.Handler {
 	handler := apiHandler
 
 	handler = filterlatency.TrackCompleted(handler)
@@ -290,6 +336,10 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	handler = filterlatency.TrackCompleted(handler)
 	handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator, c.LongRunningFunc)
 	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "audit")
+
+	// Add platform scope annotations to audit events before the audit filter processes them.
+	// This must run AFTER the context decorators below have set user.extra with parent context.
+	handler = datumfilters.AuditScopeAnnotationDecorator(handler)
 
 	// These decorators are added after the audit filter to ensure they're run
 	// prior to the audit filter being run so they will include the user and
@@ -349,6 +399,10 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config) http.Ha
 	handler = datumfilters.OrganizationProjectListConstraintDecorator(handler)
 	handler = datumfilters.UserOrganizationMembershipListConstraintDecorator(handler)
 	handler = datumfilters.UserUserInvitationListConstraintDecorator(handler)
+	handler = datumfilters.UserContactListConstraintDecorator(handler)
+	handler = datumfilters.UserContactGroupMembershipListConstraintDecorator(handler)
+	handler = datumfilters.UserContactGroupMembershipRemovalListConstraintDecorator(handler)
+	handler = datumfilters.ContactGroupVisibilityDecorator(loopbackConfig)(handler)
 	handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
 	handler = genericapifilters.WithRequestReceivedTimestamp(handler)
 	// handler = genericapifilters.WithMuxAndDiscoveryComplete(handler, c.lifecycleSignals.MuxAndDiscoveryComplete.Signaled())
