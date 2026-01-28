@@ -72,9 +72,6 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 			return nil, errors.NewInternalError(fmt.Errorf("failed to get ContactGroup: %w", err))
 		}
 	}
-	if contactGroup.Spec.Visibility == notificationv1alpha1.ContactGroupVisibilityPrivate {
-		errs = append(errs, field.Invalid(field.NewPath("spec", "contactGroupRef", "visibility"), contactGroup.Spec.Visibility, "ContactGroup must be public for creating a ContactGroupMembershipRemoval"))
-	}
 
 	// Prevent duplicate removals
 	var existing notificationv1alpha1.ContactGroupMembershipRemovalList
