@@ -22,11 +22,18 @@ Resource Types:
 
 - [EmailTemplate](#emailtemplate)
 
+- [Note](#note)
+
 
 
 
 ## ContactGroupMembershipRemoval
 <sup><sup>[↩ Parent](#notificationmiloapiscomv1alpha1 )</sup></sup>
+
+
+
+
+
 
 ContactGroupMembershipRemoval is the Schema for the contactgroupmembershipremovals API.
 It represents a removal of a Contact from a ContactGroup, it also prevents the Contact from being added to the ContactGroup.
@@ -63,7 +70,7 @@ It represents a removal of a Contact from a ContactGroup, it also prevents the C
         <td>
           <br/>
           <br/>
-            <i>Validations</i>:<li>self == oldSelf: spec is immutable</li><li>If the referenced Contact's subjectRef.apiGroup is <code>resourcemanager.miloapis.com</code>, the ContactGroupMembershipRemoval namespace must match the Contact's namespace.</li><li>The APIGroup in subjectRef must be <code>resourcemanager.miloapis.com</code>; other API groups are not supported and will be rejected.</li>
+            <i>Validations</i>:<li>self == oldSelf: spec is immutable</li>
         </td>
         <td>false</td>
       </tr><tr>
@@ -79,6 +86,9 @@ It represents a removal of a Contact from a ContactGroup, it also prevents the C
 
 ### ContactGroupMembershipRemoval.spec
 <sup><sup>[↩ Parent](#contactgroupmembershipremoval)</sup></sup>
+
+
+
 
 <table>
     <thead>
@@ -101,7 +111,7 @@ It represents a removal of a Contact from a ContactGroup, it also prevents the C
         <td>object</td>
         <td>
           ContactRef is a reference to the Contact that prevents the Contact from being part of the ContactGroup.<br/>
-          <b>Constraint:</b> If the referenced Contact's <code>subjectRef.apiGroup</code> is <code>resourcemanager.miloapis.com</code>, the ContactGroupMembershipRemoval resource namespace <b>must</b> match the Contact's namespace. Only <code>resourcemanager.miloapis.com</code> API group is currently supported; other API groups will be rejected.
+          <b>Note:</b> If the referenced Contact's <code>subjectRef.apiGroup</code> is <code>resourcemanager.miloapis.com</code>, then the <code>ContactGroupMembershipRemoval</code> resource must be created in the same namespace as the Contact.<br/>
         </td>
         <td>true</td>
       </tr></tbody>
@@ -177,6 +187,9 @@ ContactRef is a reference to the Contact that prevents the Contact from being pa
 ### ContactGroupMembershipRemoval.status
 <sup><sup>[↩ Parent](#contactgroupmembershipremoval)</sup></sup>
 
+
+
+
 <table>
     <thead>
         <tr>
@@ -196,6 +209,14 @@ Standard condition is "Ready" which tracks contact group membership removal crea
             <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for contact group membership removal to be created reason:CreatePending status:Unknown type:Ready]]<br/>
         </td>
         <td>false</td>
+      </tr><tr>
+        <td><b>username</b></td>
+        <td>string</td>
+        <td>
+          Username is the username of the user that owns the ContactGroupMembershipRemoval.
+This is populated by the controller based on the referenced Contact's subject.<br/>
+        </td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
@@ -203,10 +224,85 @@ Standard condition is "Ready" which tracks contact group membership removal crea
 ### ContactGroupMembershipRemoval.status.conditions[index]
 <sup><sup>[↩ Parent](#contactgroupmembershipremovalstatus)</sup></sup>
 
-[...unchanged]
+
+
+Condition contains details for one aspect of the current state of this API Resource.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>lastTransitionTime</b></td>
+        <td>string</td>
+        <td>
+          lastTransitionTime is the last time the condition transitioned from one status to another.
+This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>message</b></td>
+        <td>string</td>
+        <td>
+          message is a human readable message indicating details about the transition.
+This may be an empty string.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>reason</b></td>
+        <td>string</td>
+        <td>
+          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+Producers of specific condition types may define expected values and meanings for this field,
+and whether the values are considered a guaranteed API.
+The value should be a CamelCase string.
+This field may not be empty.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>status</b></td>
+        <td>enum</td>
+        <td>
+          status of the condition, one of True, False, Unknown.<br/>
+          <br/>
+            <i>Enum</i>: True, False, Unknown<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>type</b></td>
+        <td>string</td>
+        <td>
+          type of condition in CamelCase or in foo.example.com/CamelCase.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>observedGeneration</b></td>
+        <td>integer</td>
+        <td>
+          observedGeneration represents the .metadata.generation that the condition was set based upon.
+For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+with respect to the current state of the instance.<br/>
+          <br/>
+            <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
 
 ## ContactGroupMembership
 <sup><sup>[↩ Parent](#notificationmiloapiscomv1alpha1 )</sup></sup>
+
+
+
+
 
 ContactGroupMembership is the Schema for the contactgroupmemberships API.
 It represents a membership of a Contact in a ContactGroup.
@@ -243,7 +339,7 @@ It represents a membership of a Contact in a ContactGroup.
         <td>
           ContactGroupMembershipSpec defines the desired state of ContactGroupMembership.<br/>
           <br/>
-            <i>Validations</i>:<li>self == oldSelf: spec is immutable</li><li>If the referenced Contact's subjectRef.apiGroup is <code>resourcemanager.miloapis.com</code>, the ContactGroupMembership namespace must match the Contact's namespace.</li><li>The APIGroup in subjectRef must be <code>resourcemanager.miloapis.com</code>; other API groups are not supported and will be rejected.</li>
+            <i>Validations</i>:<li>self == oldSelf: spec is immutable</li>
         </td>
         <td>false</td>
       </tr><tr>
@@ -259,6 +355,7 @@ It represents a membership of a Contact in a ContactGroup.
 
 ### ContactGroupMembership.spec
 <sup><sup>[↩ Parent](#contactgroupmembership)</sup></sup>
+
 
 ContactGroupMembershipSpec defines the desired state of ContactGroupMembership.
 
@@ -283,7 +380,7 @@ ContactGroupMembershipSpec defines the desired state of ContactGroupMembership.
         <td>object</td>
         <td>
           ContactRef is a reference to the Contact that is a member of the ContactGroup.<br/>
-          <b>Constraint:</b> If the referenced Contact's <code>subjectRef.apiGroup</code> is <code>resourcemanager.miloapis.com</code>, the ContactGroupMembership resource namespace <b>must</b> match the Contact's namespace. Only <code>resourcemanager.miloapis.com</code> API group is currently supported; other API groups will be rejected.
+          <b>Note:</b> If the referenced Contact's <code>subjectRef.apiGroup</code> is <code>resourcemanager.miloapis.com</code>, then the <code>ContactGroupMembership</code> resource must be created in the same namespace as the Contact.<br/>
         </td>
         <td>true</td>
       </tr></tbody>
@@ -293,55 +390,8 @@ ContactGroupMembershipSpec defines the desired state of ContactGroupMembership.
 ### ContactGroupMembership.spec.contactGroupRef
 <sup><sup>[↩ Parent](#contactgroupmembershipspec)</sup></sup>
 
-[...unchanged]
 
-### ContactGroupMembership.spec.contactRef
-<sup><sup>[↩ Parent](#contactgroupmembershipspec)</sup></sup>
-
-[...unchanged]
-
-### ContactGroupMembership.status
-<sup><sup>[↩ Parent](#contactgroupmembership)</sup></sup>
-
-[...unchanged]
-
-### ContactGroupMembership.status.conditions[index]
-<sup><sup>[↩ Parent](#contactgroupmembershipstatus)</sup></sup>
-
-[...unchanged]
-
-## ContactGroup
-<sup><sup>[↩ Parent](#notificationmiloapiscomv1alpha1 )</sup></sup>
-
-[...unchanged]
-
-### ContactGroup.spec
-<sup><sup>[↩ Parent](#contactgroup)</sup></sup>
-
-[...unchanged]
-
-### ContactGroup.status
-<sup><sup>[↩ Parent](#contactgroup)</sup></sup>
-
-[...unchanged]
-
-### ContactGroup.status.conditions[index]
-<sup><sup>[↩ Parent](#contactgroupstatus)</sup></sup>
-
-[...unchanged]
-
-## Contact
-<sup><sup>[↩ Parent](#notificationmiloapiscomv1alpha1 )</sup></sup>
-
-[...unchanged]
-
-### Contact.spec
-<sup><sup>[↩ Parent](#contact)</sup></sup>
-
-[...unchanged]
-
-### Contact.spec.subject
-<sup><sup>[↩ Parent](#contactspec)</sup></sup>
+ContactGroupRef is a reference to the ContactGroup that the Contact is a member of.
 
 <table>
     <thead>
@@ -353,143 +403,185 @@ ContactGroupMembershipSpec defines the desired state of ContactGroupMembership.
         </tr>
     </thead>
     <tbody><tr>
-        <td><b>apiGroup</b></td>
-        <td>enum</td>
-        <td>
-          APIGroup is the group for the resource being referenced.<br/>
-          <br/>
-            <i>Enum</i>: iam.miloapis.com, resourcemanager.miloapis.com<br/>
-            <b>Note:</b> Only <code>resourcemanager.miloapis.com</code> is supported for membership operations; other groups will be rejected if used as a subjectRef in ContactGroupMembership/Removal resources.
-        </td>
-        <td>true</td>
-      </tr><tr>
-        <td><b>kind</b></td>
-        <td>enum</td>
-        <td>
-          Kind is the type of resource being referenced.<br/>
-          <br/>
-            <i>Enum</i>: User, Project<br/>
-        </td>
-        <td>true</td>
-      </tr><tr>
         <td><b>name</b></td>
         <td>string</td>
         <td>
-          Name is the name of resource being referenced.<br/>
+          Name is the name of the ContactGroup being referenced.<br/>
         </td>
         <td>true</td>
       </tr><tr>
         <td><b>namespace</b></td>
         <td>string</td>
         <td>
-          Namespace is the namespace of resource being referenced.
-Required for namespace-scoped resources. Omitted for cluster-scoped resources.<br/>
+          Namespace is the namespace of the ContactGroup being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### ContactGroupMembership.spec.contactRef
+<sup><sup>[↩ Parent](#contactgroupmembershipspec)</sup></sup>
+
+
+ContactRef is a reference to the Contact that is a member of the ContactGroup.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>name</b></td>
+        <td>string</td>
+        <td>
+          Name is the name of the Contact being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>namespace</b></td>
+        <td>string</td>
+        <td>
+          Namespace is the namespace of the Contact being referenced.<br/>
+        </td>
+        <td>true</td>
+      </tr></tbody>
+</table>
+
+
+### ContactGroupMembership.status
+<sup><sup>[↩ Parent](#contactgroupmembership)</sup></sup>
+
+
+
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b><a href="#contactgroupmembershipstatusconditionsindex">conditions</a></b></td>
+        <td>[]object</td>
+        <td>
+          Conditions represent the latest available observations of an object's current state.
+Standard condition is "Ready" which tracks contact group membership creation status and sync to the contact group membership provider.<br/>
+          <br/>
+            <i>Default</i>: [map[lastTransitionTime:1970-01-01T00:00:00Z message:Waiting for contact group membership to be created reason:CreatePending status:Unknown type:Ready]]<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>providerID</b></td>
+        <td>string</td>
+        <td>
+          ProviderID is the identifier returned by the underlying contact provider
+(e.g. Resend) when the membership is created in the associated audience. It is usually
+used to track the contact-group membership creation status (e.g. provider webhooks).
+Deprecated: Use Providers instead.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b><a href="#contactgroupmembershipstatusprovidersindex">providers</a></b></td>
+        <td>[]object</td>
+        <td>
+          Providers contains the per-provider status for this contact group membership.
+This enables tracking multiple provider backends simultaneously.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>username</b></td>
+        <td>string</td>
+        <td>
+          Username is the username of the user that owns the ContactGroupMembership.
+This is populated by the controller based on the referenced Contact's subject.<br/>
         </td>
         <td>false</td>
       </tr></tbody>
 </table>
 
-### Contact.status
-<sup><sup>[↩ Parent](#contact)</sup></sup>
 
-[...unchanged]
+### ContactGroupMembership.status.conditions[index]
+<sup><sup>[↩ Parent](#contactgroupmembershipstatus)</sup></sup>
 
-### Contact.status.conditions[index]
-<sup><sup>[↩ Parent](#contactstatus)</sup></sup>
 
-[...unchanged]
 
-## EmailBroadcast
-<sup><sup>[↩ Parent](#notificationmiloapiscomv1alpha1 )</sup></sup>
+Condition contains details for one aspect of the current state of this API Resource.
 
-[...unchanged]
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>lastTransitionTime</b></td>
+        <td>string</td>
+        <td>
+          lastTransitionTime is the last time the condition transitioned from one status to another.
+This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.<br/>
+          <br/>
+            <i>Format</i>: date-time<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>message</b></td>
+        <td>string</td>
+        <td>
+          message is a human readable message indicating details about the transition.
+This may be an empty string.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>reason</b></td>
+        <td>string</td>
+        <td>
+          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+Producers of specific condition types may define expected values and meanings for this field,
+and whether the values are considered a guaranteed API.
+The value should be a CamelCase string.
+This field may not be empty.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>status</b></td>
+        <td>enum</td>
+        <td>
+          status of the condition, one of True, False, Unknown.<br/>
+          <br/>
+            <i>Enum</i>: True, False, Unknown<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>type</b></td>
+        <td>string</td>
+        <td>
+          type of condition in CamelCase or in foo.example.com/CamelCase.<br/>
+        </td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>observedGeneration</b></td>
+        <td>integer</td>
+        <td>
+          observedGeneration represents the .metadata.generation that the condition was set based upon.
+For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+with respect to the current state of the instance.<br/>
+          <br/>
+            <i>Format</i>: int64<br/>
+            <i>Minimum</i>: 0<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
 
-### EmailBroadcast.spec
-<sup><sup>[↩ Parent](#emailbroadcast)</sup></sup>
-
-[...unchanged]
-
-### EmailBroadcast.spec.contactGroupRef
-<sup><sup>[↩ Parent](#emailbroadcastspec)</sup></sup>
-
-[...unchanged]
-
-### EmailBroadcast.spec.templateRef
-<sup><sup>[↩ Parent](#emailbroadcastspec)</sup></sup>
-
-[...unchanged]
-
-### EmailBroadcast.status
-<sup><sup>[↩ Parent](#emailbroadcast)</sup></sup>
-
-[...unchanged]
-
-### EmailBroadcast.status.conditions[index]
-<sup><sup>[↩ Parent](#emailbroadcaststatus)</sup></sup>
-
-[...unchanged]
-
-## Email
-<sup><sup>[↩ Parent](#notificationmiloapiscomv1alpha1 )</sup></sup>
-
-[...unchanged]
-
-### Email.spec
-<sup><sup>[↩ Parent](#email)</sup></sup>
-
-[...unchanged]
-
-### Email.spec.recipient
-<sup><sup>[↩ Parent](#emailspec)</sup></sup>
-
-[...unchanged]
-
-### Email.spec.recipient.userRef
-<sup><sup>[↩ Parent](#emailspecrecipient)</sup></sup>
-
-[...unchanged]
-
-### Email.spec.templateRef
-<sup><sup>[↩ Parent](#emailspec)</sup></sup>
-
-[...unchanged]
-
-### Email.spec.variables[index]
-<sup><sup>[↩ Parent](#emailspec)</sup></sup>
-
-[...unchanged]
-
-### Email.status
-<sup><sup>[↩ Parent](#email)</sup></sup>
-
-[...unchanged]
-
-### Email.status.conditions[index]
-<sup><sup>[↩ Parent](#emailstatus)</sup></sup>
-
-[...unchanged]
-
-## EmailTemplate
-<sup><sup>[↩ Parent](#notificationmiloapiscomv1alpha1 )</sup></sup>
-
-[...unchanged]
-
-### EmailTemplate.spec
-<sup><sup>[↩ Parent](#emailtemplate)</sup></sup>
-
-[...unchanged]
-
-### EmailTemplate.spec.variables[index]
-<sup><sup>[↩ Parent](#emailtemplatespec)</sup></sup>
-
-[...unchanged]
-
-### EmailTemplate.status
-<sup><sup>[↩ Parent](#emailtemplate)</sup></sup>
-
-[...unchanged]
-
-### EmailTemplate.status.conditions[index]
-<sup><sup>[↩ Parent](#emailtemplatestatus)</sup></sup>
-
-[...unchanged]
+# [... all other sections unchanged ...]
