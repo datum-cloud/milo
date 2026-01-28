@@ -122,6 +122,23 @@ type EmailStatus struct {
 	// used to track the email delivery status (e.g. provider webhooks).
 	// +optional
 	ProviderID string `json:"providerID,omitempty"`
+
+	// HTMLBody stores the rendered HTML content of the e-mail.
+	// +optional
+	HTMLBody string `json:"htmlBody,omitempty"`
+
+	// TextBody stores the rendered plain-text content of the e-mail.
+	// +optional
+	TextBody string `json:"textBody,omitempty"`
+
+	// Subject stores the subject line used for the e-mail.
+	// +optional
+	Subject string `json:"subject,omitempty"`
+
+	// EmailAddress stores the final recipient address used for delivery,
+	// after resolving any referenced User.
+	// +optional
+	EmailAddress string `json:"emailAddress,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -137,6 +154,8 @@ type EmailStatus struct {
 // +kubebuilder:printcolumn:name="Delivered",type="string",JSONPath=".status.conditions[?(@.type=='Delivered')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Namespaced
+// +kubebuilder:selectablefield:JSONPath=".spec.recipient.userRef.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.recipient.emailAddress"
 type Email struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

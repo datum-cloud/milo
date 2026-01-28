@@ -1,0 +1,18 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: quota.miloapis.com-resourceregistration
+spec:
+  serviceRef:
+    name: "quota.miloapis.com"
+  kind: ResourceRegistration
+  plural: resourceregistrations
+  singular: resourceregistration
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch

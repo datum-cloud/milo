@@ -14,12 +14,15 @@ resources:
   - ../../apiserver
   - ../../controller-manager/overlays/core-control-plane
 
+  # Deploy argo-events (controller runs on infrastructure cluster)
+  - ../../dependencies/argo-system
 
 components:
   - components/auth
   - components/certificates
   - ../../components/certificates
   - ../../components/apiserver-audit-logging
+  - ../../components/apiserver-tracing
   # Ingress configuration (shared Gateway API with Envoy)
   - ../../components/gateway-api
 
@@ -35,6 +38,12 @@ patches:
     target:
       kind: Deployment
       name: milo-controller-manager
+
+  # Configure argo-events for test environment
+  - path: patches/argo-events-patch.yaml
+    target:
+      kind: HelmRelease
+      name: argo-events
 
 images:
   - name: ghcr.io/datum-cloud/milo

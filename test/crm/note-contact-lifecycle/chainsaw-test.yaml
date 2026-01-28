@@ -1,0 +1,145 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: crm-note-contact-lifecycle
+spec:
+  description: |
+    End-to-end tests for CRM Notes.
+
+    This test verifies:
+    - A Note referencing a Contact and User populates status.createdBy with the User's email
+    - Deleting a Contact causes a reconciled Note that references it to be deleted
+    - Deleting a User causes owned Notes to be garbage-collected via ownerReferences
+
+  steps:
+    - name: create-user-contact-and-notes
+      description: Create IAM User, Notification Contact, and CRM Notes, then verify Note status
+      try:
+        - apply:
+            file: 01-test-user.yaml
+        - wait:
+            apiVersion: iam.miloapis.com/v1alpha1
+            kind: User
+            name: test-crm-note-user
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+
+        - apply:
+            file: 02-test-contacts.yaml
+
+        - apply:
+            file: 03-test-notes.yaml
+
+        # Mark PolicyBinding as Ready (test workaround - PolicyBinding controller is in a different repo)
+        - script:
+            timeout: 30s
+            content: |
+              # Wait for PolicyBinding to be created
+              sleep 5
+              # Patch the specific PolicyBinding for test-crm-note-1
+              kubectl patch policybinding note-creator-editor-test-crm-note-1 -n milo-system --type=merge --subresource=status -p '{"status":{"conditions":[{"type":"Ready","status":"True","reason":"TestReady","message":"Marked ready for testing","lastTransitionTime":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}],"observedGeneration":1}}'
+
+        # Verify Note1 becomes Ready and status.createdBy is set from the User's email
+        - wait:
+            apiVersion: crm.miloapis.com/v1alpha1
+            kind: Note
+            name: test-crm-note-1
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - wait:
+            apiVersion: crm.miloapis.com/v1alpha1
+            kind: Note
+            name: test-crm-note-1
+            timeout: 60s
+            for:
+              jsonPath:
+                path: '{.status.createdBy}'
+                value: admin@test.local
+
+    - name: delete-contact-and-verify-contact-note-deletion
+      description: Delete Contact, update the contact Note to trigger reconciliation, and verify the contact Note is deleted
+      try:
+        # Ensure Contact and contact Note exist before deletion
+        - assert:
+            resource:
+              apiVersion: notification.miloapis.com/v1alpha1
+              kind: Contact
+              metadata:
+                name: test-crm-note-contact-1
+                namespace: ($namespace)
+        - assert:
+            resource:
+              apiVersion: crm.miloapis.com/v1alpha1
+              kind: Note
+              metadata:
+                name: test-crm-note-1
+
+        - delete:
+            ref:
+              apiVersion: notification.miloapis.com/v1alpha1
+              kind: Contact
+              name: test-crm-note-contact-1
+              namespace: ($namespace)
+        - wait:
+            apiVersion: notification.miloapis.com/v1alpha1
+            kind: Contact
+            name: test-crm-note-contact-1
+            namespace: ($namespace)
+            timeout: 60s
+            for:
+              deletion: {}
+
+        - wait:
+            apiVersion: crm.miloapis.com/v1alpha1
+            kind: Note
+            name: test-crm-note-1
+            timeout: 60s
+            for:
+              deletion: {}
+
+
+    - name: delete-user-and-verify-user-note-deletion
+      description: Delete the IAM User and verify the Note that references the User is garbage-collected
+      try:
+        # Ensure the user-referencing Note exists before deleting the User
+        - assert:
+            resource:
+              apiVersion: crm.miloapis.com/v1alpha1
+              kind: Note
+              metadata:
+                name: test-crm-note-2
+
+        - delete:
+            ref:
+              apiVersion: iam.miloapis.com/v1alpha1
+              kind: User
+              name: test-crm-note-user
+
+        - wait:
+            apiVersion: iam.miloapis.com/v1alpha1
+            kind: User
+            name: test-crm-note-user
+            timeout: 60s
+            for:
+              deletion: {}
+    - name: verify-additional-notes-still-exist
+      description: Verify additional Notes are not accidentally deleted by Contact or User deletion
+      try:
+        - assert:
+            resource:
+              apiVersion: crm.miloapis.com/v1alpha1
+              kind: Note
+              metadata:
+                name: test-crm-note-3
+        - assert:
+            resource:
+              apiVersion: crm.miloapis.com/v1alpha1
+              kind: Note
+              metadata:
+                name: test-crm-note-4

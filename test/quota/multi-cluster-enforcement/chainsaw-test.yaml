@@ -1,0 +1,231 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: multi-cluster-enforcement
+spec:
+  description: |
+    Tests quota system for Secrets across multiple control planes using Milo's storage filtering.
+
+    Validates: GrantCreationPolicy creates grants for projects, ClaimCreationPolicy creates claims
+    for Secrets, quota enforced across project control planes, control plane isolation.
+
+  clusters:
+    main:
+      kubeconfig: kubeconfig-main
+    org:
+      kubeconfig: kubeconfig-org
+    project1:
+      kubeconfig: kubeconfig-project-1
+    project2:
+      kubeconfig: kubeconfig-project-2
+
+  steps:
+    - name: setup-resource-registration
+      description: Register unique resource type for secrets claimed by Projects
+      try:
+        - apply:
+            file: 01-resource-registration.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceRegistration
+            name: mc-test-secrets-per-project
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    - name: setup-grant-creation-policy
+      description: Create GrantCreationPolicy to grant secret quota to projects
+      try:
+        - apply:
+            file: 02-grant-creation-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: GrantCreationPolicy
+            name: mc-test-project-secret-grant-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+
+    - name: setup-test-organization
+      description: Create test organization
+      try:
+        - apply:
+            file: 03-test-organization.yaml
+        - wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-mc-test-org
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+
+    - name: create-project-1-in-org-control-plane
+      description: Create project in org control plane
+      cluster: org
+      try:
+        - apply:
+            file: test-data/project-1.yaml
+        - wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: Project
+            name: mc-test-project-1
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'true'
+
+    - name: verify-grant-for-project-1
+      description: Confirm grant is created in project control plane after provisioning
+      cluster: project1
+      try:
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: auto-grant-mc-test-project-1
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
+    - name: verify-bucket-pre-created
+      description: Verify AllowanceBucket is pre-created in project control plane when grant becomes active
+      cluster: project1
+      try:
+        - assert:
+            resource:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: AllowanceBucket
+              metadata:
+                namespace: milo-system
+                labels:
+                  quota.miloapis.com/consumer-kind: Project
+                  quota.miloapis.com/consumer-name: mc-test-project-1
+              status:
+                limit: 5
+                allocated: 0
+                available: 5
+
+    - name: setup-claim-creation-policy
+      description: Register ClaimCreationPolicy for Secrets
+      cluster: main
+      try:
+        - apply:
+            file: 04-claim-creation-policy.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ClaimCreationPolicy
+            name: mc-test-secret-claim-policy
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+
+    - name: create-secret-1-in-project-1
+      description: Create secret in project control plane
+      cluster: project1
+      try:
+        - apply:
+            file: test-data/secret-1.yaml
+
+    - name: verify-claim-for-secret-1
+      description: Confirm resource claim is created for secret in project
+      cluster: project1
+      try:
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceClaim
+            namespace: default
+            selector: test.miloapis.com/quota=multicluster
+            timeout: 30s
+            for:
+              condition:
+                name: Granted
+                value: 'True'
+
+    - name: verify-bucket-usage-1-of-5
+      description: Verify bucket shows 1 secret allocated
+      cluster: project1
+      try:
+        - assert:
+            resource:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: AllowanceBucket
+              metadata:
+                namespace: milo-system
+              status:
+                limit: 5
+                allocated: 1
+                available: 4
+
+    - name: create-secret-2-in-project-1
+      description: Create second secret in project control plane
+      cluster: project1
+      try:
+        - apply:
+            file: test-data/secret-2.yaml
+
+    - name: verify-claim-for-secret-2
+      description: Verify second claim created and granted
+      cluster: project1
+      try:
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceClaim
+            namespace: default
+            selector: test.miloapis.com/quota=multicluster
+            timeout: 30s
+            for:
+              condition:
+                name: Granted
+                value: 'True'
+
+    - name: verify-bucket-usage-2-of-5
+      description: Verify bucket shows 2 secrets allocated
+      cluster: project1
+      try:
+        - assert:
+            resource:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: AllowanceBucket
+              metadata:
+                namespace: milo-system
+              status:
+                limit: 5
+                allocated: 2
+                available: 3
+
+    - name: delete-secret-1
+      description: Delete first secret to free quota
+      cluster: project1
+      try:
+        - delete:
+            ref:
+              apiVersion: v1
+              kind: Secret
+              name: mc-test-secret-1
+              namespace: default
+
+    - name: verify-bucket-usage-after-deletion
+      description: Verify bucket shows quota freed after deletion
+      cluster: project1
+      try:
+        - assert:
+            resource:
+              apiVersion: quota.miloapis.com/v1alpha1
+              kind: AllowanceBucket
+              metadata:
+                namespace: milo-system
+              status:
+                limit: 5
+                allocated: 1
+                available: 4

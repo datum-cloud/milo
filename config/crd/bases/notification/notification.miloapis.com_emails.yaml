@@ -207,14 +207,32 @@ spec:
                   - type
                   type: object
                 type: array
+              emailAddress:
+                description: |-
+                  EmailAddress stores the final recipient address used for delivery,
+                  after resolving any referenced User.
+                type: string
+              htmlBody:
+                description: HTMLBody stores the rendered HTML content of the e-mail.
+                type: string
               providerID:
                 description: |-
                   ProviderID is the identifier returned by the underlying email provider
                   (e.g. Resend) when the e-mail is accepted for delivery. It is usually
                   used to track the email delivery status (e.g. provider webhooks).
                 type: string
+              subject:
+                description: Subject stores the subject line used for the e-mail.
+                type: string
+              textBody:
+                description: TextBody stores the rendered plain-text content of the
+                  e-mail.
+                type: string
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.recipient.userRef.name
+    - jsonPath: .spec.recipient.emailAddress
     served: true
     storage: true
     subresources:

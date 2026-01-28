@@ -1,0 +1,24 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: GrantCreationPolicy
+metadata:
+  name: test-production-style-labels-policy
+  labels:
+    test.miloapis.com/quota: "grant-creation-policy"
+spec:
+  disabled: false
+  target:
+    resourceGrantTemplate:
+      metadata:
+        # These are the exact labels that were failing in production before our fix
+        labels:
+          app.kubernetes.io/component: "quota-system"
+          app.kubernetes.io/name: "datum"
+          quota.miloapis.com/auto-created: "true"
+          quota.miloapis.com/organization-type: "standard"
+          quota.miloapis.com/policy: "standard-organization-project-quota-policy"
+          quota.miloapis.com/resource-type: "projects"
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: PolicyReady

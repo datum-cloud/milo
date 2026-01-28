@@ -26,9 +26,31 @@ var contactLog = logf.Log.WithName("contact-resource")
 var acceptedResourceManagerKinds = []string{"Organization", "Project"}
 var acceptedAPIGroups = []string{"iam.miloapis.com", "resourcemanager.miloapis.com"}
 
+const contactSpecKey = "contactSpecKey"
+
+// buildContactSpecKey returns the composite key used for indexing contact spec (subjectRef + email)
+func buildContactSpecKey(contact notificationv1alpha1.Contact) string {
+	if contact.Spec.SubjectRef == nil {
+		// Newsletter Contact
+		return fmt.Sprintf("%s|%s", contact.Spec.Email, contact.Namespace)
+	}
+	// Contact with a related subject
+	sr := contact.Spec.SubjectRef
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s",
+		sr.APIGroup, sr.Kind, sr.Name, sr.Namespace, contact.Spec.Email, contact.Namespace)
+}
+
 // SetupContactWebhooksWithManager sets up the webhooks for the Contact resource.
 func SetupContactWebhooksWithManager(mgr ctrl.Manager) error {
 	contactLog.Info("Setting up notification.miloapis.com contact webhooks")
+
+	// Composite index for contact spec (subjectRef + email)
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &notificationv1alpha1.Contact{}, contactSpecKey, func(rawObj client.Object) []string {
+		contact := rawObj.(*notificationv1alpha1.Contact)
+		return []string{buildContactSpecKey(*contact)}
+	}); err != nil {
+		return fmt.Errorf("failed to index contactSpecKey: %w", err)
+	}
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&notificationv1alpha1.Contact{}).
@@ -91,6 +113,18 @@ func (v *ContactValidator) ValidateCreate(ctx context.Context, obj runtime.Objec
 	// Validate Email format
 	if _, err := mail.ParseAddress(contact.Spec.Email); err != nil {
 		errs = append(errs, field.Invalid(field.NewPath("spec", "email"), contact.Spec.Email, fmt.Sprintf("invalid email address: %v", err)))
+	}
+
+	// Validate that a contact with the same subject and email does not already exist
+	var existing notificationv1alpha1.ContactList
+	if err := v.Client.List(ctx, &existing,
+		client.MatchingFields{contactSpecKey: buildContactSpecKey(*contact)}); err != nil {
+		return nil, errors.NewInternalError(fmt.Errorf("failed to list contacts: %w", err))
+	}
+	if len(existing.Items) > 0 {
+		dup := field.Duplicate(field.NewPath("spec"), contact.Spec)
+		dup.Detail = fmt.Sprintf("a Contact named %s already has this subject and email in the same Contact namespace", existing.Items[0].Name)
+		errs = append(errs, dup)
 	}
 
 	// If no subject reference is provided, we are in presense of a Contact with no related subject
@@ -211,7 +245,10 @@ func (v *ContactValidator) ValidateUpdate(ctx context.Context, oldObj, newObj ru
 
 	// If the SubjectRef changed, reject the update.
 	if !reflect.DeepEqual(contactNew.Spec.SubjectRef, contactOld.Spec.SubjectRef) {
-		errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef"), contactNew.Spec.SubjectRef, "subjectRef is immutable and cannot be updated"))
+		// Allow updating SubjectRef only if it was previously nil (e.g., user claiming a newsletter contact)
+		if contactOld.Spec.SubjectRef != nil {
+			errs = append(errs, field.Invalid(field.NewPath("spec", "subjectRef"), contactNew.Spec.SubjectRef, "subjectRef is immutable once set"))
+		}
 	}
 
 	// Validate Email format
@@ -219,6 +256,22 @@ func (v *ContactValidator) ValidateUpdate(ctx context.Context, oldObj, newObj ru
 		if _, err := mail.ParseAddress(contactNew.Spec.Email); err != nil {
 			errs = append(errs, field.Invalid(field.NewPath("spec", "email"), contactNew.Spec.Email, fmt.Sprintf("invalid email address: %v", err)))
 		}
+	}
+
+	// Validate that another contact (different object) with the same subject and email does not already exist
+	var existing notificationv1alpha1.ContactList
+	if err := v.Client.List(ctx, &existing,
+		client.MatchingFields{contactSpecKey: buildContactSpecKey(*contactNew)}); err != nil {
+		return nil, errors.NewInternalError(fmt.Errorf("failed to list contacts: %w", err))
+	}
+	for _, c := range existing.Items {
+		if c.Name == contactNew.Name && c.Namespace == contactNew.Namespace {
+			continue // skip the object being updated
+		}
+		dup := field.Duplicate(field.NewPath("spec"), contactNew.Spec)
+		dup.Detail = fmt.Sprintf("a Contact named %s already has this subject and email in the same Contact namespace", c.Name)
+		errs = append(errs, dup)
+		break
 	}
 
 	return nil, contactValidationResult(errs, contactNew)

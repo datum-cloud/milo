@@ -91,8 +91,6 @@ spec:
                 type: object
             required:
             - email
-            - familyName
-            - givenName
             type: object
           status:
             properties:
@@ -166,9 +164,40 @@ spec:
                   ProviderID is the identifier returned by the underlying contact provider
                   (e.g. Resend) when the contact is created. It is usually
                   used to track the contact creation status (e.g. provider webhooks).
+                  Deprecated: Use Providers instead.
                 type: string
+              providers:
+                description: |-
+                  Providers contains the per-provider status for this contact.
+                  This enables tracking multiple provider backends simultaneously.
+                items:
+                  description: |-
+                    ContactProviderStatus represents status information for a single contact provider.
+                    It allows tracking the provider name and the provider-specific identifier.
+                  properties:
+                    id:
+                      description: ID is the identifier returned by the specific contact
+                        provider for this contact.
+                      type: string
+                    name:
+                      description: |-
+                        Name is the provider handling this contact.
+                        Allowed values are Resend and Loops.
+                      enum:
+                      - Resend
+                      - Loops
+                      type: string
+                  required:
+                  - id
+                  - name
+                  type: object
+                type: array
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.email
+    - jsonPath: .spec.subject.name
+    - jsonPath: .spec.subject.kind
     served: true
     storage: true
     subresources:

@@ -43,6 +43,7 @@ resources:
   - organizationmembership-reader.yaml
   - organizationmembership-editor.yaml
   - organizationmembership-admin.yaml
+  - organizationmembership-self-delete.yaml
   - iam-role-reader.yaml
   - iam-role-editor.yaml
   - iam-role-admin.yaml
@@ -50,3 +51,20 @@ resources:
   - organization-admin.yaml
   - project-viewer.yaml
   - project-admin.yaml
+  - iam.miloapis.com-getinvitation.yaml
+  - iam.miloapis.com-acceptinvitation.yaml
+  - iam-platform-access-approvals-reader.yaml
+  - iam-platform-access-approvals-editor.yaml
+  - iam-platform-access-approvals-admin.yaml
+  - iam-platform-access-rejections-reader.yaml
+  - iam-platform-access-rejections-editor.yaml
+  - iam-platform-access-rejections-admin.yaml
+  - iam-platform-invitations-reader.yaml
+  - iam-platform-invitations-editor.yaml
+  - iam-platform-invitations-admin.yaml
+  - crm-note-viewer.yaml
+  - crm-note-creator.yaml
+  - crm-note-editor.yaml
+  - crm-note-creator-editor.yaml
+  - crm-note-admin.yaml
+  - identity-user-session-viewer.yaml

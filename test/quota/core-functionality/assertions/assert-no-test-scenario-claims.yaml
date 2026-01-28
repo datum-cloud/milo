@@ -1,0 +1,7 @@
+# This assertion verifies that NO ResourceClaims exist with our test scenario label
+# After cleanup, we expect 0 claims because:
+# 1. Successful project claims were garbage collected when projects were deleted
+# 2. The quota-exceeding project shouldn't create claims with our test scenario label
+apiVersion: v1
+kind: List
+items: []

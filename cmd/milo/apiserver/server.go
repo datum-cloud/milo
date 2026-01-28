@@ -6,14 +6,18 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
+	crd "go.miloapis.com/milo/config/crd"
 	"go.miloapis.com/milo/internal/apiserver/admission/plugin/namespace/lifecycle"
 	projectstorage "go.miloapis.com/milo/internal/apiserver/storage/project"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // ← add / keep this
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -37,12 +41,15 @@ import (
 	_ "k8s.io/component-base/logs/json/register"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
 	"k8s.io/kubernetes/pkg/controlplane/apiserver/options"
+
+	admissionquota "go.miloapis.com/milo/internal/quota/admission"
 )
 
 func init() {
 	utilruntime.Must(logsapi.AddFeatureGates(utilfeature.DefaultMutableFeatureGate))
 	// Enable JSON logging support by default
 	utilfeature.DefaultMutableFeatureGate.Set("LoggingBetaOptions=true")
+	utilfeature.DefaultMutableFeatureGate.Set("RemoteRequestHeaderUID=true")
 }
 
 var (
@@ -59,6 +66,12 @@ var (
 	providerTimeoutSeconds     int
 	providerRetries            int
 	forwardExtras              []string
+	// UserIdentities feature/config flags
+	featureUserIdentities            bool
+	userIdentitiesProviderURL        string
+	userIdentitiesProviderCAFile     string
+	userIdentitiesProviderClientCert string
+	userIdentitiesProviderClientKey  string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters
@@ -97,6 +110,8 @@ func NewCommand() *cobra.Command {
 			}
 
 			// utilfeature.DefaultMutableFeatureGate.Set("ExternalServiceAccountTokenSigner=true")
+			// Enable tracing to support trace continuation from incoming requests
+			utilfeature.DefaultMutableFeatureGate.Set("APIServerTracing=true")
 
 			if errs := completedOptions.Validate(); len(errs) != 0 {
 				return utilerrors.NewAggregate(errs)
@@ -132,7 +147,23 @@ func NewCommand() *cobra.Command {
 	s.Metrics.AddFlags(namedFlagSets.FlagSet("metrics"))
 	logsapi.AddFlags(s.Logs, namedFlagSets.FlagSet("logs"))
 	s.Traces.AddFlags(namedFlagSets.FlagSet("traces"))
-	// Add misc flags for event ttl
+
+	// Add misc flags for event ttl, proxy client certs, etc.
+	miscfs := namedFlagSets.FlagSet("misc")
+	miscfs.DurationVar(&s.EventTTL, "event-ttl", s.EventTTL,
+		"Amount of time to retain events.")
+	miscfs.StringVar(&s.ProxyClientCertFile, "proxy-client-cert-file", s.ProxyClientCertFile,
+		"Client certificate used to prove the identity of the aggregator or kube-apiserver "+
+			"when it must call out during a request. This includes proxying requests to a user "+
+			"api-server and calling out to webhook admission plugins. It is expected that this "+
+			"cert includes a signature from the CA in the --requestheader-client-ca-file flag. "+
+			"That CA is published in the 'extension-apiserver-authentication' configmap in "+
+			"the kube-system namespace. Components receiving calls from kube-aggregator should "+
+			"use that CA to perform their half of the mutual TLS verification.")
+	miscfs.StringVar(&s.ProxyClientKeyFile, "proxy-client-key-file", s.ProxyClientKeyFile,
+		"Private key for the client certificate used to prove the identity of the aggregator or kube-apiserver "+
+			"when it must call out during a request. This includes proxying requests to a user "+
+			"api-server and calling out to webhook admission plugins.")
 
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name(), logs.SkipLoggingConfigurationFlags())
@@ -157,6 +188,11 @@ func NewCommand() *cobra.Command {
 	fs.IntVar(&providerTimeoutSeconds, "provider-timeout", 3, "Provider request timeout in seconds")
 	fs.IntVar(&providerRetries, "provider-retries", 2, "Provider request retries")
 	fs.StringSliceVar(&forwardExtras, "forward-extras", []string{"iam.miloapis.com/parent-api-group", "iam.miloapis.com/parent-type", "iam.miloapis.com/parent-name"}, "User extras keys to forward during impersonation")
+	fs.BoolVar(&featureUserIdentities, "feature-useridentities", false, "Enable identity useridentities virtual API")
+	fs.StringVar(&userIdentitiesProviderURL, "useridentities-provider-url", "", "Direct provider base URL for useridentities (e.g., https://zitadel-apiserver:8443)")
+	fs.StringVar(&userIdentitiesProviderCAFile, "useridentities-provider-ca-file", "", "Path to CA file to validate useridentities provider TLS")
+	fs.StringVar(&userIdentitiesProviderClientCert, "useridentities-provider-client-cert", "", "Client certificate for mTLS to useridentities provider")
+	fs.StringVar(&userIdentitiesProviderClientKey, "useridentities-provider-client-key", "", "Client private key for mTLS to useridentities provider")
 
 	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cliflag.SetUsageAndHelpFunc(cmd, namedFlagSets, cols)
@@ -166,11 +202,22 @@ func NewCommand() *cobra.Command {
 
 func NewOptions() *options.Options {
 	s := options.NewOptions()
-	s.Admission.GenericAdmission.DefaultOffPlugins = DefaultOffAdmissionPlugins()
 
 	if s.Admission.GenericAdmission.Plugins == nil {
 		s.Admission.GenericAdmission.Plugins = admission.NewPlugins()
 	}
+
+	// Register custom admission plugins BEFORE determining which plugins to disable
+	// This ensures our plugins are known when DefaultOffAdmissionPlugins() is called
+	admissionquota.Register(s.Admission.GenericAdmission.Plugins)
+
+	// Set custom plugin order that includes our ClaimCreationQuota plugin
+	// This dynamically extends Kubernetes' plugin order with our custom plugins
+	s.Admission.GenericAdmission.RecommendedPluginOrder = GetMiloOrderedPlugins()
+
+	// Configure which plugins should be disabled
+	s.Admission.GenericAdmission.DefaultOffPlugins = DefaultOffAdmissionPlugins()
+
 	lifecycle.Register(s.Admission.GenericAdmission.Plugins)
 
 	s.Admission.GenericAdmission.RecommendedPluginOrder =
@@ -209,6 +256,15 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 	config.ExtraConfig.SessionsProvider.Retries = providerRetries
 	config.ExtraConfig.SessionsProvider.ForwardExtras = forwardExtras
 
+	config.ExtraConfig.FeatureUserIdentities = featureUserIdentities
+	config.ExtraConfig.UserIdentitiesProvider.URL = userIdentitiesProviderURL
+	config.ExtraConfig.UserIdentitiesProvider.CAFile = userIdentitiesProviderCAFile
+	config.ExtraConfig.UserIdentitiesProvider.ClientCertFile = userIdentitiesProviderClientCert
+	config.ExtraConfig.UserIdentitiesProvider.ClientKeyFile = userIdentitiesProviderClientKey
+	config.ExtraConfig.UserIdentitiesProvider.TimeoutSeconds = providerTimeoutSeconds
+	config.ExtraConfig.UserIdentitiesProvider.Retries = providerRetries
+	config.ExtraConfig.UserIdentitiesProvider.ForwardExtras = forwardExtras
+
 	completed, err := config.Complete()
 	if err != nil {
 		return err
@@ -232,11 +288,14 @@ func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregat
 	// 1. CRDs
 	notFoundHandler := notfoundhandler.New(config.ControlPlane.Generic.Serializer, genericapifilters.NoMuxAndDiscoveryIncompleteKey)
 
+	// Use loopback config to enable automatic namespace bootstrapping in project control planes
+	loopbackConfig := config.ControlPlane.Generic.LoopbackClientConfig
+
 	config.APIExtensions.GenericConfig.RESTOptionsGetter =
-		projectstorage.WithProjectAwareDecorator(config.APIExtensions.GenericConfig.RESTOptionsGetter)
+		projectstorage.WithProjectAwareDecoratorAndConfig(config.APIExtensions.GenericConfig.RESTOptionsGetter, loopbackConfig)
 
 	config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter =
-		projectstorage.WithProjectAwareDecorator(config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter)
+		projectstorage.WithProjectAwareDecoratorAndConfig(config.APIExtensions.ExtraConfig.CRDRESTOptionsGetter, loopbackConfig)
 
 	apiExtensionsServer, err := config.APIExtensions.New(genericapiserver.NewEmptyDelegateWithCustomHandler(notFoundHandler))
 	if err != nil {
@@ -281,4 +340,38 @@ func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregat
 	}
 
 	return aggregatorServer, nil
+}
+
+// bootstrapCRDsHook installs all embedded CRDs into the cluster as a post-start hook.
+// This is called after the API server starts but before readiness checks pass.
+// This follows KCP's pattern of bootstrapping CRDs with polling retry.
+func bootstrapCRDsHook(hookCtx genericapiserver.PostStartHookContext, loopbackConfig *rest.Config) error {
+	logger := klog.FromContext(hookCtx).WithName("bootstrap-crds")
+
+	// Create apiextensions client from loopback config
+	extClient, err := apiextensionsclient.NewForConfig(loopbackConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create apiextensions client: %w", err)
+	}
+
+	logger.Info("Starting CRD bootstrap from embedded filesystem")
+
+	// Use polling with retry in case the apiextensions server isn't fully ready yet.
+	// Post-start hooks run after the server starts listening but before readiness.
+	// The embedded Context in PostStartHookContext is cancelled when the server stops.
+	err = wait.PollUntilContextCancel(hookCtx, time.Second, true, func(ctx context.Context) (bool, error) {
+		if err := crd.Bootstrap(ctx, extClient); err != nil {
+			logger.Error(err, "failed to bootstrap CRDs, retrying")
+			return false, nil // keep retrying
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		logger.Error(err, "failed to bootstrap CRDs")
+		return nil // don't fail the server start, just log the error
+	}
+
+	logger.Info("CRD bootstrap completed successfully")
+	return nil
 }

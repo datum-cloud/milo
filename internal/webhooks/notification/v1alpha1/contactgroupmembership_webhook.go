@@ -75,6 +75,11 @@ func (v *ContactGroupMembershipValidator) ValidateCreate(ctx context.Context, ob
 		} else {
 			return nil, errors.NewInternalError(fmt.Errorf("failed to get Contact: %w", err))
 		}
+	} else {
+		// Validate contact ownership when in user context
+		if err := ValidateContactOwnership(ctx, contact, notificationv1alpha1.SchemeGroupVersion.WithResource("contactgroupmemberships").GroupResource(), cgm.Name, "create membership"); err != nil {
+			return nil, err
+		}
 	}
 
 	// Validate referenced ContactGroup exists

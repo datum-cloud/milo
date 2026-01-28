@@ -5,7 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: vector-audit-log-processor
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app.kubernetes.io/name: vector-audit-log-processor
@@ -13,7 +13,15 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: vector-audit-log-processor
+        app: vector-audit-log-processor
     spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: vector-audit-log-processor
+              topologyKey: kubernetes.io/hostname
       containers:
         - name: vector-audit-log-processor
           image: timberio/vector:latest
@@ -30,6 +38,8 @@ spec:
           volumeMounts:
             - name: vector-config
               mountPath: /etc/vector/
+            - name: vector-buffer
+              mountPath: /var/lib/vector
           ports:
             - containerPort: 9598
               name: metrics
@@ -39,12 +49,15 @@ spec:
               protocol: TCP
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
               cpu: 500m
-              memory: 512Mi
+              memory: 1Gi
+            limits:
+              cpu: 2
+              memory: 2Gi
       volumes:
         - name: vector-config
           configMap:
             name: vector-config
+        - name: vector-buffer
+          emptyDir:
+            sizeLimit: 10Gi

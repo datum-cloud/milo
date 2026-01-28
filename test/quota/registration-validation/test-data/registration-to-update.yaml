@@ -1,0 +1,17 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceRegistration
+metadata:
+  name: test-immutable-registration
+spec:
+  consumerType:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Organization
+  type: "Entity"
+  resourceType: "test.immutable.miloapis.com/original"
+  description: "Registration to test immutability"
+  baseUnit: "item"
+  displayUnit: "items"
+  unitConversionFactor: 1
+  claimingResources:
+    - apiGroup: test.miloapis.com
+      kind: TestItem

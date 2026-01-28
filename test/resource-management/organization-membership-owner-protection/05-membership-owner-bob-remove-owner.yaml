@@ -1,0 +1,7 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: owner-membership-bob
+  namespace: organization-owner-protection
+spec:
+  roles: []

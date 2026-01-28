@@ -1,0 +1,402 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: organization-membership-role-assignment
+spec:
+  description: |
+    Tests OrganizationMembership role-based access control functionality.
+
+    This test validates the enhanced OrganizationMembership feature that
+    automatically manages PolicyBinding resources for assigned roles.
+
+    Key scenarios tested:
+    - OrganizationMembership creation with role assignments
+    - Automatic PolicyBinding creation by the controller
+    - Multiple roles per membership
+    - Cross-namespace role references
+    - Role addition via membership update
+    - Role removal via membership update
+    - PolicyBinding cleanup when roles are removed
+    - Validation webhook enforcement (duplicate roles, invalid roles)
+    - Status tracking with appliedRoles and conditions
+    - Garbage collection of PolicyBindings via owner references
+
+  clusters:
+    org:
+      kubeconfig: kubeconfig-org
+
+  steps:
+    - name: setup-test-environment
+      description: |
+        Creates test organization, user, and four test roles (organization-admin,
+        organization-viewer, billing-manager in org namespace; shared-developer in
+        milo-system). Waits for organization namespace to become Active and user to
+        reach Ready state before proceeding.
+      try:
+        - description: Create test Organization
+          apply:
+            file: 01-organization.yaml
+        - description: Wait for Organization namespace to become Active
+          wait:
+            apiVersion: v1
+            kind: Namespace
+            name: organization-test-membership-roles
+            timeout: 30s
+            for:
+              jsonPath:
+                path: '{.status.phase}'
+                value: Active
+        - description: Create test User
+          apply:
+            file: 02-user.yaml
+        - description: Wait for User to reach Ready state
+          wait:
+            apiVersion: iam.miloapis.com/v1alpha1
+            kind: User
+            name: "test-user-alice"
+            timeout: 30s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Create four test Roles (organization-admin, organization-viewer, billing-manager, shared-developer)
+          apply:
+            file: 03-roles.yaml
+        - description: Allow time for Roles to be processed
+          sleep:
+            duration: 2s
+
+    - name: test-membership-with-single-role
+      cluster: org
+      description: |
+        Assigns organization-viewer role to user via OrganizationMembership. Verifies
+        that the controller automatically creates one PolicyBinding with correct labels
+        and owner references. Confirms appliedRoles status shows role as "Applied".
+      try:
+        - description: Create OrganizationMembership with organization-viewer role
+          apply:
+            file: 04-membership-single-role.yaml
+        - description: Wait for membership to reach Ready state
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-single
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Mark PolicyBindings as Ready (test workaround)
+          script:
+            timeout: 30s
+            content: |
+              # Wait for PolicyBindings to be created
+              sleep 2
+              # Get all PolicyBindings in the namespace and mark them Ready
+              kubectl get policybindings -n organization-test-membership-roles -o name | while read pb; do
+                kubectl patch "$pb" -n organization-test-membership-roles --type=merge --subresource=status -p '{"status":{"conditions":[{"type":"Ready","status":"True","reason":"TestReady","message":"Marked ready for testing","lastTransitionTime":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}],"observedGeneration":1}}'
+              done
+        - description: Wait for controller to apply role and update RolesApplied condition
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-single
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: RolesApplied
+                value: 'True'
+        - description: Verify membership status shows applied role
+          assert:
+            file: assertions/assert-single-role-membership.yaml
+        - description: Verify controller created PolicyBinding with correct labels and owner reference
+          assert:
+            file: assertions/assert-single-role-policybinding.yaml
+
+    - name: test-membership-with-multiple-roles
+      cluster: org
+      description: |
+        Assigns two roles (organization-admin and billing-manager) to user in single
+        membership. Verifies controller creates two PolicyBindings, each referencing
+        the correct role. Confirms both roles appear in appliedRoles status.
+      try:
+        - description: Create OrganizationMembership with organization-admin and billing-manager roles
+          apply:
+            file: 05-membership-multiple-roles.yaml
+        - description: Wait for membership to reach Ready state
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-multiple
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Mark PolicyBindings as Ready (test workaround)
+          script:
+            timeout: 30s
+            content: |
+              # Wait for PolicyBindings to be created
+              sleep 2
+              # Get all PolicyBindings in the namespace and mark them Ready
+              kubectl get policybindings -n organization-test-membership-roles -o name | while read pb; do
+                kubectl patch "$pb" -n organization-test-membership-roles --type=merge --subresource=status -p '{"status":{"conditions":[{"type":"Ready","status":"True","reason":"TestReady","message":"Marked ready for testing","lastTransitionTime":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}],"observedGeneration":1}}'
+              done
+        - description: Wait for controller to apply both roles
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-multiple
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: RolesApplied
+                value: 'True'
+        - description: Verify membership status shows both applied roles
+          assert:
+            file: assertions/assert-multiple-roles-membership.yaml
+        - description: Verify controller created two PolicyBindings, one for each role
+          assert:
+            file: assertions/assert-multiple-roles-policybindings.yaml
+
+    - name: test-add-roles-via-update
+      cluster: org
+      description: |
+        Updates existing single-role membership to add billing-manager role. Verifies
+        controller creates additional PolicyBinding for new role while preserving
+        existing PolicyBinding. Confirms appliedRoles status reflects both roles.
+      try:
+        - description: Update membership to add billing-manager role to existing organization-viewer role
+          apply:
+            file: 06-membership-updated-add-role.yaml
+        - description: Mark PolicyBindings as Ready (test workaround)
+          script:
+            timeout: 30s
+            content: |
+              # Wait for new PolicyBindings to be created
+              sleep 2
+              # Get all PolicyBindings in the namespace and mark them Ready
+              kubectl get policybindings -n organization-test-membership-roles -o name | while read pb; do
+                kubectl patch "$pb" -n organization-test-membership-roles --type=merge --subresource=status -p '{"status":{"conditions":[{"type":"Ready","status":"True","reason":"TestReady","message":"Marked ready for testing","lastTransitionTime":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}],"observedGeneration":1}}'
+              done
+        - description: Wait for controller to process update and apply new role
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-single
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: RolesApplied
+                value: 'True'
+        - description: Allow time for PolicyBinding creation to complete
+          sleep:
+            duration: 2s
+        - description: Verify both roles in appliedRoles and two PolicyBindings exist
+          assert:
+            file: assertions/assert-role-added.yaml
+
+    - name: test-remove-roles-via-update
+      cluster: org
+      description: |
+        Updates multi-role membership to remove billing-manager role. Verifies controller
+        deletes corresponding PolicyBinding while preserving PolicyBinding for remaining
+        organization-admin role. Confirms appliedRoles status shows only active role.
+      try:
+        - description: Update membership to remove billing-manager role, keeping only organization-admin
+          apply:
+            file: 07-membership-updated-remove-role.yaml
+        - description: Wait for controller to process removal and update RolesApplied condition
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-multiple
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: RolesApplied
+                value: 'True'
+        - description: Allow time for PolicyBinding deletion to complete
+          sleep:
+            duration: 2s
+        - description: Verify only organization-admin role remains in appliedRoles and corresponding PolicyBinding exists
+          assert:
+            file: assertions/assert-role-removed.yaml
+
+    - name: test-membership-without-roles
+      cluster: org
+      description: |
+        Creates membership with empty roles list. Verifies no PolicyBindings are created
+        and RolesApplied condition shows True with reason "NoRolesSpecified". Confirms
+        membership remains valid without role assignments.
+      try:
+        - description: Create OrganizationMembership with empty roles list
+          apply:
+            file: 08-membership-no-roles.yaml
+        - description: Wait for membership to reach Ready state
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-no-roles
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Wait for RolesApplied condition (should be True with NoRolesSpecified reason)
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-no-roles
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: RolesApplied
+                value: 'True'
+        - description: Verify no PolicyBindings created and RolesApplied condition reason is NoRolesSpecified
+          assert:
+            file: assertions/assert-no-roles-membership.yaml
+
+    - name: test-cross-namespace-role
+      cluster: org
+      description: |
+        Assigns role from milo-system namespace (shared-developer) to membership in
+        organization namespace. Verifies PolicyBinding is created in membership namespace
+        with correct cross-namespace role reference. Confirms appliedRoles shows full
+        namespace/name format.
+      try:
+        - description: Create membership referencing shared-developer role from milo-system namespace
+          apply:
+            file: 09-membership-cross-namespace-role.yaml
+        - description: Wait for membership to reach Ready state
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-cross-ns
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Mark PolicyBindings as Ready (test workaround)
+          script:
+            timeout: 30s
+            content: |
+              # Wait for PolicyBindings to be created
+              sleep 2
+              # Get all PolicyBindings in the namespace and mark them Ready
+              kubectl get policybindings -n organization-test-membership-roles -o name | while read pb; do
+                kubectl patch "$pb" -n organization-test-membership-roles --type=merge --subresource=status -p '{"status":{"conditions":[{"type":"Ready","status":"True","reason":"TestReady","message":"Marked ready for testing","lastTransitionTime":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}],"observedGeneration":1}}'
+              done
+        - description: Wait for controller to apply cross-namespace role
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-cross-ns
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: RolesApplied
+                value: 'True'
+        - description: Verify PolicyBinding created in membership namespace with correct cross-namespace role reference
+          assert:
+            file: assertions/assert-cross-namespace-role.yaml
+
+    - name: test-validation-duplicate-roles
+      description: |
+        Attempts to create membership with duplicate role reference (organization-viewer
+        listed twice). Verifies Kubernetes API server rejects request with "Duplicate
+        value" error before webhook runs. Tests +listType=map kubebuilder marker
+        enforcement.
+      try:
+        - description: Attempt to create membership with organization-viewer role listed twice
+          create:
+            file: 10-membership-duplicate-roles.yaml
+            expect:
+              - check:
+                  ($error != null): true
+
+    - name: test-validation-invalid-role
+      description: |
+        Attempts to create membership referencing non-existent role (nonexistent-role).
+        Verifies admission webhook rejects request with "role not found" error. Tests
+        webhook validation layer that checks role existence.
+      try:
+        - description: Attempt to create membership with non-existent role reference
+          create:
+            file: 11-membership-invalid-role.yaml
+            expect:
+              - check:
+                  ($error != null): true
+
+    - name: test-partial-role-application
+      cluster: org
+      description: |
+        Creates membership with single valid role (organization-viewer). Verifies
+        controller successfully applies the role and creates PolicyBinding. Confirms
+        appliedRoles status accurately reflects successful role application.
+      try:
+        - description: Create membership with organization-viewer role
+          create:
+            file: 12-membership-partial-roles.yaml
+        - description: Wait for membership to reach Ready state
+          wait:
+            apiVersion: resourcemanager.miloapis.com/v1alpha1
+            kind: OrganizationMembership
+            name: alice-membership-partial
+            namespace: organization-test-membership-roles
+            timeout: 60s
+            for:
+              condition:
+                name: Ready
+                value: 'True'
+        - description: Mark PolicyBindings as Ready (test workaround)
+          script:
+            timeout: 30s
+            content: |
+              # Wait for PolicyBindings to be created
+              sleep 2
+              # Get all PolicyBindings in the namespace and mark them Ready
+              kubectl get policybindings -n organization-test-membership-roles -o name | while read pb; do
+                kubectl patch "$pb" -n organization-test-membership-roles --type=merge --subresource=status -p '{"status":{"conditions":[{"type":"Ready","status":"True","reason":"TestReady","message":"Marked ready for testing","lastTransitionTime":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}],"observedGeneration":1}}'
+              done
+        - description: Allow time for role application to complete
+          sleep:
+            duration: 1s
+        - description: Verify role successfully applied and status accurate
+          assert:
+            file: assertions/assert-partial-role-status.yaml
+
+    - name: test-garbage-collection
+      cluster: org
+      description: |
+        Deletes membership with active PolicyBindings. Verifies Kubernetes garbage
+        collection automatically deletes associated PolicyBindings via owner references.
+        Confirms no orphaned PolicyBindings remain after membership deletion.
+      try:
+        - description: Delete membership with active PolicyBinding
+          delete:
+            ref:
+              apiVersion: resourcemanager.miloapis.com/v1alpha1
+              kind: OrganizationMembership
+              name: alice-membership-single
+        - description: Allow time for garbage collection to process owner references
+          sleep:
+            duration: 3s
+        - description: Verify PolicyBinding was automatically deleted (should return NotFound)
+          script:
+            content: kubectl get policybinding alice-membership-single-organization-admin -n organization-test-membership-roles 2>&1 | grep -q "NotFound"
+            check:
+              ($error == null): true
+

@@ -57,6 +57,11 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 		} else {
 			return nil, errors.NewInternalError(fmt.Errorf("failed to get Contact: %w", err))
 		}
+	} else {
+		// Validate contact ownership when in user context
+		if err := ValidateContactOwnership(ctx, contact, notificationv1alpha1.SchemeGroupVersion.WithResource("contactgroupmembershipremovals").GroupResource(), removal.Name, "create membership removal"); err != nil {
+			return nil, err
+		}
 	}
 	// Ensure ContactGroup exists
 	contactGroup := &notificationv1alpha1.ContactGroup{}
@@ -104,5 +109,23 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateUpdate(ctx context.Cont
 }
 
 func (v *ContactGroupMembershipRemovalValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	removal, ok := obj.(*notificationv1alpha1.ContactGroupMembershipRemoval)
+	if !ok {
+		return nil, errors.NewInternalError(fmt.Errorf("failed to cast object to ContactGroupMembershipRemoval"))
+	}
+
+	// Validate contact ownership when in user context
+	// Retrieve the referenced Contact to check its ownership
+	contact := &notificationv1alpha1.Contact{}
+	if err := v.Client.Get(ctx, client.ObjectKey{Namespace: removal.Spec.ContactRef.Namespace, Name: removal.Spec.ContactRef.Name}, contact); err != nil {
+		if errors.IsNotFound(err) {
+			return nil, errors.NewInternalError(fmt.Errorf("failed to get Contact for validation: %w", err))
+		}
+		return nil, errors.NewInternalError(fmt.Errorf("failed to get Contact: %w", err))
+	}
+
+	if err := ValidateContactOwnership(ctx, contact, notificationv1alpha1.SchemeGroupVersion.WithResource("contactgroupmembershipremovals").GroupResource(), removal.Name, "delete membership removal"); err != nil {
+		return nil, err
+	}
 	return nil, nil
 }

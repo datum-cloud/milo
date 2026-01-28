@@ -1,0 +1,11 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: test-membership-roles
+  labels:
+    test.miloapis.com/scenario: "organization-membership-roles"
+  annotations:
+    kubernetes.io/description: "Organization for testing membership role assignments"
+    kubernetes.io/display-name: "Test Membership Roles Organization"
+spec:
+  type: Standard

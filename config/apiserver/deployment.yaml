@@ -51,11 +51,18 @@ spec:
           - --audit-webhook-config-file=$(AUDIT_WEBHOOK_CONFIG_FILE)
           - --audit-webhook-mode=$(AUDIT_WEBHOOK_MODE)
           - --audit-webhook-initial-backoff=$(AUDIT_WEBHOOK_INITIAL_BACKOFF)
+          - --proxy-client-cert-file=$(PROXY_CLIENT_CERT_FILE)
+          - --proxy-client-key-file=$(PROXY_CLIENT_KEY_FILE)
           - --feature-sessions=true
           - --sessions-provider-url=$(SESSIONS_PROVIDER_URL)
           - --sessions-provider-ca-file=$(SESSIONS_PROVIDER_CA_FILE)
           - --sessions-provider-client-cert=$(SESSIONS_PROVIDER_CLIENT_CERT_FILE)
           - --sessions-provider-client-key=$(SESSIONS_PROVIDER_CLIENT_KEY_FILE)
+          - --feature-useridentities=true
+          - --useridentities-provider-url=$(USERIDENTITIES_PROVIDER_URL)
+          - --useridentities-provider-ca-file=$(USERIDENTITIES_PROVIDER_CA_FILE)
+          - --useridentities-provider-client-cert=$(USERIDENTITIES_PROVIDER_CLIENT_CERT_FILE)
+          - --useridentities-provider-client-key=$(USERIDENTITIES_PROVIDER_CLIENT_KEY_FILE)
           - --provider-timeout=3
           - --provider-retries=2
           - --forward-extras=iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name
@@ -112,6 +119,10 @@ spec:
             value: ""
           - name: AUDIT_WEBHOOK_INITIAL_BACKOFF
             value: ""
+          - name: PROXY_CLIENT_CERT_FILE
+            value: ""
+          - name: PROXY_CLIENT_KEY_FILE
+            value: ""
           - name: SESSIONS_PROVIDER_URL
             value: ""
           - name: SESSIONS_PROVIDER_CA_FILE
@@ -119,6 +130,14 @@ spec:
           - name: SESSIONS_PROVIDER_CLIENT_CERT_FILE
             value: ""
           - name: SESSIONS_PROVIDER_CLIENT_KEY_FILE
+            value: ""
+          - name: USERIDENTITIES_PROVIDER_URL
+            value: ""
+          - name: USERIDENTITIES_PROVIDER_CA_FILE
+            value: ""
+          - name: USERIDENTITIES_PROVIDER_CLIENT_CERT_FILE
+            value: ""
+          - name: USERIDENTITIES_PROVIDER_CLIENT_KEY_FILE
             value: ""
         livenessProbe:
           failureThreshold: 3
@@ -153,7 +172,7 @@ spec:
             cpu: 500m
             memory: 512Mi
         startupProbe:
-          failureThreshold: 3
+          failureThreshold: 30
           httpGet:
             path: /livez
             port: https

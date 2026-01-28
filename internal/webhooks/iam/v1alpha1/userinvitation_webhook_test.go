@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,15 +12,11 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-func init() {
-	utilruntime.Must(iamv1alpha1.AddToScheme(runtimeScheme))
-}
-
-// TestUserInvitationMutator_Default ensures that the InvitedBy field is defaulted to the requesting user.
 func TestUserInvitationMutator_Default(t *testing.T) {
 	// Prepare basic UserInvitation with no InvitedBy
 	ui := &iamv1alpha1.UserInvitation{
@@ -33,12 +30,18 @@ func TestUserInvitationMutator_Default(t *testing.T) {
 	// Create admission request context with authenticated user
 	req := admission.Request{
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			UserInfo: authenticationv1.UserInfo{Username: "requester"},
+			UserInfo: authenticationv1.UserInfo{Username: "requester", UID: "requester"},
 		},
 	}
 	ctx := admission.NewContextWithRequest(context.Background(), req)
 
-	mutator := &UserInvitationMutator{}
+	// Build a fake client containing the inviter User so the mutator's lookup succeeds.
+	inviterUser := &iamv1alpha1.User{
+		ObjectMeta: metav1.ObjectMeta{Name: "requester", UID: "requester"},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(runtimeScheme).WithObjects(inviterUser).Build()
+
+	mutator := &UserInvitationMutator{client: fakeClient}
 	assert.NoError(t, mutator.Default(ctx, ui))
 
 	// Check that InvitedBy has been populated correctly
@@ -52,6 +55,7 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 	future := metav1.NewTime(now.Add(1 * time.Hour))
 
 	tests := map[string]struct {
+		existing       []client.Object
 		invitation     *iamv1alpha1.UserInvitation
 		expectError    bool
 		errorSubstring string
@@ -115,9 +119,94 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 			expectError:    true,
 			errorSubstring: "organizationRef must be the same as the requesting user's organization",
 		},
+		"error when duplicate invitation exists": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "duplicate-invitation"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email:           "duplicate@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+				},
+			},
+			existing: []client.Object{
+				&iamv1alpha1.UserInvitation{
+					ObjectMeta: metav1.ObjectMeta{Name: "existing-invitation"},
+					Spec: iamv1alpha1.UserInvitationSpec{
+						Email:           "duplicate@example.com",
+						State:           "Pending",
+						OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+					},
+				},
+			},
+			expectError:    true,
+			errorSubstring: "organizationRef",
+		},
+		"error when user is already a member of organization": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "already-member"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email:           "member@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+				},
+			},
+			existing: []client.Object{
+				// Existing user with same email
+				&iamv1alpha1.User{
+					ObjectMeta: metav1.ObjectMeta{Name: "existing-user"},
+					Spec:       iamv1alpha1.UserSpec{Email: "member@example.com"},
+				},
+				// Membership linking user to organization
+				&resourcemanagerv1alpha1.OrganizationMembership{
+					ObjectMeta: metav1.ObjectMeta{Name: "membership"},
+					Spec: resourcemanagerv1alpha1.OrganizationMembershipSpec{
+						OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+						UserRef:         resourcemanagerv1alpha1.MemberReference{Name: "existing-user"},
+					},
+				},
+			},
+			expectError:    true,
+			errorSubstring: "already a member of the organization",
+		},
+		"success when user is not a member of the organization": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "not-a-member"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email:           "member@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+				},
+			},
+			existing: []client.Object{
+				// Existing user with same email
+				&iamv1alpha1.User{
+					ObjectMeta: metav1.ObjectMeta{Name: "existing-user"},
+					Spec:       iamv1alpha1.UserSpec{Email: "member@example.com"},
+				},
+				// Membership linking user to organization
+				&resourcemanagerv1alpha1.OrganizationMembership{
+					ObjectMeta: metav1.ObjectMeta{Name: "membership"},
+					Spec: resourcemanagerv1alpha1.OrganizationMembershipSpec{
+						OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+						UserRef:         resourcemanagerv1alpha1.MemberReference{Name: "existing-user-2"},
+					},
+				},
+			},
+			expectError: false,
+		},
+		"success when user does not exist": {
+			invitation: &iamv1alpha1.UserInvitation{
+				ObjectMeta: metav1.ObjectMeta{Name: "not-a-member"},
+				Spec: iamv1alpha1.UserInvitationSpec{
+					Email:           "member@example.com",
+					State:           "Pending",
+					OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{Name: "testorg"},
+				},
+			},
+			existing:    []client.Object{},
+			expectError: false,
+		},
 	}
-
-	validator := &UserInvitationValidator{}
 
 	// Common admission request used across sub-tests
 	req := admission.Request{
@@ -129,7 +218,29 @@ func TestUserInvitationValidator_ValidateCreate(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Ensure OrganizationRef is set so validator passes namespace check
+			// Build fake client with any existing objects for this test case
+			builder := fake.NewClientBuilder().WithScheme(runtimeScheme)
+			if len(tc.existing) > 0 {
+				builder = builder.WithObjects(tc.existing...)
+			}
+			// Add composite key index to mimic real indexer behaviour
+			builder = builder.WithIndex(&iamv1alpha1.UserInvitation{}, userInvitationCompositeKey, func(raw client.Object) []string {
+				ui := raw.(*iamv1alpha1.UserInvitation)
+				return []string{buildUserInvitationCompositeKey(*ui)}
+			})
+			builder = builder.WithIndex(&iamv1alpha1.User{}, userEmailKey, func(raw client.Object) []string {
+				user := raw.(*iamv1alpha1.User)
+				return []string{strings.ToLower(user.Spec.Email)}
+			})
+			builder = builder.WithIndex(&resourcemanagerv1alpha1.OrganizationMembership{}, organizationMembershipCompositeKey, func(raw client.Object) []string {
+				om := raw.(*resourcemanagerv1alpha1.OrganizationMembership)
+				return []string{buildOrganizationMembershipCompositeKey(om.Spec.OrganizationRef.Name, om.Spec.UserRef.Name)}
+			})
+
+			fakeClient := builder.Build()
+
+			validator := &UserInvitationValidator{client: fakeClient}
+
 			ctx := admission.NewContextWithRequest(context.Background(), req)
 
 			warnings, err := validator.ValidateCreate(ctx, tc.invitation)

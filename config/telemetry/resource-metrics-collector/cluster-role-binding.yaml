@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: exporter
+    app.kubernetes.io/name: custom-resources-state-metrics
+    app.kubernetes.io/version: 2.15.0
+  name: custom-resources-state-metrics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: custom-resources-state-metrics
+subjects:
+  - kind: ServiceAccount
+    name: custom-resources-state-metrics
