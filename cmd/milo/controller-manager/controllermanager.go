@@ -78,15 +78,20 @@ import (
 	_ "k8s.io/component-base/logs/json/register"
 
 	controlplane "go.miloapis.com/milo/internal/control-plane"
+	crmcontroller "go.miloapis.com/milo/internal/controllers/crm"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
 	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	quotacontroller "go.miloapis.com/milo/internal/quota/controllers"
+	crmv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/crm/v1alpha1"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
+	identityv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/identity/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
+	crmv1alpha1 "go.miloapis.com/milo/pkg/apis/crm/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
+	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
@@ -150,6 +155,13 @@ var (
 	// OrganizationMembershipSelfDeleteRoleNamespace is the namespace where the organization membership self delete role is located.
 	// This allows service providers to configure where self delete roles are stored.
 	OrganizationMembershipSelfDeleteRoleNamespace string
+
+	// NoteCreatorEditorRoleName is the name of the role that will be used to grant note creator edit permissions.
+	NoteCreatorEditorRoleName string
+
+	// UserContactNamespace is the namespace where user contacts will be created/managed.
+	// When a User is created, the UserContactController will create or update Contacts in this namespace.
+	UserContactNamespace string
 )
 
 func init() {
@@ -163,7 +175,9 @@ func init() {
 	utilruntime.Must(resourcemanagerv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(identityv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(crmv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(quotav1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(apiregistrationv1.AddToScheme(Scheme))
 }
@@ -283,6 +297,7 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&PlatformInvitationEmailVariableActionUrl, "platform-invitation-email-variable-action-url", "https://cloud.datum.net", "The action url for the platform invitation email.")
 	fs.StringVar(&OrganizationMembershipSelfDeleteRoleName, "organization-membership-self-delete-role-name", "organizationmembership-self-delete", "The name of the role that will be used to grant organization membership self delete actions.")
 	fs.StringVar(&OrganizationMembershipSelfDeleteRoleNamespace, "organization-membership-self-delete-role-namespace", "milo-system", "The namespace where the organization membership self delete role is located. Defaults to system-namespace if not specified.")
+	fs.StringVar(&NoteCreatorEditorRoleName, "note-creator-editor-role-name", "crm-note-creator-editor", "The name of the role that will be used to grant note creator edit permissions.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -487,6 +502,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up userdeactivation webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
+			if err := identityv1alpha1webhook.SetupUserIdentityWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up useridentity webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 			if err := notificationv1alpha1webhook.SetupEmailTemplateWebhooksWithManager(ctrl, SystemNamespace); err != nil {
 				logger.Error(err, "Error setting up emailtemplate webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
@@ -525,6 +544,10 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := iamv1alpha1webhook.SetupPlatformAccessRejectionWebhooksWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up platform access rejection webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := crmv1alpha1webhook.SetupNoteWebhooksWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up note webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
@@ -684,6 +707,21 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
+			// UserContactController manages the relationship between Users and Contacts.
+			// It ensures that when a User is created, a corresponding Contact exists with a reference to the User.
+			userContactNamespace := UserContactNamespace
+			if userContactNamespace == "" {
+				userContactNamespace = SystemNamespace
+			}
+			userContactCtrl := iamcontroller.UserContactController{
+				Client:           ctrl.GetClient(),
+				ContactNamespace: userContactNamespace,
+			}
+			if err := userContactCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up user contact controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
 			userInvitationCtrl := iamcontroller.UserInvitationController{
 				Client:                          ctrl.GetClient(),
 				SystemNamespace:                 SystemNamespace,
@@ -693,6 +731,16 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			if err := userInvitationCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up user invitation controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			noteCtrl := crmcontroller.NoteController{
+				Client:                     ctrl.GetClient(),
+				CreatorEditorRoleName:      NoteCreatorEditorRoleName,
+				CreatorEditorRoleNamespace: SystemNamespace,
+			}
+			if err := noteCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up note controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

@@ -1,0 +1,12 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: User
+metadata:
+  name: test-crm-note-user
+  labels:
+    test.miloapis.com/scenario: "crm-note-contact-lifecycle"
+spec:
+  email: test-crm-note-user@example.com
+  givenName: Test
+  familyName: CrmNote
+
+

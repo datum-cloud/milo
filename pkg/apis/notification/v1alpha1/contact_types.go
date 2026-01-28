@@ -47,6 +47,8 @@ const (
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Namespaced
 // +kubebuilder:selectablefield:JSONPath=".spec.email"
+// +kubebuilder:selectablefield:JSONPath=".spec.subject.name"
+// +kubebuilder:selectablefield:JSONPath=".spec.subject.kind"
 type Contact struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
