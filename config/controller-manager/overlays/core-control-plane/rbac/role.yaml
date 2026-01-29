@@ -201,6 +201,18 @@ rules:
   - update
   - watch
 - apiGroups:
+  - networking.datumapis.com
+  resources:
+  - connectorclasses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - notification.miloapis.com
   resources:
   - contacts
