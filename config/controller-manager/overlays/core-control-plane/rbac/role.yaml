@@ -46,6 +46,25 @@ rules:
   verbs:
   - create
 - apiGroups:
+  - crm.miloapis.com
+  resources:
+  - notes
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crm.miloapis.com
+  resources:
+  - notes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - dns.networking.miloapis.com
   resources:
   - dnszoneclasses
@@ -202,6 +221,18 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - networking.datumapis.com
+  resources:
+  - connectorclasses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - notification.miloapis.com
   resources:

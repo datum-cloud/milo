@@ -72,13 +72,10 @@ func (v *ContactGroupMembershipRemovalValidator) ValidateCreate(ctx context.Cont
 			return nil, errors.NewInternalError(fmt.Errorf("failed to get ContactGroup: %w", err))
 		}
 	}
-	if contactGroup.Spec.Visibility == notificationv1alpha1.ContactGroupVisibilityPrivate {
-		errs = append(errs, field.Invalid(field.NewPath("spec", "contactGroupRef", "visibility"), contactGroup.Spec.Visibility, "ContactGroup must be public for creating a ContactGroupMembershipRemoval"))
-	}
 
 	// Prevent duplicate removals
 	var existing notificationv1alpha1.ContactGroupMembershipRemovalList
-	if err := v.Client.List(ctx, &existing, client.InNamespace(removal.Namespace), client.MatchingFields{cgmrByContactGroupTupleKey: buildContactGroupTupleKey(removal.Spec.ContactRef, removal.Spec.ContactGroupRef)}); err != nil {
+	if err := v.Client.List(ctx, &existing, client.MatchingFields{cgmrByContactGroupTupleKey: buildContactGroupTupleKey(removal.Spec.ContactRef, removal.Spec.ContactGroupRef)}); err != nil {
 		return nil, errors.NewInternalError(fmt.Errorf("failed to list removals: %w", err))
 	}
 	if len(existing.Items) > 0 {
