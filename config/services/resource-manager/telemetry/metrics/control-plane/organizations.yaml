@@ -1,0 +1,54 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "resourcemanager.miloapis.com"
+        kind: "Organization"
+        version: "v1alpha1"
+      metricNamePrefix: milo_organizations
+      commonLabels:
+        component: resource_manager
+        resource_type: organization
+      labelsFromPath:
+        organization_type: [spec, type]
+      metrics:
+        - name: "info"
+          help: "Information about organizations"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+
+        - name: "status_condition"
+          help: "Status conditions for organizations"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the organization was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "observed_generation"
+          help: "The observed generation for the organization"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, observedGeneration]
+              nilIsZero: true
+
+        - name: "current_generation"
+          help: "The current generation for the organization"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]

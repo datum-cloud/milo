@@ -1,0 +1,71 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "notification.miloapis.com"
+        kind: "EmailBroadcast"
+        version: "v1alpha1"
+      metricNamePrefix: milo_email_broadcasts
+      commonLabels:
+        component: notification
+        resource_type: email_broadcast
+      labelsFromPath:
+        template_name: [spec, templateRef, name]
+      metrics:
+        - name: "info"
+          help: "Information about email broadcasts"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for email broadcasts"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "total_recipients"
+          help: "Total number of recipients for the broadcast"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, totalRecipients]
+              nilIsZero: true
+
+        - name: "successful_deliveries"
+          help: "Number of successful deliveries"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, successfulDeliveries]
+              nilIsZero: true
+
+        - name: "failed_deliveries"
+          help: "Number of failed deliveries"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, failedDeliveries]
+              nilIsZero: true
+
+        - name: "created_timestamp"
+          help: "Timestamp when the email broadcast was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "current_generation"
+          help: "The current generation for the email broadcast"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]

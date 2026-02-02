@@ -1,0 +1,46 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: resourcemanager.miloapis.com-recording-rules
+  labels:
+    app.kubernetes.io/name: milo
+    app.kubernetes.io/component: resource-manager
+    app.kubernetes.io/part-of: milo
+    monitoring.coreos.com/prometheus: kube-prometheus
+spec:
+  groups:
+    # =============================================================================
+    # RESOURCE READINESS
+    # =============================================================================
+    - name: resourcemanager.readiness.1m
+      interval: 15s
+      rules:
+        # NOT READY organizations
+        - record: resourcemanager.miloapis.com:organizations:not_ready
+          expr: |
+            count by (organization_type) (
+              milo_organizations_info{component="resource_manager"}
+              unless on(name) (
+                milo_organizations_status_condition{component="resource_manager", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY projects
+        - record: resourcemanager.miloapis.com:projects:not_ready
+          expr: |
+            count by (owner_kind, owner_name) (
+              milo_projects_info{component="resource_manager"}
+              unless on(name) (
+                milo_projects_status_condition{component="resource_manager", type="Ready", status="True"} == 1
+              )
+            )
+
+        # NOT READY organization memberships
+        - record: resourcemanager.miloapis.com:memberships:not_ready
+          expr: |
+            count by (organization_name) (
+              milo_organization_memberships_info{component="resource_manager"}
+              unless on(name, namespace) (
+                milo_organization_memberships_status_condition{component="resource_manager", type="Ready", status="True"} == 1
+              )
+            )
