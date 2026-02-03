@@ -1,11 +1,12 @@
-Test: `contactgroup-visibility`
+# Test: `contactgroup-visibility`
 
 End-to-end tests for ContactGroup visibility filtering.
 
 This test verifies:
-
 - Public groups are visible to all users when listing
-- Private groups are NOT visible to users regardless of membership (strict public filtering)
+- Private groups are NOT visible to users without membership
+- Private groups become visible once the user has a ContactGroupMembership
+
 
 ## Steps
 
@@ -67,9 +68,9 @@ Create two private groups and verify user cannot see them (only public groups)
 | 4 | `assert` | 0 | 0 | *No description* |
 | 5 | `script` | 0 | 0 | *No description* |
 
-### Step: `create-first-membership-and-verify-one-private-visible`
+### Step: `create-first-membership-and-verify-private-still-hidden`
 
-Create membership for first private group and verify user can now see it
+Create membership for first private group but verify user still ONLY sees public groups (strict public filtering)
 
 #### Try
 
@@ -79,9 +80,9 @@ Create membership for first private group and verify user can now see it
 | 2 | `assert` | 0 | 0 | *No description* |
 | 3 | `script` | 0 | 0 | *No description* |
 
-### Step: `create-second-membership-and-verify-both-private-visible`
+### Step: `create-second-membership-and-verify-private-still-hidden`
 
-Create membership for second private group and verify user can now see all groups
+Create membership for second private group and verify user still ONLY sees public groups
 
 #### Try
 
@@ -92,3 +93,4 @@ Create membership for second private group and verify user can now see all group
 | 3 | `script` | 0 | 0 | *No description* |
 
 ---
+
