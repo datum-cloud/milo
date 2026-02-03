@@ -67,9 +67,9 @@ Create two private groups and verify user cannot see them (only public groups)
 | 4 | `assert` | 0 | 0 | *No description* |
 | 5 | `script` | 0 | 0 | *No description* |
 
-### Step: `create-first-membership-and-verify-one-private-visible`
+### Step: `create-first-membership-and-verify-private-still-hidden`
 
-Create membership for first private group and verify user can now see it
+Create membership for first private group but verify user still ONLY sees public groups (private remains hidden even with membership)
 
 #### Try
 
@@ -79,9 +79,9 @@ Create membership for first private group and verify user can now see it
 | 2 | `assert` | 0 | 0 | *No description* |
 | 3 | `script` | 0 | 0 | *No description* |
 
-### Step: `create-second-membership-and-verify-both-private-visible`
+### Step: `create-second-membership-and-verify-private-still-hidden`
 
-Create membership for second private group and verify user can now see all groups
+Create membership for second private group and verify user still ONLY sees public groups (private groups still hidden despite membership)
 
 #### Try
 
