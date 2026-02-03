@@ -26,14 +26,14 @@ import (
 //   - Public contact groups are visible to all users
 //   - Private contact groups are only visible to users who have an associated
 //     ContactGroupMembership
-type ContactGroupVisibilityFilter struct {
+type ContactGroupVisibilityWithPrivateFilter struct {
 	loopbackConfig *rest.Config
 	clientGetter   func() (dynamic.Interface, error)
 }
 
 // NewContactGroupVisibilityFilter creates a new ContactGroupVisibilityFilter.
-func NewContactGroupVisibilityFilter(loopbackConfig *rest.Config) *ContactGroupVisibilityFilter {
-	return &ContactGroupVisibilityFilter{
+func NewContactGroupVisibilityWithPrivateFilter(loopbackConfig *rest.Config) *ContactGroupVisibilityWithPrivateFilter {
+	return &ContactGroupVisibilityWithPrivateFilter{
 		loopbackConfig: loopbackConfig,
 		clientGetter: func() (dynamic.Interface, error) {
 			return dynamic.NewForConfig(loopbackConfig)
@@ -47,13 +47,13 @@ func NewContactGroupVisibilityFilter(loopbackConfig *rest.Config) *ContactGroupV
 // Visibility rules:
 //   - Public groups: visible to everyone
 //   - Private groups: only visible if the user has a ContactGroupMembership associated with that group
-func ContactGroupVisibilityDecorator(loopbackConfig *rest.Config) func(http.Handler) http.Handler {
-	filter := NewContactGroupVisibilityFilter(loopbackConfig)
+func ContactGroupVisibilityWithPrivateDecorator(loopbackConfig *rest.Config) func(http.Handler) http.Handler {
+	filter := NewContactGroupVisibilityWithPrivateFilter(loopbackConfig)
 	return filter.Wrap
 }
 
 // Wrap wraps the provided handler with contact group visibility filtering.
-func (f *ContactGroupVisibilityFilter) Wrap(handler http.Handler) http.Handler {
+func (f *ContactGroupVisibilityWithPrivateFilter) Wrap(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
 		info, ok := request.RequestInfoFrom(ctx)
@@ -104,7 +104,7 @@ func (f *ContactGroupVisibilityFilter) Wrap(handler http.Handler) http.Handler {
 
 // filterContactGroups filters the list of contact groups based on visibility rules.
 // Supports both ContactGroupList/List responses and Table responses (kubectl default).
-func (f *ContactGroupVisibilityFilter) filterContactGroups(ctx context.Context, userID string, body []byte) ([]byte, error) {
+func (f *ContactGroupVisibilityWithPrivateFilter) filterContactGroups(ctx context.Context, userID string, body []byte) ([]byte, error) {
 	// First, check the response kind to determine how to filter it.
 	var typeMeta struct {
 		Kind string `json:"kind"`
@@ -135,7 +135,7 @@ func (f *ContactGroupVisibilityFilter) filterContactGroups(ctx context.Context, 
 
 // buildAccessibleGroupsSet returns the set of group keys (namespace/name) accessible to the user.
 // Returns the map and a boolean indicating if the user has an associated Contact.
-func (f *ContactGroupVisibilityFilter) buildAccessibleGroupsSet(ctx context.Context, client dynamic.Interface, userID string) (map[string]bool, bool) {
+func (f *ContactGroupVisibilityWithPrivateFilter) buildAccessibleGroupsSet(ctx context.Context, client dynamic.Interface, userID string) (map[string]bool, bool) {
 	contactName, contactNamespace, err := f.findContactForUser(ctx, client, userID)
 	if err != nil {
 		// No contact found, user can only see public groups
@@ -152,7 +152,7 @@ func (f *ContactGroupVisibilityFilter) buildAccessibleGroupsSet(ctx context.Cont
 }
 
 // filterListResponse filters a ContactGroupList or List response.
-func (f *ContactGroupVisibilityFilter) filterListResponse(body []byte, accessibleGroups map[string]bool, hasContact bool) ([]byte, error) {
+func (f *ContactGroupVisibilityWithPrivateFilter) filterListResponse(body []byte, accessibleGroups map[string]bool, hasContact bool) ([]byte, error) {
 	var contactGroupList notificationv1alpha1.ContactGroupList
 	if err := json.Unmarshal(body, &contactGroupList); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal contact group list: %w", err)
@@ -164,7 +164,7 @@ func (f *ContactGroupVisibilityFilter) filterListResponse(body []byte, accessibl
 }
 
 // filterTableResponse filters a Table response (kubectl default format).
-func (f *ContactGroupVisibilityFilter) filterTableResponse(ctx context.Context, client dynamic.Interface, body []byte, accessibleGroups map[string]bool, hasContact bool) ([]byte, error) {
+func (f *ContactGroupVisibilityWithPrivateFilter) filterTableResponse(ctx context.Context, client dynamic.Interface, body []byte, accessibleGroups map[string]bool, hasContact bool) ([]byte, error) {
 	var table metav1.Table
 	if err := json.Unmarshal(body, &table); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal table: %w", err)
@@ -210,7 +210,7 @@ func (f *ContactGroupVisibilityFilter) filterTableResponse(ctx context.Context, 
 }
 
 // filterGroupItems filters a slice of ContactGroup items based on visibility rules.
-func (f *ContactGroupVisibilityFilter) filterGroupItems(groups []notificationv1alpha1.ContactGroup, accessibleGroups map[string]bool, hasContact bool) []notificationv1alpha1.ContactGroup {
+func (f *ContactGroupVisibilityWithPrivateFilter) filterGroupItems(groups []notificationv1alpha1.ContactGroup, accessibleGroups map[string]bool, hasContact bool) []notificationv1alpha1.ContactGroup {
 	filtered := make([]notificationv1alpha1.ContactGroup, 0, len(groups))
 	for _, group := range groups {
 		if f.isGroupVisible(group, accessibleGroups, hasContact) {
@@ -221,7 +221,7 @@ func (f *ContactGroupVisibilityFilter) filterGroupItems(groups []notificationv1a
 }
 
 // isGroupVisible determines if a contact group is visible to the user.
-func (f *ContactGroupVisibilityFilter) isGroupVisible(group notificationv1alpha1.ContactGroup, accessibleGroups map[string]bool, hasContact bool) bool {
+func (f *ContactGroupVisibilityWithPrivateFilter) isGroupVisible(group notificationv1alpha1.ContactGroup, accessibleGroups map[string]bool, hasContact bool) bool {
 	// Public groups are always visible
 	if group.Spec.Visibility == notificationv1alpha1.ContactGroupVisibilityPublic {
 		return true
@@ -238,7 +238,7 @@ func (f *ContactGroupVisibilityFilter) isGroupVisible(group notificationv1alpha1
 
 // findContactForUser finds the Contact resource for the given user ID.
 // Searches across all namespaces and returns the contact name, namespace, and any error.
-func (f *ContactGroupVisibilityFilter) findContactForUser(ctx context.Context, client dynamic.Interface, userID string) (string, string, error) {
+func (f *ContactGroupVisibilityWithPrivateFilter) findContactForUser(ctx context.Context, client dynamic.Interface, userID string) (string, string, error) {
 	// Query contacts across all namespaces
 	contactGVR := notificationv1alpha1.SchemeGroupVersion.WithResource("contacts")
 
@@ -265,7 +265,7 @@ func (f *ContactGroupVisibilityFilter) findContactForUser(ctx context.Context, c
 
 // getAccessibleGroups returns the list of contact group keys (namespace/name) that the user has access to
 // (through membership or removal records). Searches across all namespaces.
-func (f *ContactGroupVisibilityFilter) getAccessibleGroups(ctx context.Context, client dynamic.Interface, contactName, contactNamespace string) (map[string]bool, error) {
+func (f *ContactGroupVisibilityWithPrivateFilter) getAccessibleGroups(ctx context.Context, client dynamic.Interface, contactName, contactNamespace string) (map[string]bool, error) {
 	accessibleGroups := make(map[string]bool)
 
 	// Get memberships for this contact across all namespaces
