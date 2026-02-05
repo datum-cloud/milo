@@ -4,14 +4,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: notes.crm.miloapis.com
+  name: clusternotes.notes.miloapis.com
 spec:
-  group: crm.miloapis.com
+  group: notes.miloapis.com
   names:
-    kind: Note
-    listKind: NoteList
-    plural: notes
-    singular: note
+    kind: ClusterNote
+    listKind: ClusterNoteList
+    plural: clusternotes
+    singular: clusternote
   scope: Cluster
   versions:
   - additionalPrinterColumns:
@@ -34,8 +34,8 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          Note is the Schema for the notes API.
-          It represents a note attached to a subject (e.g. Contact or User).
+          ClusterNote is the Schema for the cluster-scoped notes API.
+          It represents a note attached to a cluster-scoped subject resource.
         properties:
           apiVersion:
             description: |-
@@ -98,15 +98,9 @@ spec:
                 properties:
                   apiGroup:
                     description: APIGroup is the group for the resource being referenced.
-                    enum:
-                    - iam.miloapis.com
-                    - notification.miloapis.com
                     type: string
                   kind:
                     description: Kind is the type of resource being referenced.
-                    enum:
-                    - User
-                    - Contact
                     type: string
                   name:
                     description: Name is the name of resource being referenced.
@@ -203,7 +197,6 @@ spec:
     selectableFields:
     - jsonPath: .spec.creatorRef.name
     - jsonPath: .spec.subjectRef.name
-    - jsonPath: .spec.subjectRef.namespace
     - jsonPath: .spec.subjectRef.kind
     - jsonPath: .spec.nextActionTime
     - jsonPath: .spec.followUp
