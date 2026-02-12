@@ -21,7 +21,7 @@ import (
 )
 
 func TestFilterGroupItems(t *testing.T) {
-	f := NewContactGroupVisibilityFilter(nil)
+	f := NewContactGroupVisibilityWithPrivateFilter(nil)
 
 	tests := []struct {
 		name             string
@@ -340,7 +340,7 @@ func TestContactGroupVisibilityFilter_Visibility(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Setup fake client
-			f := NewContactGroupVisibilityFilter(nil)
+			f := NewContactGroupVisibilityWithPrivateFilter(nil)
 			f.clientGetter = func() (dynamic.Interface, error) {
 				// Convert typed objects to unstructured for the dynamic client
 				scheme := runtime.NewScheme()

@@ -402,7 +402,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config, loopbac
 	handler = datumfilters.UserContactListConstraintDecorator(handler)
 	handler = datumfilters.UserContactGroupMembershipListConstraintDecorator(handler)
 	handler = datumfilters.UserContactGroupMembershipRemovalListConstraintDecorator(handler)
-	handler = datumfilters.ContactGroupVisibilityDecorator(loopbackConfig)(handler)
+	handler = datumfilters.ContactGroupVisibilityWithoutPrivateDecorator(handler)
 	handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
 	handler = genericapifilters.WithRequestReceivedTimestamp(handler)
 	// handler = genericapifilters.WithMuxAndDiscoveryComplete(handler, c.lifecycleSignals.MuxAndDiscoveryComplete.Signaled())

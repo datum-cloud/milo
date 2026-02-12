@@ -16,8 +16,8 @@ This test verifies:
 | 2 | [create-first-public-group-and-verify-visible](#step-create-first-public-group-and-verify-visible) | 0 | 3 | 0 | 0 | 0 |
 | 3 | [create-second-public-group-and-verify-both-visible](#step-create-second-public-group-and-verify-both-visible) | 0 | 3 | 0 | 0 | 0 |
 | 4 | [create-private-groups-and-verify-not-visible](#step-create-private-groups-and-verify-not-visible) | 0 | 5 | 0 | 0 | 0 |
-| 5 | [create-first-membership-and-verify-one-private-visible](#step-create-first-membership-and-verify-one-private-visible) | 0 | 3 | 0 | 0 | 0 |
-| 6 | [create-second-membership-and-verify-both-private-visible](#step-create-second-membership-and-verify-both-private-visible) | 0 | 3 | 0 | 0 | 0 |
+| 5 | [create-first-membership-and-verify-private-still-hidden](#step-create-first-membership-and-verify-private-still-hidden) | 0 | 3 | 0 | 0 | 0 |
+| 6 | [create-second-membership-and-verify-private-still-hidden](#step-create-second-membership-and-verify-private-still-hidden) | 0 | 3 | 0 | 0 | 0 |
 
 ### Step: `setup-contact`
 
@@ -68,9 +68,9 @@ Create two private groups and verify user cannot see them (only public groups)
 | 4 | `assert` | 0 | 0 | *No description* |
 | 5 | `script` | 0 | 0 | *No description* |
 
-### Step: `create-first-membership-and-verify-one-private-visible`
+### Step: `create-first-membership-and-verify-private-still-hidden`
 
-Create membership for first private group and verify user can now see it
+Create membership for first private group but verify user still ONLY sees public groups (strict public filtering)
 
 #### Try
 
@@ -80,9 +80,9 @@ Create membership for first private group and verify user can now see it
 | 2 | `assert` | 0 | 0 | *No description* |
 | 3 | `script` | 0 | 0 | *No description* |
 
-### Step: `create-second-membership-and-verify-both-private-visible`
+### Step: `create-second-membership-and-verify-private-still-hidden`
 
-Create membership for second private group and verify user can now see all groups
+Create membership for second private group and verify user still ONLY sees public groups
 
 #### Try
 
