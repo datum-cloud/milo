@@ -1,10 +1,10 @@
 apiVersion: iam.miloapis.com/v1alpha1
 kind: ProtectedResource
 metadata:
-  name: crm.miloapis.com-note
+  name: notes.miloapis.com-note
 spec:
   serviceRef:
-    name: "crm.miloapis.com"
+    name: "notes.miloapis.com"
   kind: Note
   plural: notes
   singular: note

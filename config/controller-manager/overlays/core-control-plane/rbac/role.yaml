@@ -46,25 +46,6 @@ rules:
   verbs:
   - create
 - apiGroups:
-  - crm.miloapis.com
-  resources:
-  - notes
-  verbs:
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - crm.miloapis.com
-  resources:
-  - notes/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - dns.networking.miloapis.com
   resources:
   - dnszoneclasses
@@ -212,6 +193,27 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - notes.miloapis.com
+  resources:
+  - clusternotes
+  - notes
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - notes.miloapis.com
+  resources:
+  - clusternotes/status
+  - notes/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - notification.miloapis.com
   resources:
