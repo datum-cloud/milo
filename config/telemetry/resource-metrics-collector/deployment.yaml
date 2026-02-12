@@ -79,7 +79,7 @@ spec:
           - name: NAMESPACE
             value: ALL
           - name: LABEL
-            value: "custom-resource-metrics-config"
+            value: "telemetry.datumapis.com/core-resource-metrics-config"
           - name: LABEL_VALUE
             value: "true"
           - name: FOLDER

@@ -1,0 +1,45 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "iam.miloapis.com"
+        kind: "MachineAccount"
+        version: "v1alpha1"
+      metricNamePrefix: milo_machine_accounts
+      commonLabels:
+        component: iam
+        resource_type: machine_account
+      metrics:
+        - name: "info"
+          help: "Information about machine accounts"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for machine accounts"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the machine account was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "current_generation"
+          help: "The current generation for the machine account"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]

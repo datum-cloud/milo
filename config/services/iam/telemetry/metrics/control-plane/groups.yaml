@@ -1,0 +1,45 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "iam.miloapis.com"
+        kind: "Group"
+        version: "v1alpha1"
+      metricNamePrefix: milo_groups
+      commonLabels:
+        component: iam
+        resource_type: group
+      metrics:
+        - name: "info"
+          help: "Information about groups"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for groups"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the group was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "current_generation"
+          help: "The current generation for the group"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]

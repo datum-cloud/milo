@@ -1,19 +1,76 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: resourcemanager-projects
+  name: resourcemanager.miloapis.com-alerting-rules
+  labels:
+    app.kubernetes.io/name: milo
+    app.kubernetes.io/component: resource-manager
+    app.kubernetes.io/part-of: milo
+    monitoring.coreos.com/prometheus: kube-prometheus
 spec:
   groups:
-    - name: resourcemanager-projects
+    - name: resourcemanager.readiness
+      interval: 30s
       rules:
-        - alert: ProjectStuckCreatingSLOViolation
-          expr: |
-            (time() - milo_projects_created_timestamp) > 60
-            unless ignoring(type, reason) (milo_projects_status_condition{type="Ready"} == 1)
-          for: 0s
+        # Organizations not ready
+        - alert: OrganizationsNotReady
+          expr: resourcemanager.miloapis.com:organizations:not_ready > 0
+          for: 2m
           labels:
             severity: critical
-            slo_violation: "true"
+            category: readiness
+            team: platform
           annotations:
-            summary: "Project {{ $labels.resource_name }} is stuck creating for over 60 seconds"
-            description: "Project {{ $labels.resource_name }} has been in creation state for {{ $value }} seconds without reaching Ready status, which exceeds the 60-second SLO threshold."
+            summary: "{{ $value }} organizations are not ready"
+            description: |
+              Organizations are not in Ready state, preventing proper operation.
+
+              Not ready count: {{ $value }}
+              Organization type: {{ $labels.organization_type }}
+
+              Actions needed:
+              1. Check organization status: kubectl get organizations -o wide
+              2. Review controller logs for reconciliation errors
+              3. Verify organization namespace creation and initialization
+
+        # Projects not ready
+        - alert: ProjectsNotReady
+          expr: resourcemanager.miloapis.com:projects:not_ready > 0
+          for: 2m
+          labels:
+            severity: critical
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} projects are not ready"
+            description: |
+              Projects are not in Ready state, preventing resource operations.
+
+              Not ready count: {{ $value }}
+              Owner: {{ $labels.owner_kind }}/{{ $labels.owner_name }}
+
+              Actions needed:
+              1. Check project status: kubectl get projects -o wide
+              2. Review controller logs for reconciliation errors
+              3. Verify project namespace and control plane provisioning
+
+        # Organization memberships not ready
+        - alert: OrganizationMembershipsNotReady
+          expr: resourcemanager.miloapis.com:memberships:not_ready > 0
+          for: 5m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} organization memberships are not ready"
+            description: |
+              Organization memberships are not in Ready state, affecting user access.
+
+              Not ready count: {{ $value }}
+              Organization: {{ $labels.organization_name }}
+
+              Actions needed:
+              1. Check membership status: kubectl get organizationmemberships -o wide
+              2. Review RBAC provisioning and role binding creation
+              3. Verify user references are valid

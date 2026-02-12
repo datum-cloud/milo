@@ -1,0 +1,91 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Kustomize component for IAM custom resource state metrics
+# Creates ConfigMaps that the resource-metrics-collector sidecar will discover
+# and merge into its kube-state-metrics configuration
+configMapGenerator:
+  - name: milo-iam-users-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: users
+    files:
+      - config.yaml=users.yaml
+
+  - name: milo-iam-groups-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: groups
+    files:
+      - config.yaml=groups.yaml
+
+  - name: milo-iam-groupmemberships-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: groupmemberships
+    files:
+      - config.yaml=group_memberships.yaml
+
+  - name: milo-iam-roles-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: roles
+    files:
+      - config.yaml=roles.yaml
+
+  - name: milo-iam-policybindings-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: policybindings
+    files:
+      - config.yaml=policy_bindings.yaml
+
+  - name: milo-iam-machineaccounts-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: machineaccounts
+    files:
+      - config.yaml=machine_accounts.yaml
+
+  - name: milo-iam-machineaccountkeys-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: machineaccountkeys
+    files:
+      - config.yaml=machine_account_keys.yaml
+
+  - name: milo-iam-userinvitations-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: userinvitations
+    files:
+      - config.yaml=user_invitations.yaml
+
+  - name: milo-iam-userdeactivations-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: userdeactivations
+    files:
+      - config.yaml=user_deactivations.yaml
+
+  - name: milo-iam-userpreferences-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: userpreferences
+    files:
+      - config.yaml=user_preferences.yaml
+
+  - name: milo-iam-protectedresources-metrics
+    options:
+      labels:
+        iam.miloapis.com/resource-type: protectedresources
+    files:
+      - config.yaml=protected_resources.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/part-of: milo
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/component: iam-metrics
+    telemetry.datumapis.com/core-resource-metrics-config: "true"

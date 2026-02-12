@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Kustomize component for resource manager custom resource state metrics
+# Creates ConfigMaps that the resource-metrics-collector sidecar will discover
+# and merge into its kube-state-metrics configuration
+configMapGenerator:
+  - name: milo-resourcemanager-organizations-metrics
+    options:
+      labels:
+        resourcemanager.miloapis.com/resource-type: organizations
+    files:
+      - config.yaml=organizations.yaml
+
+  - name: milo-resourcemanager-projects-metrics
+    options:
+      labels:
+        resourcemanager.miloapis.com/resource-type: projects
+    files:
+      - config.yaml=projects.yaml
+
+  - name: milo-resourcemanager-organizationmemberships-metrics
+    options:
+      labels:
+        resourcemanager.miloapis.com/resource-type: organizationmemberships
+    files:
+      - config.yaml=organizationmemberships.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/part-of: milo
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/component: resource-manager-metrics
+    telemetry.datumapis.com/core-resource-metrics-config: "true"

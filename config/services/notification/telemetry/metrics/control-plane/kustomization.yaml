@@ -1,0 +1,63 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Kustomize component for notification custom resource state metrics
+# Creates ConfigMaps that the resource-metrics-collector sidecar will discover
+# and merge into its kube-state-metrics configuration
+configMapGenerator:
+  - name: milo-notification-contacts-metrics
+    options:
+      labels:
+        notification.miloapis.com/resource-type: contacts
+    files:
+      - config.yaml=contacts.yaml
+
+  - name: milo-notification-contactgroups-metrics
+    options:
+      labels:
+        notification.miloapis.com/resource-type: contactgroups
+    files:
+      - config.yaml=contact_groups.yaml
+
+  - name: milo-notification-contactgroupmemberships-metrics
+    options:
+      labels:
+        notification.miloapis.com/resource-type: contactgroupmemberships
+    files:
+      - config.yaml=contact_group_memberships.yaml
+
+  - name: milo-notification-contactgroupmembershipremovals-metrics
+    options:
+      labels:
+        notification.miloapis.com/resource-type: contactgroupmembershipremovals
+    files:
+      - config.yaml=contact_group_membership_removals.yaml
+
+  - name: milo-notification-emails-metrics
+    options:
+      labels:
+        notification.miloapis.com/resource-type: emails
+    files:
+      - config.yaml=emails.yaml
+
+  - name: milo-notification-emailtemplates-metrics
+    options:
+      labels:
+        notification.miloapis.com/resource-type: emailtemplates
+    files:
+      - config.yaml=email_templates.yaml
+
+  - name: milo-notification-emailbroadcasts-metrics
+    options:
+      labels:
+        notification.miloapis.com/resource-type: emailbroadcasts
+    files:
+      - config.yaml=email_broadcasts.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/part-of: milo
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/component: notification-metrics
+    telemetry.datumapis.com/core-resource-metrics-config: "true"

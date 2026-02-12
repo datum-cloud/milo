@@ -1,0 +1,57 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "iam.miloapis.com"
+        kind: "PolicyBinding"
+        version: "v1alpha1"
+      metricNamePrefix: milo_policy_bindings
+      commonLabels:
+        component: iam
+        resource_type: policy_binding
+      labelsFromPath:
+        role_name: [spec, roleRef, name]
+        subject_kind: [spec, subjectRef, kind]
+        subject_name: [spec, subjectRef, name]
+      metrics:
+        - name: "info"
+          help: "Information about policy bindings"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                namespace: [metadata, namespace]
+
+        - name: "status_condition"
+          help: "Status conditions for policy bindings"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the policy binding was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "observed_generation"
+          help: "The observed generation for the policy binding"
+          each:
+            type: Gauge
+            gauge:
+              path: [status, observedGeneration]
+              nilIsZero: true
+
+        - name: "current_generation"
+          help: "The current generation for the policy binding"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]

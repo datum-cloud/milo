@@ -1,0 +1,141 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: quota.miloapis.com-alerting-rules
+  labels:
+    app.kubernetes.io/name: milo
+    app.kubernetes.io/component: quota-system
+    app.kubernetes.io/part-of: milo
+    monitoring.coreos.com/prometheus: kube-prometheus
+spec:
+  groups:
+    # =============================================================================
+    # RESOURCE READINESS
+    # =============================================================================
+    - name: quota.readiness
+      interval: 30s
+      rules:
+        # Claim creation policies not ready
+        - alert: ClaimCreationPoliciesNotReady
+          expr: |
+            count(milo_quota_claim_policy_info{component="quota_system"}) > 0
+            and
+            count(milo_quota_claim_policy_status_condition{component="quota_system", type="Ready", status="False"} == 1) > 0
+          for: 2m
+          labels:
+            severity: critical
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} claim creation policies are not ready"
+            description: |
+              Claim creation policies are not in Ready state, potentially breaking quota enforcement.
+
+              Not ready count: {{ $value }}
+              Target kind: {{ $labels.target_kind }}
+
+              Actions needed:
+              1. Check policy status: kubectl get claimcreationpolicies -o wide
+              2. Review policy template validation and CEL expressions
+              3. Verify target resource types and consumer resolution
+              4. Check admission webhook functionality
+
+        # Grant creation policies not ready
+        - alert: GrantCreationPoliciesNotReady
+          expr: |
+            count(milo_quota_grant_policy_info{component="quota_system"}) > 0
+            and
+            count(milo_quota_grant_policy_status_condition{component="quota_system", type="Ready", status="False"} == 1) > 0
+          for: 2m
+          labels:
+            severity: critical
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} grant creation policies are not ready"
+            description: |
+              Grant creation policies are not in Ready state, preventing automated quota provisioning.
+
+              Not ready count: {{ $value }}
+              Trigger kind: {{ $labels.trigger_kind }}
+
+              Actions needed:
+              1. Check policy status: kubectl get grantcreationpolicies -o wide
+              2. Review policy template validation and trigger conditions
+              3. Test policy trigger mechanisms and grant creation
+
+        # Resource registrations not active
+        - alert: ResourceRegistrationsNotActive
+          expr: |
+            count(milo_quota_registration_info{component="quota_system"}) > 0
+            and
+            count(milo_quota_registration_status_condition{component="quota_system", type="Active", status="False"} == 1) > 0
+          for: 5m
+          labels:
+            severity: critical
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} resource registrations are not active"
+            description: |
+              Resource registrations are not in Active state, breaking quota system functionality.
+
+              Not active count: {{ $value }}
+              Consumer kind: {{ $labels.consumer_kind }}
+              Resource type: {{ $labels.resource_type }}
+
+              Actions needed:
+              1. Check registration status: kubectl get resourceregistrations -o wide
+              2. Review registration validation errors
+              3. Verify consumer and resource type configuration
+              4. Check controller reconciliation logs
+
+        # Resource grants not active
+        - alert: ResourceGrantsNotActive
+          expr: |
+            count(milo_quota_grant_info{component="quota_system"}) > 0
+            and
+            count(milo_quota_grant_status_condition{component="quota_system", type="Active", status="False"} == 1) > 0
+          for: 2m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} resource grants are not active"
+            description: |
+              Resource grants are not in Active state, preventing quota allocation.
+
+              Not active count: {{ $value }}
+              Consumer: {{ $labels.consumer_kind }}/{{ $labels.consumer_name }}
+
+              Actions needed:
+              1. Check grant status: kubectl get resourcegrants -n milo-system -o wide
+              2. Review grant validation and bucket aggregation
+              3. Verify consumer references and resource registrations
+
+        # Resource claims not granted
+        - alert: ResourceClaimsNotGranted
+          expr: |
+            count(milo_quota_claim_info{component="quota_system"}) > 0
+            and
+            count(milo_quota_claim_status_condition{component="quota_system", type="Granted", status="False"} == 1) > 0
+          for: 2m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} resource claims are not granted"
+            description: |
+              Resource claims are not in Granted state, indicating quota issues or exhaustion.
+
+              Not granted count: {{ $value }}
+              Consumer: {{ $labels.consumer_kind }}/{{ $labels.consumer_name }}
+              Triggering resource: {{ $labels.triggering_resource_kind }}
+
+              Actions needed:
+              1. Check claim status: kubectl get resourceclaims -n milo-system -o wide
+              2. Review quota availability and allocation
+              3. Check for quota exhaustion or grant issues
+              4. Verify claim validation and consumer quota buckets

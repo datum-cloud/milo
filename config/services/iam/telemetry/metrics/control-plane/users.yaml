@@ -1,0 +1,58 @@
+kind: CustomResourceStateMetrics
+spec:
+  resources:
+    - groupVersionKind:
+        group: "iam.miloapis.com"
+        kind: "User"
+        version: "v1alpha1"
+      metricNamePrefix: milo_users
+      commonLabels:
+        component: iam
+        resource_type: user
+      labelsFromPath:
+        email: [spec, email]
+        state: [status, state]
+      metrics:
+        - name: "info"
+          help: "Information about users"
+          each:
+            type: Info
+            info:
+              labelsFromPath:
+                uid: [metadata, uid]
+                name: [metadata, name]
+                given_name: [spec, givenName]
+                family_name: [spec, familyName]
+
+        - name: "status_condition"
+          help: "Status conditions for users"
+          each:
+            type: Info
+            info:
+              path: [status, conditions]
+              labelsFromPath:
+                type: [type]
+                status: [status]
+
+        - name: "state"
+          help: "User activation state (1 = Active, 0 = Inactive)"
+          each:
+            type: StateSet
+            stateSet:
+              labelName: state
+              path: [status, state]
+              list: [Active, Inactive]
+
+        - name: "created_timestamp"
+          help: "Timestamp when the user was created"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, creationTimestamp]
+
+        - name: "current_generation"
+          help: "The current generation for the user"
+          each:
+            type: Gauge
+            gauge:
+              path: [metadata, generation]
