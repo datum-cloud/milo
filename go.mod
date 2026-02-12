@@ -1,6 +1,6 @@
 module go.miloapis.com/milo
 
-go 1.23.1
+go 1.24.0
 
 require (
 	github.com/blang/semver/v4 v4.0.0
@@ -12,7 +12,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.55.0
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
-	golang.org/x/sync v0.16.0
+	golang.org/x/sync v0.19.0
 	golang.org/x/time v0.12.0
 	gopkg.in/square/go-jose.v2 v2.6.0
 	k8s.io/api v0.32.3
