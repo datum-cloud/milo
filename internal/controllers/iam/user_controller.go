@@ -81,6 +81,11 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	// Capture the current status to detect changes later
 	oldUserStatus := user.Status.DeepCopy()
 
+	// Ensure platform access approval exists for new users
+	if err := r.ensurePlatformAccessApprovalToNewUsers(ctx, user); err != nil {
+		log.Error(err, "failed to ensure platform access approval to new users")
+		return ctrl.Result{}, fmt.Errorf("failed to ensure platform access approval to new users: %w", err)
+	}
 	// Get the user access approval status
 	registrationApproval, err := r.getUserAccessApprovalStatus(ctx, user)
 	if err != nil {
@@ -356,4 +361,50 @@ func (r *UserController) getUserAccessApprovalStatus(ctx context.Context, user *
 	// If no PlatformAccessApproval or PlatformAccessRejection is found, return Pending
 	return iamv1alpha1.RegistrationApprovalStatePending, nil
 
+}
+
+// ensurePlatformAccessApprovalToNewUsers ensures that a PlatformAccessApproval exists for new users
+func (r *UserController) ensurePlatformAccessApprovalToNewUsers(ctx context.Context, user *iamv1alpha1.User) error {
+	log := log.FromContext(ctx).WithName("ensure-platform-access-approval-to-new-users")
+
+	paName := fmt.Sprintf("new-user-access-approval-%s", user.Name)
+
+	// Check if it has a PlatformAccessApproval related to email address or user reference
+	userReferences := []string{user.Spec.Email, user.Name}
+	for _, reference := range userReferences {
+		paas := &iamv1alpha1.PlatformAccessApprovalList{}
+		if err := r.Client.List(ctx, paas, client.MatchingFields{platformAccessApprovalIndexKey: reference}); err != nil {
+			log.Error(err, "failed to list platformaccessapprovals", "reference", reference)
+			return fmt.Errorf("failed to list platformaccessapprovals: %w", err)
+		}
+		if len(paas.Items) > 0 {
+			return nil
+		}
+	}
+
+	if user.Status.RegistrationApproval == "" {
+		// If here, this is a new user with not approval yet
+		platformAccessApproval := &iamv1alpha1.PlatformAccessApproval{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: paName,
+			},
+			Spec: iamv1alpha1.PlatformAccessApprovalSpec{
+				SubjectRef: iamv1alpha1.SubjectReference{
+					UserRef: &iamv1alpha1.UserReference{
+						Name: user.Name,
+					},
+				},
+			},
+		}
+		if err := r.Client.Create(ctx, platformAccessApproval); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				log.Info("PlatformAccessApproval already exists", "platformAccessApproval", platformAccessApproval.Name)
+				return nil
+			}
+			log.Error(err, "Failed to create PlatformAccessApproval")
+			return fmt.Errorf("failed to create PlatformAccessApproval: %w", err)
+		}
+	}
+
+	return nil
 }
