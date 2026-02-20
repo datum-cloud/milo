@@ -367,22 +367,22 @@ func (r *UserController) getUserAccessApprovalStatus(ctx context.Context, user *
 func (r *UserController) ensurePlatformAccessApprovalToNewUsers(ctx context.Context, user *iamv1alpha1.User) error {
 	log := log.FromContext(ctx).WithName("ensure-platform-access-approval-to-new-users")
 
-	paName := fmt.Sprintf("new-user-access-approval-%s", user.Name)
-
-	// Check if it has a PlatformAccessApproval related to email address or user reference
-	userReferences := []string{user.Spec.Email, user.Name}
-	for _, reference := range userReferences {
-		paas := &iamv1alpha1.PlatformAccessApprovalList{}
-		if err := r.Client.List(ctx, paas, client.MatchingFields{platformAccessApprovalIndexKey: reference}); err != nil {
-			log.Error(err, "failed to list platformaccessapprovals", "reference", reference)
-			return fmt.Errorf("failed to list platformaccessapprovals: %w", err)
-		}
-		if len(paas.Items) > 0 {
-			return nil
-		}
-	}
-
 	if user.Status.RegistrationApproval == "" {
+		paName := fmt.Sprintf("new-user-access-approval-%s", user.Name)
+
+		// Check if it has a PlatformAccessApproval related to email address or user reference
+		userReferences := []string{user.Spec.Email, user.Name}
+		for _, reference := range userReferences {
+			paas := &iamv1alpha1.PlatformAccessApprovalList{}
+			if err := r.Client.List(ctx, paas, client.MatchingFields{platformAccessApprovalIndexKey: reference}); err != nil {
+				log.Error(err, "failed to list platformaccessapprovals", "reference", reference)
+				return fmt.Errorf("failed to list platformaccessapprovals: %w", err)
+			}
+			if len(paas.Items) > 0 {
+				return nil
+			}
+		}
+
 		// If here, this is a new user with not approval yet
 		platformAccessApproval := &iamv1alpha1.PlatformAccessApproval{
 			ObjectMeta: metav1.ObjectMeta{
