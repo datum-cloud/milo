@@ -47,8 +47,11 @@ func (r *REST) List(ctx context.Context, opts *metainternalversion.ListOptions) 
 		groups = u.GetGroups()
 	}
 	logger.V(4).Info("Listing user identities", "username", username, "uid", uid, "groups", groups)
-	// ignore selectors; self-scoped list delegated to provider
+	// Pass field selector to backend provider for staff user queries
 	lo := metav1.ListOptions{}
+	if opts != nil && opts.FieldSelector != nil {
+		lo.FieldSelector = opts.FieldSelector.String()
+	}
 	res, err := r.backend.ListUserIdentities(ctx, u, &lo)
 	if err != nil {
 		logger.Error(err, "List user identities failed")
