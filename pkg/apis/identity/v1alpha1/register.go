@@ -42,16 +42,20 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	// Register field label conversions for UserIdentity
 	// This enables field selectors like status.userUID=<user-id> for staff users
 	userIdentityGVK := SchemeGroupVersion.WithKind("UserIdentity")
+	klog.InfoS("Registering field label conversion for UserIdentity", "gvk", userIdentityGVK.String())
 	if err := scheme.AddFieldLabelConversionFunc(userIdentityGVK,
 		UserIdentityFieldLabelConversionFunc); err != nil {
+		klog.ErrorS(err, "Failed to register UserIdentity field label conversion")
 		return err
 	}
 
 	// Register field label conversions for Session
 	// This enables field selectors like status.userUID=<user-id> for staff users
 	sessionGVK := SchemeGroupVersion.WithKind("Session")
+	klog.InfoS("Registering field label conversion for Session", "gvk", sessionGVK.String())
 	if err := scheme.AddFieldLabelConversionFunc(sessionGVK,
 		SessionFieldLabelConversionFunc); err != nil {
+		klog.ErrorS(err, "Failed to register Session field label conversion")
 		return err
 	}
 
