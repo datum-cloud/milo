@@ -1,7 +1,7 @@
 package identity
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	generic "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -25,10 +25,15 @@ func (p StorageProvider) NewRESTStorage(
 	_ serverstorage.APIResourceConfigSource,
 	_ generic.RESTOptionsGetter,
 ) (genericapiserver.APIGroupInfo, error) {
+	// Create ParameterCodec using legacyscheme.Scheme which has identity scheme installed
+	// with field label conversion functions. This is critical for field selector validation.
+	// The identity scheme is installed in cmd/milo/apiserver/config.go via identityapi.Install(legacyscheme.Scheme)
+	parameterCodec := runtime.NewParameterCodec(legacyscheme.Scheme)
+
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(
 		identityv1alpha1.SchemeGroupVersion.Group,
 		legacyscheme.Scheme,
-		metav1.ParameterCodec,
+		parameterCodec,
 		legacyscheme.Codecs,
 	)
 
