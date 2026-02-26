@@ -48,17 +48,20 @@ func init() {
 		userIdentityGVK := identityv1alpha1.SchemeGroupVersion.WithKind("UserIdentity")
 		sessionGVK := identityv1alpha1.SchemeGroupVersion.WithKind("Session")
 
-		// Test if field label conversion works
+		// Test if field label conversion functions are registered correctly
+
+		// Test UserIdentity field label conversion
 		if _, _, err := Scheme.ConvertFieldLabel(userIdentityGVK, "status.userUID", "test"); err == nil {
-			klog.InfoS("UserIdentity field label conversion is working in init", "gvk", userIdentityGVK.String())
+			klog.InfoS("✓ UserIdentity field label conversion WORKS", "gvk", userIdentityGVK.String())
 		} else {
-			klog.ErrorS(err, "UserIdentity field label conversion FAILED in init", "gvk", userIdentityGVK.String())
+			klog.ErrorS(err, "✗ UserIdentity field label conversion FAILED", "gvk", userIdentityGVK.String())
 		}
 
+		// Test Session field label conversion
 		if _, _, err := Scheme.ConvertFieldLabel(sessionGVK, "status.userUID", "test"); err == nil {
-			klog.InfoS("Session field label conversion is working in init", "gvk", sessionGVK.String())
+			klog.InfoS("✓ Session field label conversion WORKS", "gvk", sessionGVK.String())
 		} else {
-			klog.ErrorS(err, "Session field label conversion FAILED in init", "gvk", sessionGVK.String())
+			klog.ErrorS(err, "✗ Session field label conversion FAILED", "gvk", sessionGVK.String())
 		}
 	}
 }
