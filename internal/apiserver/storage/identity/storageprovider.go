@@ -9,7 +9,6 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
-	"k8s.io/klog/v2"
 	controlplaneapiserver "k8s.io/kubernetes/pkg/controlplane/apiserver"
 
 	sessionsregistry "go.miloapis.com/milo/internal/apiserver/identity/sessions"
@@ -26,10 +25,7 @@ var (
 )
 
 func init() {
-	klog.Error("========== IDENTITY STORAGE INIT START ==========")
-
 	identityinstall.Install(Scheme)
-	klog.Error("Identity install complete")
 
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
 
@@ -42,28 +38,6 @@ func init() {
 		&metav1.APIGroup{},
 		&metav1.APIResourceList{},
 	)
-
-	// Test if field label conversion functions are registered correctly
-	userIdentityGVK := identityv1alpha1.SchemeGroupVersion.WithKind("UserIdentity")
-	sessionGVK := identityv1alpha1.SchemeGroupVersion.WithKind("Session")
-
-	klog.Errorf("Testing UserIdentity GVK: %s", userIdentityGVK.String())
-
-	// Test UserIdentity field label conversion
-	if _, _, err := Scheme.ConvertFieldLabel(userIdentityGVK, "status.userUID", "test"); err == nil {
-		klog.Error("✓ UserIdentity field label conversion WORKS")
-	} else {
-		klog.Errorf("✗ UserIdentity field label conversion FAILED: %v", err)
-	}
-
-	// Test Session field label conversion
-	if _, _, err := Scheme.ConvertFieldLabel(sessionGVK, "status.userUID", "test"); err == nil {
-		klog.Error("✓ Session field label conversion WORKS")
-	} else {
-		klog.Errorf("✗ Session field label conversion FAILED: %v", err)
-	}
-
-	klog.Error("========== IDENTITY STORAGE INIT END ==========")
 }
 
 type StorageProvider struct {
