@@ -274,7 +274,7 @@ tasks:
         fi
 
         echo "Test paths: $TEST_PATHS"
-        KUBECONFIG=.milo/kubeconfig "{{.TOOL_DIR}}/chainsaw" test $TEST_PATHS --selector "requires!=authorization-provider,requires!=multicluster"
+        KUBECONFIG=.milo/kubeconfig "{{.TOOL_DIR}}/chainsaw" test $TEST_PATHS --selector "requires!=authorization-provider"
     silent: true
 
   test:unit:
