@@ -16,6 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
+// Note: newTestRESTMapper is defined in note_webhook_test.go and shared across tests in this package
+
 func TestClusterNoteMutator_Default(t *testing.T) {
 	tests := map[string]struct {
 		clusterNote   *notesv1alpha1.ClusterNote
@@ -124,8 +126,9 @@ func TestClusterNoteMutator_Default(t *testing.T) {
 
 			fakeClient := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(objects...).Build()
 			mutator := &ClusterNoteMutator{
-				Client: fakeClient,
-				Scheme: testScheme,
+				Client:     fakeClient,
+				Scheme:     testScheme,
+				RESTMapper: newTestRESTMapper(),
 			}
 
 			// Create admission request context

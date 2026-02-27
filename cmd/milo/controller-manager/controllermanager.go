@@ -466,6 +466,11 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					Metrics: metricsserver.Options{
 						BindAddress: "0",
 					},
+					// Use the same REST mapper as the controller context to share the
+					// cached API discovery across the webhook manager and controllers.
+					MapperProvider: func(c *restclient.Config, httpClient *http.Client) (meta.RESTMapper, error) {
+						return controllerContext.RESTMapper, nil
+					},
 					WebhookServer: webhook.NewServer(webhook.Options{
 						Port:    opts.ControllerRuntimeWebhookPort,
 						CertDir: opts.SecureServing.ServerCert.CertDirectory,
