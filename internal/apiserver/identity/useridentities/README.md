@@ -38,6 +38,33 @@ Naming & structure
 - internal/apiserver/identity/useridentities/rest.go — REST storage
 - internal/apiserver/identity/useridentities/dynamic.go — provider implementation
 
+Field Selector Support for Staff Users
+The UserIdentities API supports field selectors to enable staff users to query
+other users' identity provider links. This is required for support and administrative
+purposes in the staff portal.
+
+Supported field selectors:
+- status.userUID=<user-id> — Query identities for a specific user
+
+Authorization:
+- Regular users: Can only list their own identities (field selectors are ignored)
+- Staff users: Can use field selectors to query other users' identities
+  - Must be members of privileged groups in the identity provider (e.g., staff-users, fraud-manager)
+  - Authorization is enforced by the backend provider (auth-provider-zitadel)
+  - Requires appropriate PolicyBinding in Milo for RBAC
+
+Example usage:
+  # Regular user (sees only their own identities)
+  kubectl get useridentities
+
+  # Staff user (can query specific user's identities)
+  kubectl get useridentities --field-selector=status.userUID=<target-user-id>
+
+Security model:
+1. Milo RBAC: PolicyBinding grants access to useridentities resource
+2. Backend authorization: Provider validates group membership for field selector usage
+3. Audit logging: All requests are logged with user context for compliance
+
 Read-only resource and admission webhook for deletion
 Unlike sessions, useridentities is a read-only resource. Users cannot create,
 update, or delete user identities through the Kubernetes API. Identity linking
