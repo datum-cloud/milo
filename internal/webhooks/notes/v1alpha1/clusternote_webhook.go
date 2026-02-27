@@ -19,19 +19,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
 )
 
 var clusterNoteLog = logf.Log.WithName("clusternote-resource")
 
-func SetupClusterNoteWebhooksWithManager(mgr ctrl.Manager, clusters ClusterGetter) error {
+func SetupClusterNoteWebhooksWithManager(mgr ctrl.Manager, mcMgr mcmanager.Manager) error {
 	clusterNoteLog.Info("Setting up notes.miloapis.com clusternote webhooks")
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&notesv1alpha1.ClusterNote{}).
 		WithDefaulter(&ClusterNoteMutator{
-			Client:     mgr.GetClient(),
-			Scheme:     mgr.GetScheme(),
-			RESTMapper: mgr.GetRESTMapper(),
-			Clusters:   clusters,
+			Client:         mgr.GetClient(),
+			Scheme:         mgr.GetScheme(),
+			RESTMapper:     mgr.GetRESTMapper(),
+			ClusterManager: mcMgr,
 		}).
 		WithValidator(&ClusterNoteValidator{
 			Client: mgr.GetClient(),
@@ -42,10 +43,10 @@ func SetupClusterNoteWebhooksWithManager(mgr ctrl.Manager, clusters ClusterGette
 // +kubebuilder:webhook:path=/mutate-notes-miloapis-com-v1alpha1-clusternote,mutating=true,failurePolicy=fail,sideEffects=None,groups=notes.miloapis.com,resources=clusternotes,verbs=create,versions=v1alpha1,name=mclusternote.notes.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 type ClusterNoteMutator struct {
-	Client     client.Client
-	Scheme     *runtime.Scheme
-	RESTMapper meta.RESTMapper
-	Clusters   ClusterGetter // For multi-cluster lookups
+	Client         client.Client
+	Scheme         *runtime.Scheme
+	RESTMapper     meta.RESTMapper
+	ClusterManager mcmanager.Manager
 }
 
 var _ admission.CustomDefaulter = &ClusterNoteMutator{}
@@ -72,8 +73,7 @@ func (m *ClusterNoteMutator) Default(ctx context.Context, obj runtime.Object) er
 	}
 
 	// Set owner reference to the subject resource for automatic garbage collection
-	// This is critical for the ClusterNote to be garbage collected when the subject is deleted
-	if err := m.setSubjectOwnerReference(ctx, clusterNote); err != nil {
+	if err := m.setSubjectOwnerReference(ctx, clusterNote, req); err != nil {
 		clusterNoteLog.Error(err, "Failed to set owner reference to subject", "clusternote", clusterNote.Name)
 		return errors.NewInternalError(fmt.Errorf("failed to set owner reference to subject: %w", err))
 	}
@@ -82,7 +82,7 @@ func (m *ClusterNoteMutator) Default(ctx context.Context, obj runtime.Object) er
 }
 
 // setSubjectOwnerReference sets the owner reference to the subject resource if it's cluster-scoped
-func (m *ClusterNoteMutator) setSubjectOwnerReference(ctx context.Context, clusterNote *notesv1alpha1.ClusterNote) error {
+func (m *ClusterNoteMutator) setSubjectOwnerReference(ctx context.Context, clusterNote *notesv1alpha1.ClusterNote, req admission.Request) error {
 	// ClusterNote can only have owner references to other cluster-scoped resources
 	if clusterNote.Spec.SubjectRef.Namespace != "" {
 		return nil // Subject is namespaced, can't set owner reference on cluster-scoped resource
@@ -103,44 +103,34 @@ func (m *ClusterNoteMutator) setSubjectOwnerReference(ctx context.Context, clust
 		Name: clusterNote.Spec.SubjectRef.Name,
 	}
 
-	// If no multi-cluster support, fall back to local client only
-	if m.Clusters == nil {
-		subject := &unstructured.Unstructured{}
-		subject.SetGroupVersionKind(mapping.GroupVersionKind)
-		if err := m.Client.Get(ctx, key, subject); err != nil {
-			if errors.IsNotFound(err) {
-				return fmt.Errorf("subject resource not found: %w", err)
+	// Determine which client to use based on project context
+	subjectClient := m.Client
+
+	// Check if this is a project control plane request
+	if m.ClusterManager != nil {
+		if parentKinds, ok := req.UserInfo.Extra[iamv1alpha1.ParentKindExtraKey]; ok && len(parentKinds) > 0 && parentKinds[0] == "Project" {
+			if parentNames, ok := req.UserInfo.Extra[iamv1alpha1.ParentNameExtraKey]; ok && len(parentNames) > 0 {
+				projectName := parentNames[0]
+				cluster, err := m.ClusterManager.GetCluster(ctx, projectName)
+				if err != nil {
+					return fmt.Errorf("failed to get project control plane %s: %w", projectName, err)
+				}
+				subjectClient = cluster.GetClient()
+				clusterNoteLog.V(1).Info("Using project control plane client", "project", projectName)
 			}
-			return fmt.Errorf("failed to get subject resource: %w", err)
-		}
-		return controllerutil.SetOwnerReference(subject, clusterNote, m.Scheme)
-	}
-
-	// Search all clusters (local first, then project control planes)
-	for _, clusterName := range m.Clusters.ListClusterNames() {
-		cluster, err := m.Clusters.GetCluster(ctx, clusterName)
-		if err != nil {
-			clusterNoteLog.V(1).Info("Failed to get cluster", "cluster", clusterName, "error", err)
-			continue
-		}
-
-		subject := &unstructured.Unstructured{}
-		subject.SetGroupVersionKind(mapping.GroupVersionKind)
-
-		if err := cluster.GetClient().Get(ctx, key, subject); err == nil {
-			if clusterName != "" {
-				clusterNoteLog.Info("Found subject in project control plane",
-					"cluster", clusterName,
-					"subject", key)
-			}
-			return controllerutil.SetOwnerReference(subject, clusterNote, m.Scheme)
 		}
 	}
 
-	return fmt.Errorf("subject resource not found in any cluster: %s/%s %s",
-		clusterNote.Spec.SubjectRef.APIGroup,
-		clusterNote.Spec.SubjectRef.Kind,
-		clusterNote.Spec.SubjectRef.Name)
+	subject := &unstructured.Unstructured{}
+	subject.SetGroupVersionKind(mapping.GroupVersionKind)
+	if err := subjectClient.Get(ctx, key, subject); err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("subject resource not found: %w", err)
+		}
+		return fmt.Errorf("failed to get subject resource: %w", err)
+	}
+
+	return controllerutil.SetOwnerReference(subject, clusterNote, m.Scheme)
 }
 
 // +kubebuilder:webhook:path=/validate-notes-miloapis-com-v1alpha1-clusternote,mutating=false,failurePolicy=fail,sideEffects=None,groups=notes.miloapis.com,resources=clusternotes,verbs=create;update,versions=v1alpha1,name=vclusternote.notes.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system

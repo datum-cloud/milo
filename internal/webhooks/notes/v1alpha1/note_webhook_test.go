@@ -160,10 +160,10 @@ func TestNoteMutator_Default(t *testing.T) {
 
 			fakeClient := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(objects...).Build()
 			mutator := &NoteMutator{
-				Client:     fakeClient,
-				Scheme:     testScheme,
-				RESTMapper: newTestRESTMapper(),
-				Clusters:   nil, // nil means local-only search (backwards compatible)
+				Client:         fakeClient,
+				Scheme:         testScheme,
+				RESTMapper:     newTestRESTMapper(),
+				ClusterManager: nil, // nil means local-only search (backwards compatible)
 			}
 
 			// Create admission request context

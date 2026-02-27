@@ -298,19 +298,6 @@ func (p *Provider) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result
 	return ctrl.Result{}, nil
 }
 
-// ListEngagedClusters returns the names of all currently engaged project clusters.
-// Note: This does not include the local cluster (empty string key).
-func (p *Provider) ListEngagedClusters() []string {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	names := make([]string, 0, len(p.projects))
-	for name := range p.projects {
-		names = append(names, name)
-	}
-	return names
-}
-
 func (p *Provider) IndexField(ctx context.Context, obj client.Object, field string, extractValue client.IndexerFunc) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()

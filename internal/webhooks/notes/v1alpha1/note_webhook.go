@@ -19,19 +19,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
 )
 
 var noteLog = logf.Log.WithName("note-resource")
 
-func SetupNoteWebhooksWithManager(mgr ctrl.Manager, clusters ClusterGetter) error {
+func SetupNoteWebhooksWithManager(mgr ctrl.Manager, mcMgr mcmanager.Manager) error {
 	noteLog.Info("Setting up notes.miloapis.com note webhooks")
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&notesv1alpha1.Note{}).
 		WithDefaulter(&NoteMutator{
-			Client:     mgr.GetClient(),
-			Scheme:     mgr.GetScheme(),
-			RESTMapper: mgr.GetRESTMapper(),
-			Clusters:   clusters,
+			Client:         mgr.GetClient(),
+			Scheme:         mgr.GetScheme(),
+			RESTMapper:     mgr.GetRESTMapper(),
+			ClusterManager: mcMgr,
 		}).
 		WithValidator(&NoteValidator{
 			Client: mgr.GetClient(),
@@ -42,10 +43,10 @@ func SetupNoteWebhooksWithManager(mgr ctrl.Manager, clusters ClusterGetter) erro
 // +kubebuilder:webhook:path=/mutate-notes-miloapis-com-v1alpha1-note,mutating=true,failurePolicy=fail,sideEffects=None,groups=notes.miloapis.com,resources=notes,verbs=create,versions=v1alpha1,name=mnote.notes.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 type NoteMutator struct {
-	Client     client.Client
-	Scheme     *runtime.Scheme
-	RESTMapper meta.RESTMapper
-	Clusters   ClusterGetter // For multi-cluster lookups
+	Client         client.Client
+	Scheme         *runtime.Scheme
+	RESTMapper     meta.RESTMapper
+	ClusterManager mcmanager.Manager
 }
 
 var _ admission.CustomDefaulter = &NoteMutator{}
@@ -72,8 +73,7 @@ func (m *NoteMutator) Default(ctx context.Context, obj runtime.Object) error {
 	}
 
 	// Set owner reference to the subject resource for automatic garbage collection
-	// This is critical for the Note to be garbage collected when the subject is deleted
-	if err := m.setSubjectOwnerReference(ctx, note); err != nil {
+	if err := m.setSubjectOwnerReference(ctx, note, req); err != nil {
 		noteLog.Error(err, "Failed to set owner reference to subject", "note", note.Name)
 		return errors.NewInternalError(fmt.Errorf("failed to set owner reference to subject: %w", err))
 	}
@@ -82,13 +82,13 @@ func (m *NoteMutator) Default(ctx context.Context, obj runtime.Object) error {
 }
 
 // setSubjectOwnerReference sets the owner reference to the subject resource if it's in the same namespace
-func (m *NoteMutator) setSubjectOwnerReference(ctx context.Context, note *notesv1alpha1.Note) error {
+func (m *NoteMutator) setSubjectOwnerReference(ctx context.Context, note *notesv1alpha1.Note, req admission.Request) error {
 	// Only set owner reference if the subject is in the same namespace
 	if note.Spec.SubjectRef.Namespace == "" || note.Spec.SubjectRef.Namespace != note.Namespace {
 		return nil
 	}
 
-	// Resolve the GVK using REST mapper to discover the correct API version
+	// Resolve the GVK using REST mapper
 	groupKind := schema.GroupKind{
 		Group: note.Spec.SubjectRef.APIGroup,
 		Kind:  note.Spec.SubjectRef.Kind,
@@ -104,44 +104,34 @@ func (m *NoteMutator) setSubjectOwnerReference(ctx context.Context, note *notesv
 		Namespace: note.Spec.SubjectRef.Namespace,
 	}
 
-	// If no multi-cluster support, fall back to local client only
-	if m.Clusters == nil {
-		subject := &unstructured.Unstructured{}
-		subject.SetGroupVersionKind(mapping.GroupVersionKind)
-		if err := m.Client.Get(ctx, key, subject); err != nil {
-			if errors.IsNotFound(err) {
-				return fmt.Errorf("subject resource not found: %w", err)
+	// Determine which client to use based on project context
+	subjectClient := m.Client
+
+	// Check if this is a project control plane request
+	if m.ClusterManager != nil {
+		if parentKinds, ok := req.UserInfo.Extra[iamv1alpha1.ParentKindExtraKey]; ok && len(parentKinds) > 0 && parentKinds[0] == "Project" {
+			if parentNames, ok := req.UserInfo.Extra[iamv1alpha1.ParentNameExtraKey]; ok && len(parentNames) > 0 {
+				projectName := parentNames[0]
+				cluster, err := m.ClusterManager.GetCluster(ctx, projectName)
+				if err != nil {
+					return fmt.Errorf("failed to get project control plane %s: %w", projectName, err)
+				}
+				subjectClient = cluster.GetClient()
+				noteLog.V(1).Info("Using project control plane client", "project", projectName)
 			}
-			return fmt.Errorf("failed to get subject resource: %w", err)
-		}
-		return controllerutil.SetOwnerReference(subject, note, m.Scheme)
-	}
-
-	// Search all clusters (local first, then project control planes)
-	for _, clusterName := range m.Clusters.ListClusterNames() {
-		cluster, err := m.Clusters.GetCluster(ctx, clusterName)
-		if err != nil {
-			noteLog.V(1).Info("Failed to get cluster", "cluster", clusterName, "error", err)
-			continue
-		}
-
-		subject := &unstructured.Unstructured{}
-		subject.SetGroupVersionKind(mapping.GroupVersionKind)
-
-		if err := cluster.GetClient().Get(ctx, key, subject); err == nil {
-			if clusterName != "" {
-				noteLog.Info("Found subject in project control plane",
-					"cluster", clusterName,
-					"subject", key)
-			}
-			return controllerutil.SetOwnerReference(subject, note, m.Scheme)
 		}
 	}
 
-	return fmt.Errorf("subject resource not found in any cluster: %s/%s %s",
-		note.Spec.SubjectRef.APIGroup,
-		note.Spec.SubjectRef.Kind,
-		note.Spec.SubjectRef.Name)
+	subject := &unstructured.Unstructured{}
+	subject.SetGroupVersionKind(mapping.GroupVersionKind)
+	if err := subjectClient.Get(ctx, key, subject); err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("subject resource not found: %w", err)
+		}
+		return fmt.Errorf("failed to get subject resource: %w", err)
+	}
+
+	return controllerutil.SetOwnerReference(subject, note, m.Scheme)
 }
 
 // +kubebuilder:webhook:path=/validate-notes-miloapis-com-v1alpha1-note,mutating=false,failurePolicy=fail,sideEffects=None,groups=notes.miloapis.com,resources=notes,verbs=create;update,versions=v1alpha1,name=vnote.notes.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
