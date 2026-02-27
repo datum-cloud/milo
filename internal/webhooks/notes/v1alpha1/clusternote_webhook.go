@@ -8,6 +8,7 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notesv1alpha1 "go.miloapis.com/milo/pkg/apis/notes/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -27,8 +28,9 @@ func SetupClusterNoteWebhooksWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&notesv1alpha1.ClusterNote{}).
 		WithDefaulter(&ClusterNoteMutator{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
+			Client:     mgr.GetClient(),
+			Scheme:     mgr.GetScheme(),
+			RESTMapper: mgr.GetRESTMapper(),
 		}).
 		WithValidator(&ClusterNoteValidator{
 			Client: mgr.GetClient(),
@@ -39,8 +41,9 @@ func SetupClusterNoteWebhooksWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:webhook:path=/mutate-notes-miloapis-com-v1alpha1-clusternote,mutating=true,failurePolicy=fail,sideEffects=None,groups=notes.miloapis.com,resources=clusternotes,verbs=create,versions=v1alpha1,name=mclusternote.notes.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 type ClusterNoteMutator struct {
-	Client client.Client
-	Scheme *runtime.Scheme
+	Client     client.Client
+	Scheme     *runtime.Scheme
+	RESTMapper meta.RESTMapper
 }
 
 var _ admission.CustomDefaulter = &ClusterNoteMutator{}
@@ -83,15 +86,19 @@ func (m *ClusterNoteMutator) setSubjectOwnerReference(ctx context.Context, clust
 		return nil // Subject is namespaced, can't set owner reference on cluster-scoped resource
 	}
 
-	// Get the subject resource
-	gvk := schema.GroupVersionKind{
-		Group:   clusterNote.Spec.SubjectRef.APIGroup,
-		Version: "v1alpha1", // Assuming v1alpha1, this could be made more flexible
-		Kind:    clusterNote.Spec.SubjectRef.Kind,
+	// Resolve the GVK using REST mapper to discover the correct API version
+	groupKind := schema.GroupKind{
+		Group: clusterNote.Spec.SubjectRef.APIGroup,
+		Kind:  clusterNote.Spec.SubjectRef.Kind,
+	}
+
+	mapping, err := m.RESTMapper.RESTMapping(groupKind)
+	if err != nil {
+		return fmt.Errorf("failed to get REST mapping for %s: %w", groupKind, err)
 	}
 
 	subject := &unstructured.Unstructured{}
-	subject.SetGroupVersionKind(gvk)
+	subject.SetGroupVersionKind(mapping.GroupVersionKind)
 
 	if err := m.Client.Get(ctx, types.NamespacedName{
 		Name: clusterNote.Spec.SubjectRef.Name,

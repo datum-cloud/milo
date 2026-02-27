@@ -8,6 +8,7 @@ import (
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notesv1alpha1 "go.miloapis.com/milo/pkg/apis/notes/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -27,8 +28,9 @@ func SetupNoteWebhooksWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&notesv1alpha1.Note{}).
 		WithDefaulter(&NoteMutator{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
+			Client:     mgr.GetClient(),
+			Scheme:     mgr.GetScheme(),
+			RESTMapper: mgr.GetRESTMapper(),
 		}).
 		WithValidator(&NoteValidator{
 			Client: mgr.GetClient(),
@@ -39,8 +41,9 @@ func SetupNoteWebhooksWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:webhook:path=/mutate-notes-miloapis-com-v1alpha1-note,mutating=true,failurePolicy=fail,sideEffects=None,groups=notes.miloapis.com,resources=notes,verbs=create,versions=v1alpha1,name=mnote.notes.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system
 
 type NoteMutator struct {
-	Client client.Client
-	Scheme *runtime.Scheme
+	Client     client.Client
+	Scheme     *runtime.Scheme
+	RESTMapper meta.RESTMapper
 }
 
 var _ admission.CustomDefaulter = &NoteMutator{}
@@ -83,15 +86,19 @@ func (m *NoteMutator) setSubjectOwnerReference(ctx context.Context, note *notesv
 		return nil
 	}
 
-	// Get the subject resource
-	gvk := schema.GroupVersionKind{
-		Group:   note.Spec.SubjectRef.APIGroup,
-		Version: "v1alpha1", // Assuming v1alpha1, this could be made more flexible
-		Kind:    note.Spec.SubjectRef.Kind,
+	// Resolve the GVK using REST mapper to discover the correct API version
+	groupKind := schema.GroupKind{
+		Group: note.Spec.SubjectRef.APIGroup,
+		Kind:  note.Spec.SubjectRef.Kind,
+	}
+
+	mapping, err := m.RESTMapper.RESTMapping(groupKind)
+	if err != nil {
+		return fmt.Errorf("failed to get REST mapping for %s: %w", groupKind, err)
 	}
 
 	subject := &unstructured.Unstructured{}
-	subject.SetGroupVersionKind(gvk)
+	subject.SetGroupVersionKind(mapping.GroupVersionKind)
 
 	if err := m.Client.Get(ctx, types.NamespacedName{
 		Name:      note.Spec.SubjectRef.Name,
