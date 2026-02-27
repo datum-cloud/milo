@@ -75,9 +75,6 @@ spec:
       try:
         - apply:
             file: test-data/clusternote.yaml
-        # Note: We don't wait for Ready condition because the notes controller
-        # doesn't watch project control planes. Instead, we verify the owner
-        # reference was set by the webhook.
         - assert:
             resource:
               apiVersion: notes.miloapis.com/v1alpha1
