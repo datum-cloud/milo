@@ -163,6 +163,7 @@ func TestNoteMutator_Default(t *testing.T) {
 				Client:     fakeClient,
 				Scheme:     testScheme,
 				RESTMapper: newTestRESTMapper(),
+				Clusters:   nil, // nil means local-only search (backwards compatible)
 			}
 
 			// Create admission request context

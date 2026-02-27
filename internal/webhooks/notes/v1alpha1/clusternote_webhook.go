@@ -23,7 +23,7 @@ import (
 
 var clusterNoteLog = logf.Log.WithName("clusternote-resource")
 
-func SetupClusterNoteWebhooksWithManager(mgr ctrl.Manager) error {
+func SetupClusterNoteWebhooksWithManager(mgr ctrl.Manager, clusters ClusterGetter) error {
 	clusterNoteLog.Info("Setting up notes.miloapis.com clusternote webhooks")
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&notesv1alpha1.ClusterNote{}).
@@ -31,6 +31,7 @@ func SetupClusterNoteWebhooksWithManager(mgr ctrl.Manager) error {
 			Client:     mgr.GetClient(),
 			Scheme:     mgr.GetScheme(),
 			RESTMapper: mgr.GetRESTMapper(),
+			Clusters:   clusters,
 		}).
 		WithValidator(&ClusterNoteValidator{
 			Client: mgr.GetClient(),
@@ -44,6 +45,7 @@ type ClusterNoteMutator struct {
 	Client     client.Client
 	Scheme     *runtime.Scheme
 	RESTMapper meta.RESTMapper
+	Clusters   ClusterGetter // For multi-cluster lookups
 }
 
 var _ admission.CustomDefaulter = &ClusterNoteMutator{}
@@ -97,24 +99,48 @@ func (m *ClusterNoteMutator) setSubjectOwnerReference(ctx context.Context, clust
 		return fmt.Errorf("failed to get REST mapping for %s: %w", groupKind, err)
 	}
 
-	subject := &unstructured.Unstructured{}
-	subject.SetGroupVersionKind(mapping.GroupVersionKind)
-
-	if err := m.Client.Get(ctx, types.NamespacedName{
+	key := types.NamespacedName{
 		Name: clusterNote.Spec.SubjectRef.Name,
-	}, subject); err != nil {
-		if errors.IsNotFound(err) {
-			return fmt.Errorf("subject resource not found: %w", err)
+	}
+
+	// If no multi-cluster support, fall back to local client only
+	if m.Clusters == nil {
+		subject := &unstructured.Unstructured{}
+		subject.SetGroupVersionKind(mapping.GroupVersionKind)
+		if err := m.Client.Get(ctx, key, subject); err != nil {
+			if errors.IsNotFound(err) {
+				return fmt.Errorf("subject resource not found: %w", err)
+			}
+			return fmt.Errorf("failed to get subject resource: %w", err)
 		}
-		return fmt.Errorf("failed to get subject resource: %w", err)
+		return controllerutil.SetOwnerReference(subject, clusterNote, m.Scheme)
 	}
 
-	// Set owner reference
-	if err := controllerutil.SetOwnerReference(subject, clusterNote, m.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference: %w", err)
+	// Search all clusters (local first, then project control planes)
+	for _, clusterName := range m.Clusters.ListClusterNames() {
+		cluster, err := m.Clusters.GetCluster(ctx, clusterName)
+		if err != nil {
+			clusterNoteLog.V(1).Info("Failed to get cluster", "cluster", clusterName, "error", err)
+			continue
+		}
+
+		subject := &unstructured.Unstructured{}
+		subject.SetGroupVersionKind(mapping.GroupVersionKind)
+
+		if err := cluster.GetClient().Get(ctx, key, subject); err == nil {
+			if clusterName != "" {
+				clusterNoteLog.Info("Found subject in project control plane",
+					"cluster", clusterName,
+					"subject", key)
+			}
+			return controllerutil.SetOwnerReference(subject, clusterNote, m.Scheme)
+		}
 	}
 
-	return nil
+	return fmt.Errorf("subject resource not found in any cluster: %s/%s %s",
+		clusterNote.Spec.SubjectRef.APIGroup,
+		clusterNote.Spec.SubjectRef.Kind,
+		clusterNote.Spec.SubjectRef.Name)
 }
 
 // +kubebuilder:webhook:path=/validate-notes-miloapis-com-v1alpha1-clusternote,mutating=false,failurePolicy=fail,sideEffects=None,groups=notes.miloapis.com,resources=clusternotes,verbs=create;update,versions=v1alpha1,name=vclusternote.notes.miloapis.com,admissionReviewVersions={v1,v1beta1},serviceName=milo-controller-manager,servicePort=9443,serviceNamespace=milo-system

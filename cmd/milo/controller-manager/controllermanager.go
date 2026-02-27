@@ -553,14 +553,9 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up platform access rejection webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-			if err := notesv1alpha1webhook.SetupNoteWebhooksWithManager(ctrl); err != nil {
-				logger.Error(err, "Error setting up note webhook")
-				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-			}
-			if err := notesv1alpha1webhook.SetupClusterNoteWebhooksWithManager(ctrl); err != nil {
-				logger.Error(err, "Error setting up clusternote webhook")
-				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-			}
+			// Note webhooks are set up later after the multicluster provider is created,
+			// so they can share it for cross-cluster subject lookups.
+			// See the noteClusterGetter setup after the quota multicluster manager.
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
@@ -665,6 +660,20 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 			logger.Info("Local cluster engaged successfully")
+
+			// Set up note webhooks using the shared multicluster provider for cross-cluster subject lookups
+			noteClusterGetter := &notesv1alpha1webhook.MultiClusterGetter{
+				Manager:  mcMgr,
+				Provider: provider,
+			}
+			if err := notesv1alpha1webhook.SetupNoteWebhooksWithManager(ctrl, noteClusterGetter); err != nil {
+				logger.Error(err, "Error setting up note webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := notesv1alpha1webhook.SetupClusterNoteWebhooksWithManager(ctrl, noteClusterGetter); err != nil {
+				logger.Error(err, "Error setting up clusternote webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 
 			// Start concurrently to resolve circular dependency between provider and manager
 			go func() {
