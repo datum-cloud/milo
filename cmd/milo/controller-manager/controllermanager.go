@@ -98,6 +98,7 @@ import (
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	miloprovider "go.miloapis.com/milo/pkg/multicluster-runtime/milo"
+	milowebhook "go.miloapis.com/milo/pkg/webhook"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 )
 
@@ -471,7 +472,11 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					MapperProvider: func(c *restclient.Config, httpClient *http.Client) (meta.RESTMapper, error) {
 						return controllerContext.RESTMapper, nil
 					},
-					WebhookServer: webhook.NewServer(webhook.Options{
+					// Wrap the webhook server with ClusterAwareServer to automatically inject
+					// project control plane context from UserInfo.Extra into the request context.
+					// This allows webhook handlers to use mccontext.ClusterFrom(ctx) to determine
+					// which project control plane the request is targeting.
+					WebhookServer: milowebhook.NewClusterAwareServer(webhook.NewServer(webhook.Options{
 						Port:    opts.ControllerRuntimeWebhookPort,
 						CertDir: opts.SecureServing.ServerCert.CertDirectory,
 						// The webhook server expects the key and cert files to be in the
@@ -481,7 +486,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 						// key and cert file names.
 						KeyName:  strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.KeyFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
 						CertName: strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.CertFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
-					}),
+					})),
 				},
 			)
 			if err != nil {

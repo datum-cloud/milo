@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	mccontext "sigs.k8s.io/multicluster-runtime/pkg/context"
 	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
 )
 
@@ -73,7 +74,7 @@ func (m *NoteMutator) Default(ctx context.Context, obj runtime.Object) error {
 	}
 
 	// Set owner reference to the subject resource for automatic garbage collection
-	if err := m.setSubjectOwnerReference(ctx, note, req); err != nil {
+	if err := m.setSubjectOwnerReference(ctx, note); err != nil {
 		noteLog.Error(err, "Failed to set owner reference to subject", "note", note.Name)
 		return errors.NewInternalError(fmt.Errorf("failed to set owner reference to subject: %w", err))
 	}
@@ -81,8 +82,9 @@ func (m *NoteMutator) Default(ctx context.Context, obj runtime.Object) error {
 	return nil
 }
 
-// setSubjectOwnerReference sets the owner reference to the subject resource if it's in the same namespace
-func (m *NoteMutator) setSubjectOwnerReference(ctx context.Context, note *notesv1alpha1.Note, req admission.Request) error {
+// setSubjectOwnerReference sets the owner reference to the subject resource if it's in the same namespace.
+// The cluster context is expected to be injected by the ClusterAwareServer wrapper.
+func (m *NoteMutator) setSubjectOwnerReference(ctx context.Context, note *notesv1alpha1.Note) error {
 	// Only set owner reference if the subject is in the same namespace
 	if note.Spec.SubjectRef.Namespace == "" || note.Spec.SubjectRef.Namespace != note.Namespace {
 		return nil
@@ -104,21 +106,17 @@ func (m *NoteMutator) setSubjectOwnerReference(ctx context.Context, note *notesv
 		Namespace: note.Spec.SubjectRef.Namespace,
 	}
 
-	// Determine which client to use based on project context
+	// Determine which client to use based on cluster context (injected by ClusterAwareServer)
 	subjectClient := m.Client
 
-	// Check if this is a project control plane request
 	if m.ClusterManager != nil {
-		if parentKinds, ok := req.UserInfo.Extra[iamv1alpha1.ParentKindExtraKey]; ok && len(parentKinds) > 0 && parentKinds[0] == "Project" {
-			if parentNames, ok := req.UserInfo.Extra[iamv1alpha1.ParentNameExtraKey]; ok && len(parentNames) > 0 {
-				projectName := parentNames[0]
-				cluster, err := m.ClusterManager.GetCluster(ctx, projectName)
-				if err != nil {
-					return fmt.Errorf("failed to get project control plane %s: %w", projectName, err)
-				}
-				subjectClient = cluster.GetClient()
-				noteLog.V(1).Info("Using project control plane client", "project", projectName)
+		if clusterName, ok := mccontext.ClusterFrom(ctx); ok && clusterName != "" {
+			cluster, err := m.ClusterManager.GetCluster(ctx, clusterName)
+			if err != nil {
+				return fmt.Errorf("failed to get project control plane %s: %w", clusterName, err)
 			}
+			subjectClient = cluster.GetClient()
+			noteLog.V(1).Info("Using project control plane client", "cluster", clusterName)
 		}
 	}
 
