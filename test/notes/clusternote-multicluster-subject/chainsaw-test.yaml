@@ -75,20 +75,9 @@ spec:
       try:
         - apply:
             file: test-data/clusternote.yaml
-        - wait:
-            apiVersion: notes.miloapis.com/v1alpha1
-            kind: ClusterNote
-            name: test-namespace-clusternote
-            timeout: 30s
-            for:
-              condition:
-                name: Ready
-                value: 'True'
-
-    - name: verify-owner-reference
-      description: Verify owner reference points to Namespace
-      cluster: project
-      try:
+        # Note: We don't wait for Ready condition because the notes controller
+        # doesn't watch project control planes. Instead, we verify the owner
+        # reference was set by the webhook.
         - assert:
             resource:
               apiVersion: notes.miloapis.com/v1alpha1
