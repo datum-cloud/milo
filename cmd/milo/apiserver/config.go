@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/component-base/tracing"
 	utilversion "k8s.io/component-base/version"
+	"k8s.io/klog/v2"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
 	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
@@ -37,12 +39,12 @@ import (
 	authorizationrest "k8s.io/kubernetes/pkg/registry/authorization/rest"
 	coordinationrest "k8s.io/kubernetes/pkg/registry/coordination/rest"
 	discoveryrest "k8s.io/kubernetes/pkg/registry/discovery/rest"
-	eventsrest "k8s.io/kubernetes/pkg/registry/events/rest"
 	flowcontrolrest "k8s.io/kubernetes/pkg/registry/flowcontrol/rest"
 	rbacrest "k8s.io/kubernetes/pkg/registry/rbac/rest"
 	svmrest "k8s.io/kubernetes/pkg/registry/storagemigration/rest"
 
 	"go.miloapis.com/milo/internal/apiserver/admission/initializer"
+	eventsbackend "go.miloapis.com/milo/internal/apiserver/events"
 	sessionsbackend "go.miloapis.com/milo/internal/apiserver/identity/sessions"
 	useridentitiesbackend "go.miloapis.com/milo/internal/apiserver/identity/useridentities"
 	identitystorage "go.miloapis.com/milo/internal/apiserver/storage/identity"
@@ -50,7 +52,9 @@ import (
 	identityapi "go.miloapis.com/milo/pkg/apis/identity"
 	identityopenapi "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	quotaapi "go.miloapis.com/milo/pkg/apis/quota"
+	"go.miloapis.com/milo/pkg/features"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
 )
 
@@ -65,15 +69,13 @@ type Config struct {
 }
 
 type ExtraConfig struct {
-	FeatureSessions        bool
 	SessionsProvider       SessionsProviderConfig
-	FeatureUserIdentities  bool
 	UserIdentitiesProvider UserIdentitiesProviderConfig
+	EventsProvider         EventsProviderConfig
 }
 
-// SessionsProviderConfig groups configuration for the sessions backend provider.
+// SessionsProviderConfig groups configuration for the sessions backend provider
 type SessionsProviderConfig struct {
-	// Direct provider connection (standalone upstream serving Milo public GVK)
 	URL            string
 	CAFile         string
 	ClientCertFile string
@@ -83,9 +85,19 @@ type SessionsProviderConfig struct {
 	ForwardExtras  []string
 }
 
-// UserIdentitiesProviderConfig groups configuration for the useridentities backend provider.
+// UserIdentitiesProviderConfig groups configuration for the useridentities backend provider
 type UserIdentitiesProviderConfig struct {
-	// Direct provider connection (standalone upstream serving Milo public GVK)
+	URL            string
+	CAFile         string
+	ClientCertFile string
+	ClientKeyFile  string
+	TimeoutSeconds int
+	Retries        int
+	ForwardExtras  []string
+}
+
+// EventsProviderConfig groups configuration for the events backend provider
+type EventsProviderConfig struct {
 	URL            string
 	CAFile         string
 	ClientCertFile string
@@ -111,8 +123,21 @@ type CompletedConfig struct {
 }
 
 func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryInterface) ([]controlplaneapiserver.RESTStorageProvider, error) {
+	// Initialize shared events backend if EventsProxy is enabled
+	// This is done once and shared between core/v1 and events.k8s.io/v1 providers
+	var eventsBackend *eventsbackend.DynamicProvider
+	if utilfeature.DefaultFeatureGate.Enabled(features.EventsProxy) {
+		backend, err := c.initEventsBackend()
+		if err != nil {
+			return nil, err
+		}
+		eventsBackend = backend
+	}
+
+	coreProvider := c.buildCoreProvider(eventsBackend)
+
 	providers := []controlplaneapiserver.RESTStorageProvider{
-		c.ControlPlane.NewCoreGenericConfig(),
+		coreProvider,
 		apiserverinternalrest.StorageProvider{},
 		authenticationrest.RESTStorageProvider{Authenticator: c.ControlPlane.Generic.Authentication.Authenticator, APIAudiences: c.ControlPlane.Generic.Authentication.APIAudiences},
 		authorizationrest.RESTStorageProvider{Authorizer: c.ControlPlane.Generic.Authorization.Authorizer, RuleResolver: c.ControlPlane.Generic.RuleResolver},
@@ -121,13 +146,15 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 		svmrest.RESTStorageProvider{},
 		flowcontrolrest.RESTStorageProvider{InformerFactory: c.ControlPlane.Generic.SharedInformerFactory},
 		admissionregistrationrest.RESTStorageProvider{Authorizer: c.ControlPlane.Generic.Authorization.Authorizer, DiscoveryClient: discovery},
-		eventsrest.RESTStorageProvider{TTL: c.ControlPlane.EventTTL},
 		discoveryrest.StorageProvider{},
 	}
 
-	// Build identity storage provider with both Sessions and UserIdentities
-	if c.ExtraConfig.FeatureSessions || c.ExtraConfig.FeatureUserIdentities {
+	if utilfeature.DefaultFeatureGate.Enabled(features.Sessions) || utilfeature.DefaultFeatureGate.Enabled(features.UserIdentities) {
 		providers = append(providers, newIdentityStorageProvider(c))
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.EventsProxy) {
+		providers = append(providers, newEventsV1StorageProvider(eventsBackend))
 	}
 
 	return providers, nil
@@ -136,8 +163,7 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 func newIdentityStorageProvider(c *CompletedConfig) controlplaneapiserver.RESTStorageProvider {
 	provider := identitystorage.StorageProvider{}
 
-	// Initialize Sessions backend if enabled
-	if c.ExtraConfig.FeatureSessions {
+	if utilfeature.DefaultFeatureGate.Enabled(features.Sessions) {
 		allow := make(map[string]struct{}, len(c.ExtraConfig.SessionsProvider.ForwardExtras))
 		for _, k := range c.ExtraConfig.SessionsProvider.ForwardExtras {
 			allow[k] = struct{}{}
@@ -156,8 +182,7 @@ func newIdentityStorageProvider(c *CompletedConfig) controlplaneapiserver.RESTSt
 		provider.Sessions = backend
 	}
 
-	// Initialize UserIdentities backend if enabled
-	if c.ExtraConfig.FeatureUserIdentities {
+	if utilfeature.DefaultFeatureGate.Enabled(features.UserIdentities) {
 		allow := make(map[string]struct{}, len(c.ExtraConfig.UserIdentitiesProvider.ForwardExtras))
 		for _, k := range c.ExtraConfig.UserIdentitiesProvider.ForwardExtras {
 			allow[k] = struct{}{}
@@ -179,6 +204,58 @@ func newIdentityStorageProvider(c *CompletedConfig) controlplaneapiserver.RESTSt
 	return provider
 }
 
+// initEventsBackend creates a shared DynamicProvider for both core/v1 and events.k8s.io/v1 APIs
+func (c *CompletedConfig) initEventsBackend() (*eventsbackend.DynamicProvider, error) {
+	allow := make(map[string]struct{}, len(c.ExtraConfig.EventsProvider.ForwardExtras))
+	for _, k := range c.ExtraConfig.EventsProvider.ForwardExtras {
+		allow[k] = struct{}{}
+	}
+
+	cfg := eventsbackend.Config{
+		BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
+		ProviderURL:    c.ExtraConfig.EventsProvider.URL,
+		CAFile:         c.ExtraConfig.EventsProvider.CAFile,
+		ClientCertFile: c.ExtraConfig.EventsProvider.ClientCertFile,
+		ClientKeyFile:  c.ExtraConfig.EventsProvider.ClientKeyFile,
+		Timeout:        time.Duration(c.ExtraConfig.EventsProvider.TimeoutSeconds) * time.Second,
+		Retries:        c.ExtraConfig.EventsProvider.Retries,
+		ExtrasAllow:    allow,
+	}
+
+	backend, err := eventsbackend.NewDynamicProvider(cfg)
+	if err != nil {
+		klog.ErrorS(err, "Failed to initialize events proxy (EventsProxy feature gate is enabled)",
+			"providerURL", cfg.ProviderURL,
+			"caFile", cfg.CAFile,
+			"clientCertFile", cfg.ClientCertFile,
+			"clientKeyFile", cfg.ClientKeyFile)
+		return nil, fmt.Errorf("failed to initialize events proxy: %w", err)
+	}
+
+	klog.InfoS("Events proxy initialized successfully (shared backend for core/v1 and events.k8s.io/v1)",
+		"providerURL", cfg.ProviderURL)
+
+	return backend, nil
+}
+
+func newEventsV1StorageProvider(backend *eventsbackend.DynamicProvider) controlplaneapiserver.RESTStorageProvider {
+	return &eventsbackend.EventsV1StorageProvider{
+		Backend: backend,
+	}
+}
+
+// buildCoreProvider creates the core storage provider with optional events proxy support.
+// If eventsBackend is provided (non-nil), events storage will be proxied through it.
+func (c *CompletedConfig) buildCoreProvider(eventsBackend *eventsbackend.DynamicProvider) controlplaneapiserver.RESTStorageProvider {
+	coreProvider := c.ControlPlane.NewCoreGenericConfig()
+
+	if eventsBackend == nil {
+		return coreProvider
+	}
+
+	return eventsbackend.WrapCoreProvider(coreProvider, eventsBackend)
+}
+
 func (c *Config) Complete() (CompletedConfig, error) {
 	return CompletedConfig{&completedConfig{
 		Options: c.Options,
@@ -196,7 +273,6 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		Options: opts,
 	}
 
-	// Initialize Milo scheme with identity and quota APIs and install into legacy scheme
 	miloScheme := runtime.NewScheme()
 	identityapi.Install(miloScheme)
 	identityapi.Install(legacyscheme.Scheme)
@@ -206,7 +282,11 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	apiResourceConfigSource := controlplane.DefaultAPIResourceConfigSource()
 	apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("serviceaccounts"))
 	apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("resourcequotas"))
-	// Enable identity group/version served by virtual storage
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.EventsProxy) {
+		apiResourceConfigSource.DisableResources(corev1.SchemeGroupVersion.WithResource("events"))
+	}
+
 	apiResourceConfigSource.EnableVersions(identityopenapi.SchemeGroupVersion)
 
 	genericConfig, versionedInformers, storageFactory, err := controlplaneapiserver.BuildGenericConfig(
@@ -226,7 +306,6 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 
-	// Capture the loopback config for use in filters that need it
 	loopbackClientConfig := genericConfig.LoopbackClientConfig
 
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
@@ -238,7 +317,6 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 
 	serviceResolver := webhook.NewDefaultServiceResolver()
 
-	// 🔧 Build loopback-only initializer using the generic loopback
 	loopbackInit := initializer.LoopbackInitializer{
 		Loopback: rest.CopyConfig(genericConfig.LoopbackClientConfig),
 	}
@@ -250,8 +328,6 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	c.ControlPlane = kubeAPIs
 	c.ControlPlane.Generic.EffectiveVersion = utilversion.DefaultKubeEffectiveVersion()
 
-	// Configure tracing for the loopback client to ensure trace context propagation
-	// to admission plugins that use dynamic clients (e.g., quota admission plugin)
 	if kubeAPIs.Generic.LoopbackClientConfig != nil && kubeAPIs.Generic.TracerProvider != nil {
 		kubeAPIs.Generic.LoopbackClientConfig.Wrap(tracing.WrapperFor(kubeAPIs.Generic.TracerProvider))
 	}
@@ -280,8 +356,6 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return bootstrapCRDsHook(ctx, kubeAPIs.Generic.LoopbackClientConfig)
 	})
 
-	// TODO(jreese) create an admission plugin that will prohibit the creation of
-	// a Secret with a type of `kubernetes.io/service-account-token`
 	c.APIExtensions.GenericConfig.DisabledPostStartHooks.Insert("start-legacy-token-tracking-controller")
 
 	aggregator, err := controlplaneapiserver.CreateAggregatorConfig(*kubeAPIs.Generic, opts, kubeAPIs.VersionedInformers, serviceResolver, kubeAPIs.ProxyTransport, kubeAPIs.Extra.PeerProxy, combinedInits)
@@ -296,25 +370,12 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	}
 	c.Aggregator = aggregator
 	c.Aggregator.ExtraConfig.DisableRemoteAvailableConditionController = true
-	// TODO(jreese) better version handling
 	c.Aggregator.GenericConfig.EffectiveVersion = utilversion.DefaultKubeEffectiveVersion()
 
 	return c, nil
 }
 
-// Taken from https://github.com/kubernetes/kubernetes/blob/50fc400f178d2078d0ca46aee955ee26375fc437/staging/src/k8s.io/apiserver/pkg/server/config.go#L1004
-//
-// Modified to inject the following filters at the necessary locations:
-//   - datumfilters.OrganizationContextAuthorizationDecorator
-//   - datumfilters.ProjectListOrganizationConstraintDecorator
-//   - datumfilters.OrganizationContextHandler
-//   - datumfilters.ContactGroupVisibilityDecorator
-//
-// This is done to improve the UX that customers will experience while
-// interacting with the Milo API server.
-//
-// Some handlers have not been added as a result of not having access to
-// lifecycleSignals in server.Config. TODO(jreese) need to look into this more
+// DefaultBuildHandlerChain builds the standard Kubernetes filter chain with Milo-specific filters
 func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config, loopbackConfig *rest.Config) http.Handler {
 	handler := apiHandler
 
@@ -337,13 +398,8 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config, loopbac
 	handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyRuleEvaluator, c.LongRunningFunc)
 	handler = filterlatency.TrackStarted(handler, c.TracerProvider, "audit")
 
-	// Add platform scope annotations to audit events before the audit filter processes them.
-	// This must run AFTER the context decorators below have set user.extra with parent context.
 	handler = datumfilters.AuditScopeAnnotationDecorator(handler)
 
-	// These decorators are added after the audit filter to ensure they're run
-	// prior to the audit filter being run so they will include the user and
-	// organization contexts.
 	handler = datumfilters.UserContextAuthorizationDecorator(handler)
 	handler = datumfilters.OrganizationContextAuthorizationDecorator(handler)
 	handler = datumfilters.ProjectContextAuthorizationDecorator(handler)
@@ -389,9 +445,6 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config, loopbac
 		handler = withCustomTracing(handler, c.TracerProvider)
 	}
 	handler = genericapifilters.WithLatencyTrackers(handler)
-	// WithRoutine will execute future handlers in a separate goroutine and serving
-	// handler in current goroutine to minimize the stack memory usage. It must be
-	// after WithPanicRecover() to be protected from panics.
 	if c.FeatureGate.Enabled(genericfeatures.APIServingWithRoutine) {
 		handler = routine.WithRoutine(handler, c.LongRunningFunc)
 	}
@@ -415,8 +468,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *server.Config, loopbac
 	return handler
 }
 
-// withCustomTracing provides tracing that always creates child spans (not links)
-// ensuring proper trace hierarchy for all requests including internal loopback requests.
+// withCustomTracing provides tracing that always creates child spans for proper trace hierarchy
 func withCustomTracing(handler http.Handler, tp trace.TracerProvider) http.Handler {
 	opts := []otelhttp.Option{
 		otelhttp.WithPropagators(tracing.Propagators()),
@@ -430,19 +482,15 @@ func withCustomTracing(handler http.Handler, tp trace.TracerProvider) http.Handl
 			}
 			return getSpanNameFromRequestInfo(info, r)
 		}),
-		// Note: NOT using WithPublicEndpoint() to always create child spans instead of links
 	}
 
 	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Add the http.target attribute to the span
 		if r.URL != nil {
 			trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPTarget(r.URL.RequestURI()))
 		}
 		handler.ServeHTTP(w, r)
 	})
 
-	// With Noop TracerProvider, the otelhttp still handles context propagation.
-	// See https://github.com/open-telemetry/opentelemetry-go/tree/main/example/passthrough
 	return otelhttp.NewHandler(wrappedHandler, "MiloAPI", opts...)
 }
 

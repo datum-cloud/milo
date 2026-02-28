@@ -156,7 +156,9 @@ func (p *Provider) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result
 	log := p.log.WithValues("project", req.Name)
 	log.Info("Reconciling Project")
 
-	key := req.String()
+	// Use just the project name as the key for cluster lookup.
+	// This matches the project name used in URL paths and ParentNameExtraKey.
+	key := req.Name
 	var project unstructured.Unstructured
 
 	if p.opts.InternalServiceDiscovery {

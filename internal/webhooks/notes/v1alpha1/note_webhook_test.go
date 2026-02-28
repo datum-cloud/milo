@@ -8,9 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	notesv1alpha1 "go.miloapis.com/milo/pkg/apis/notes/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -23,6 +25,27 @@ var testScheme = runtime.NewScheme()
 func init() {
 	utilruntime.Must(iamv1alpha1.AddToScheme(testScheme))
 	utilruntime.Must(notesv1alpha1.AddToScheme(testScheme))
+}
+
+// newTestRESTMapper creates a RESTMapper for testing that knows about common test resources
+func newTestRESTMapper() meta.RESTMapper {
+	mapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{
+		{Group: "networking.datumapis.com", Version: "v1alpha1"},
+		{Group: "resourcemanager.miloapis.com", Version: "v1alpha1"},
+	})
+	// Register Domain as a namespaced resource
+	mapper.Add(schema.GroupVersionKind{
+		Group:   "networking.datumapis.com",
+		Version: "v1alpha1",
+		Kind:    "Domain",
+	}, meta.RESTScopeNamespace)
+	// Register Organization as a cluster-scoped resource
+	mapper.Add(schema.GroupVersionKind{
+		Group:   "resourcemanager.miloapis.com",
+		Version: "v1alpha1",
+		Kind:    "Organization",
+	}, meta.RESTScopeRoot)
+	return mapper
 }
 
 func TestNoteMutator_Default(t *testing.T) {
@@ -137,8 +160,10 @@ func TestNoteMutator_Default(t *testing.T) {
 
 			fakeClient := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(objects...).Build()
 			mutator := &NoteMutator{
-				Client: fakeClient,
-				Scheme: testScheme,
+				Client:         fakeClient,
+				Scheme:         testScheme,
+				RESTMapper:     newTestRESTMapper(),
+				ClusterManager: nil, // nil means local-only search (backwards compatible)
 			}
 
 			// Create admission request context
