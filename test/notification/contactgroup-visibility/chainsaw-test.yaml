@@ -103,8 +103,8 @@ spec:
           fi
           echo "User can see 2 groups (private groups correctly filtered)"
 
-  - name: create-first-membership-and-verify-one-private-visible
-    description: Create membership for first private group and verify user can now see it
+  - name: create-first-membership-and-verify-private-still-hidden
+    description: Create membership for first private group but verify user still ONLY sees public groups (strict public filtering)
     try:
     - apply:
         file: 07-membership-private-1.yaml
@@ -119,14 +119,14 @@ spec:
         timeout: 30s
         content: |
           count=$(kubectl --kubeconfig=kubeconfig-user get contactgroups -A -o json | jq '.items | length')
-          if [ "$count" -ne 3 ]; then
-            echo "Expected 3 groups (2 public + 1 private with membership), got $count"
+          if [ "$count" -ne 2 ]; then
+            echo "Expected 2 groups (public only) even with membership, got $count"
             exit 1
           fi
-          echo "User can see 3 groups as expected"
+          echo "User sees only 2 public groups as expected (private hidden despite membership)"
 
-  - name: create-second-membership-and-verify-both-private-visible
-    description: Create membership for second private group and verify user can now see all groups
+  - name: create-second-membership-and-verify-private-still-hidden
+    description: Create membership for second private group and verify user still ONLY sees public groups
     try:
     - apply:
         file: 08-membership-private-2.yaml
@@ -141,9 +141,9 @@ spec:
         timeout: 30s
         content: |
           count=$(kubectl --kubeconfig=kubeconfig-user get contactgroups -A -o json | jq '.items | length')
-          if [ "$count" -ne 4 ]; then
-            echo "Expected 4 groups (2 public + 2 private with memberships), got $count"
+          if [ "$count" -ne 2 ]; then
+            echo "Expected 2 groups (public only), got $count"
             exit 1
           fi
-          echo "User can see all 4 groups as expected"
+          echo "User sees only 2 public groups as expected"
           echo "Test completed successfully!"

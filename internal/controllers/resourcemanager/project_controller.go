@@ -44,6 +44,12 @@ var gvrDNSZoneClass = schema.GroupVersionResource{
 	Resource: "dnszoneclasses",
 }
 
+var gvrConnectorClass = schema.GroupVersionResource{
+	Group:    "networking.datumapis.com",
+	Version:  "v1alpha1",
+	Resource: "connectorclasses",
+}
+
 // ProjectController reconciles a Project object
 type ProjectController struct {
 	ControlPlaneClient client.Client
@@ -63,6 +69,7 @@ type ProjectController struct {
 // +kubebuilder:rbac:groups=infrastructure.miloapis.com,resources=projectcontrolplanes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gatewayclasses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dns.networking.miloapis.com,resources=dnszoneclasses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.datumapis.com,resources=connectorclasses,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -203,6 +210,27 @@ func (r *ProjectController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Info("DNSZoneClass CRD not installed; skipping", "project", project.Name)
 	}
 
+	// Ensure the project's ConnectorClass exists
+	ok, err = hasResource(pc.Disc,
+		gvrConnectorClass.GroupVersion(),
+		"connectorclasses",
+	)
+	if err != nil {
+		logger.Error(err, "connectorclass discovery failed")
+		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+	}
+	if ok {
+		if err := ensureConnectorClass(ctx, pc.Dynamic,
+			"datum-connect",
+			"networking.datumapis.com/datum-connect",
+		); err != nil {
+			logger.Error(err, "ensure connectorclass failed", "project", project.Name)
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+		}
+	} else {
+		logger.Info("ConnectorClass CRD not installed; skipping", "project", project.Name)
+	}
+
 	// Set Ready condition (idempotent)
 	if cond := apimeta.FindStatusCondition(project.Status.Conditions, resourcemanagerv1alpha.ProjectReady); cond == nil || cond.Status != metav1.ConditionTrue {
 		newCond := metav1.Condition{
@@ -263,6 +291,29 @@ func ensureDNSZoneClass(ctx context.Context, dc dynamic.Interface, name, control
 	}
 	if _, err := dc.Resource(gvrDNSZoneClass).Create(ctx, obj, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("create DNSZoneClass %q: %w", name, err)
+	}
+	return nil
+}
+
+// ensureConnectorClass ensures that a ConnectorClass with the given name and controller exists.
+func ensureConnectorClass(ctx context.Context, dc dynamic.Interface, name, controller string) error {
+	_, err := dc.Resource(gvrConnectorClass).Get(ctx, name, metav1.GetOptions{})
+	if err == nil {
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("get ConnectorClass %q: %w", name, err)
+	}
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "networking.datumapis.com/v1alpha1",
+			"kind":       "ConnectorClass",
+			"metadata":   map[string]interface{}{"name": name},
+			"spec":       map[string]interface{}{"controllerName": controller},
+		},
+	}
+	if _, err := dc.Resource(gvrConnectorClass).Create(ctx, obj, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create ConnectorClass %q: %w", name, err)
 	}
 	return nil
 }

@@ -53,20 +53,37 @@ spec:
           - --audit-webhook-initial-backoff=$(AUDIT_WEBHOOK_INITIAL_BACKOFF)
           - --proxy-client-cert-file=$(PROXY_CLIENT_CERT_FILE)
           - --proxy-client-key-file=$(PROXY_CLIENT_KEY_FILE)
-          - --feature-sessions=true
+          # Feature gates controlled via FEATURE_GATES env var
+          # Default: Sessions and UserIdentities enabled
+          # To enable EventsProxy: FEATURE_GATES=Sessions=true,UserIdentities=true,EventsProxy=true
+          - --feature-gates=$(FEATURE_GATES)
+          # Sessions provider configuration
           - --sessions-provider-url=$(SESSIONS_PROVIDER_URL)
           - --sessions-provider-ca-file=$(SESSIONS_PROVIDER_CA_FILE)
           - --sessions-provider-client-cert=$(SESSIONS_PROVIDER_CLIENT_CERT_FILE)
           - --sessions-provider-client-key=$(SESSIONS_PROVIDER_CLIENT_KEY_FILE)
-          - --feature-useridentities=true
+          - --provider-timeout=3
+          - --provider-retries=2
+          - --forward-extras=iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name
+          # UserIdentities provider configuration
           - --useridentities-provider-url=$(USERIDENTITIES_PROVIDER_URL)
           - --useridentities-provider-ca-file=$(USERIDENTITIES_PROVIDER_CA_FILE)
           - --useridentities-provider-client-cert=$(USERIDENTITIES_PROVIDER_CLIENT_CERT_FILE)
           - --useridentities-provider-client-key=$(USERIDENTITIES_PROVIDER_CLIENT_KEY_FILE)
-          - --provider-timeout=3
-          - --provider-retries=2
-          - --forward-extras=iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name
+          # Events proxy provider configuration (requires EventsProxy feature gate)
+          - --events-provider-url=$(EVENTS_PROVIDER_URL)
+          - --events-provider-ca-file=$(EVENTS_PROVIDER_CA_FILE)
+          - --events-provider-client-cert=$(EVENTS_PROVIDER_CLIENT_CERT_FILE)
+          - --events-provider-client-key=$(EVENTS_PROVIDER_CLIENT_KEY_FILE)
+          - --events-provider-timeout=$(EVENTS_PROVIDER_TIMEOUT)
+          - --events-provider-retries=$(EVENTS_PROVIDER_RETRIES)
+          - --events-forward-extras=$(EVENTS_FORWARD_EXTRAS)
         env:
+          # Feature gates configuration
+          # Sessions and UserIdentities are GA (enabled by default)
+          # Add EventsProxy=true to enable Events proxy to Activity service
+          - name: FEATURE_GATES
+            value: ""
           - name: LOG_LEVEL
             value: "4"
           - name: LOGGING_FORMAT
@@ -139,6 +156,21 @@ spec:
             value: ""
           - name: USERIDENTITIES_PROVIDER_CLIENT_KEY_FILE
             value: ""
+          # Events proxy provider configuration (requires --feature-gates=EventsProxy=true)
+          - name: EVENTS_PROVIDER_URL
+            value: ""
+          - name: EVENTS_PROVIDER_CA_FILE
+            value: ""
+          - name: EVENTS_PROVIDER_CLIENT_CERT_FILE
+            value: ""
+          - name: EVENTS_PROVIDER_CLIENT_KEY_FILE
+            value: ""
+          - name: EVENTS_PROVIDER_TIMEOUT
+            value: "30"
+          - name: EVENTS_PROVIDER_RETRIES
+            value: "3"
+          - name: EVENTS_FORWARD_EXTRAS
+            value: "iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name"
         livenessProbe:
           failureThreshold: 3
           httpGet:
