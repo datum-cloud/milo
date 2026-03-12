@@ -78,25 +78,27 @@ import (
 	_ "k8s.io/component-base/logs/json/register"
 
 	controlplane "go.miloapis.com/milo/internal/control-plane"
-	crmcontroller "go.miloapis.com/milo/internal/controllers/crm"
 	iamcontroller "go.miloapis.com/milo/internal/controllers/iam"
+	notescontroller "go.miloapis.com/milo/internal/controllers/notes"
 	remoteapiservicecontroller "go.miloapis.com/milo/internal/controllers/remoteapiservice"
 	resourcemanagercontroller "go.miloapis.com/milo/internal/controllers/resourcemanager"
 	infracluster "go.miloapis.com/milo/internal/infra-cluster"
 	quotacontroller "go.miloapis.com/milo/internal/quota/controllers"
-	crmv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/crm/v1alpha1"
 	iamv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/iam/v1alpha1"
 	identityv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/identity/v1alpha1"
+	notesv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notes/v1alpha1"
 	notificationv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/notification/v1alpha1"
 	resourcemanagerv1alpha1webhook "go.miloapis.com/milo/internal/webhooks/resourcemanager/v1alpha1"
 	crmv1alpha1 "go.miloapis.com/milo/pkg/apis/crm/v1alpha1"
 	iamv1alpha1 "go.miloapis.com/milo/pkg/apis/iam/v1alpha1"
 	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	infrastructurev1alpha1 "go.miloapis.com/milo/pkg/apis/infrastructure/v1alpha1"
+	notesv1alpha1 "go.miloapis.com/milo/pkg/apis/notes/v1alpha1"
 	notificationv1alpha1 "go.miloapis.com/milo/pkg/apis/notification/v1alpha1"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
 	resourcemanagerv1alpha1 "go.miloapis.com/milo/pkg/apis/resourcemanager/v1alpha1"
 	miloprovider "go.miloapis.com/milo/pkg/multicluster-runtime/milo"
+	milowebhook "go.miloapis.com/milo/pkg/webhook"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 )
 
@@ -176,6 +178,7 @@ func init() {
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(iamv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(identityv1alpha1.AddToScheme(Scheme))
+	utilruntime.Must(notesv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(notificationv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(crmv1alpha1.AddToScheme(Scheme))
 	utilruntime.Must(quotav1alpha1.AddToScheme(Scheme))
@@ -297,7 +300,7 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&PlatformInvitationEmailVariableActionUrl, "platform-invitation-email-variable-action-url", "https://cloud.datum.net", "The action url for the platform invitation email.")
 	fs.StringVar(&OrganizationMembershipSelfDeleteRoleName, "organization-membership-self-delete-role-name", "organizationmembership-self-delete", "The name of the role that will be used to grant organization membership self delete actions.")
 	fs.StringVar(&OrganizationMembershipSelfDeleteRoleNamespace, "organization-membership-self-delete-role-namespace", "milo-system", "The namespace where the organization membership self delete role is located. Defaults to system-namespace if not specified.")
-	fs.StringVar(&NoteCreatorEditorRoleName, "note-creator-editor-role-name", "crm-note-creator-editor", "The name of the role that will be used to grant note creator edit permissions.")
+	fs.StringVar(&NoteCreatorEditorRoleName, "note-creator-editor-role-name", "notes-creator-editor", "The name of the role that will be used to grant note creator edit permissions.")
 
 	fs.IntVar(&s.ControllerRuntimeWebhookPort, "controller-runtime-webhook-port", 9443, "The port to use for the controller-runtime webhook server.")
 
@@ -464,7 +467,16 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					Metrics: metricsserver.Options{
 						BindAddress: "0",
 					},
-					WebhookServer: webhook.NewServer(webhook.Options{
+					// Use the same REST mapper as the controller context to share the
+					// cached API discovery across the webhook manager and controllers.
+					MapperProvider: func(c *restclient.Config, httpClient *http.Client) (meta.RESTMapper, error) {
+						return controllerContext.RESTMapper, nil
+					},
+					// Wrap the webhook server with ClusterAwareServer to automatically inject
+					// project control plane context from UserInfo.Extra into the request context.
+					// This allows webhook handlers to use mccontext.ClusterFrom(ctx) to determine
+					// which project control plane the request is targeting.
+					WebhookServer: milowebhook.NewClusterAwareServer(webhook.NewServer(webhook.Options{
 						Port:    opts.ControllerRuntimeWebhookPort,
 						CertDir: opts.SecureServing.ServerCert.CertDirectory,
 						// The webhook server expects the key and cert files to be in the
@@ -474,7 +486,7 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 						// key and cert file names.
 						KeyName:  strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.KeyFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
 						CertName: strings.TrimPrefix(opts.SecureServing.ServerCert.CertKey.CertFile, opts.SecureServing.ServerCert.CertDirectory+"/"),
-					}),
+					})),
 				},
 			)
 			if err != nil {
@@ -546,10 +558,8 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				logger.Error(err, "Error setting up platform access rejection webhook")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
-			if err := crmv1alpha1webhook.SetupNoteWebhooksWithManager(ctrl); err != nil {
-				logger.Error(err, "Error setting up note webhook")
-				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-			}
+			// Note webhooks are set up later after the multicluster manager is created,
+			// so they can use it for project control plane lookups.
 
 			projectCtrl := resourcemanagercontroller.ProjectController{
 				ControlPlaneClient: ctrl.GetClient(),
@@ -655,6 +665,16 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 			}
 			logger.Info("Local cluster engaged successfully")
 
+			// Set up note webhooks with multicluster manager for project control plane lookups
+			if err := notesv1alpha1webhook.SetupNoteWebhooksWithManager(ctrl, mcMgr); err != nil {
+				logger.Error(err, "Error setting up note webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+			if err := notesv1alpha1webhook.SetupClusterNoteWebhooksWithManager(ctrl, mcMgr); err != nil {
+				logger.Error(err, "Error setting up clusternote webhook")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
 			// Start concurrently to resolve circular dependency between provider and manager
 			go func() {
 				logger.Info("Starting Datum cluster provider")
@@ -734,13 +754,23 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 
-			noteCtrl := crmcontroller.NoteController{
+			noteCtrl := notescontroller.NoteController{
 				Client:                     ctrl.GetClient(),
 				CreatorEditorRoleName:      NoteCreatorEditorRoleName,
 				CreatorEditorRoleNamespace: SystemNamespace,
 			}
 			if err := noteCtrl.SetupWithManager(ctrl); err != nil {
 				logger.Error(err, "Error setting up note controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			clusterNoteCtrl := notescontroller.ClusterNoteController{
+				Client:                     ctrl.GetClient(),
+				CreatorEditorRoleName:      NoteCreatorEditorRoleName,
+				CreatorEditorRoleNamespace: SystemNamespace,
+			}
+			if err := clusterNoteCtrl.SetupWithManager(ctrl); err != nil {
+				logger.Error(err, "Error setting up clusternote controller")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 

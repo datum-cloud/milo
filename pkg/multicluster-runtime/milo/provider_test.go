@@ -61,7 +61,7 @@ func TestReadyProject(t *testing.T) {
 	assert.Zero(t, result.RequeueAfter)
 	assert.Len(t, provider.projects, 1)
 
-	cl, err := provider.Get(context.Background(), "/test-project")
+	cl, err := provider.Get(context.Background(), "test-project")
 	assert.NoError(t, err)
 	apiHost, err := url.Parse(cl.GetConfig().Host)
 	assert.NoError(t, err)

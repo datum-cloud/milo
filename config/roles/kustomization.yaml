@@ -62,9 +62,9 @@ resources:
   - iam-platform-invitations-reader.yaml
   - iam-platform-invitations-editor.yaml
   - iam-platform-invitations-admin.yaml
-  - crm-note-viewer.yaml
-  - crm-note-creator.yaml
-  - crm-note-editor.yaml
-  - crm-note-creator-editor.yaml
-  - crm-note-admin.yaml
+  - notes-viewer.yaml
+  - notes-creator.yaml
+  - notes-editor.yaml
+  - notes-creator-editor.yaml
+  - notes-admin.yaml
   - identity-user-session-viewer.yaml

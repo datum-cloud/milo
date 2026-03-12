@@ -216,6 +216,8 @@ spec:
                 type: array
             type: object
         type: object
+    selectableFields:
+    - jsonPath: .spec.visibility
     served: true
     storage: true
     subresources:
