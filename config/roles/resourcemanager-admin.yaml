@@ -4,7 +4,7 @@ metadata:
   name: resourcemanager-admin
   annotations:
     kubernetes.io/display-name: Resource Manager Admin
-    kubernetes.io/description: Full access to organizations and projects
+    kubernetes.io/description: Full access to manage organizations and projects
 spec:
   launchStage: Beta
   inheritedRoles:
