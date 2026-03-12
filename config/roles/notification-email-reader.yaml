@@ -5,6 +5,8 @@ metadata:
   annotations:
     kubernetes.io/display-name: Notification Email Viewer
     kubernetes.io/description: View notification emails
+    taxonomy.miloapis.com/product: Notifications
+    taxonomy.miloapis.com/sort-order: "30"
 spec:
   launchStage: Beta
   includedPermissions:
