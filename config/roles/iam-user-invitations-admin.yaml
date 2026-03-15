@@ -2,6 +2,8 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: iam-user-invitations-admin
+  labels:
+    taxonomy.miloapis.com/role-category: platform
   annotations:
     kubernetes.io/display-name: User Invitation Admin
     kubernetes.io/description: Full access to user invitations

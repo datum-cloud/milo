@@ -2,6 +2,8 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: project-manager
+  labels:
+    taxonomy.miloapis.com/role-category: platform
   annotations:
     kubernetes.io/display-name: Project Manager
     kubernetes.io/description: Full access to projects including create, update, and delete

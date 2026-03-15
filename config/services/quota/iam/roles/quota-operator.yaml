@@ -11,6 +11,7 @@ metadata:
   labels:
     quota.miloapis.com/role-type: operator
     quota.miloapis.com/service: quota
+    taxonomy.miloapis.com/role-category: platform
 spec:
   launchStage: Beta
   includedPermissions:

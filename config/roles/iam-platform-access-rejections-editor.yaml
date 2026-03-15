@@ -2,6 +2,8 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: iam-platform-access-rejections-editor
+  labels:
+    taxonomy.miloapis.com/role-category: platform
   annotations:
     kubernetes.io/display-name: Platform Access Rejection Editor
     kubernetes.io/description: Create, update, and delete platform access rejections

@@ -2,6 +2,8 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: resourcemanager-editor
+  labels:
+    taxonomy.miloapis.com/role-category: platform
   annotations:
     kubernetes.io/display-name: Resource Manager Editor
     kubernetes.io/description: Edit access to organizations and projects

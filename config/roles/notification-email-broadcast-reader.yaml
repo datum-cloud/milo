@@ -2,6 +2,8 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: notification-email-broadcast-reader
+  labels:
+    taxonomy.miloapis.com/role-category: feature
   annotations:
     kubernetes.io/display-name: Email Broadcast Viewer
     kubernetes.io/description: View email broadcasts

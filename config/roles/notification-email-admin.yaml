@@ -2,6 +2,8 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: notification-email-admin
+  labels:
+    taxonomy.miloapis.com/role-category: feature
   annotations:
     kubernetes.io/display-name: Notification Email Admin
     kubernetes.io/description: Full access to notification emails
