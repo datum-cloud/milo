@@ -1,0 +1,193 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: iam.miloapis.com-alerting-rules
+  labels:
+    app.kubernetes.io/name: milo
+    app.kubernetes.io/component: iam
+    app.kubernetes.io/part-of: milo
+    monitoring.coreos.com/prometheus: kube-prometheus
+spec:
+  groups:
+    - name: iam.readiness
+      interval: 30s
+      rules:
+        # Users not ready
+        - alert: UsersNotReady
+          expr: iam.miloapis.com:users:not_ready > 0
+          for: 2m
+          labels:
+            severity: critical
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} users are not ready"
+            description: |
+              Users are not in Ready state, preventing authentication and access.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check user status: kubectl get users -o wide
+              2. Review controller logs for user provisioning errors
+              3. Verify authentication provider integration (Zitadel)
+
+        # Roles not ready
+        - alert: RolesNotReady
+          expr: iam.miloapis.com:roles:not_ready > 0
+          for: 5m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} roles are not ready"
+            description: |
+              Roles are not in Ready state, affecting RBAC configuration.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check role status: kubectl get roles.iam.miloapis.com -o wide
+              2. Review role validation and permission configuration
+              3. Verify authorization provider integration (OpenFGA)
+
+        # Policy bindings not ready (critical for access control)
+        - alert: PolicyBindingsNotReady
+          expr: iam.miloapis.com:bindings:not_ready > 0
+          for: 2m
+          labels:
+            severity: critical
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} policy bindings are not ready"
+            description: |
+              Policy bindings are not in Ready state, breaking access control.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check binding status: kubectl get policybindings -o wide
+              2. Review authorization provider sync errors
+              3. Verify role and principal references are valid
+
+        # Groups not ready
+        - alert: GroupsNotReady
+          expr: iam.miloapis.com:groups:not_ready > 0
+          for: 5m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} groups are not ready"
+            description: |
+              Groups are not in Ready state, affecting team organization.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check group status: kubectl get groups.iam.miloapis.com -o wide
+              2. Review group provisioning logic
+              3. Verify group membership reconciliation
+
+        # Group memberships not ready
+        - alert: GroupMembershipsNotReady
+          expr: iam.miloapis.com:group_memberships:not_ready > 0
+          for: 5m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} group memberships are not ready"
+            description: |
+              Group memberships are not in Ready state, affecting group-based access.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check membership status: kubectl get groupmemberships -o wide
+              2. Review member and group reference validation
+              3. Verify membership sync to authorization provider
+
+        # Machine accounts not ready (critical for service authentication)
+        - alert: MachineAccountsNotReady
+          expr: iam.miloapis.com:machine_accounts:not_ready > 0
+          for: 2m
+          labels:
+            severity: critical
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} machine accounts are not ready"
+            description: |
+              Machine accounts are not in Ready state, preventing service authentication.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check machine account status: kubectl get machineaccounts -o wide
+              2. Review service account provisioning
+              3. Verify authentication provider integration
+
+        # Machine account keys not ready (critical for API access)
+        - alert: MachineAccountKeysNotReady
+          expr: iam.miloapis.com:machine_account_keys:not_ready > 0
+          for: 1m
+          labels:
+            severity: critical
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} machine account keys are not ready"
+            description: |
+              Machine account keys are not in Ready state, breaking API authentication.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check key status: kubectl get machineaccountkeys -o wide
+              2. Review key generation and secret creation
+              3. Verify key storage and distribution
+
+        # User invitations not ready
+        - alert: UserInvitationsNotReady
+          expr: iam.miloapis.com:invitations:not_ready > 0
+          for: 10m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} user invitations are not ready"
+            description: |
+              User invitations are not in Ready state, preventing user onboarding.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check invitation status: kubectl get userinvitations -o wide
+              2. Review email delivery integration
+              3. Verify invitation template rendering
+
+        # User deactivations not ready
+        - alert: UserDeactivationsNotReady
+          expr: iam.miloapis.com:deactivations:not_ready > 0
+          for: 5m
+          labels:
+            severity: warning
+            category: readiness
+            team: platform
+          annotations:
+            summary: "{{ $value }} user deactivations are not ready"
+            description: |
+              User deactivations are not in Ready state, delaying access revocation.
+
+              Not ready count: {{ $value }}
+
+              Actions needed:
+              1. Check deactivation status: kubectl get userdeactivations -o wide
+              2. Review user state transitions
+              3. Verify authentication provider sync

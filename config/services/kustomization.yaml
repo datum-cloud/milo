@@ -6,3 +6,6 @@ kind: Component
 
 components:
   - quota
+  - resource-manager
+  - iam
+  - notification

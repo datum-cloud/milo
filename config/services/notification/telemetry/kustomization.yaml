@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Kustomize component for notification telemetry
+# Includes both raw metrics collection and aggregation policies
+# for comprehensive observability of the notification system.
+
+metadata:
+  name: notification-telemetry
+  annotations:
+    config.kubernetes.io/function: |
+      container:
+        image: registry.k8s.io/kustomize/kustomize:v5.0.1
+    config.kubernetes.io/local-config: "true"
+
+components:
+  - metrics/control-plane
+
+generatorOptions:
+  disableNameSuffixHash: false
+  labels:
+    milo.notification/telemetry: complete
+    app.kubernetes.io/part-of: milo
+    app.kubernetes.io/component: notification
+    app.kubernetes.io/managed-by: kustomize
