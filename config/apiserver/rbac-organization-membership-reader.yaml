@@ -1,0 +1,39 @@
+# Grants any authenticated user read-only access to organization memberships.
+#
+# Row-level scoping is enforced server-side by UserOrganizationMembershipListConstraintDecorator,
+# which injects fieldSelector=spec.userRef.name=<requesting-user> on all list requests that
+# arrive through the user-context endpoint (/iam.miloapis.com/v1alpha1/users/{id}/control-plane).
+#
+# This ClusterRole exists solely to short-circuit the authorization webhook for this
+# high-frequency read path. With --authorization-mode=RBAC,Webhook, a RBAC "Allowed"
+# result is returned immediately — the webhook is never called.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:milo:organization-membership-reader
+  labels:
+    app.kubernetes.io/part-of: milo-control-plane
+rules:
+- apiGroups:
+  - resourcemanager.miloapis.com
+  resources:
+  - organizationmemberships
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:milo:organization-membership-reader
+  labels:
+    app.kubernetes.io/part-of: milo-control-plane
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:milo:organization-membership-reader
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: system:authenticated

@@ -31,6 +31,8 @@ spec:
           - --authentication-token-webhook-version=$(AUTHENTICATION_TOKEN_WEBHOOK_VERSION)
           - --authorization-webhook-config-file=$(AUTHORIZATION_WEBHOOK_CONFIG_FILE)
           - --authorization-webhook-version=$(AUTHORIZATION_WEBHOOK_VERSION)
+          - --authorization-webhook-cache-authorized-ttl=$(AUTHORIZATION_WEBHOOK_CACHE_AUTHORIZED_TTL)
+          - --authorization-webhook-cache-unauthorized-ttl=$(AUTHORIZATION_WEBHOOK_CACHE_UNAUTHORIZED_TTL)
           - --bind-address=$(BIND_ADDRESS)
           - --secure-port=$(SECURE_PORT)
           - --etcd-servers=$(ETCD_SERVERS)
@@ -100,6 +102,13 @@ spec:
             value: "/etc/kubernetes/config/authorization-config.yaml"
           - name: AUTHORIZATION_WEBHOOK_VERSION
             value: "v1"
+          # Cache authorized decisions for 1h to reduce webhook round-trips.
+          # Unauthorized decisions are cached for 30s (default) to allow quick
+          # recovery if a permission is granted.
+          - name: AUTHORIZATION_WEBHOOK_CACHE_AUTHORIZED_TTL
+            value: "1h"
+          - name: AUTHORIZATION_WEBHOOK_CACHE_UNAUTHORIZED_TTL
+            value: "30s"
           - name: BIND_ADDRESS
             value: "0.0.0.0"
           - name: SECURE_PORT
