@@ -474,6 +474,17 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 	case *unstructured.Unstructured:
 		// Already unstructured (CRDs from apiextensions-apiserver)
 		unstructuredObj = v
+
+		// Log top-level keys for debugging missing metadata issues
+		keys := make([]string, 0, len(v.Object))
+		for k := range v.Object {
+			keys = append(keys, k)
+		}
+		p.logger.V(2).Info("Admission object is unstructured",
+			"objectKeys", keys,
+			"hasMetadata", v.Object["metadata"] != nil,
+			"getName", v.GetName(),
+			"resourceName", attrs.GetName())
 	default:
 		// Structured type (native k8s types like Secret, ConfigMap, etc.)
 		// Convert to unstructured for consistent processing
