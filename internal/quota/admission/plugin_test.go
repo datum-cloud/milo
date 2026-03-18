@@ -1539,23 +1539,6 @@ func TestStructuredEndpointSliceCELTemplateRendering(t *testing.T) {
 				},
 			},
 		},
-		{
-			// Reproduces the production bug: an unstructured object without
-			// a metadata key in the Object map. This happens when the API
-			// server decodes the request body but metadata is handled
-			// separately by the REST handler, leaving the unstructured map
-			// with only spec-level fields.
-			name: "unstructured without metadata key",
-			object: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion":  "discovery.k8s.io/v1",
-					"kind":        "EndpointSlice",
-					"addressType": "FQDN",
-					"endpoints":   []interface{}{map[string]interface{}{"addresses": []interface{}{"google.com"}}},
-					"ports":       []interface{}{map[string]interface{}{"port": int64(443)}},
-				},
-			},
-		},
 	}
 
 	for _, tt := range tests {

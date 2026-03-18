@@ -2,6 +2,7 @@ package admission
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -476,10 +477,17 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		unstructuredObj = v
 	default:
 		// Structured type (native k8s types like Secret, ConfigMap, etc.)
-		// Convert to unstructured for consistent processing
-		unstructuredMap, convErr := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		// Convert to unstructured via JSON round-trip to ensure field names
+		// match JSON tags (e.g. "metadata") rather than Go field names
+		// (e.g. "objectMeta"). runtime.DefaultUnstructuredConverter.ToUnstructured
+		// uses Go field names, which breaks CEL expressions like trigger.metadata.name.
+		jsonBytes, convErr := json.Marshal(obj)
 		if convErr != nil {
-			return fmt.Errorf("failed to convert %T to unstructured: %w", obj, convErr)
+			return fmt.Errorf("failed to marshal %T to JSON: %w", obj, convErr)
+		}
+		var unstructuredMap map[string]interface{}
+		if convErr := json.Unmarshal(jsonBytes, &unstructuredMap); convErr != nil {
+			return fmt.Errorf("failed to unmarshal %T JSON to map: %w", obj, convErr)
 		}
 		unstructuredObj = &unstructured.Unstructured{Object: unstructuredMap}
 	}
@@ -497,27 +505,6 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		"getName", unstructuredObj.GetName(),
 		"attrsName", attrs.GetName(),
 		"attrsNamespace", attrs.GetNamespace())
-
-	// Ensure the unstructured object has metadata populated. Some API server
-	// code paths (e.g. apiextensions) decode the request body without the
-	// metadata envelope, leaving the Object map with only spec-level fields.
-	// CEL templates like "trigger.metadata.name" need metadata to be present.
-	if _, ok := unstructuredObj.Object["metadata"]; !ok {
-		p.logger.Error(nil, "BUG: admission object missing metadata key, backfilling from attrs",
-			"gvk", attrs.GetKind(),
-			"objectType", fmt.Sprintf("%T", obj),
-			"attrsName", attrs.GetName(),
-			"attrsNamespace", attrs.GetNamespace())
-		unstructuredObj.Object["metadata"] = map[string]interface{}{}
-	}
-	if md, ok := unstructuredObj.Object["metadata"].(map[string]interface{}); ok {
-		if _, hasName := md["name"]; !hasName && attrs.GetName() != "" {
-			md["name"] = attrs.GetName()
-		}
-		if _, hasNS := md["namespace"]; !hasNS && attrs.GetNamespace() != "" {
-			md["namespace"] = attrs.GetNamespace()
-		}
-	}
 
 	// Build evaluation context
 	evalContext := p.buildEvaluationContext(attrs, unstructuredObj)
