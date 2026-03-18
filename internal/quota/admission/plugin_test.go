@@ -1279,6 +1279,170 @@ func (m *testWatchManager) UnregisterClaimWaiter(claimName, namespace string) {}
 func (m *testWatchManager) Start(ctx context.Context) error                   { return nil }
 func (m *testWatchManager) Stop()                                             {}
 
+// TestDeterministicClaimNameBlocksRetry demonstrates that when a ResourceClaim
+// is denied (or times out), the claim persists in the API server. Because the
+// claim name is deterministic (derived from the triggering resource name),
+// subsequent attempts to create the same resource generate the same claim name
+// and fail with AlreadyExists — surfaced as "Insufficient quota" to the user.
+//
+// This reproduces a bug where:
+// 1. EndpointSlice creation triggers a quota claim
+// 2. The claim is denied or times out
+// 3. The denied/timed-out claim is not cleaned up quickly enough
+// 4. Controller retries EndpointSlice creation → same claim name → AlreadyExists
+// 5. User sees "Insufficient quota" even though bucket shows 0/25
+func TestDeterministicClaimNameBlocksRetry(t *testing.T) {
+	tests := []struct {
+		name          string
+		watchBehavior string // "deny" or "timeout"
+	}{
+		{
+			name:          "denied claim blocks retry with same resource name",
+			watchBehavior: "deny",
+		},
+		{
+			name:          "timed-out claim blocks retry with same resource name",
+			watchBehavior: "timeout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			quotav1alpha1.AddToScheme(scheme)
+
+			// Use the denying dynamic client so claims are created but denied.
+			// The key: the fake client's object tracker stores the claim on
+			// first Create, so the second Create returns AlreadyExists.
+			fakeDynClient := &fakeDenyingDynamicClient{
+				FakeDynamicClient: fake.NewSimpleDynamicClient(scheme),
+			}
+
+			logger := zap.New(zap.UseDevMode(true))
+
+			celEngine, err := engine.NewCELEngine()
+			if err != nil {
+				t.Fatalf("Failed to create CEL engine: %v", err)
+			}
+
+			// Policy with a DETERMINISTIC claim name derived from the trigger
+			// resource name. This mirrors real policies like:
+			//   name: "endpointslice-{{ trigger.metadata.name }}"
+			policy := &quotav1alpha1.ClaimCreationPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "endpointslice-quota-policy",
+				},
+				Spec: quotav1alpha1.ClaimCreationPolicySpec{
+					Trigger: quotav1alpha1.ClaimTriggerSpec{
+						Resource: quotav1alpha1.ClaimTriggerResource{
+							APIVersion: "discovery.k8s.io/v1",
+							Kind:       "EndpointSlice",
+						},
+					},
+					Disabled: ptr.To(false),
+					Target: quotav1alpha1.ClaimTargetSpec{
+						ResourceClaimTemplate: quotav1alpha1.ResourceClaimTemplate{
+							Metadata: quotav1alpha1.ObjectMetaTemplate{
+								// Deterministic name — same resource always
+								// produces the same claim name.
+								Name: "endpointslice-{{ trigger.metadata.name }}",
+							},
+							Spec: quotav1alpha1.ResourceClaimSpec{
+								ConsumerRef: quotav1alpha1.ConsumerRef{
+									APIGroup: "resourcemanager.miloapis.com",
+									Kind:     "Project",
+									Name:     "test-project",
+								},
+								Requests: []quotav1alpha1.ResourceRequest{
+									{
+										ResourceType: "discovery.miloapis.com/endpointslices",
+										Amount:       1,
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: quotav1alpha1.ClaimCreationPolicyStatus{
+					Conditions: []metav1.Condition{{
+						Type:   quotav1alpha1.ClaimCreationPolicyReady,
+						Status: metav1.ConditionTrue,
+						Reason: "TestReady",
+					}},
+				},
+			}
+
+			gvk := schema.GroupVersionKind{
+				Group:   "discovery.k8s.io",
+				Version: "v1",
+				Kind:    "EndpointSlice",
+			}
+
+			plugin := &ResourceQuotaEnforcementPlugin{
+				Handler:       admission.NewHandler(admission.Create),
+				dynamicClient: fakeDynClient,
+				policyEngine: &testPolicyEngine{
+					policy: policy,
+					gvk:    gvk,
+				},
+				templateEngine: engine.NewTemplateEngine(celEngine, logger.WithName("template")),
+				config:         DefaultAdmissionPluginConfig(),
+				logger:         logger.WithName("plugin"),
+			}
+			plugin.watchManagers.Store("", &testWatchManager{behavior: tt.watchBehavior})
+
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "discovery.k8s.io/v1",
+					"kind":       "EndpointSlice",
+					"metadata": map[string]interface{}{
+						"name":      "test-eps-1",
+						"namespace": "default",
+					},
+				},
+			}
+
+			attrs := &testAdmissionAttributes{
+				operation: admission.Create,
+				object:    obj,
+				gvk:       gvk,
+				name:      obj.GetName(),
+				namespace: obj.GetNamespace(),
+				userInfo:  &user.DefaultInfo{Name: "test-user"},
+			}
+
+			// --- First attempt: claim is created, then denied/timed-out ---
+			err = plugin.Validate(context.Background(), attrs, nil)
+			if err == nil {
+				t.Fatal("Expected error on first attempt (claim should be denied/timed-out)")
+			}
+			t.Logf("First attempt error (expected): %v", err)
+
+			// Verify the claim WAS created in the fake client's store
+			claimCreated := false
+			for _, action := range fakeDynClient.Actions() {
+				if action.Matches("create", "resourceclaims") {
+					claimCreated = true
+					break
+				}
+			}
+			if !claimCreated {
+				t.Fatal("Expected ResourceClaim to be created on first attempt")
+			}
+
+			// --- Second attempt: same resource, same claim name ---
+			// The plugin should detect the stale claim, delete it, and create
+			// a fresh one. The watch manager grants the new claim, so the
+			// second attempt succeeds.
+			plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
+			err = plugin.Validate(context.Background(), attrs, nil)
+			if err != nil {
+				t.Errorf("Expected second attempt to succeed after stale claim cleanup, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestProjectContextExtraction(t *testing.T) {
 	tests := []struct {
 		name           string

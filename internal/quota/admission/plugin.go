@@ -52,11 +52,29 @@ var (
 		},
 		[]string{"result", "policy_name", "policy_namespace", "resource_group", "resource_kind"},
 	)
+
+	// Tracks how existing (stale) claims are resolved before creating a fresh claim.
+	// Labels:
+	//   outcome: "not_found"         — no prior claim existed, normal path
+	//            "existing_granted"  — prior claim was already granted, resource allowed immediately
+	//            "stale_deleted"     — prior denied/pending claim deleted, fresh claim will be created
+	//            "delete_failed"     — failed to delete the stale claim
+	//            "get_failed"        — failed to look up the existing claim
+	existingClaimResolutions = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Subsystem:      "milo_quota",
+			Name:           "existing_claim_resolutions_total",
+			Help:           "How existing ResourceClaims from prior attempts are resolved during admission retries.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"outcome"},
+	)
 )
 
 func init() {
 	// Register metrics with Kubernetes legacy registry so they are exposed on the apiserver /metrics.
 	legacyregistry.MustRegister(admissionResultTotal)
+	legacyregistry.MustRegister(existingClaimResolutions)
 }
 
 // ResourceQuotaEnforcementPlugin enforces quota by creating ResourceClaims for applicable resources.
@@ -561,6 +579,23 @@ func (p *ResourceQuotaEnforcementPlugin) createAndWaitForResourceClaim(ctx conte
 		"policy", policy.Name,
 		"resourceName", evalContext.Object.GetName())
 
+	// Handle stale claims from previous attempts before registering the waiter.
+	// This prevents AlreadyExists errors when retrying after a denied or timed-out claim.
+	granted, err := p.handleExistingClaim(ctx, claimName, namespace)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "Failed to handle existing claim")
+		return fmt.Errorf("failed to handle existing claim: %w", err)
+	}
+	if granted {
+		// The existing claim was already granted — allow the resource.
+		span.SetAttributes(attribute.String("claim.result", "existing_granted"))
+		p.logger.V(2).Info("Existing claim already granted, allowing resource",
+			"claimName", claimName,
+			"namespace", namespace)
+		return nil
+	}
+
 	// Register waiter before claim exists to ensure watch stream catches the ADDED event.
 	timeout := p.config.WatchManager.DefaultTimeout
 	resultChan, cancelFunc, err := watchManager.RegisterClaimWaiter(ctx, claimName, namespace, timeout)
@@ -741,6 +776,76 @@ func (p *ResourceQuotaEnforcementPlugin) createResourceClaim(ctx context.Context
 	)
 
 	return nil
+}
+
+// handleExistingClaim checks for and handles a pre-existing ResourceClaim with the given name.
+// Returns (true, nil) if the claim exists and is already granted (caller should allow the resource).
+// Returns (false, nil) if the claim does not exist or was deleted (caller should proceed normally).
+func (p *ResourceQuotaEnforcementPlugin) handleExistingClaim(ctx context.Context, claimName, namespace string) (bool, error) {
+	gvr := schema.GroupVersionResource{
+		Group:    "quota.miloapis.com",
+		Version:  "v1alpha1",
+		Resource: "resourceclaims",
+	}
+
+	client, err := p.getClient(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	existing, err := client.Resource(gvr).Namespace(namespace).Get(ctx, claimName, metav1.GetOptions{})
+	if errors.IsNotFound(err) {
+		existingClaimResolutions.WithLabelValues("not_found").Inc()
+		return false, nil
+	}
+	if err != nil {
+		existingClaimResolutions.WithLabelValues("get_failed").Inc()
+		return false, fmt.Errorf("failed to get existing claim: %w", err)
+	}
+
+	// Claim exists. If already granted, short-circuit — the quota was consumed
+	// on the previous attempt and creating the resource fixes the quota leak.
+	if isClaimGranted(existing) {
+		existingClaimResolutions.WithLabelValues("existing_granted").Inc()
+		p.logger.V(2).Info("Existing claim is already granted, reusing",
+			"claimName", claimName,
+			"namespace", namespace)
+		return true, nil
+	}
+
+	// Claim exists but is denied or still pending — delete the stale claim
+	// so a fresh one can be created.
+	p.logger.V(2).Info("Deleting stale claim from previous attempt",
+		"claimName", claimName,
+		"namespace", namespace)
+
+	if err := client.Resource(gvr).Namespace(namespace).Delete(ctx, claimName, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+		existingClaimResolutions.WithLabelValues("delete_failed").Inc()
+		return false, fmt.Errorf("failed to delete stale claim: %w", err)
+	}
+
+	existingClaimResolutions.WithLabelValues("stale_deleted").Inc()
+	return false, nil
+}
+
+// isClaimGranted checks whether an unstructured ResourceClaim has condition Granted=True.
+func isClaimGranted(obj *unstructured.Unstructured) bool {
+	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+	if err != nil || !found {
+		return false
+	}
+	for _, c := range conditions {
+		condMap, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		condType, _, _ := unstructured.NestedString(condMap, "type")
+		condStatus, _, _ := unstructured.NestedString(condMap, "status")
+		if condType == quotav1alpha1.ResourceClaimGranted && condStatus == string(metav1.ConditionTrue) {
+			return true
+		}
+	}
+	return false
 }
 
 // validateResourceClaim validates ResourceClaim objects when they are created directly
