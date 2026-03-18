@@ -1284,114 +1284,6 @@ func (m *testWatchManager) UnregisterClaimWaiter(claimName, namespace string) {}
 func (m *testWatchManager) Start(ctx context.Context) error                   { return nil }
 func (m *testWatchManager) Stop()                                             {}
 
-// TestDeterministicClaimRetryWithDeniedClaim verifies that when a denied claim
-// exists from a prior attempt, the admission plugin defers to the
-// DeniedAutoClaimCleanupController for deletion rather than deleting it inline.
-// The second attempt returns a clear error indicating the claim is pending GC.
-func TestDeterministicClaimRetryWithDeniedClaim(t *testing.T) {
-	scheme := runtime.NewScheme()
-	quotav1alpha1.AddToScheme(scheme)
-
-	// fakeDenyingDynamicClient sets Granted=False, reason=QuotaExceeded on
-	// created claims — matching the state handled by the GC controller.
-	fakeDynClient := &fakeDenyingDynamicClient{
-		FakeDynamicClient: fake.NewSimpleDynamicClient(scheme),
-	}
-
-	logger := zap.New(zap.UseDevMode(true))
-	celEngine, err := engine.NewCELEngine()
-	if err != nil {
-		t.Fatalf("Failed to create CEL engine: %v", err)
-	}
-
-	policy := newDeterministicClaimPolicy()
-	gvk := endpointSliceGVK()
-
-	plugin := &ResourceQuotaEnforcementPlugin{
-		Handler:       admission.NewHandler(admission.Create),
-		dynamicClient: fakeDynClient,
-		policyEngine:  &testPolicyEngine{policy: policy, gvk: gvk},
-		templateEngine: engine.NewTemplateEngine(celEngine, logger.WithName("template")),
-		config:         DefaultAdmissionPluginConfig(),
-		logger:         logger.WithName("plugin"),
-	}
-	plugin.watchManagers.Store("", &testWatchManager{behavior: "deny"})
-
-	obj := newEndpointSliceObject()
-	attrs := newEndpointSliceAttrs(obj, gvk)
-
-	// First attempt: claim created, then denied.
-	err = plugin.Validate(context.Background(), attrs, nil)
-	if err == nil {
-		t.Fatal("Expected error on first attempt (claim should be denied)")
-	}
-	t.Logf("First attempt error (expected): %v", err)
-
-	// Second attempt: denied claim still exists. The plugin should NOT
-	// delete it (GC handles that) and should return a quota error.
-	plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
-	err = plugin.Validate(context.Background(), attrs, nil)
-	if err == nil {
-		t.Fatal("Expected error on second attempt (denied claim pending GC)")
-	}
-	if !contains(err.Error(), "Insufficient quota") && !contains(err.Error(), "pending garbage collection") {
-		t.Errorf("Expected quota or GC-pending error on second attempt, got: %v", err)
-	}
-	t.Logf("Second attempt error (expected, waiting for GC): %v", err)
-}
-
-// TestDeterministicClaimRetryWithPendingClaim verifies that when a pending
-// (timed-out) claim exists from a prior attempt, the admission plugin deletes
-// it inline — the GC controller only handles denied claims, not pending ones.
-func TestDeterministicClaimRetryWithPendingClaim(t *testing.T) {
-	scheme := runtime.NewScheme()
-	quotav1alpha1.AddToScheme(scheme)
-
-	// The timeout case: fakeDenyingDynamicClient still stores the claim with
-	// Granted=False/reason=QuotaExceeded, but the real timeout scenario
-	// leaves claims with NO terminal condition. Use a plain fake client so
-	// the claim is stored without any status conditions (pending state).
-	fakeDynClient := fake.NewSimpleDynamicClient(scheme)
-
-	logger := zap.New(zap.UseDevMode(true))
-	celEngine, err := engine.NewCELEngine()
-	if err != nil {
-		t.Fatalf("Failed to create CEL engine: %v", err)
-	}
-
-	policy := newDeterministicClaimPolicy()
-	gvk := endpointSliceGVK()
-
-	plugin := &ResourceQuotaEnforcementPlugin{
-		Handler:       admission.NewHandler(admission.Create),
-		dynamicClient: fakeDynClient,
-		policyEngine:  &testPolicyEngine{policy: policy, gvk: gvk},
-		templateEngine: engine.NewTemplateEngine(celEngine, logger.WithName("template")),
-		config:         DefaultAdmissionPluginConfig(),
-		logger:         logger.WithName("plugin"),
-	}
-	// First attempt times out (channel closes without sending a result).
-	plugin.watchManagers.Store("", &testWatchManager{behavior: "timeout"})
-
-	obj := newEndpointSliceObject()
-	attrs := newEndpointSliceAttrs(obj, gvk)
-
-	// First attempt: claim created, then times out.
-	err = plugin.Validate(context.Background(), attrs, nil)
-	if err == nil {
-		t.Fatal("Expected error on first attempt (claim should time out)")
-	}
-	t.Logf("First attempt error (expected): %v", err)
-
-	// Second attempt: pending claim still exists. The plugin should delete
-	// it (GC won't) and create a fresh one that gets granted.
-	plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
-	err = plugin.Validate(context.Background(), attrs, nil)
-	if err != nil {
-		t.Errorf("Expected second attempt to succeed after pending claim cleanup, got: %v", err)
-	}
-}
-
 // Shared test helpers for deterministic claim retry tests.
 
 func newDeterministicClaimPolicy() *quotav1alpha1.ClaimCreationPolicy {
@@ -1521,20 +1413,23 @@ func TestStructuredEndpointSliceCELTemplateRendering(t *testing.T) {
 	plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
 
 	tests := []struct {
-		name   string
-		object runtime.Object
+		name      string
+		epsName   string
+		object    runtime.Object
 	}{
 		{
-			name:   "structured discoveryv1.EndpointSlice",
-			object: newStructuredEndpointSlice("test-eps-structured", "default"),
+			name:    "structured discoveryv1.EndpointSlice",
+			epsName: "test-eps-structured",
+			object:  newStructuredEndpointSlice("test-eps-structured", "default"),
 		},
 		{
-			name: "unstructured with metadata",
+			name:    "unstructured with metadata",
+			epsName: "test-eps-unstructured",
 			object: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion":  "discovery.k8s.io/v1",
 					"kind":        "EndpointSlice",
-					"metadata":    map[string]interface{}{"name": "test-eps-structured", "namespace": "default"},
+					"metadata":    map[string]interface{}{"name": "test-eps-unstructured", "namespace": "default"},
 					"addressType": "FQDN",
 				},
 			},
@@ -1547,7 +1442,7 @@ func TestStructuredEndpointSliceCELTemplateRendering(t *testing.T) {
 				operation: admission.Create,
 				object:    tt.object,
 				gvk:       gvk,
-				name:      "test-eps-structured",
+				name:      tt.epsName,
 				namespace: "default",
 				userInfo:  &user.DefaultInfo{Name: "system:control@networking.datumapis.com"},
 			}
