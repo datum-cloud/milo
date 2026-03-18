@@ -180,7 +180,7 @@ func getDeterministicWaitlistEmailName(user *iamv1alpha1.User, condition iamv1al
 func getEmailStatusCondition(user *iamv1alpha1.User) iamv1alpha1.UserWaitlistEmailSentCondition {
 	switch user.Status.RegistrationApproval {
 	case iamv1alpha1.RegistrationApprovalStatePending:
-		return iamv1alpha1.UserWaitlistPendingEmailSentCondition
+		return "" // No email for pending users, as waitilist is disabled
 	case iamv1alpha1.RegistrationApprovalStateApproved:
 		return iamv1alpha1.UserWaitlistApprovedEmailSentCondition
 	case iamv1alpha1.RegistrationApprovalStateRejected:
