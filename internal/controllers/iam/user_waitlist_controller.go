@@ -203,7 +203,7 @@ func (r *UserWaitlistController) getEmailTemplateName(condition iamv1alpha1.User
 }
 
 func (r *UserWaitlistController) getEmailVariables(condition iamv1alpha1.UserWaitlistEmailSentCondition, user *iamv1alpha1.User) []notificationv1alpha1.EmailVariable {
-	userName := fmt.Sprintf("%s %s", user.Spec.GivenName, user.Spec.FamilyName)
+	userName := user.Spec.GivenName
 	if userName == "" {
 		userName = user.Spec.Email
 	}
@@ -211,10 +211,6 @@ func (r *UserWaitlistController) getEmailVariables(condition iamv1alpha1.UserWai
 	switch condition {
 	case iamv1alpha1.UserWaitlistApprovedEmailSentCondition:
 		return []notificationv1alpha1.EmailVariable{
-			{
-				Name:  "ActionUrl",
-				Value: "https://cloud.datum.net",
-			},
 			{
 				Name:  "UserName",
 				Value: userName,
