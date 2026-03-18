@@ -480,7 +480,8 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		for k := range v.Object {
 			keys = append(keys, k)
 		}
-		p.logger.V(2).Info("Admission object is unstructured",
+		p.logger.Info("Admission object is unstructured",
+			"gvk", attrs.GetKind(),
 			"objectKeys", keys,
 			"hasMetadata", v.Object["metadata"] != nil,
 			"getName", v.GetName(),
@@ -499,7 +500,8 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		for k := range unstructuredMap {
 			keys = append(keys, k)
 		}
-		p.logger.V(2).Info("Admission object is structured, converted to unstructured",
+		p.logger.Info("Admission object is structured, converted to unstructured",
+			"gvk", attrs.GetKind(),
 			"objectType", fmt.Sprintf("%T", obj),
 			"objectKeys", keys,
 			"hasMetadata", unstructuredMap["metadata"] != nil,
