@@ -57,8 +57,9 @@ var (
 	// Labels:
 	//   outcome: "not_found"         — no prior claim existed, normal path
 	//            "existing_granted"  — prior claim was already granted, resource allowed immediately
-	//            "stale_deleted"     — prior denied/pending claim deleted, fresh claim will be created
-	//            "delete_failed"     — failed to delete the stale claim
+	//            "existing_denied"   — prior claim was denied, waiting for GC cleanup
+	//            "pending_deleted"   — prior pending claim deleted, fresh claim will be created
+	//            "delete_failed"     — failed to delete a pending claim
 	//            "get_failed"        — failed to look up the existing claim
 	existingClaimResolutions = metrics.NewCounterVec(
 		&metrics.CounterOpts{
@@ -803,36 +804,62 @@ func (p *ResourceQuotaEnforcementPlugin) handleExistingClaim(ctx context.Context
 		return false, fmt.Errorf("failed to get existing claim: %w", err)
 	}
 
-	// Claim exists. If already granted, short-circuit — the quota was consumed
-	// on the previous attempt and creating the resource fixes the quota leak.
-	if isClaimGranted(existing) {
+	// Evaluate the claim's current state.
+	claimState := classifyClaim(existing)
+
+	switch claimState {
+	case claimStateGranted:
+		// Quota was already consumed on the previous attempt — allow the
+		// resource so the grant is not leaked.
 		existingClaimResolutions.WithLabelValues("existing_granted").Inc()
 		p.logger.V(2).Info("Existing claim is already granted, reusing",
 			"claimName", claimName,
 			"namespace", namespace)
 		return true, nil
+
+	case claimStateDenied:
+		// The DeniedAutoClaimCleanupController will delete this claim.
+		// Return an error so the caller surfaces the denial; the next
+		// retry will find the claim gone (or still present, and re-enter
+		// this branch until GC completes).
+		existingClaimResolutions.WithLabelValues("existing_denied").Inc()
+		p.logger.V(2).Info("Existing claim was denied, waiting for GC cleanup",
+			"claimName", claimName,
+			"namespace", namespace)
+		return false, fmt.Errorf("existing ResourceClaim %s/%s was denied and is pending garbage collection", namespace, claimName)
+
+	default:
+		// Claim is still pending (no terminal Granted condition). The GC
+		// controller only handles denied claims, so pending ones must be
+		// cleaned up here to unblock the retry.
+		p.logger.V(2).Info("Deleting pending claim from previous attempt",
+			"claimName", claimName,
+			"namespace", namespace)
+
+		if err := client.Resource(gvr).Namespace(namespace).Delete(ctx, claimName, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+			existingClaimResolutions.WithLabelValues("delete_failed").Inc()
+			return false, fmt.Errorf("failed to delete pending claim: %w", err)
+		}
+
+		existingClaimResolutions.WithLabelValues("pending_deleted").Inc()
+		return false, nil
 	}
-
-	// Claim exists but is denied or still pending — delete the stale claim
-	// so a fresh one can be created.
-	p.logger.V(2).Info("Deleting stale claim from previous attempt",
-		"claimName", claimName,
-		"namespace", namespace)
-
-	if err := client.Resource(gvr).Namespace(namespace).Delete(ctx, claimName, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
-		existingClaimResolutions.WithLabelValues("delete_failed").Inc()
-		return false, fmt.Errorf("failed to delete stale claim: %w", err)
-	}
-
-	existingClaimResolutions.WithLabelValues("stale_deleted").Inc()
-	return false, nil
 }
 
-// isClaimGranted checks whether an unstructured ResourceClaim has condition Granted=True.
-func isClaimGranted(obj *unstructured.Unstructured) bool {
+type claimState int
+
+const (
+	claimStatePending claimState = iota
+	claimStateGranted
+	claimStateDenied
+)
+
+// classifyClaim inspects an unstructured ResourceClaim's Granted condition and
+// returns its terminal state, or claimStatePending if no terminal condition exists.
+func classifyClaim(obj *unstructured.Unstructured) claimState {
 	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
 	if err != nil || !found {
-		return false
+		return claimStatePending
 	}
 	for _, c := range conditions {
 		condMap, ok := c.(map[string]interface{})
@@ -840,12 +867,19 @@ func isClaimGranted(obj *unstructured.Unstructured) bool {
 			continue
 		}
 		condType, _, _ := unstructured.NestedString(condMap, "type")
+		if condType != quotav1alpha1.ResourceClaimGranted {
+			continue
+		}
 		condStatus, _, _ := unstructured.NestedString(condMap, "status")
-		if condType == quotav1alpha1.ResourceClaimGranted && condStatus == string(metav1.ConditionTrue) {
-			return true
+		if condStatus == string(metav1.ConditionTrue) {
+			return claimStateGranted
+		}
+		reason, _, _ := unstructured.NestedString(condMap, "reason")
+		if condStatus == string(metav1.ConditionFalse) && reason == quotav1alpha1.ResourceClaimDeniedReason {
+			return claimStateDenied
 		}
 	}
-	return false
+	return claimStatePending
 }
 
 // validateResourceClaim validates ResourceClaim objects when they are created directly
