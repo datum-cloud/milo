@@ -492,20 +492,6 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		unstructuredObj = &unstructured.Unstructured{Object: unstructuredMap}
 	}
 
-	// Log the admission object shape for debugging CEL template issues.
-	keys := make([]string, 0, len(unstructuredObj.Object))
-	for k := range unstructuredObj.Object {
-		keys = append(keys, k)
-	}
-	p.logger.Info("Admission object for quota evaluation",
-		"gvk", attrs.GetKind(),
-		"objectType", fmt.Sprintf("%T", obj),
-		"objectKeys", keys,
-		"hasMetadata", unstructuredObj.Object["metadata"] != nil,
-		"getName", unstructuredObj.GetName(),
-		"attrsName", attrs.GetName(),
-		"attrsNamespace", attrs.GetNamespace())
-
 	// Build evaluation context
 	evalContext := p.buildEvaluationContext(attrs, unstructuredObj)
 
