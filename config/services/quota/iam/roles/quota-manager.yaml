@@ -6,9 +6,12 @@ metadata:
   annotations:
     kubernetes.io/display-name: Quota Manager
     kubernetes.io/description: Manage quota grants and claims, with read access to resource registrations and creation policies
+    taxonomy.miloapis.com/product: Quota
+    taxonomy.miloapis.com/sort-order: "20"
   labels:
     quota.miloapis.com/role-type: manager
     quota.miloapis.com/service: quota
+    taxonomy.miloapis.com/role-category: platform
 spec:
   launchStage: Beta
   includedPermissions:

@@ -6,9 +6,12 @@ metadata:
   annotations:
     kubernetes.io/display-name: Quota Viewer
     kubernetes.io/description: View access to quota resources including resource registrations, grants, and claims
+    taxonomy.miloapis.com/product: "Quota"
+    taxonomy.miloapis.com/sort-order: "40"
   labels:
     quota.miloapis.com/role-type: viewer
     quota.miloapis.com/service: quota
+    taxonomy.miloapis.com/role-category: platform
 spec:
   launchStage: Beta
   includedPermissions:
