@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1458,6 +1459,26 @@ func newEndpointSliceObject() *unstructured.Unstructured {
 	}
 }
 
+func newStructuredEndpointSlice(name, namespace string) *discoveryv1.EndpointSlice {
+	return &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		AddressType: discoveryv1.AddressTypeFQDN,
+		Endpoints: []discoveryv1.Endpoint{
+			{
+				Addresses: []string{"google.com"},
+			},
+		},
+		Ports: []discoveryv1.EndpointPort{
+			{
+				Port: ptr.To(int32(443)),
+			},
+		},
+	}
+}
+
 func newEndpointSliceAttrs(obj *unstructured.Unstructured, gvk schema.GroupVersionKind) *testAdmissionAttributes {
 	return &testAdmissionAttributes{
 		operation: admission.Create,
@@ -1466,6 +1487,93 @@ func newEndpointSliceAttrs(obj *unstructured.Unstructured, gvk schema.GroupVersi
 		name:      obj.GetName(),
 		namespace: obj.GetNamespace(),
 		userInfo:  &user.DefaultInfo{Name: "test-user"},
+	}
+}
+
+// TestStructuredEndpointSliceCELTemplateRendering verifies that a structured
+// (non-unstructured) EndpointSlice object passes through the admission plugin
+// and the CEL template engine can resolve trigger.metadata.name.
+func TestStructuredEndpointSliceCELTemplateRendering(t *testing.T) {
+	scheme := runtime.NewScheme()
+	quotav1alpha1.AddToScheme(scheme)
+
+	fakeDynClient := &fakeGrantingDynamicClient{
+		FakeDynamicClient: fake.NewSimpleDynamicClient(scheme),
+	}
+
+	logger := zap.New(zap.UseDevMode(true))
+	celEngine, err := engine.NewCELEngine()
+	if err != nil {
+		t.Fatalf("Failed to create CEL engine: %v", err)
+	}
+
+	policy := newDeterministicClaimPolicy()
+	gvk := endpointSliceGVK()
+
+	plugin := &ResourceQuotaEnforcementPlugin{
+		Handler:        admission.NewHandler(admission.Create),
+		dynamicClient:  fakeDynClient,
+		policyEngine:   &testPolicyEngine{policy: policy, gvk: gvk},
+		templateEngine: engine.NewTemplateEngine(celEngine, logger.WithName("template")),
+		config:         DefaultAdmissionPluginConfig(),
+		logger:         logger.WithName("plugin"),
+	}
+	plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
+
+	tests := []struct {
+		name   string
+		object runtime.Object
+	}{
+		{
+			name:   "structured discoveryv1.EndpointSlice",
+			object: newStructuredEndpointSlice("test-eps-structured", "default"),
+		},
+		{
+			name: "unstructured with metadata",
+			object: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion":  "discovery.k8s.io/v1",
+					"kind":        "EndpointSlice",
+					"metadata":    map[string]interface{}{"name": "test-eps-structured", "namespace": "default"},
+					"addressType": "FQDN",
+				},
+			},
+		},
+		{
+			// Reproduces the production bug: an unstructured object without
+			// a metadata key in the Object map. This happens when the API
+			// server decodes the request body but metadata is handled
+			// separately by the REST handler, leaving the unstructured map
+			// with only spec-level fields.
+			name: "unstructured without metadata key",
+			object: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion":  "discovery.k8s.io/v1",
+					"kind":        "EndpointSlice",
+					"addressType": "FQDN",
+					"endpoints":   []interface{}{map[string]interface{}{"addresses": []interface{}{"google.com"}}},
+					"ports":       []interface{}{map[string]interface{}{"port": int64(443)}},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := &testAdmissionAttributes{
+				operation: admission.Create,
+				object:    tt.object,
+				gvk:       gvk,
+				name:      "test-eps-structured",
+				namespace: "default",
+				userInfo:  &user.DefaultInfo{Name: "system:control@networking.datumapis.com"},
+			}
+
+			err = plugin.Validate(context.Background(), attrs, nil)
+			if err != nil {
+				t.Fatalf("Expected admission to pass, got: %v", err)
+			}
+		})
 	}
 }
 

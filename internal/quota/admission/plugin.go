@@ -484,6 +484,22 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		unstructuredObj = &unstructured.Unstructured{Object: unstructuredMap}
 	}
 
+	// Ensure the unstructured object has metadata populated. Some API server
+	// code paths (e.g. apiextensions) decode the request body without the
+	// metadata envelope, leaving the Object map with only spec-level fields.
+	// CEL templates like "trigger.metadata.name" need metadata to be present.
+	if _, ok := unstructuredObj.Object["metadata"]; !ok {
+		unstructuredObj.Object["metadata"] = map[string]interface{}{}
+	}
+	if md, ok := unstructuredObj.Object["metadata"].(map[string]interface{}); ok {
+		if _, hasName := md["name"]; !hasName && attrs.GetName() != "" {
+			md["name"] = attrs.GetName()
+		}
+		if _, hasNS := md["namespace"]; !hasNS && attrs.GetNamespace() != "" {
+			md["namespace"] = attrs.GetNamespace()
+		}
+	}
+
 	// Build evaluation context
 	evalContext := p.buildEvaluationContext(attrs, unstructuredObj)
 
