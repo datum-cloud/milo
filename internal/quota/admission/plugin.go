@@ -493,6 +493,18 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 			return fmt.Errorf("failed to convert %T to unstructured: %w", obj, convErr)
 		}
 		unstructuredObj = &unstructured.Unstructured{Object: unstructuredMap}
+
+		// Log converted object keys for debugging missing metadata issues
+		keys := make([]string, 0, len(unstructuredMap))
+		for k := range unstructuredMap {
+			keys = append(keys, k)
+		}
+		p.logger.V(2).Info("Admission object is structured, converted to unstructured",
+			"objectType", fmt.Sprintf("%T", obj),
+			"objectKeys", keys,
+			"hasMetadata", unstructuredMap["metadata"] != nil,
+			"getName", unstructuredObj.GetName(),
+			"resourceName", attrs.GetName())
 	}
 
 	// Ensure the unstructured object has metadata populated. Some API server
