@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1178,6 +1179,10 @@ func (f *fakeDenyingResource) Create(ctx context.Context, obj *unstructured.Unst
 		}
 
 		unstructured.SetNestedSlice(created.Object, conditions, "status", "conditions")
+
+		// Persist the denied status in the object tracker so that
+		// subsequent Get calls return the claim with conditions set.
+		_, _ = f.ResourceInterface.Update(ctx, created, metav1.UpdateOptions{})
 	}
 
 	return created, nil
@@ -1278,6 +1283,177 @@ func (m *testWatchManager) RegisterClaimWaiter(ctx context.Context, claimName, n
 func (m *testWatchManager) UnregisterClaimWaiter(claimName, namespace string) {}
 func (m *testWatchManager) Start(ctx context.Context) error                   { return nil }
 func (m *testWatchManager) Stop()                                             {}
+
+// Shared test helpers for deterministic claim retry tests.
+
+func newDeterministicClaimPolicy() *quotav1alpha1.ClaimCreationPolicy {
+	return &quotav1alpha1.ClaimCreationPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "endpointslice-quota-policy",
+		},
+		Spec: quotav1alpha1.ClaimCreationPolicySpec{
+			Trigger: quotav1alpha1.ClaimTriggerSpec{
+				Resource: quotav1alpha1.ClaimTriggerResource{
+					APIVersion: "discovery.k8s.io/v1",
+					Kind:       "EndpointSlice",
+				},
+			},
+			Disabled: ptr.To(false),
+			Target: quotav1alpha1.ClaimTargetSpec{
+				ResourceClaimTemplate: quotav1alpha1.ResourceClaimTemplate{
+					Metadata: quotav1alpha1.ObjectMetaTemplate{
+						Name: "endpointslice-{{ trigger.metadata.name }}",
+					},
+					Spec: quotav1alpha1.ResourceClaimSpec{
+						ConsumerRef: quotav1alpha1.ConsumerRef{
+							APIGroup: "resourcemanager.miloapis.com",
+							Kind:     "Project",
+							Name:     "test-project",
+						},
+						Requests: []quotav1alpha1.ResourceRequest{
+							{
+								ResourceType: "discovery.miloapis.com/endpointslices",
+								Amount:       1,
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: quotav1alpha1.ClaimCreationPolicyStatus{
+			Conditions: []metav1.Condition{{
+				Type:   quotav1alpha1.ClaimCreationPolicyReady,
+				Status: metav1.ConditionTrue,
+				Reason: "TestReady",
+			}},
+		},
+	}
+}
+
+func endpointSliceGVK() schema.GroupVersionKind {
+	return schema.GroupVersionKind{
+		Group:   "discovery.k8s.io",
+		Version: "v1",
+		Kind:    "EndpointSlice",
+	}
+}
+
+func newEndpointSliceObject() *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "discovery.k8s.io/v1",
+			"kind":       "EndpointSlice",
+			"metadata": map[string]interface{}{
+				"name":      "test-eps-1",
+				"namespace": "default",
+			},
+		},
+	}
+}
+
+func newStructuredEndpointSlice(name, namespace string) *discoveryv1.EndpointSlice {
+	return &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		AddressType: discoveryv1.AddressTypeFQDN,
+		Endpoints: []discoveryv1.Endpoint{
+			{
+				Addresses: []string{"google.com"},
+			},
+		},
+		Ports: []discoveryv1.EndpointPort{
+			{
+				Port: ptr.To(int32(443)),
+			},
+		},
+	}
+}
+
+func newEndpointSliceAttrs(obj *unstructured.Unstructured, gvk schema.GroupVersionKind) *testAdmissionAttributes {
+	return &testAdmissionAttributes{
+		operation: admission.Create,
+		object:    obj,
+		gvk:       gvk,
+		name:      obj.GetName(),
+		namespace: obj.GetNamespace(),
+		userInfo:  &user.DefaultInfo{Name: "test-user"},
+	}
+}
+
+// TestStructuredEndpointSliceCELTemplateRendering verifies that a structured
+// (non-unstructured) EndpointSlice object passes through the admission plugin
+// and the CEL template engine can resolve trigger.metadata.name.
+func TestStructuredEndpointSliceCELTemplateRendering(t *testing.T) {
+	scheme := runtime.NewScheme()
+	quotav1alpha1.AddToScheme(scheme)
+
+	fakeDynClient := &fakeGrantingDynamicClient{
+		FakeDynamicClient: fake.NewSimpleDynamicClient(scheme),
+	}
+
+	logger := zap.New(zap.UseDevMode(true))
+	celEngine, err := engine.NewCELEngine()
+	if err != nil {
+		t.Fatalf("Failed to create CEL engine: %v", err)
+	}
+
+	policy := newDeterministicClaimPolicy()
+	gvk := endpointSliceGVK()
+
+	plugin := &ResourceQuotaEnforcementPlugin{
+		Handler:        admission.NewHandler(admission.Create),
+		dynamicClient:  fakeDynClient,
+		policyEngine:   &testPolicyEngine{policy: policy, gvk: gvk},
+		templateEngine: engine.NewTemplateEngine(celEngine, logger.WithName("template")),
+		config:         DefaultAdmissionPluginConfig(),
+		logger:         logger.WithName("plugin"),
+	}
+	plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
+
+	tests := []struct {
+		name      string
+		epsName   string
+		object    runtime.Object
+	}{
+		{
+			name:    "structured discoveryv1.EndpointSlice",
+			epsName: "test-eps-structured",
+			object:  newStructuredEndpointSlice("test-eps-structured", "default"),
+		},
+		{
+			name:    "unstructured with metadata",
+			epsName: "test-eps-unstructured",
+			object: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion":  "discovery.k8s.io/v1",
+					"kind":        "EndpointSlice",
+					"metadata":    map[string]interface{}{"name": "test-eps-unstructured", "namespace": "default"},
+					"addressType": "FQDN",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := &testAdmissionAttributes{
+				operation: admission.Create,
+				object:    tt.object,
+				gvk:       gvk,
+				name:      tt.epsName,
+				namespace: "default",
+				userInfo:  &user.DefaultInfo{Name: "system:control@networking.datumapis.com"},
+			}
+
+			err = plugin.Validate(context.Background(), attrs, nil)
+			if err != nil {
+				t.Fatalf("Expected admission to pass, got: %v", err)
+			}
+		})
+	}
+}
 
 func TestProjectContextExtraction(t *testing.T) {
 	tests := []struct {
