@@ -2,7 +2,6 @@ package admission
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -27,6 +26,8 @@ import (
 	"k8s.io/component-base/metrics"
 	legacyregistry "k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
+
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 
 	"go.miloapis.com/milo/internal/quota/engine"
 	"go.miloapis.com/milo/internal/quota/validation"
@@ -458,18 +459,21 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		// Already unstructured (CRDs from apiextensions-apiserver)
 		unstructuredObj = v
 	default:
-		// Structured type (native k8s types like Secret, ConfigMap, etc.)
-		// Convert to unstructured via JSON round-trip to ensure field names
-		// match JSON tags (e.g. "metadata") rather than Go field names
-		// (e.g. "objectMeta"). runtime.DefaultUnstructuredConverter.ToUnstructured
-		// uses Go field names, which breaks CEL expressions like trigger.metadata.name.
-		jsonBytes, convErr := json.Marshal(obj)
-		if convErr != nil {
-			return fmt.Errorf("failed to marshal %T to JSON: %w", obj, convErr)
+		// Structured type (native k8s types) — the admission handler decodes
+		// these as internal Go types (e.g. pkg/apis/discovery.EndpointSlice),
+		// not the external versioned types (e.g. api/discovery/v1.EndpointSlice).
+		// Internal types inline ObjectMeta without a "metadata" wrapper, so
+		// both json.Marshal and ToUnstructured produce maps without a "metadata"
+		// key. Convert to the external versioned type first using the scheme,
+		// then use ToUnstructured to get proper Kubernetes JSON structure.
+		toConvert := obj
+		targetGV := schema.GroupVersion{Group: gvk.Group, Version: gvk.Version}
+		if versioned, convErr := legacyscheme.Scheme.ConvertToVersion(obj, targetGV); convErr == nil {
+			toConvert = versioned
 		}
-		var unstructuredMap map[string]interface{}
-		if convErr := json.Unmarshal(jsonBytes, &unstructuredMap); convErr != nil {
-			return fmt.Errorf("failed to unmarshal %T JSON to map: %w", obj, convErr)
+		unstructuredMap, convErr := runtime.DefaultUnstructuredConverter.ToUnstructured(toConvert)
+		if convErr != nil {
+			return fmt.Errorf("failed to convert %T to unstructured: %w", toConvert, convErr)
 		}
 		unstructuredObj = &unstructured.Unstructured{Object: unstructuredMap}
 	}
