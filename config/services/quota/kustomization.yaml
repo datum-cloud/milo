@@ -6,3 +6,4 @@ components:
   - telemetry/metrics/control-plane
   - registrations
   - claim-policies
+  - grant-policies
