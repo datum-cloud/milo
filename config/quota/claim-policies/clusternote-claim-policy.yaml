@@ -22,5 +22,5 @@ spec:
           kubernetes.io/description: "Automatic quota claim for ClusterNote creation"
       spec:
         requests:
-          - resourceType: notes.miloapis.com/clusternotes
+          - resourceType: notes.miloapis.com/notes
             amount: 1

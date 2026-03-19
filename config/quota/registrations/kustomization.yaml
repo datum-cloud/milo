@@ -5,7 +5,6 @@ sortOptions:
   order: fifo
 
 resources:
-  - clusternote-registration.yaml
   - configmap-registration.yaml
   - note-registration.yaml
   - secret-registration.yaml
