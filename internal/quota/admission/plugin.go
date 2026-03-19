@@ -27,6 +27,8 @@ import (
 	legacyregistry "k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog/v2"
 
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
+
 	"go.miloapis.com/milo/internal/quota/engine"
 	"go.miloapis.com/milo/internal/quota/validation"
 	quotav1alpha1 "go.miloapis.com/milo/pkg/apis/quota/v1alpha1"
@@ -52,6 +54,7 @@ var (
 		},
 		[]string{"result", "policy_name", "policy_namespace", "resource_group", "resource_kind"},
 	)
+
 )
 
 func init() {
@@ -456,11 +459,21 @@ func (p *ResourceQuotaEnforcementPlugin) processResourceWithPolicy(ctx context.C
 		// Already unstructured (CRDs from apiextensions-apiserver)
 		unstructuredObj = v
 	default:
-		// Structured type (native k8s types like Secret, ConfigMap, etc.)
-		// Convert to unstructured for consistent processing
-		unstructuredMap, convErr := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		// Structured type (native k8s types) — the admission handler decodes
+		// these as internal Go types (e.g. pkg/apis/discovery.EndpointSlice),
+		// not the external versioned types (e.g. api/discovery/v1.EndpointSlice).
+		// Internal types inline ObjectMeta without a "metadata" wrapper, so
+		// both json.Marshal and ToUnstructured produce maps without a "metadata"
+		// key. Convert to the external versioned type first using the scheme,
+		// then use ToUnstructured to get proper Kubernetes JSON structure.
+		toConvert := obj
+		targetGV := schema.GroupVersion{Group: gvk.Group, Version: gvk.Version}
+		if versioned, convErr := legacyscheme.Scheme.ConvertToVersion(obj, targetGV); convErr == nil {
+			toConvert = versioned
+		}
+		unstructuredMap, convErr := runtime.DefaultUnstructuredConverter.ToUnstructured(toConvert)
 		if convErr != nil {
-			return fmt.Errorf("failed to convert %T to unstructured: %w", obj, convErr)
+			return fmt.Errorf("failed to convert %T to unstructured: %w", toConvert, convErr)
 		}
 		unstructuredObj = &unstructured.Unstructured{Object: unstructuredMap}
 	}
