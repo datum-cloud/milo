@@ -52,6 +52,23 @@ spec:
                 name: Ready
                 value: 'true'
 
+    - name: setup-quota-grant
+      description: Provision quota for the project so resources can be created
+      cluster: project
+      try:
+        - apply:
+            file: test-data/quota-grant.yaml
+        - wait:
+            apiVersion: quota.miloapis.com/v1alpha1
+            kind: ResourceGrant
+            name: test-notes-quota-grant
+            namespace: milo-system
+            timeout: 30s
+            for:
+              condition:
+                name: Active
+                value: 'True'
+
     - name: create-configmap-in-project
       description: Create ConfigMap resource in project control plane
       cluster: project

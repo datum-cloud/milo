@@ -1,0 +1,20 @@
+apiVersion: quota.miloapis.com/v1alpha1
+kind: ResourceGrant
+metadata:
+  name: test-clusternotes-quota-grant
+  namespace: milo-system
+spec:
+  consumerRef:
+    apiGroup: resourcemanager.miloapis.com
+    kind: Project
+    name: cn-mc-test-project-1
+  allowances:
+    - resourceType: notes.miloapis.com/notes
+      buckets:
+        - amount: 100
+    - resourceType: core.miloapis.com/configmaps
+      buckets:
+        - amount: 100
+    - resourceType: core.miloapis.com/secrets
+      buckets:
+        - amount: 100
