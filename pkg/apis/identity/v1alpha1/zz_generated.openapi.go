@@ -27,8 +27,7 @@ func schema_pkg_apis_identity_v1alpha1_Session(ref common.ReferenceCallback) com
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Session represents an active user authentication session. Status is read-only and populated by the identity provider (e.g. Zitadel).",
-				Type:        []string{"object"},
+				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
@@ -156,12 +155,6 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
-					"expiresAt": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ExpiresAt is when the session expires, if applicable.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
 					"location": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Location is a human-readable geographic label for the client (e.g. \"Bristol, United Kingdom\"), typically derived from GeoIP by the provider.",
@@ -181,12 +174,6 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 							Description: "OS is the detected operating system (e.g. \"macOS\", \"Windows\").",
 							Type:        []string{"string"},
 							Format:      "",
-						},
-					},
-					"lastActiveAt": {
-						SchemaProps: spec.SchemaProps{
-							Description: "LastActiveAt is the last time the session had activity according to the provider (e.g. last refresh or change). Distinct from CreatedAt and ExpiresAt.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 				},

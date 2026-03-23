@@ -30,9 +30,6 @@ type SessionStatus struct {
 	// CreatedAt is when the session was created.
 	CreatedAt metav1.Time `json:"createdAt"`
 
-	// ExpiresAt is when the session expires, if applicable.
-	ExpiresAt *metav1.Time `json:"expiresAt,omitempty"`
-
 	// Location is a human-readable geographic label for the client (e.g. "Bristol, United Kingdom"),
 	// typically derived from GeoIP by the provider.
 	Location string `json:"location,omitempty"`
@@ -42,10 +39,6 @@ type SessionStatus struct {
 
 	// OS is the detected operating system (e.g. "macOS", "Windows").
 	OS string `json:"os,omitempty"`
-
-	// LastActiveAt is the last time the session had activity according to the provider
-	// (e.g. last refresh or change). Distinct from CreatedAt and ExpiresAt.
-	LastActiveAt *metav1.Time `json:"lastActiveAt,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

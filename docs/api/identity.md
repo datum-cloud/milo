@@ -67,8 +67,6 @@ This resource provides information about user authentication sessions, including
 | `ip` | string | The IP address from which the session was created (optional). |
 | `fingerprintID` | string | A fingerprint identifier for the session (optional). |
 | `createdAt` | metav1.Time | The timestamp when the session was created. |
-| `expiresAt` | *metav1.Time | The timestamp when the session expires (optional). |
 | `location` | string | Human-readable location for the client (e.g. city and country), if the provider supplies it (optional). |
 | `browser` | string | Detected browser or app name (e.g. Safari, Chrome) (optional). |
 | `os` | string | Detected operating system (e.g. macOS, Windows) (optional). |
-| `lastActiveAt` | *metav1.Time | Last session activity time from the provider (optional). |
