@@ -98,13 +98,29 @@ func (r *REST) Delete(ctx context.Context, name string, _ rest.ValidateObjectFun
 func (r *REST) Destroy() {}
 
 // Satisfy rest.TableConvertor with a no-op conversion (returning nil uses default table printer)
+func sessionClientLabel(browser, os string) string {
+	switch {
+	case browser == "" && os == "":
+		return ""
+	case browser == "":
+		return os
+	case os == "":
+		return browser
+	default:
+		return browser + " / " + os
+	}
+}
+
 func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	table := &metav1.Table{
 		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string"},
-			{Name: "Provider", Type: "string"},
-			{Name: "UserUID", Type: "string"},
-			{Name: "Age", Type: "date"},
+			{Name: "Name", Type: "string", Format: "name", Description: "Metadata name of the session.", Priority: 0},
+			{Name: "Provider", Type: "string", Description: "Authentication provider.", Priority: 0},
+			{Name: "Age", Type: "date", Description: "Creation timestamp.", Priority: 0},
+			{Name: "Location", Type: "string", Description: "Approximate client location, if known.", Priority: 1},
+			{Name: "Client", Type: "string", Description: "Browser and OS, if known.", Priority: 1},
+			{Name: "Last active", Type: "string", Description: "Last activity time (RFC3339), if known.", Priority: 1},
+			{Name: "UserUID", Type: "string", Description: "Owning user UID.", Priority: 1},
 		},
 	}
 
@@ -115,8 +131,20 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 			// metav1.Table wants a date in the cell; pass the timestamp
 			age = s.CreationTimestamp
 		}
+		lastActive := ""
+		if s.Status.LastActiveAt != nil {
+			lastActive = s.Status.LastActiveAt.Time.Format(time.RFC3339)
+		}
 		table.Rows = append(table.Rows, metav1.TableRow{
-			Cells:  []interface{}{s.Name, s.Status.Provider, s.Status.UserUID, age.Time.Format(time.RFC3339)},
+			Cells: []interface{}{
+				s.Name,
+				s.Status.Provider,
+				age.Time.Format(time.RFC3339),
+				s.Status.Location,
+				sessionClientLabel(s.Status.Browser, s.Status.OS),
+				lastActive,
+				s.Status.UserUID,
+			},
 			Object: runtime.RawExtension{Object: s},
 		})
 	}

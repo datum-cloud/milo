@@ -27,7 +27,8 @@ func schema_pkg_apis_identity_v1alpha1_Session(ref common.ReferenceCallback) com
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "Session represents an active user authentication session. Status is read-only and populated by the identity provider (e.g. Zitadel).",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
@@ -115,43 +116,77 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "SessionStatus contains session metadata exposed for display and management. All fields except those required for identity are optional and populated by the authentication provider.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"userUID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "UserUID is the unique identifier of the user who owns this session.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"provider": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "Provider is the authentication provider for this session (e.g. \"zitadel\").",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"ip": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "IP is the client IP address associated with the session, if known.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"fingerprintID": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "FingerprintID is an optional device or client fingerprint from the provider.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"createdAt": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Description: "CreatedAt is when the session was created.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 					"expiresAt": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Description: "ExpiresAt is when the session expires, if applicable.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"location": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Location is a human-readable geographic label for the client (e.g. \"Bristol, United Kingdom\"), typically derived from GeoIP by the provider.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"browser": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Browser is the detected client browser or app name (e.g. \"Safari\", \"Chrome\").",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"os": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OS is the detected operating system (e.g. \"macOS\", \"Windows\").",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"lastActiveAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LastActiveAt is the last time the session had activity according to the provider (e.g. last refresh or change). Distinct from CreatedAt and ExpiresAt.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 				},

@@ -12,13 +12,40 @@ type Session struct {
 	Status SessionStatus `json:"status,omitempty"`
 }
 
+// SessionStatus contains session metadata exposed for display and management.
+// All fields except those required for identity are optional and populated by the authentication provider.
 type SessionStatus struct {
-	UserUID       string       `json:"userUID"`
-	Provider      string       `json:"provider"`
-	IP            string       `json:"ip,omitempty"`
-	FingerprintID string       `json:"fingerprintID,omitempty"`
-	CreatedAt     metav1.Time  `json:"createdAt"`
-	ExpiresAt     *metav1.Time `json:"expiresAt,omitempty"`
+	// UserUID is the unique identifier of the user who owns this session.
+	UserUID string `json:"userUID"`
+
+	// Provider is the authentication provider for this session (e.g. "zitadel").
+	Provider string `json:"provider"`
+
+	// IP is the client IP address associated with the session, if known.
+	IP string `json:"ip,omitempty"`
+
+	// FingerprintID is an optional device or client fingerprint from the provider.
+	FingerprintID string `json:"fingerprintID,omitempty"`
+
+	// CreatedAt is when the session was created.
+	CreatedAt metav1.Time `json:"createdAt"`
+
+	// ExpiresAt is when the session expires, if applicable.
+	ExpiresAt *metav1.Time `json:"expiresAt,omitempty"`
+
+	// Location is a human-readable geographic label for the client (e.g. "Bristol, United Kingdom"),
+	// typically derived from GeoIP by the provider.
+	Location string `json:"location,omitempty"`
+
+	// Browser is the detected client browser or app name (e.g. "Safari", "Chrome").
+	Browser string `json:"browser,omitempty"`
+
+	// OS is the detected operating system (e.g. "macOS", "Windows").
+	OS string `json:"os,omitempty"`
+
+	// LastActiveAt is the last time the session had activity according to the provider
+	// (e.g. last refresh or change). Distinct from CreatedAt and ExpiresAt.
+	LastActiveAt *metav1.Time `json:"lastActiveAt,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
