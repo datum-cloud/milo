@@ -7,6 +7,9 @@ resources:
   - iam-viewer.yaml
   - iam-editor.yaml
   - iam-admin.yaml
+  - iam-organization-viewer.yaml
+  - iam-organization-editor.yaml
+  - iam-organization-admin.yaml
   - resourcemanager-reader.yaml
   - resourcemanager-editor.yaml
   - resourcemanager-admin.yaml
