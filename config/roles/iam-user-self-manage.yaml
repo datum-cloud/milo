@@ -22,6 +22,7 @@ spec:
   - identity.miloapis.com/useridentities.get
   - iam.miloapis.com/userinvitations.get
   - iam.miloapis.com/userinvitations.list
+  - iam.miloapis.com/userinvitations.watch
   - notification.miloapis.com/contacts.list
   - notification.miloapis.com/contactgroups.list
   - notification.miloapis.com/contactgroupmemberships.list
