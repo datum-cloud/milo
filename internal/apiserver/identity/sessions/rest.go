@@ -119,6 +119,7 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 			{Name: "Age", Type: "date", Description: "Creation timestamp.", Priority: 0},
 			{Name: "Location", Type: "string", Description: "Approximate client location, if known.", Priority: 1},
 			{Name: "Client", Type: "string", Description: "Browser and OS, if known.", Priority: 1},
+			{Name: "Last updated", Type: "string", Description: "Provider last update time (RFC3339), if known.", Priority: 1},
 			{Name: "UserUID", Type: "string", Description: "Owning user UID.", Priority: 1},
 		},
 	}
@@ -130,6 +131,10 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 			// metav1.Table wants a date in the cell; pass the timestamp
 			age = s.CreationTimestamp
 		}
+		lastUpdated := ""
+		if s.Status.LastUpdatedAt != nil {
+			lastUpdated = s.Status.LastUpdatedAt.Time.Format(time.RFC3339)
+		}
 		table.Rows = append(table.Rows, metav1.TableRow{
 			Cells: []interface{}{
 				s.Name,
@@ -137,6 +142,7 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 				age.Time.Format(time.RFC3339),
 				s.Status.Location,
 				sessionClientLabel(s.Status.Browser, s.Status.OS),
+				lastUpdated,
 				s.Status.UserUID,
 			},
 			Object: runtime.RawExtension{Object: s},

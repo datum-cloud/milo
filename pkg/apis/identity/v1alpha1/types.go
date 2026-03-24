@@ -30,6 +30,9 @@ type SessionStatus struct {
 	// CreatedAt is when the session was created.
 	CreatedAt metav1.Time `json:"createdAt"`
 
+	// LastUpdatedAt is the last time the provider updated this session (e.g. Zitadel change_date).
+	LastUpdatedAt *metav1.Time `json:"lastUpdatedAt,omitempty"`
+
 	// Location is a human-readable geographic label for the client (e.g. "Bristol, United Kingdom"),
 	// typically derived from GeoIP by the provider.
 	Location string `json:"location,omitempty"`

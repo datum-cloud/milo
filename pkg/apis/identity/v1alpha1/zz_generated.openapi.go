@@ -155,6 +155,12 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
+					"lastUpdatedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LastUpdatedAt is the last time the provider updated this session (e.g. Zitadel change_date).",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
 					"location": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Location is a human-readable geographic label for the client (e.g. \"Bristol, United Kingdom\"), typically derived from GeoIP by the provider.",
