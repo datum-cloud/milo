@@ -161,23 +161,9 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
-					"location": {
+					"userAgent": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Location is a human-readable geographic label for the client (e.g. \"Bristol, United Kingdom\"), typically derived from GeoIP by the provider.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"browser": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Browser is the detected client browser or app name (e.g. \"Safari\", \"Chrome\").",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"os": {
-						SchemaProps: spec.SchemaProps{
-							Description: "OS is the detected operating system (e.g. \"macOS\", \"Windows\").",
+							Description: "UserAgent is the client User-Agent string for this session, if the provider supplies it.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

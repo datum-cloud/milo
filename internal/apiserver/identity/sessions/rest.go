@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
@@ -97,18 +98,11 @@ func (r *REST) Delete(ctx context.Context, name string, _ rest.ValidateObjectFun
 
 func (r *REST) Destroy() {}
 
-// Satisfy rest.TableConvertor with a no-op conversion (returning nil uses default table printer)
-func sessionClientLabel(browser, os string) string {
-	switch {
-	case browser == "" && os == "":
-		return ""
-	case browser == "":
-		return os
-	case os == "":
-		return browser
-	default:
-		return browser + " / " + os
+func truncateForTable(s string, max int) string {
+	if max <= 0 || len(s) <= max {
+		return s
 	}
+	return strings.TrimSpace(s[:max]) + "…"
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
@@ -117,8 +111,7 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 			{Name: "Name", Type: "string", Format: "name", Description: "Metadata name of the session.", Priority: 0},
 			{Name: "Provider", Type: "string", Description: "Authentication provider.", Priority: 0},
 			{Name: "Age", Type: "date", Description: "Creation timestamp.", Priority: 0},
-			{Name: "Location", Type: "string", Description: "Approximate client location, if known.", Priority: 1},
-			{Name: "Client", Type: "string", Description: "Browser and OS, if known.", Priority: 1},
+			{Name: "User agent", Type: "string", Description: "Client User-Agent (truncated in table view).", Priority: 1},
 			{Name: "Last updated", Type: "string", Description: "Provider last update time (RFC3339), if known.", Priority: 1},
 			{Name: "UserUID", Type: "string", Description: "Owning user UID.", Priority: 1},
 		},
@@ -140,8 +133,7 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 				s.Name,
 				s.Status.Provider,
 				age.Time.Format(time.RFC3339),
-				s.Status.Location,
-				sessionClientLabel(s.Status.Browser, s.Status.OS),
+				truncateForTable(s.Status.UserAgent, 80),
 				lastUpdated,
 				s.Status.UserUID,
 			},

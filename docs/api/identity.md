@@ -68,6 +68,4 @@ This resource provides information about user authentication sessions, including
 | `fingerprintID` | string | A fingerprint identifier for the session (optional). |
 | `createdAt` | metav1.Time | The timestamp when the session was created. |
 | `lastUpdatedAt` | *metav1.Time | Last time the authentication provider updated this session (optional). |
-| `location` | string | Human-readable location for the client (e.g. city and country), if the provider supplies it (optional). |
-| `browser` | string | Detected browser or app name (e.g. Safari, Chrome) (optional). |
-| `os` | string | Detected operating system (e.g. macOS, Windows) (optional). |
+| `userAgent` | string | Client User-Agent string for this session, if the provider supplies it (optional). |

@@ -33,15 +33,8 @@ type SessionStatus struct {
 	// LastUpdatedAt is the last time the provider updated this session (e.g. Zitadel change_date).
 	LastUpdatedAt *metav1.Time `json:"lastUpdatedAt,omitempty"`
 
-	// Location is a human-readable geographic label for the client (e.g. "Bristol, United Kingdom"),
-	// typically derived from GeoIP by the provider.
-	Location string `json:"location,omitempty"`
-
-	// Browser is the detected client browser or app name (e.g. "Safari", "Chrome").
-	Browser string `json:"browser,omitempty"`
-
-	// OS is the detected operating system (e.g. "macOS", "Windows").
-	OS string `json:"os,omitempty"`
+	// UserAgent is the client User-Agent string for this session, if the provider supplies it.
+	UserAgent string `json:"userAgent,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
