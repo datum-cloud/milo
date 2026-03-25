@@ -70,8 +70,8 @@ func (in *SessionList) DeepCopyObject() runtime.Object {
 func (in *SessionStatus) DeepCopyInto(out *SessionStatus) {
 	*out = *in
 	in.CreatedAt.DeepCopyInto(&out.CreatedAt)
-	if in.ExpiresAt != nil {
-		in, out := &in.ExpiresAt, &out.ExpiresAt
+	if in.LastUpdatedAt != nil {
+		in, out := &in.LastUpdatedAt, &out.LastUpdatedAt
 		*out = (*in).DeepCopy()
 	}
 }

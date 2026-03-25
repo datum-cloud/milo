@@ -115,43 +115,57 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "SessionStatus contains session metadata exposed for display and management. All fields except those required for identity are optional and populated by the authentication provider.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"userUID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "UserUID is the unique identifier of the user who owns this session.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"provider": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "Provider is the authentication provider for this session (e.g. \"zitadel\").",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"ip": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "IP is the client IP address associated with the session, if known.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"fingerprintID": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "FingerprintID is an optional device or client fingerprint from the provider.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"createdAt": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Description: "CreatedAt is when the session was created.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
-					"expiresAt": {
+					"lastUpdatedAt": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Description: "LastUpdatedAt is the last time the provider updated this session (e.g. Zitadel change_date).",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"userAgent": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UserAgent is the client User-Agent string for this session, if the provider supplies it.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
