@@ -7,6 +7,7 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 
 // MachineAccountKey is the Schema for the machineaccountkeys API
 // +kubebuilder:printcolumn:name="Machine Account",type="string",JSONPath=".spec.machineAccountName"
@@ -45,11 +46,24 @@ type MachineAccountKeyStatus struct {
 	// AuthProviderKeyID is the unique identifier for the key in the auth provider.
 	// This field is populated by the controller after the key is created in the auth provider.
 	// For example, when using Zitadel, a typical value might be: "326102453042806786"
-	AuthProviderKeyID string `json:"authProviderKeyId,omitempty"`
+	AuthProviderKeyID string `json:"authProviderKeyID,omitempty"`
+
+	// PrivateKey contains the PEM-encoded RSA private key generated during resource
+	// creation. This field is populated only in the creation response and is never
+	// persisted to etcd. Any value present on a GET or LIST response indicates a
+	// bug in the server implementation.
+	//
+	// Note: private key material will appear in API server audit logs for creation
+	// events. This matches the behavior of similar systems (GCP service account keys).
+	//
+	// +kubebuilder:validation:Optional
+	PrivateKey string `json:"privateKey,omitempty"`
 
 	// Conditions provide conditions that represent the current status of the MachineAccountKey.
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +kubebuilder:validation:Optional
+	// +listType=map
+	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

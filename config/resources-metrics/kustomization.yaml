@@ -3,5 +3,6 @@ kind: Component
 
 components:
   - iam/
+  - identity/
   - resources-manager/
   - infrastructure/
