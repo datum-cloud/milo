@@ -14,6 +14,7 @@ spec:
     - No private key is returned when a public key is provided
     - Validation rejects expiration dates in the past
     - Validation rejects malformed public keys
+    - Validation rejects any updates to spec after creation (immutability)
     - Created resources are reconcilable (Ready condition initialized to Unknown)
 
   steps:
@@ -154,32 +155,26 @@ spec:
                 exit 1
               fi
 
-    # Test 5: Key Rotation (triggered by clearing publicKey)
-    - name: test-key-rotation
-      description: Update existing MachineAccountKey with publicKey="" → rotate and return new privateKey
+    # Test 5: Immutability - reject any spec update
+    - name: test-spec-immutability
+      description: Reject any update to MachineAccountKey.spec after creation
       try:
         - script:
             timeout: 10s
             content: |
-              # Get current public key for comparison
-              OLD_PUB=$(kubectl get machineaccountkey test-key-auto -n $NAMESPACE -o jsonpath='{.spec.publicKey}')
+              # Attempt to patch the expirationDate
+              if kubectl patch machineaccountkey test-key-auto -n $NAMESPACE --type=merge -p '{"spec":{"expirationDate":"2030-01-01T00:00:00Z"}}' 2> /tmp/immutability_err.json; then
+                echo "FAIL: spec update should have been rejected"
+                exit 1
+              fi
 
-              # Patch the resource to trigger rotation (clearing publicKey)
-              kubectl patch machineaccountkey test-key-auto -n $NAMESPACE --type=merge -p '{"spec":{"publicKey":""}}' -o json > /tmp/rotation_response.json
-
-              # 1. Verify a new privateKey is returned
-              NEW_PRIV=$(jq -r '.status.privateKey // empty' /tmp/rotation_response.json)
-              if [ -z "$NEW_PRIV" ]; then echo "FAIL: privateKey not returned on rotation"; exit 1; fi
-
-              # 2. Verify spec.publicKey has changed
-              NEW_PUB=$(jq -r '.spec.publicKey' /tmp/rotation_response.json)
-              if [ "$OLD_PUB" == "$NEW_PUB" ]; then echo "FAIL: publicKey did not change after rotation"; exit 1; fi
-
-              # 3. Verify Ready condition is reset to Unknown (signals controller to start)
-              READY_STATUS=$(jq -r '.status.conditions[] | select(.type=="Ready") | .status' /tmp/rotation_response.json)
-              if [ "$READY_STATUS" != "Unknown" ]; then echo "FAIL: Ready status not reset to Unknown on rotation"; exit 1; fi
-
-              echo "PASS: machine account key successfully rotated"
+              if grep -q "spec is immutable after creation" /tmp/immutability_err.json; then
+                echo "PASS: spec immutability validation triggered"
+              else
+                echo "FAIL: wrong error message"
+                cat /tmp/immutability_err.json
+                exit 1
+              fi
 
     # Test 6: Validation - reject malformed public key
     - name: test-validation-malformed-key
@@ -218,22 +213,5 @@ spec:
 
               echo "PASS: conditions are correctly initialized"
 
-    # Cleanup: delete created resources
-    - name: cleanup
-      description: Clean up test resources
-      try:
-        - delete:
-            ref:
-              apiVersion: iam.miloapis.com/v1alpha1
-              kind: MachineAccount
-              name: test-machine-account
-        - delete:
-            ref:
-              apiVersion: identity.miloapis.com/v1alpha1
-              kind: MachineAccountKey
-              name: test-key-auto
-        - delete:
-            ref:
-              apiVersion: identity.miloapis.com/v1alpha1
-              kind: MachineAccountKey
-              name: test-key-provided
+
+

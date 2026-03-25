@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -112,8 +113,7 @@ func (machineAccountKeyStrategy) Validate(ctx context.Context, obj runtime.Objec
 }
 
 // ValidateUpdate enforces immutability constraints and validates updates to MachineAccountKey.
-// It blocks updates to machineAccountName and expirationDate (immutable fields),
-// and validates any new publicKey provided (for key rotation).
+// It blocks any updates to the Spec after creation.
 func (machineAccountKeyStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
 	key, ok := obj.(*identityv1alpha1.MachineAccountKey)
 	if !ok {
@@ -126,51 +126,16 @@ func (machineAccountKeyStrategy) ValidateUpdate(ctx context.Context, obj, old ru
 	}
 
 	var errs field.ErrorList
-	specPath := field.NewPath("spec")
 
-	// Block updates to machineAccountName (immutable)
-	if key.Spec.MachineAccountName != oldKey.Spec.MachineAccountName {
+	// Block all updates to Spec after creation
+	if !apiequality.Semantic.DeepEqual(key.Spec, oldKey.Spec) {
 		errs = append(errs, field.Forbidden(
-			specPath.Child("machineAccountName"),
-			"machineAccountName is immutable after creation",
+			field.NewPath("spec"),
+			"spec is immutable after creation",
 		))
-	}
-
-	// Block updates to expirationDate (immutable)
-	if !expirationDatesEqual(key.Spec.ExpirationDate, oldKey.Spec.ExpirationDate) {
-		errs = append(errs, field.Forbidden(
-			specPath.Child("expirationDate"),
-			"expirationDate is immutable after creation",
-		))
-	}
-
-	// Validate publicKey if it has changed (allows key rotation)
-	if key.Spec.PublicKey != oldKey.Spec.PublicKey {
-		// If new publicKey is non-empty, validate it
-		if key.Spec.PublicKey != "" {
-			if err := validateRSAPublicKey(key.Spec.PublicKey); err != nil {
-				errs = append(errs, field.Invalid(
-					specPath.Child("publicKey"),
-					"<redacted>",
-					err.Error(),
-				))
-			}
-		}
-		// If new publicKey is empty, the REST handler's Update method will handle auto-generation
 	}
 
 	return errs
-}
-
-// expirationDatesEqual compares two expiration date pointers for equality.
-func expirationDatesEqual(a, b *metav1.Time) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Time.Equal(b.Time)
 }
 
 // Canonicalize normalizes the object. No-op here.

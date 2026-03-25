@@ -361,35 +361,18 @@ func TestGenerateRSAKeyPair_ProducesValidKeys(t *testing.T) {
 	assert.Equal(t, 2048, priv.Size()*8, "key should be 2048-bit")
 }
 
-func TestValidateUpdate_BlocksMachineAccountNameChange(t *testing.T) {
+func TestValidateUpdate_BlocksSpecChange(t *testing.T) {
 	oldKey := makeKey("test-key", "original-account", "")
 	newKey := makeKey("test-key", "changed-account", "")
 
 	errs := Strategy.ValidateUpdate(context.Background(), newKey, oldKey)
 
 	require.Len(t, errs, 1)
-	assert.Equal(t, "spec.machineAccountName", errs[0].Field)
+	assert.Equal(t, "spec", errs[0].Field)
 	assert.Contains(t, errs[0].Detail, "immutable")
 }
 
-func TestValidateUpdate_BlocksExpirationDateChange(t *testing.T) {
-	oldTime := metav1.NewTime(time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC))
-	newTime := metav1.NewTime(time.Date(2028, 1, 1, 0, 0, 0, 0, time.UTC))
-
-	oldKey := makeKey("test-key", "my-account", "")
-	oldKey.Spec.ExpirationDate = &oldTime
-
-	newKey := makeKey("test-key", "my-account", "")
-	newKey.Spec.ExpirationDate = &newTime
-
-	errs := Strategy.ValidateUpdate(context.Background(), newKey, oldKey)
-
-	require.Len(t, errs, 1)
-	assert.Equal(t, "spec.expirationDate", errs[0].Field)
-	assert.Contains(t, errs[0].Detail, "immutable")
-}
-
-func TestValidateUpdate_AllowsPublicKeyRotation(t *testing.T) {
+func TestValidateUpdate_BlocksPublicKeyRotation(t *testing.T) {
 	oldPubKey := generateTestRSAPublicKeyPEM(t)
 	newPubKey := generateTestRSAPublicKeyPEM(t)
 
@@ -398,23 +381,12 @@ func TestValidateUpdate_AllowsPublicKeyRotation(t *testing.T) {
 
 	errs := Strategy.ValidateUpdate(context.Background(), newKey, oldKey)
 
-	require.Len(t, errs, 0, "updating publicKey to a new valid RSA key should be allowed")
-}
-
-func TestValidateUpdate_ValidatesNewPublicKey(t *testing.T) {
-	oldPubKey := generateTestRSAPublicKeyPEM(t)
-
-	oldKey := makeKey("test-key", "my-account", oldPubKey)
-	newKey := makeKey("test-key", "my-account", "not-a-valid-pem")
-
-	errs := Strategy.ValidateUpdate(context.Background(), newKey, oldKey)
-
 	require.Len(t, errs, 1)
-	assert.Equal(t, "spec.publicKey", errs[0].Field)
-	assert.Contains(t, errs[0].Detail, "must be PEM-encoded")
+	assert.Equal(t, "spec", errs[0].Field)
+	assert.Contains(t, errs[0].Detail, "immutable")
 }
 
-func TestValidateUpdate_AllowsPublicKeyToEmptyString(t *testing.T) {
+func TestValidateUpdate_BlocksPublicKeyToEmptyString(t *testing.T) {
 	oldPubKey := generateTestRSAPublicKeyPEM(t)
 
 	oldKey := makeKey("test-key", "my-account", oldPubKey)
@@ -422,7 +394,9 @@ func TestValidateUpdate_AllowsPublicKeyToEmptyString(t *testing.T) {
 
 	errs := Strategy.ValidateUpdate(context.Background(), newKey, oldKey)
 
-	require.Len(t, errs, 0, "clearing publicKey should be allowed (handler can auto-generate)")
+	require.Len(t, errs, 1)
+	assert.Equal(t, "spec", errs[0].Field)
+	assert.Contains(t, errs[0].Detail, "immutable")
 }
 
 func TestValidateUpdate_NoChanges_Succeeds(t *testing.T) {

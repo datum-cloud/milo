@@ -153,63 +153,8 @@ func (r *REST) Create(
 	return result, nil
 }
 
-// Update intercepts the standard update path to support key rotation.
-// It allows updating the publicKey field and optionally auto-generates a new key pair
-// if publicKey is set to empty string. The strategy's ValidateUpdate enforces immutability
-// of machineAccountName and expirationDate.
-func (r *REST) Update(
-	ctx context.Context,
-	name string,
-	objInfo rest.UpdatedObjectInfo,
-	createValidation rest.ValidateObjectFunc,
-	updateValidation rest.ValidateObjectUpdateFunc,
-	forceAllowCreate bool,
-	options *metav1.UpdateOptions,
-) (runtime.Object, bool, error) {
-	var privateKeyPEM string
-
-	// Wrap objInfo to intercept the update and trigger rotation if publicKey is cleared.
-	info := &rotationUpdatedObjectInfo{
-		UpdatedObjectInfo: objInfo,
-		update: func(ctx context.Context, obj, old runtime.Object) (runtime.Object, error) {
-			newKey, ok := obj.(*identityv1alpha1.MachineAccountKey)
-			if !ok {
-				return obj, nil
-			}
-
-			// If the public key is explicitly cleared in the update, generate a new one.
-			if newKey.Spec.PublicKey == "" {
-				start := time.Now()
-				pubPEM, privPEM, err := generateRSAKeyPairFunc()
-				elapsed := time.Since(start)
-
-				if err != nil {
-					keyGenerationDuration.WithLabelValues("failure").Observe(elapsed.Seconds())
-					return nil, apierrors.NewInternalError(err)
-				}
-				keyGenerationDuration.WithLabelValues("success").Observe(elapsed.Seconds())
-
-				newKey.Spec.PublicKey = pubPEM
-				privateKeyPEM = privPEM
-			}
-			return newKey, nil
-		},
-	}
-
-	result, created, err := r.Store.Update(ctx, name, info, createValidation, updateValidation, forceAllowCreate, options)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Set the private key on the response object (in-memory only).
-	if privateKeyPEM != "" {
-		if updatedKey, ok := result.(*identityv1alpha1.MachineAccountKey); ok {
-			updatedKey.Status.PrivateKey = privateKeyPEM
-		}
-	}
-
-	return result, created, nil
-}
+// Update is omitted here as it's not needed. The embedded genericregistry.Store.Update will be used.
+// The strategy's ValidateUpdate will still be called to enforce Spec immutability.
 
 // generateRSAKeyPair generates a 2048-bit RSA key pair and returns
 // PEM-encoded public (PKIX) and private (PKCS1) key material.
@@ -256,20 +201,4 @@ func validateRSAPublicKey(pubKeyPEM string) error {
 	}
 
 	return nil
-}
-
-// rotationUpdatedObjectInfo wraps rest.UpdatedObjectInfo to allow intercepting
-// the resulting object and performing transformations (like key generation)
-// before it is passed to the underlying store.
-type rotationUpdatedObjectInfo struct {
-	rest.UpdatedObjectInfo
-	update func(ctx context.Context, obj, old runtime.Object) (runtime.Object, error)
-}
-
-func (i *rotationUpdatedObjectInfo) UpdatedObject(ctx context.Context, old runtime.Object) (runtime.Object, error) {
-	newObj, err := i.UpdatedObjectInfo.UpdatedObject(ctx, old)
-	if err != nil {
-		return nil, err
-	}
-	return i.update(ctx, newObj, old)
 }
