@@ -1,0 +1,239 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: machine-account-key-creation
+spec:
+  description: |
+    Tests MachineAccountKey creation with automatic RSA key pair generation and validation.
+
+    This test verifies:
+    - MachineAccountKey can be created without providing a public key (auto-generation)
+    - Auto-generated RSA public key is stored in spec.publicKey
+    - Private key is returned in creation response but NOT persisted to etcd
+    - MachineAccountKey can be created with a provided public key
+    - No private key is returned when a public key is provided
+    - Validation rejects expiration dates in the past
+    - Validation rejects malformed public keys
+    - Created resources are reconcilable (Ready condition initialized to Unknown)
+
+  steps:
+    # Setup: create machine account in test namespace
+    - name: create-machine-account
+      description: Create a MachineAccount resource for testing keys
+      try:
+        - apply:
+            file: resources/machine-account.yaml
+
+    # Test 1: Auto-generate RSA key pair
+    - name: test-auto-generate-key
+      description: Create MachineAccountKey without publicKey → auto-generate RSA pair
+      try:
+        # Create the resource and capture the raw response
+        - script:
+            timeout: 10s
+            content: |
+              # Create the resource and capture the raw response
+              kubectl apply -f resources/key-auto-generate.yaml -n $NAMESPACE -o json > /tmp/response.json
+
+              # Verify that the response contains a privateKey in status
+              PRIVATE_KEY=$(jq -r '.status.privateKey // empty' /tmp/response.json)
+
+              if [ -z "$PRIVATE_KEY" ]; then
+                echo "FAIL: privateKey not found in creation response"
+                echo "RAW RESPONSE:"
+                cat /tmp/response.json
+                exit 1
+              fi
+
+              # Verify the privateKey looks like a PEM-encoded RSA key
+              if ! echo "$PRIVATE_KEY" | grep -q "BEGIN RSA PRIVATE KEY"; then
+                echo "FAIL: privateKey is not PEM-encoded PKCS1"
+                exit 1
+              fi
+
+              # Verify publicKey was auto-generated in the response
+              PUBLIC_KEY=$(jq -r '.spec.publicKey // empty' /tmp/response.json)
+              if [ -z "$PUBLIC_KEY" ]; then
+                echo "FAIL: publicKey not found in creation response"
+                exit 1
+              fi
+
+              if ! echo "$PUBLIC_KEY" | grep -q "BEGIN PUBLIC KEY"; then
+                echo "FAIL: publicKey is not PEM-encoded PKIX"
+                exit 1
+              fi
+
+              echo "PASS: privateKey returned in creation response, publicKey auto-generated"
+
+        # Verify the created key exists and is reconcilable
+        - wait:
+            apiVersion: identity.miloapis.com/v1alpha1
+            kind: MachineAccountKey
+            name: test-key-auto
+            timeout: 10s
+            for:
+              condition:
+                name: Ready
+                value: Unknown
+
+        # Assert the persisted object has correct structure
+        - assert:
+            file: assertions/assert-key-auto-generated.yaml
+
+        # Verify privateKey is absent from GET response (not persisted to etcd)
+        - script:
+            timeout: 5s
+            content: |
+              # Fetch the resource from etcd
+              kubectl get machineaccountkey test-key-auto -n $NAMESPACE -o json > /tmp/fetched.json
+
+              # Verify privateKey is NOT present
+              PRIVATE_KEY=$(jq -r '.status.privateKey // empty' /tmp/fetched.json)
+
+              if [ -n "$PRIVATE_KEY" ]; then
+                echo "FAIL: privateKey should not be stored in etcd"
+                exit 1
+              fi
+
+              echo "PASS: privateKey correctly absent from persisted object"
+
+    # Test 2: Provided public key (no auto-generation)
+    - name: test-provided-public-key
+      description: Create MachineAccountKey with publicKey → no auto-generation, no privateKey returned
+      try:
+        - script:
+            timeout: 10s
+            content: |
+              # Create the resource with provided public key
+              kubectl apply -f resources/key-provided-public.yaml -n $NAMESPACE -o json > /tmp/provided_response.json
+
+              # Verify that the response does NOT contain a privateKey
+              PRIVATE_KEY=$(jq -r '.status.privateKey // empty' /tmp/provided_response.json)
+
+              if [ -n "$PRIVATE_KEY" ]; then
+                echo "FAIL: privateKey should not be returned when publicKey is provided"
+                exit 1
+              fi
+
+              # Verify the publicKey is present
+              PUBLIC_KEY=$(jq -r '.spec.publicKey' /tmp/provided_response.json)
+              if [ -z "$PUBLIC_KEY" ]; then echo "FAIL: publicKey missing"; exit 1; fi
+
+              echo "PASS: no privateKey returned with provided publicKey"
+
+        - wait:
+            apiVersion: identity.miloapis.com/v1alpha1
+            kind: MachineAccountKey
+            name: test-key-provided
+            timeout: 10s
+            for:
+              condition:
+                name: Ready
+                value: Unknown
+        # Assert the public key matches what was provided
+        - assert:
+            file: assertions/assert-key-provided.yaml
+
+    # Test 3: Validation - reject expiration date in past
+    - name: test-validation-expiration-past
+      description: Reject MachineAccountKey with expirationDate in the past
+      try:
+        - script:
+            timeout: 10s
+            content: |
+              if kubectl apply -f resources/key-invalid-expiration.yaml -n $NAMESPACE 2> /tmp/val_err.json; then
+                echo "FAIL: resource should have been rejected"
+                exit 1
+              fi
+              
+              if grep -q "expirationDate must be in the future" /tmp/val_err.json; then
+                echo "PASS: expirationDate validation triggered"
+              else
+                echo "FAIL: wrong error message"
+                cat /tmp/val_err.json
+                exit 1
+              fi
+
+    # Test 5: Key Rotation (triggered by clearing publicKey)
+    - name: test-key-rotation
+      description: Update existing MachineAccountKey with publicKey="" → rotate and return new privateKey
+      try:
+        - script:
+            timeout: 10s
+            content: |
+              # Get current public key for comparison
+              OLD_PUB=$(kubectl get machineaccountkey test-key-auto -n $NAMESPACE -o jsonpath='{.spec.publicKey}')
+
+              # Patch the resource to trigger rotation (clearing publicKey)
+              kubectl patch machineaccountkey test-key-auto -n $NAMESPACE --type=merge -p '{"spec":{"publicKey":""}}' -o json > /tmp/rotation_response.json
+
+              # 1. Verify a new privateKey is returned
+              NEW_PRIV=$(jq -r '.status.privateKey // empty' /tmp/rotation_response.json)
+              if [ -z "$NEW_PRIV" ]; then echo "FAIL: privateKey not returned on rotation"; exit 1; fi
+
+              # 2. Verify spec.publicKey has changed
+              NEW_PUB=$(jq -r '.spec.publicKey' /tmp/rotation_response.json)
+              if [ "$OLD_PUB" == "$NEW_PUB" ]; then echo "FAIL: publicKey did not change after rotation"; exit 1; fi
+
+              # 3. Verify Ready condition is reset to Unknown (signals controller to start)
+              READY_STATUS=$(jq -r '.status.conditions[] | select(.type=="Ready") | .status' /tmp/rotation_response.json)
+              if [ "$READY_STATUS" != "Unknown" ]; then echo "FAIL: Ready status not reset to Unknown on rotation"; exit 1; fi
+
+              echo "PASS: machine account key successfully rotated"
+
+    # Test 6: Validation - reject malformed public key
+    - name: test-validation-malformed-key
+      description: Reject MachineAccountKey with malformed publicKey
+      try:
+        - script:
+            timeout: 10s
+            content: |
+              if kubectl apply -f resources/key-malformed.yaml -n $NAMESPACE 2> /tmp/malformed_err.json; then
+                echo "FAIL: malformed key should have been rejected"
+                exit 1
+              fi
+
+              if grep -q "publicKey" /tmp/malformed_err.json; then
+                echo "PASS: malformed key validation triggered"
+              else
+                echo "FAIL: wrong error message"
+                cat /tmp/malformed_err.json
+                exit 1
+              fi
+
+    # Test 7: Verify resource schema and conditions
+    - name: test-resource-conditions
+      description: Verify MachineAccountKey initializes with correct conditions
+      try:
+        - script:
+            timeout: 5s
+            content: |
+              READY_STATUS=$(kubectl get machineaccountkey test-key-auto -n $NAMESPACE -o json | \
+              jq -r '.status.conditions[] | select(.type=="Ready") | .status')
+
+              if [ "$READY_STATUS" != "Unknown" ]; then
+                echo "FAIL: Expected Ready condition to be Unknown, got $READY_STATUS"
+                exit 1
+              fi
+
+              echo "PASS: conditions are correctly initialized"
+
+    # Cleanup: delete created resources
+    - name: cleanup
+      description: Clean up test resources
+      try:
+        - delete:
+            ref:
+              apiVersion: iam.miloapis.com/v1alpha1
+              kind: MachineAccount
+              name: test-machine-account
+        - delete:
+            ref:
+              apiVersion: identity.miloapis.com/v1alpha1
+              kind: MachineAccountKey
+              name: test-key-auto
+        - delete:
+            ref:
+              apiVersion: identity.miloapis.com/v1alpha1
+              kind: MachineAccountKey
+              name: test-key-provided

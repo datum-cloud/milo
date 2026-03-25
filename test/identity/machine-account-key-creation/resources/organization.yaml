@@ -1,0 +1,11 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: mak-test-org
+spec:
+  type: Standard
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: organization-mak-test-org

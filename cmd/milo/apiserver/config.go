@@ -149,9 +149,7 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 		discoveryrest.StorageProvider{},
 	}
 
-	if utilfeature.DefaultFeatureGate.Enabled(features.Sessions) || utilfeature.DefaultFeatureGate.Enabled(features.UserIdentities) {
-		providers = append(providers, newIdentityStorageProvider(c))
-	}
+	providers = append(providers, newIdentityStorageProvider(c))
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.EventsProxy) {
 		providers = append(providers, newEventsV1StorageProvider(eventsBackend))

@@ -1,0 +1,18 @@
+apiVersion: identity.miloapis.com/v1alpha1
+kind: MachineAccountKey
+metadata:
+  name: test-key-provided
+spec:
+  machineAccountName: test-machine-account
+  # Should match the provided key
+  publicKey: |
+    -----BEGIN PUBLIC KEY-----
+    MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1hRF7sbBHvQ8E/vQXPxq
+    fg8qc3yGR6D75cv6xJwr82QU/twD0eGxVyzRV9Ndhq4DJNdDbKA5rseO36GiGP99
+    S5uIUHi+BREdzsuBm+L8K2T5GcE6+5lPmlMjV12qVVJbyWoIEkse/k/zowjSmg5c
+    Qszc/lDglmWjFfNJG1YtmKqWvUXMNayV5whrpzygMTlHUes7GcGlfQ5gsXKudyYd
+    HSSeh3bXYfv6IdFj8UoJbFqfIjJNj7Dv4tyF5H7ShQKgSIrXDxzZqtuNLgImmoyE
+    gFL3FfS1mYO/lNNRctBhN/BkIrAB3bls0JDmJogBBbg9ttyE5QwsRXtV2LIof7Bm
+    PQIDAQAB
+    -----END PUBLIC KEY-----
+  expirationDate: "2027-12-31T23:59:59Z"

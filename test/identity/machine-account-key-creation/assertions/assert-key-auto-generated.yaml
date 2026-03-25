@@ -1,0 +1,7 @@
+apiVersion: identity.miloapis.com/v1alpha1
+kind: MachineAccountKey
+metadata:
+  name: test-key-auto
+spec:
+  machineAccountName: test-machine-account
+  expirationDate: "2027-12-31T23:59:59Z"
