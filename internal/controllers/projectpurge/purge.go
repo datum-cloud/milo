@@ -179,7 +179,7 @@ func (p *Purger) Purge(ctx context.Context, cfg *rest.Config, project string, o 
 		return err
 	}
 
-	// Phase D: force-finalize namespaces so we don't rely on a namespace controller
+	// Phase D: force-finalize namespaces so we don’t rely on a namespace controller
 	if err := runParallel(deadline, o.Parallel, namespaces, func(ctx context.Context, ns string) error {
 		nso, err := core.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
 		if ignorable(err) { // not found or not served
@@ -194,8 +194,8 @@ func (p *Purger) Purge(ctx context.Context, cfg *rest.Config, project string, o 
 			_ = core.CoreV1().Namespaces().Delete(ctx, ns, delOpts)
 		}
 
-		// Clear finalizers to allow immediate removal without a namespace controller
-		nso.Spec.Finalizers = nil
+		// Clear metadata finalizers to allow immediate removal without a namespace controller
+		nso.ObjectMeta.Finalizers = nil
 		if _, err := core.CoreV1().Namespaces().Finalize(ctx, nso, metav1.UpdateOptions{}); !ignorable(err) {
 			if apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) {
 				return fmt.Errorf("rbac forbids namespaces/finalize on %q: %w", ns, err)
