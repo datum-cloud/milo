@@ -1,0 +1,177 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: userinvitation-policybinding-gc
+spec:
+  description: |
+    Regression test for GitHub issue #535: Orphaned PolicyBindings for deleted
+    UserInvitations are not garbage collected.
+
+    The UserInvitationController creates PolicyBindings in milo-system granting
+    the invitee user `getinvitation` and `acceptinvitation` permissions. When a
+    UserInvitation is deleted (accepted, declined, expired, or manually removed),
+    the associated PolicyBindings must be cleaned up by the finalizer.
+
+    The fix wires r.finalizer.Finalize(ctx, ui) into Reconcile so the finalizer
+    string is added on first reconcile and the cleanup handler (userInvitationFinalizer.Finalize)
+    runs on deletion, deleting both PolicyBindings before the object is removed.
+
+    See also: test/iam/user-deletion-garbage-collection/chainsaw-test.yaml for
+    the established pattern this test follows.
+
+  steps:
+  - name: setup-organization
+    description: |
+      Create the Organization and wait for its namespace to be provisioned.
+      UserInvitations are namespaced resources that live in the
+      organization-{name} namespace.
+    try:
+    - apply:
+        file: 01-organization.yaml
+    - wait:
+        apiVersion: v1
+        kind: Namespace
+        name: organization-ui-gc-test-org
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.status.phase}'
+            value: Active
+
+  - name: setup-users
+    description: |
+      Create the inviter and invitee User resources and wait for them to become
+      Ready. The controller looks up the invitee User by email when reconciling
+      the UserInvitation and will only create PolicyBindings once the User exists.
+    try:
+    - apply:
+        file: 02-inviter-user.yaml
+    - apply:
+        file: 03-invitee-user.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: User
+        name: ui-gc-inviter
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'True'
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: User
+        name: ui-gc-invitee
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'True'
+
+  - name: create-invitation-and-verify-policybindings
+    description: |
+      Create the UserInvitation and wait for the controller to reconcile it.
+      The controller creates two PolicyBindings in milo-system:
+        - one for the iam.miloapis.com-getinvitation role
+        - one for the iam.miloapis.com-acceptinvitation role
+      Both bindings use deterministic names derived from the UserInvitation UID
+      and role name: {uid}-{rolename}.
+      Wait for the Pending condition to be set, which indicates the controller
+      has finished its first reconcile pass and created the PolicyBindings.
+    try:
+    - apply:
+        file: 04-userinvitation.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: UserInvitation
+        name: ui-gc-test-invitation
+        namespace: organization-ui-gc-test-org
+        timeout: 60s
+        for:
+          condition:
+            name: Pending
+            value: 'True'
+    - description: Verify both invitation PolicyBindings were created in milo-system
+      script:
+        timeout: 30s
+        content: |
+          set -eu
+          # PolicyBinding names are {uid}-{rolename}. We filter by the
+          # resourceRef pointing to this specific UserInvitation.
+          INVITATION_NAME="ui-gc-test-invitation"
+          INVITATION_NS="organization-ui-gc-test-org"
+
+          GETINVITATION_COUNT=$(kubectl get policybindings -n milo-system -o json \
+            | jq --arg name "$INVITATION_NAME" --arg ns "$INVITATION_NS" \
+              '[.items[] | select(
+                  .spec.resourceSelector.resourceRef.kind == "UserInvitation" and
+                  .spec.resourceSelector.resourceRef.name == $name and
+                  .spec.resourceSelector.resourceRef.namespace == $ns and
+                  (.spec.roleRef.name | test("getinvitation"))
+                )] | length')
+
+          ACCEPTINVITATION_COUNT=$(kubectl get policybindings -n milo-system -o json \
+            | jq --arg name "$INVITATION_NAME" --arg ns "$INVITATION_NS" \
+              '[.items[] | select(
+                  .spec.resourceSelector.resourceRef.kind == "UserInvitation" and
+                  .spec.resourceSelector.resourceRef.name == $name and
+                  .spec.resourceSelector.resourceRef.namespace == $ns and
+                  (.spec.roleRef.name | test("acceptinvitation"))
+                )] | length')
+
+          echo "getinvitation PolicyBindings: $GETINVITATION_COUNT"
+          echo "acceptinvitation PolicyBindings: $ACCEPTINVITATION_COUNT"
+
+          test "$GETINVITATION_COUNT" -eq 1 || { echo "FAIL: expected 1 getinvitation PolicyBinding, got $GETINVITATION_COUNT"; exit 1; }
+          test "$ACCEPTINVITATION_COUNT" -eq 1 || { echo "FAIL: expected 1 acceptinvitation PolicyBinding, got $ACCEPTINVITATION_COUNT"; exit 1; }
+          echo "PASS: both invitation PolicyBindings exist before deletion"
+
+  - name: delete-invitation-and-verify-policybindings-cleaned-up
+    description: |
+      Delete the UserInvitation and verify the associated PolicyBindings are
+      cleaned up by the finalizer before the object is removed.
+
+      The fix for issue #535 wires r.finalizer.Finalize into Reconcile so that:
+        - The finalizer string is added to the UserInvitation on first reconcile,
+          preventing Kubernetes from deleting the object immediately.
+        - On deletion, the finalizer runs userInvitationFinalizer.Finalize which
+          calls deletePolicyBinding for each uiRelatedRoles entry.
+        - Both PolicyBindings are deleted before the UserInvitation is removed
+          from the API server.
+    try:
+    - delete:
+        ref:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: UserInvitation
+          name: ui-gc-test-invitation
+          namespace: organization-ui-gc-test-org
+    - description: Wait for the UserInvitation to be fully removed from the API server
+      error:
+        resource:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: UserInvitation
+          metadata:
+            name: ui-gc-test-invitation
+            namespace: organization-ui-gc-test-org
+        timeout: 60s
+    - description: |
+        Assert both invitation PolicyBindings were deleted by the finalizer.
+        A count of 0 confirms the fix for issue #535 is working correctly.
+      script:
+        timeout: 30s
+        content: |
+          set -eu
+          INVITATION_NAME="ui-gc-test-invitation"
+          INVITATION_NS="organization-ui-gc-test-org"
+
+          REMAINING_COUNT=$(kubectl get policybindings -n milo-system -o json \
+            | jq --arg name "$INVITATION_NAME" --arg ns "$INVITATION_NS" \
+              '[.items[] | select(
+                  .spec.resourceSelector.resourceRef.kind == "UserInvitation" and
+                  .spec.resourceSelector.resourceRef.name == $name and
+                  .spec.resourceSelector.resourceRef.namespace == $ns
+                )] | length')
+
+          echo "Remaining PolicyBindings after UserInvitation deletion: $REMAINING_COUNT"
+
+          test "$REMAINING_COUNT" -eq 0 || { echo "FAIL: expected 0 PolicyBindings after deletion (fix for issue #535), got $REMAINING_COUNT"; exit 1; }
+          echo "PASS: all invitation PolicyBindings were cleaned up by the finalizer"
