@@ -181,6 +181,14 @@ func (v *OrganizationValidator) createOrganizationMembership(ctx context.Context
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("member-%s", user.Name),
 			Namespace: fmt.Sprintf("organization-%s", org.Name),
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: iamv1alpha1.SchemeGroupVersion.String(),
+					Kind:       "User",
+					Name:       user.Name,
+					UID:        user.UID,
+				},
+			},
 		},
 		Spec: resourcemanagerv1alpha1.OrganizationMembershipSpec{
 			OrganizationRef: resourcemanagerv1alpha1.OrganizationReference{
