@@ -22,8 +22,11 @@ spec:
     description: |
       Create the Organization and wait for its namespace to be provisioned.
     try:
-    - create:
+    - apply:
         file: 01-organization.yaml
+        expect:
+        - check:
+            ($error == null): true
     - wait:
         apiVersion: v1
         kind: Namespace
@@ -39,8 +42,11 @@ spec:
       Create a User and wait for it to become Ready. The UserController will add
       the membership-cleanup finalizer on the first reconcile.
     try:
-    - create:
+    - apply:
         file: 02-user.yaml
+        expect:
+        - check:
+            ($error == null): true
     - wait:
         apiVersion: iam.miloapis.com/v1alpha1
         kind: User
@@ -65,7 +71,7 @@ spec:
       Create an OrganizationMembership linking the user to the organization with
       the owner role. The membership controller will reconcile it to Ready.
     try:
-    - create:
+    - apply:
         resource:
           apiVersion: resourcemanager.miloapis.com/v1alpha1
           kind: OrganizationMembership
@@ -80,6 +86,9 @@ spec:
             roles:
             - name: resourcemanager.miloapis.com-organizationowner
               namespace: milo-system
+        expect:
+        - check:
+            ($error == null): true
     - wait:
         apiVersion: resourcemanager.miloapis.com/v1alpha1
         kind: OrganizationMembership
