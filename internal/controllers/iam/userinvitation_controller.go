@@ -541,7 +541,7 @@ func (r *UserInvitationController) createOrganizationMembership(ctx context.Cont
 			Namespace: fmt.Sprintf("organization-%s", ui.Spec.OrganizationRef.Name),
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion: iamv1alpha1.SchemeGroupVersion.Group,
+					APIVersion: iamv1alpha1.SchemeGroupVersion.String(),
 					Kind:       "User",
 					Name:       user.GetName(),
 					UID:        user.GetUID(),
