@@ -1,0 +1,10 @@
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: Organization
+metadata:
+  name: om-gc-test-org
+  labels:
+    test.miloapis.com/scenario: "user-deletion-org-membership-cleanup"
+  annotations:
+    kubernetes.io/display-name: "OrgMembership GC Test Organization"
+spec:
+  type: Standard

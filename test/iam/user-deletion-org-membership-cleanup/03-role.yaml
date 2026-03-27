@@ -1,0 +1,13 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: Role
+metadata:
+  name: om-gc-org-owner
+  namespace: organization-om-gc-test-org
+  labels:
+    test.miloapis.com/scenario: "user-deletion-org-membership-cleanup"
+spec:
+  launchStage: Beta
+  includedPermissions:
+    - resourcemanager.miloapis.com/organizations.get
+    - resourcemanager.miloapis.com/organizations.update
+    - resourcemanager.miloapis.com/organizations.delete

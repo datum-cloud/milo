@@ -1,0 +1,19 @@
+# This OrganizationMembership is created WITHOUT a User ownerReference, which
+# mirrors exactly what the organization webhook does today (bug #536). When the
+# User is later deleted, Kubernetes garbage collection will not remove this
+# membership because there is no ownerReference linking the two resources.
+apiVersion: resourcemanager.miloapis.com/v1alpha1
+kind: OrganizationMembership
+metadata:
+  name: member-om-gc-test-user
+  namespace: organization-om-gc-test-org
+  labels:
+    test.miloapis.com/scenario: "user-deletion-org-membership-cleanup"
+spec:
+  organizationRef:
+    name: om-gc-test-org
+  userRef:
+    name: om-gc-test-user
+  roles:
+    - name: om-gc-org-owner
+      namespace: organization-om-gc-test-org

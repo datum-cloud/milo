@@ -1,0 +1,219 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: user-deletion-org-membership-cleanup
+spec:
+  description: |
+    Regression test for GitHub issue #536: Orphaned PolicyBindings for deleted
+    Users are not garbage collected.
+
+    When a User is deleted, any OrganizationMembership resources that reference
+    the user as a subject (in organization namespaces) are NOT cleaned up. The
+    root cause is that OrganizationMembership resources created by the
+    organization webhook have no User ownerReference, so Kubernetes garbage
+    collection has no knowledge of the dependency.
+
+    The membership controller owns the PolicyBindings via ownerReference, so
+    PolicyBindings are owned by the OrganizationMembership. When the User is
+    deleted without the membership being cleaned up first, the membership (and
+    its PolicyBindings) become permanently orphaned. The PolicyBindings
+    subsequently enter a SubjectValidationFailed state because the referenced
+    User no longer exists.
+
+    THIS TEST IS WRITTEN TO DEMONSTRATE THE BUG.
+    - With the CURRENT buggy code: the final assertions PASS (membership and
+      PolicyBindings remain after the User is deleted, confirming the bug).
+    - After the FIX is applied (adding a User ownerReference to the
+      OrganizationMembership, or adding a finalizer on the User that deletes
+      memberships): the final assertions must be INVERTED to use `error` instead
+      of `assert`, verifying that both the membership and its PolicyBindings
+      were deleted.
+
+    See also: test/iam/userinvitation-policybinding-gc/chainsaw-test.yaml for
+    the established pattern this test follows.
+
+  steps:
+  - name: create-user
+    description: |
+      Create the User that will later be deleted. Wait for it to reach Ready
+      state so the membership controller can successfully reconcile against it.
+    try:
+    - apply:
+        file: 01-user.yaml
+    - wait:
+        apiVersion: iam.miloapis.com/v1alpha1
+        kind: User
+        name: om-gc-test-user
+        timeout: 30s
+        for:
+          condition:
+            name: Ready
+            value: 'True'
+
+  - name: create-organization
+    description: |
+      Create the Organization using the admin token (system:masters group). The
+      organization webhook skips OrganizationMembership creation for
+      system:masters requests, so no membership is auto-created here. The
+      namespace organization-om-gc-test-org is provisioned by the webhook.
+    try:
+    - apply:
+        file: 02-organization.yaml
+    - wait:
+        apiVersion: v1
+        kind: Namespace
+        name: organization-om-gc-test-org
+        timeout: 30s
+        for:
+          jsonPath:
+            path: '{.status.phase}'
+            value: Active
+
+  - name: create-role-and-membership
+    description: |
+      Create a test role in the organization namespace, then create an
+      OrganizationMembership that mirrors what the organization webhook creates
+      today: the membership references the User in spec.userRef but has NO
+      ownerReference pointing back to the User resource. This is the core of
+      bug #536 — without the ownerReference the Kubernetes garbage collector
+      will not cascade-delete the membership when the User is removed.
+    try:
+    - apply:
+        file: 03-role.yaml
+    - apply:
+        file: 04-membership.yaml
+    - description: Wait for the membership to reach Ready state, confirming
+        the controller found the User and Organization and created PolicyBindings.
+      wait:
+        apiVersion: resourcemanager.miloapis.com/v1alpha1
+        kind: OrganizationMembership
+        name: member-om-gc-test-user
+        namespace: organization-om-gc-test-org
+        timeout: 60s
+        for:
+          condition:
+            name: Ready
+            value: 'True'
+    - description: |
+        Verify that the membership controller created at least one PolicyBinding
+        in the organization namespace, owned by the membership. These PolicyBindings
+        are what gets orphaned when the User is deleted.
+      script:
+        timeout: 30s
+        content: |
+          set -eu
+          MEMBERSHIP_NAME="member-om-gc-test-user"
+          NAMESPACE="organization-om-gc-test-org"
+
+          PB_COUNT=$(kubectl get policybindings -n "$NAMESPACE" -o json \
+            | jq --arg membership "$MEMBERSHIP_NAME" \
+              '[.items[] | select(
+                  (.metadata.ownerReferences // []) |
+                  map(select(.kind == "OrganizationMembership" and .name == $membership)) |
+                  length > 0
+                )] | length')
+
+          echo "PolicyBindings owned by membership $MEMBERSHIP_NAME: $PB_COUNT"
+
+          test "$PB_COUNT" -ge 1 || {
+            echo "FAIL: expected at least 1 PolicyBinding owned by the membership before User deletion, got $PB_COUNT"
+            exit 1
+          }
+          echo "PASS: $PB_COUNT PolicyBinding(s) exist before User deletion"
+
+  - name: delete-user-and-assert-membership-orphaned
+    description: |
+      Delete the User and then assert that the OrganizationMembership and its
+      associated PolicyBindings STILL EXIST in the organization namespace.
+
+      THIS STEP DEMONSTRATES THE BUG (issue #536).
+
+      Because the OrganizationMembership has no ownerReference pointing to the
+      User, Kubernetes garbage collection does not know to delete the membership
+      when the User is removed. The membership — and all PolicyBindings it owns
+      — are left as orphans. The PolicyBindings will subsequently enter a
+      SubjectValidationFailed state because the User subject they reference no
+      longer exists.
+
+      After the fix is applied:
+        Replace the final two `assert` operations in this step with `error`
+        operations. The `delete` and wait-for-deletion steps remain unchanged.
+
+      The fix may be implemented as any of the following:
+        1. Add a User ownerReference to OrganizationMembership when the
+           organization webhook creates it.
+        2. Add a finalizer on the User resource that deletes all
+           OrganizationMemberships referencing the User before allowing deletion.
+        3. A combination of the above approaches.
+    try:
+    - description: Delete the User resource.
+      delete:
+        ref:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: User
+          name: om-gc-test-user
+    - description: Wait for the User to be fully removed from the API server.
+      error:
+        resource:
+          apiVersion: iam.miloapis.com/v1alpha1
+          kind: User
+          metadata:
+            name: om-gc-test-user
+        timeout: 30s
+    - description: |
+        BUG DEMONSTRATION: Assert the OrganizationMembership STILL EXISTS after
+        the User was deleted. If this assertion passes the membership is
+        confirmed to be orphaned.
+
+        After the fix is applied, replace this `assert` with an `error` block
+        to verify the membership was cleaned up.
+      assert:
+        resource:
+          apiVersion: resourcemanager.miloapis.com/v1alpha1
+          kind: OrganizationMembership
+          metadata:
+            name: member-om-gc-test-user
+            namespace: organization-om-gc-test-org
+        timeout: 15s
+    - description: |
+        BUG DEMONSTRATION: Assert that at least one PolicyBinding owned by the
+        OrganizationMembership STILL EXISTS after the User was deleted. If this
+        passes, the PolicyBindings are confirmed to be orphaned.
+
+        After the fix is applied, replace this script with one that asserts
+        a count of 0 orphaned PolicyBindings.
+      script:
+        timeout: 30s
+        content: |
+          set -eu
+          MEMBERSHIP_NAME="member-om-gc-test-user"
+          NAMESPACE="organization-om-gc-test-org"
+
+          ORPHANED_COUNT=$(kubectl get policybindings -n "$NAMESPACE" -o json \
+            | jq --arg membership "$MEMBERSHIP_NAME" \
+              '[.items[] | select(
+                  (.metadata.ownerReferences // []) |
+                  map(select(.kind == "OrganizationMembership" and .name == $membership)) |
+                  length > 0
+                )] | length')
+
+          echo "Orphaned PolicyBindings after User deletion: $ORPHANED_COUNT"
+
+          # BUG: With the current code, the OrganizationMembership is not
+          # deleted when the User is removed, so the PolicyBindings it owns
+          # remain intact. This assertion confirms the bug exists by expecting
+          # the bindings to still be present (count >= 1).
+          #
+          # After the fix is applied, change this to:
+          #   test "$ORPHANED_COUNT" -eq 0 || {
+          #     echo "FAIL: expected 0 orphaned PolicyBindings, got $ORPHANED_COUNT"
+          #     exit 1
+          #   }
+          #   echo "PASS: all PolicyBindings were cleaned up after User deletion"
+          #
+          test "$ORPHANED_COUNT" -ge 1 || {
+            echo "FAIL: expected orphaned PolicyBindings to remain (bug #536 not reproduced), got $ORPHANED_COUNT"
+            echo "Either the bug has been fixed (update this test) or the membership controller did not create PolicyBindings"
+            exit 1
+          }
+          echo "BUG CONFIRMED: $ORPHANED_COUNT PolicyBinding(s) orphaned after User deletion (issue #536)"

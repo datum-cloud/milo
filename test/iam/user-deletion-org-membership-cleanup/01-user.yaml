@@ -1,0 +1,10 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: User
+metadata:
+  name: om-gc-test-user
+  labels:
+    test.miloapis.com/scenario: "user-deletion-org-membership-cleanup"
+spec:
+  email: om-gc-test-user@example.com
+  givenName: OmGc
+  familyName: TestUser
