@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: organization-creator
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   namespace: milo-system
   annotations:
     kubernetes.io/display-name: Organization Creator

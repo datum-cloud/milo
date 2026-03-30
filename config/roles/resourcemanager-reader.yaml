@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: resourcemanager-reader
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Resource Manager Viewer
     kubernetes.io/description: View access to organizations and projects

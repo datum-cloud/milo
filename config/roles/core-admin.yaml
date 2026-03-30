@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: core-admin
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Core Admin
     kubernetes.io/description: Full access to core platform resources including secrets, configmaps, and namespaces

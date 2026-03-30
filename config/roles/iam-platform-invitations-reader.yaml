@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: iam-platform-invitations-reader
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Platform Invitation Viewer
     kubernetes.io/description: View platform invitations

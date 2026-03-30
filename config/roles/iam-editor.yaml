@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: iam-editor
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: IAM Editor
     kubernetes.io/description: "Edit IAM resources"

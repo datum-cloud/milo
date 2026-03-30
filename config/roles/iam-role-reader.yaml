@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: role-reader
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Role Viewer
     kubernetes.io/description: View IAM roles

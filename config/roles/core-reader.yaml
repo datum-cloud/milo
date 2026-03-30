@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: core-reader
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Core Reader
     kubernetes.io/description: View access to core platform resources including secrets, configmaps, and namespaces

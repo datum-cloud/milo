@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: iam-user-deactivations-admin
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: User Deactivation Admin
     kubernetes.io/description: Full access to user deactivations

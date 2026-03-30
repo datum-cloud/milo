@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: iam.miloapis.com-acceptinvitation
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Accept Invitation
     kubernetes.io/description: Accept user invitations to join organizations

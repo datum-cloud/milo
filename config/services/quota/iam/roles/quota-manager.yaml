@@ -2,7 +2,6 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: quota.miloapis.com-manager
-  namespace: milo-system
   annotations:
     kubernetes.io/display-name: Quota Manager
     kubernetes.io/description: Manage quota grants and claims, with read access to resource registrations and creation policies
@@ -11,7 +10,7 @@ metadata:
   labels:
     quota.miloapis.com/role-type: manager
     quota.miloapis.com/service: quota
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
 spec:
   launchStage: Beta
   includedPermissions:

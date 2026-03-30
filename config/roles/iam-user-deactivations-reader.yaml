@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: iam-user-deactivations-reader
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: User Deactivation Viewer
     kubernetes.io/description: View user deactivations

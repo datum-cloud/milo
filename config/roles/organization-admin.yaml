@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: resourcemanager.miloapis.com-organization-admin
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Organization Admin
     kubernetes.io/description: "Full access to all organization and organization membership resources"

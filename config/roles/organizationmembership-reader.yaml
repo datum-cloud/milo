@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: organizationmembership-reader
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Organization Membership Reader
     kubernetes.io/description: "View organization membership resources"

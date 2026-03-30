@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: iam-viewer
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: IAM Viewer
     kubernetes.io/description: "View IAM resources"

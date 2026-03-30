@@ -2,7 +2,6 @@ apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
   name: quota.miloapis.com-viewer
-  namespace: milo-system
   annotations:
     kubernetes.io/display-name: Quota Viewer
     kubernetes.io/description: View access to quota resources including resource registrations, grants, and claims
@@ -11,7 +10,7 @@ metadata:
   labels:
     quota.miloapis.com/role-type: viewer
     quota.miloapis.com/service: quota
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
 spec:
   launchStage: Beta
   includedPermissions:

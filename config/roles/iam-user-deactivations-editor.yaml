@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: iam-user-deactivations-editor
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: User Deactivation Editor
     kubernetes.io/description: Create, update, and delete user deactivations

@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: organizationmembership-self-delete
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Organization Membership Self Delete
     kubernetes.io/description: "Allows a user to delete their own organization membership"

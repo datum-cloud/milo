@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: role-admin
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Role Admin
     kubernetes.io/description: Full access to IAM roles

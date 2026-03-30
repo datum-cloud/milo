@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: apiextensions-reader
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: API Extensions Viewer
     kubernetes.io/description: View access to custom resource definitions

@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: organizationmembership-editor
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Organization Membership Editor
     kubernetes.io/description: "Edit organization membership resources"

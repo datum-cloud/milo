@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: core-editor
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Core Editor
     kubernetes.io/description: Edit access to core platform resources including secrets, configmaps, and namespaces

@@ -3,7 +3,7 @@ kind: Role
 metadata:
   name: resourcemanager.miloapis.com-project-viewer
   labels:
-    taxonomy.miloapis.com/role-category: platform
+    taxonomy.miloapis.com/role-category: service
   annotations:
     kubernetes.io/display-name: Project Viewer
     kubernetes.io/description: "View access to all project resources"
