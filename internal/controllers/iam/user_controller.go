@@ -71,6 +71,12 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	// Reconcile the name-review annotation based on whether givenName and familyName match
+	if err := r.reconcileNameReviewAnnotation(ctx, user); err != nil {
+		log.Error(err, "Failed to reconcile name review annotation")
+		return ctrl.Result{}, err
+	}
+
 	// Determine desired state based on existence of any UserDeactivation for this user
 	var udList iamv1alpha1.UserDeactivationList
 	if err := r.Client.List(ctx, &udList, client.MatchingFields{"spec.userRef.name": user.Name}); err != nil {
@@ -129,6 +135,40 @@ func (r *UserController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// reconcileNameReviewAnnotation adds or removes the name-review-required annotation depending on
+// whether givenName and familyName are identical. This situation arises when an identity provider
+// (e.g. GitHub) supplies a single display name and the system copies it into both fields.
+func (r *UserController) reconcileNameReviewAnnotation(ctx context.Context, user *iamv1alpha1.User) error {
+	log := log.FromContext(ctx).WithName("reconcile-name-review-annotation")
+
+	annotations := user.GetAnnotations()
+	_, annotationPresent := annotations[iamv1alpha1.UserNameReviewRequiredAnnotation]
+	namesAreEqual := user.Spec.GivenName != "" && user.Spec.GivenName == user.Spec.FamilyName
+
+	switch {
+	case namesAreEqual && !annotationPresent:
+		if annotations == nil {
+			annotations = map[string]string{}
+		}
+		annotations[iamv1alpha1.UserNameReviewRequiredAnnotation] = "true"
+		user.SetAnnotations(annotations)
+		if err := r.Client.Update(ctx, user); err != nil {
+			return fmt.Errorf("failed to add name-review annotation: %w", err)
+		}
+		log.Info("Added name-review-required annotation", "user", user.Name)
+
+	case !namesAreEqual && annotationPresent:
+		delete(annotations, iamv1alpha1.UserNameReviewRequiredAnnotation)
+		user.SetAnnotations(annotations)
+		if err := r.Client.Update(ctx, user); err != nil {
+			return fmt.Errorf("failed to remove name-review annotation: %w", err)
+		}
+		log.Info("Removed name-review-required annotation", "user", user.Name)
+	}
+
+	return nil
 }
 
 // ensureOwnerReferences ensures that PolicyBinding and UserPreference resources have proper owner references
