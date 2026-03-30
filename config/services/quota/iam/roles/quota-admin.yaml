@@ -1,6 +1,7 @@
 apiVersion: iam.miloapis.com/v1alpha1
 kind: Role
 metadata:
+  namespace: milo-system
   name: quota.miloapis.com-admin
   annotations:
     kubernetes.io/display-name: Quota Admin
