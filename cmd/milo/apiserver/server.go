@@ -56,29 +56,29 @@ func init() {
 }
 
 var (
-	SystemNamespace                       string
-	sessionsProviderURL                   string
-	sessionsProviderCAFile                string
-	sessionsProviderClientCert            string
-	sessionsProviderClientKey             string
-	providerTimeoutSeconds                int
-	providerRetries                       int
-	forwardExtras                         []string
-	userIdentitiesProviderURL             string
-	userIdentitiesProviderCAFile          string
-	userIdentitiesProviderClientCert      string
-	userIdentitiesProviderClientKey       string
-	machineAccountKeysProviderURL         string
-	machineAccountKeysProviderCAFile      string
-	machineAccountKeysProviderClientCert  string
-	machineAccountKeysProviderClientKey   string
-	eventsProviderURL                     string
-	eventsProviderCAFile                  string
-	eventsProviderClientCert              string
-	eventsProviderClientKey               string
-	eventsProviderTimeoutSeconds          int
-	eventsProviderRetries                 int
-	eventsForwardExtras                   []string
+	SystemNamespace                      string
+	sessionsProviderURL                  string
+	sessionsProviderCAFile               string
+	sessionsProviderClientCert           string
+	sessionsProviderClientKey            string
+	providerTimeoutSeconds               int
+	providerRetries                      int
+	forwardExtras                        []string
+	userIdentitiesProviderURL            string
+	userIdentitiesProviderCAFile         string
+	userIdentitiesProviderClientCert     string
+	userIdentitiesProviderClientKey      string
+	machineAccountKeysProviderURL        string
+	machineAccountKeysProviderCAFile     string
+	machineAccountKeysProviderClientCert string
+	machineAccountKeysProviderClientKey  string
+	eventsProviderURL                    string
+	eventsProviderCAFile                 string
+	eventsProviderClientCert             string
+	eventsProviderClientKey              string
+	eventsProviderTimeoutSeconds         int
+	eventsProviderRetries                int
+	eventsForwardExtras                  []string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters
