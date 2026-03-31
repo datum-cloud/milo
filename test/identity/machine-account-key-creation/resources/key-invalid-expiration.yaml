@@ -1,8 +1,0 @@
-apiVersion: identity.miloapis.com/v1alpha1
-kind: MachineAccountKey
-metadata:
-  name: test-key-invalid-exp
-  
-spec:
-  machineAccountName: test-machine-account
-  expirationDate: "2020-01-01T00:00:00Z"

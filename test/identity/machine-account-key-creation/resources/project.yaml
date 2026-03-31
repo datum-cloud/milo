@@ -1,9 +1,0 @@
-apiVersion: resourcemanager.miloapis.com/v1alpha1
-kind: Project
-metadata:
-  name: mak-test-project
-  namespace: organization-mak-test-org
-spec:
-  ownerRef:
-    kind: Organization
-    name: mak-test-org
