@@ -26,9 +26,9 @@ type MachineAccountKey struct {
 
 // MachineAccountKeySpec defines the desired state of MachineAccountKey
 type MachineAccountKeySpec struct {
-	// MachineAccountName is the name of the MachineAccount that owns this key.
+	// MachineAccountUserName is the email address of the MachineAccount that owns this key.
 	// +kubebuilder:validation:Required
-	MachineAccountName string `json:"machineAccountName"`
+	MachineAccountUserName string `json:"machineAccountUserName"`
 
 	// ExpirationDate is the date and time when the MachineAccountKey will expire.
 	// If not specified, the MachineAccountKey will never expire.
