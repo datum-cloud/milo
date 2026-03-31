@@ -2,203 +2,167 @@ package machineaccountkeys
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
-	"fmt"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	generic "k8s.io/apiserver/pkg/registry/generic"
-	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
+	authuser "k8s.io/apiserver/pkg/authentication/user"
+	apirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
-	k8smetrics "k8s.io/component-base/metrics"
-	k8slegacy "k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/klog/v2"
 
 	identityv1alpha1 "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 )
 
-// generateRSAKeyPairFunc is a package-level variable to allow test overriding.
-var generateRSAKeyPairFunc = generateRSAKeyPair
-
-// metrics for key generation observability (NFR3)
-var (
-	keyGenerationDuration = k8smetrics.NewHistogramVec(
-		&k8smetrics.HistogramOpts{
-			Name:           "milo_machineaccountkey_generation_duration_seconds",
-			Help:           "Duration of RSA key generation for MachineAccountKey creation",
-			Buckets:        []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0},
-			StabilityLevel: k8smetrics.ALPHA,
-		},
-		[]string{"result"}, // "success" | "failure"
-	)
-)
-
-func init() {
-	k8slegacy.MustRegister(keyGenerationDuration)
+// Backend is the interface that the REST handler delegates all operations to.
+// Implementations proxy requests to the auth-provider (e.g. Zitadel) service.
+type Backend interface {
+	CreateMachineAccountKey(ctx context.Context, u authuser.Info, key *identityv1alpha1.MachineAccountKey, opts *metav1.CreateOptions) (*identityv1alpha1.MachineAccountKey, error)
+	ListMachineAccountKeys(ctx context.Context, u authuser.Info, opts *metav1.ListOptions) (*identityv1alpha1.MachineAccountKeyList, error)
+	GetMachineAccountKey(ctx context.Context, u authuser.Info, name string) (*identityv1alpha1.MachineAccountKey, error)
+	DeleteMachineAccountKey(ctx context.Context, u authuser.Info, name string) error
 }
 
-// REST wraps a genericregistry.Store and intercepts Create to inject RSA key generation.
-// It embeds the store to inherit all standard REST operations (Get, List, Watch, Delete,
-// ConvertToTable, etc.) and only overrides Create.
 type REST struct {
-	*genericregistry.Store
+	backend Backend
 }
 
 var _ rest.Scoper = &REST{}
-var _ rest.Creater = &REST{}
-var _ rest.Updater = &REST{}
-var _ rest.Getter = &REST{}
+var _ rest.Creater = &REST{} //nolint:misspell
 var _ rest.Lister = &REST{}
+var _ rest.Getter = &REST{}
 var _ rest.GracefulDeleter = &REST{}
-var _ rest.Watcher = &REST{}
 var _ rest.Storage = &REST{}
 var _ rest.SingularNameProvider = &REST{}
 
-// NewREST constructs a REST storage handler backed by etcd via the given RESTOptionsGetter.
-// It returns an error if the store cannot be completed (e.g. RESTOptionsGetter is misconfigured).
-func NewREST(optsGetter generic.RESTOptionsGetter) (*REST, error) {
-	gr := identityv1alpha1.SchemeGroupVersion.WithResource("machineaccountkeys").GroupResource()
-
-	store := &genericregistry.Store{
-		NewFunc:                   func() runtime.Object { return &identityv1alpha1.MachineAccountKey{} },
-		NewListFunc:               func() runtime.Object { return &identityv1alpha1.MachineAccountKeyList{} },
-		DefaultQualifiedResource:  gr,
-		SingularQualifiedResource: identityv1alpha1.SchemeGroupVersion.WithResource("machineaccountkey").GroupResource(),
-		CreateStrategy:            Strategy,
-		UpdateStrategy:            Strategy,
-		DeleteStrategy:            Strategy,
-		TableConvertor:            rest.NewDefaultTableConvertor(gr),
-	}
-
-	options := &generic.StoreOptions{
-		RESTOptions: optsGetter,
-	}
-
-	if err := store.CompleteWithOptions(options); err != nil {
-		return nil, fmt.Errorf("failed to complete machineaccountkeys store: %w", err)
-	}
-
-	return &REST{Store: store}, nil
-}
+func NewREST(b Backend) *REST { return &REST{backend: b} }
 
 func (r *REST) GetSingularName() string { return "machineaccountkey" }
+func (r *REST) NamespaceScoped() bool   { return false }
+func (r *REST) New() runtime.Object     { return &identityv1alpha1.MachineAccountKey{} }
+func (r *REST) NewList() runtime.Object { return &identityv1alpha1.MachineAccountKeyList{} }
 
-// Create intercepts the standard create path to optionally generate an RSA key pair
-// when spec.publicKey is omitted. The private key is returned in status.privateKey
-// of the HTTP response object only — it is never passed to etcd storage.
 func (r *REST) Create(
 	ctx context.Context,
 	obj runtime.Object,
-	createValidation rest.ValidateObjectFunc,
-	options *metav1.CreateOptions,
+	_ rest.ValidateObjectFunc,
+	opts *metav1.CreateOptions,
 ) (runtime.Object, error) {
+	logger := klog.FromContext(ctx)
+	u, _ := apirequest.UserFrom(ctx)
 	key, ok := obj.(*identityv1alpha1.MachineAccountKey)
 	if !ok {
-		return nil, apierrors.NewBadRequest(fmt.Sprintf(
-			"not a MachineAccountKey: %T", obj,
-		))
+		return nil, apierrors.NewBadRequest("not a MachineAccountKey")
 	}
-
-	// FR6: validate expiration date is in the future if provided
-	if key.Spec.ExpirationDate != nil && !key.Spec.ExpirationDate.Time.IsZero() {
-		if !key.Spec.ExpirationDate.Time.After(time.Now()) {
-			return nil, apierrors.NewBadRequest("spec.expirationDate must be in the future")
-		}
-	}
-
-	// FR7: validate public key format if provided
-	if key.Spec.PublicKey != "" {
-		if err := validateRSAPublicKey(key.Spec.PublicKey); err != nil {
-			return nil, err
-		}
-	}
-
-	// FR1: auto-generate RSA 2048-bit key pair when no public key is provided
-	var privateKeyPEM string
-	if key.Spec.PublicKey == "" {
-		start := time.Now()
-		pubPEM, privPEM, err := generateRSAKeyPairFunc()
-		elapsed := time.Since(start)
-
-		if err != nil {
-			keyGenerationDuration.WithLabelValues("failure").Observe(elapsed.Seconds())
-			return nil, apierrors.NewInternalError(fmt.Errorf("failed to generate RSA key pair: %w", err))
-		}
-		keyGenerationDuration.WithLabelValues("success").Observe(elapsed.Seconds())
-
-		key.Spec.PublicKey = pubPEM
-		privateKeyPEM = privPEM
-	}
-
-	// Persist to etcd. The strategy's PrepareForCreate ensures Status.PrivateKey
-	// is cleared before the object reaches storage (defense in depth).
-	result, err := r.Store.Create(ctx, key, createValidation, options)
+	logger.V(4).Info("Creating machine account key", "name", key.Name, "machineAccount", key.Spec.MachineAccountUserName)
+	res, err := r.backend.CreateMachineAccountKey(ctx, u, key, opts)
 	if err != nil {
+		logger.Error(err, "Create machine account key failed", "name", key.Name)
 		return nil, err
 	}
+	logger.V(4).Info("Created machine account key", "name", res.Name, "authProviderKeyID", res.Status.AuthProviderKeyID)
+	return res, nil
+}
 
-	// FR1/FR3: Set the private key on the in-memory response object AFTER the
-	// etcd write returns. The object stored in etcd never carries the private key.
-	if privateKeyPEM != "" {
-		createdKey, ok := result.(*identityv1alpha1.MachineAccountKey)
-		if ok {
-			createdKey.Status.PrivateKey = privateKeyPEM
+func (r *REST) List(ctx context.Context, opts *metainternalversion.ListOptions) (runtime.Object, error) {
+	logger := klog.FromContext(ctx)
+	u, _ := apirequest.UserFrom(ctx)
+	username, uid, groups := "", "", []string(nil)
+	if u != nil {
+		username = u.GetName()
+		uid = u.GetUID()
+		groups = u.GetGroups()
+	}
+	logger.V(4).Info("Listing machine account keys", "username", username, "uid", uid, "groups", groups)
+	lo := metav1.ListOptions{}
+	if opts != nil && opts.FieldSelector != nil && !opts.FieldSelector.Empty() {
+		lo.FieldSelector = opts.FieldSelector.String()
+	}
+	res, err := r.backend.ListMachineAccountKeys(ctx, u, &lo)
+	if err != nil {
+		logger.Error(err, "List machine account keys failed")
+		return nil, err
+	}
+	logger.V(4).Info("Listed machine account keys", "count", len(res.Items))
+	return res, nil
+}
+
+func (r *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runtime.Object, error) {
+	logger := klog.FromContext(ctx)
+	u, _ := apirequest.UserFrom(ctx)
+	username, uid := "", ""
+	if u != nil {
+		username = u.GetName()
+		uid = u.GetUID()
+	}
+	logger.V(4).Info("Getting machine account key", "name", name, "username", username, "uid", uid)
+	res, err := r.backend.GetMachineAccountKey(ctx, u, name)
+	if err != nil {
+		logger.Error(err, "Get machine account key failed", "name", name)
+		return nil, err
+	}
+	logger.V(4).Info("Got machine account key", "name", name, "authProviderKeyID", res.Status.AuthProviderKeyID)
+	return res, nil
+}
+
+func (r *REST) Delete(ctx context.Context, name string, _ rest.ValidateObjectFunc, _ *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	logger := klog.FromContext(ctx)
+	u, _ := apirequest.UserFrom(ctx)
+	username, uid := "", ""
+	if u != nil {
+		username = u.GetName()
+		uid = u.GetUID()
+	}
+	logger.V(4).Info("Deleting machine account key", "name", name, "username", username, "uid", uid)
+	if err := r.backend.DeleteMachineAccountKey(ctx, u, name); err != nil {
+		logger.Error(err, "Delete machine account key failed", "name", name)
+		return nil, false, err
+	}
+	logger.V(4).Info("Deleted machine account key", "name", name)
+	return &metav1.Status{Status: metav1.StatusSuccess}, true, nil
+}
+
+func (r *REST) Destroy() {}
+
+// ConvertToTable satisfies rest.TableConvertor with a kubectl-friendly table output.
+func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	table := &metav1.Table{
+		ColumnDefinitions: []metav1.TableColumnDefinition{
+			{Name: "Name", Type: "string"},
+			{Name: "Machine Account", Type: "string"},
+			{Name: "Key ID", Type: "string"},
+			{Name: "Age", Type: "date"},
+			{Name: "Expires", Type: "string"},
+		},
+	}
+
+	appendRow := func(mak *identityv1alpha1.MachineAccountKey) {
+		age := metav1.Now().Rfc3339Copy()
+		if !mak.CreationTimestamp.IsZero() {
+			age = mak.CreationTimestamp
 		}
+		expiresStr := "<none>"
+		if mak.Spec.ExpirationDate != nil {
+			expiresStr = mak.Spec.ExpirationDate.Time.Format(time.RFC3339)
+		}
+		table.Rows = append(table.Rows, metav1.TableRow{
+			Cells:  []interface{}{mak.Name, mak.Spec.MachineAccountUserName, mak.Status.AuthProviderKeyID, age.Time.Format(time.RFC3339), expiresStr},
+			Object: runtime.RawExtension{Object: mak},
+		})
 	}
 
-	return result, nil
-}
-
-// Update is omitted here as it's not needed. The embedded genericregistry.Store.Update will be used.
-// The strategy's ValidateUpdate will still be called to enforce Spec immutability.
-
-// generateRSAKeyPair generates a 2048-bit RSA key pair and returns
-// PEM-encoded public (PKIX) and private (PKCS1) key material.
-func generateRSAKeyPair() (publicKeyPEM string, privateKeyPEM string, err error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return "", "", fmt.Errorf("rsa.GenerateKey: %w", err)
+	switch obj := object.(type) {
+	case *identityv1alpha1.MachineAccountKeyList:
+		for i := range obj.Items {
+			appendRow(&obj.Items[i])
+		}
+	case *identityv1alpha1.MachineAccountKey:
+		appendRow(obj)
+	default:
+		return nil, nil
 	}
 
-	pubDER, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		return "", "", fmt.Errorf("x509.MarshalPKIXPublicKey: %w", err)
-	}
-
-	pubPEMBlock := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: pubDER,
-	})
-
-	privDER := x509.MarshalPKCS1PrivateKey(privateKey)
-	privPEMBlock := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: privDER,
-	})
-
-	return string(pubPEMBlock), string(privPEMBlock), nil
-}
-
-// validateRSAPublicKey returns an API error if the PEM string is not a valid
-// PEM-encoded RSA public key. It returns nil when the key is acceptable.
-func validateRSAPublicKey(pubKeyPEM string) error {
-	block, _ := pem.Decode([]byte(pubKeyPEM))
-	if block == nil {
-		return apierrors.NewBadRequest("spec.publicKey must be PEM-encoded")
-	}
-
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return apierrors.NewBadRequest(fmt.Sprintf("invalid public key: %v", err))
-	}
-
-	if _, ok := pub.(*rsa.PublicKey); !ok {
-		return apierrors.NewBadRequest("only RSA public keys are supported in v1alpha1")
-	}
-
-	return nil
+	return table, nil
 }

@@ -130,9 +130,9 @@ func schema_pkg_apis_identity_v1alpha1_MachineAccountKeySpec(ref common.Referenc
 				Description: "MachineAccountKeySpec defines the desired state of MachineAccountKey",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"machineAccountName": {
+					"machineAccountUserName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MachineAccountName is the name of the MachineAccount that owns this key.",
+							Description: "MachineAccountUserName is the email address of the MachineAccount that owns this key.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -152,7 +152,7 @@ func schema_pkg_apis_identity_v1alpha1_MachineAccountKeySpec(ref common.Referenc
 						},
 					},
 				},
-				Required: []string{"machineAccountName"},
+				Required: []string{"machineAccountUserName"},
 			},
 		},
 		Dependencies: []string{
