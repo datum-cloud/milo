@@ -68,7 +68,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		PreRelease: featuregate.Alpha,
 	},
 	MachineAccountKeys: {
-		Default:    true,
+		Default:    false,
 		PreRelease: featuregate.Alpha,
 	},
 	Sessions: {
