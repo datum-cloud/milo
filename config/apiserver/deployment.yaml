@@ -64,7 +64,7 @@ spec:
           - --sessions-provider-client-key=$(SESSIONS_PROVIDER_CLIENT_KEY_FILE)
           - --provider-timeout=3
           - --provider-retries=2
-          - --forward-extras=iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name
+          - --forward-extras=iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name,project
           # UserIdentities provider configuration
           - --useridentities-provider-url=$(USERIDENTITIES_PROVIDER_URL)
           - --useridentities-provider-ca-file=$(USERIDENTITIES_PROVIDER_CA_FILE)

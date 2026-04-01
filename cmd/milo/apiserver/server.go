@@ -183,7 +183,7 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&sessionsProviderClientKey, "sessions-provider-client-key", "", "Client private key for mTLS to provider")
 	fs.IntVar(&providerTimeoutSeconds, "provider-timeout", 3, "Provider request timeout in seconds")
 	fs.IntVar(&providerRetries, "provider-retries", 2, "Provider request retries")
-	fs.StringSliceVar(&forwardExtras, "forward-extras", []string{"iam.miloapis.com/parent-api-group", "iam.miloapis.com/parent-type", "iam.miloapis.com/parent-name"}, "User extras keys to forward during impersonation")
+	fs.StringSliceVar(&forwardExtras, "forward-extras", []string{"iam.miloapis.com/parent-api-group", "iam.miloapis.com/parent-type", "iam.miloapis.com/parent-name", "project"}, "User extras keys to forward during impersonation")
 	fs.StringVar(&userIdentitiesProviderURL, "useridentities-provider-url", "", "Direct provider base URL for useridentities (e.g., https://zitadel-apiserver:8443)")
 	fs.StringVar(&userIdentitiesProviderCAFile, "useridentities-provider-ca-file", "", "Path to CA file to validate useridentities provider TLS")
 	fs.StringVar(&userIdentitiesProviderClientCert, "useridentities-provider-client-cert", "", "Client certificate for mTLS to useridentities provider")
