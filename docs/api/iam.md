@@ -42,6 +42,84 @@ Resource Types:
 ## GroupMembership
 <sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
 
-...
+[...]
 
-... [No changes to the rest of the document -- all content except the MachineAccountKey parts left untouched] ...
+### GroupMembership.status.conditions[index]
+<sup><sup>[↩ Parent](#groupmembershipstatus)</sup></sup>
+
+[...]
+
+## Group
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+### Group.status.conditions[index]
+<sup><sup>[↩ Parent](#groupstatus)</sup></sup>
+
+[...]
+
+## MachineAccount
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+### MachineAccount.status.conditions[index]
+<sup><sup>[↩ Parent](#machineaccountstatus)</sup></sup>
+
+[...]
+
+## PlatformAccessApproval
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## PlatformAccessDenial
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## PlatformAccessRejection
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## PlatformInvitation
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## PolicyBinding
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## ProtectedResource
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## Role
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## UserDeactivation
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## UserInvitation
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## UserPreference
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
+
+## User
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+[...]
