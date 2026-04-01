@@ -13,10 +13,6 @@ Resource Types:
 - [Group](#group)
 
 - [MachineAccount](#machineaccount)
-  
-  <!-- MachineAccountKey resource has moved; refer to identity.miloapis.com for MachineAccountKey -->
-  
-  *MachineAccountKey is now provided by the identity.miloapis.com/v1alpha1 API group. See its documentation for schema and usage.*
 
 - [PlatformAccessApproval](#platformaccessapproval)
 
@@ -40,7 +36,11 @@ Resource Types:
 
 - [User](#user)
 
+---
 
+**Note:** The `MachineAccountKey` resource has been removed from `iam.miloapis.com/v1alpha1` and is now available under the API group `identity.miloapis.com/v1alpha1`. Please refer to the [identity.miloapis.com API documentation](identity.md) for details on managing machine account keys.
+
+---
 
 
 ## GroupMembership
@@ -299,4 +299,9 @@ with respect to the current state of the instance.<br/>
       </tr></tbody>
 </table>
 
-[... remainder of document unchanged ...]
+## Group
+<sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
+...
+
+<!-- Full documentation continues unchanged below here -->
