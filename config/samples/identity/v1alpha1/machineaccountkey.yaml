@@ -4,7 +4,7 @@ metadata:
   name: example-machine-account-key-32
   namespace: default
 spec:
-  machineAccountName: example-machine-account
+  machineAccountUserName: example-machine-account
   # If not specified, the key will never expire.
   # expirationDate: "2026-03-25T10:18:48Z"
   # If not specified, an auto-generated public key will be created.
