@@ -53,8 +53,9 @@ type MachineAccountKeyStatus struct {
 	// persisted to etcd. Any value present on a GET or LIST response indicates a
 	// bug in the server implementation.
 	//
-	// Note: private key material will appear in API server audit logs for creation
-	// events. This matches the behavior of similar systems (GCP service account keys).
+	// Note: The private key is NOT logged in API server audit logs. The audit policy
+	// is configured to log MachineAccountKey resources at the Metadata level only,
+	// which redacts the response body containing the private key.
 	//
 	// +kubebuilder:validation:Optional
 	PrivateKey string `json:"privateKey,omitempty"`
