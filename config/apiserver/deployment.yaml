@@ -10,8 +10,8 @@ spec:
       app.kubernetes.io/part-of: milo-control-plane
   strategy:
     rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
+      maxSurge: 1
+      maxUnavailable: 0
     type: RollingUpdate
   template:
     metadata:
@@ -83,6 +83,7 @@ spec:
           - --events-provider-timeout=$(EVENTS_PROVIDER_TIMEOUT)
           - --events-provider-retries=$(EVENTS_PROVIDER_RETRIES)
           - --events-forward-extras=$(EVENTS_FORWARD_EXTRAS)
+          - --shutdown-delay-duration=$(SHUTDOWN_DELAY_DURATION)
         env:
           # Feature gates configuration
           # Sessions and UserIdentities are GA (enabled by default)
@@ -184,6 +185,8 @@ spec:
             value: "3"
           - name: EVENTS_FORWARD_EXTRAS
             value: "iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name"
+          - name: SHUTDOWN_DELAY_DURATION
+            value: "10s"
         livenessProbe:
           failureThreshold: 3
           httpGet:
