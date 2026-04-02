@@ -12,7 +12,7 @@ spec:
     listKind: MachineAccountList
     plural: machineaccounts
     singular: machineaccount
-  scope: Namespaced
+  scope: Cluster
   versions:
   - additionalPrinterColumns:
     - jsonPath: .status.email
