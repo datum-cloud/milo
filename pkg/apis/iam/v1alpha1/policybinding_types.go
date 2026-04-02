@@ -19,7 +19,6 @@ type RoleReference struct {
 // This can be a User, Group, or MachineAccount.
 // +k8s:deepcopy-gen=true
 // +kubebuilder:validation:XValidation:rule="(self.kind == 'Group' && has(self.name) && self.name.startsWith('system:')) || (has(self.uid) && size(self.uid) > 0)",message="UID is required for all subjects except system groups (groups with names starting with 'system:')"
-// +kubebuilder:validation:XValidation:rule="self.kind != 'MachineAccount' || (has(self.namespace) && size(self.namespace) > 0)",message="Namespace is required for MachineAccount subjects"
 type Subject struct {
 	// Kind of object being referenced. Values defined in Kind constants.
 	// +kubebuilder:validation:Required
@@ -30,8 +29,8 @@ type Subject struct {
 	// users.
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
-	// Namespace of the referenced object. Required for MachineAccount subjects.
-	// If not specified for a Group or User, it is ignored.
+	// Namespace of the referenced object.
+	// If not specified for a Group, User or MachineAccount, it is ignored.
 	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
 	// UID of the referenced object. Optional for system groups (groups with names starting with "system:").
