@@ -3,7 +3,7 @@ kind: PodDisruptionBudget
 metadata:
   name: milo-apiserver
 spec:
-  maxUnavailable: 1
+  maxUnavailable: 20%
   selector:
     matchLabels:
       app.kubernetes.io/name: milo-apiserver
