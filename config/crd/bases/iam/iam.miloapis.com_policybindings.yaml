@@ -158,8 +158,8 @@ spec:
                       type: string
                     namespace:
                       description: |-
-                        Namespace of the referenced object. Required for MachineAccount subjects.
-                        If not specified for a Group or User, it is ignored.
+                        Namespace of the referenced object.
+                        If not specified for a Group, User or MachineAccount, it is ignored.
                       type: string
                     uid:
                       description: UID of the referenced object. Optional for system
@@ -174,9 +174,6 @@ spec:
                       (groups with names starting with 'system:')
                     rule: (self.kind == 'Group' && has(self.name) && self.name.startsWith('system:'))
                       || (has(self.uid) && size(self.uid) > 0)
-                  - message: Namespace is required for MachineAccount subjects
-                    rule: self.kind != 'MachineAccount' || (has(self.namespace) &&
-                      size(self.namespace) > 0)
                 minItems: 1
                 type: array
             required:

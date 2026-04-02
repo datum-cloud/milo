@@ -2088,8 +2088,8 @@ users.<br/>
         <td><b>namespace</b></td>
         <td>string</td>
         <td>
-          Namespace of the referenced object. Required for MachineAccount subjects.
-If not specified for a Group or User, it is ignored.<br/>
+          Namespace of the referenced object.
+If not specified for a Group, User or MachineAccount, it is ignored.<br/>
         </td>
         <td>false</td>
       </tr><tr>
