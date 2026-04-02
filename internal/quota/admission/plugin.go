@@ -54,7 +54,6 @@ var (
 		},
 		[]string{"result", "policy_name", "policy_namespace", "resource_group", "resource_kind"},
 	)
-
 )
 
 func init() {

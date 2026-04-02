@@ -15,7 +15,7 @@ import (
 // +kubebuilder:printcolumn:name="Access Token Type",type="string",JSONPath=".spec.accessTokenType"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:scope=Namespaced
+// +kubebuilder:resource:scope=Cluster
 type MachineAccount struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

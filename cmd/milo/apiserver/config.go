@@ -45,6 +45,7 @@ import (
 
 	"go.miloapis.com/milo/internal/apiserver/admission/initializer"
 	eventsbackend "go.miloapis.com/milo/internal/apiserver/events"
+	machineaccountkeysbackend "go.miloapis.com/milo/internal/apiserver/identity/machineaccountkeys"
 	sessionsbackend "go.miloapis.com/milo/internal/apiserver/identity/sessions"
 	useridentitiesbackend "go.miloapis.com/milo/internal/apiserver/identity/useridentities"
 	identitystorage "go.miloapis.com/milo/internal/apiserver/storage/identity"
@@ -69,9 +70,10 @@ type Config struct {
 }
 
 type ExtraConfig struct {
-	SessionsProvider       SessionsProviderConfig
-	UserIdentitiesProvider UserIdentitiesProviderConfig
-	EventsProvider         EventsProviderConfig
+	SessionsProvider           SessionsProviderConfig
+	UserIdentitiesProvider     UserIdentitiesProviderConfig
+	MachineAccountKeysProvider MachineAccountKeysProviderConfig
+	EventsProvider             EventsProviderConfig
 }
 
 // SessionsProviderConfig groups configuration for the sessions backend provider
@@ -98,6 +100,17 @@ type UserIdentitiesProviderConfig struct {
 
 // EventsProviderConfig groups configuration for the events backend provider
 type EventsProviderConfig struct {
+	URL            string
+	CAFile         string
+	ClientCertFile string
+	ClientKeyFile  string
+	TimeoutSeconds int
+	Retries        int
+	ForwardExtras  []string
+}
+
+// MachineAccountKeysProviderConfig groups configuration for the machineaccountkeys backend provider
+type MachineAccountKeysProviderConfig struct {
 	URL            string
 	CAFile         string
 	ClientCertFile string
@@ -149,9 +162,7 @@ func (c *CompletedConfig) GenericStorageProviders(discovery discovery.DiscoveryI
 		discoveryrest.StorageProvider{},
 	}
 
-	if utilfeature.DefaultFeatureGate.Enabled(features.Sessions) || utilfeature.DefaultFeatureGate.Enabled(features.UserIdentities) {
-		providers = append(providers, newIdentityStorageProvider(c))
-	}
+	providers = append(providers, newIdentityStorageProvider(c))
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.EventsProxy) {
 		providers = append(providers, newEventsV1StorageProvider(eventsBackend))
@@ -199,6 +210,25 @@ func newIdentityStorageProvider(c *CompletedConfig) controlplaneapiserver.RESTSt
 		}
 		backend, _ := useridentitiesbackend.NewDynamicProvider(cfg)
 		provider.UserIdentities = backend
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.MachineAccountKeys) {
+		allow := make(map[string]struct{}, len(c.ExtraConfig.MachineAccountKeysProvider.ForwardExtras))
+		for _, k := range c.ExtraConfig.MachineAccountKeysProvider.ForwardExtras {
+			allow[k] = struct{}{}
+		}
+		cfg := machineaccountkeysbackend.Config{
+			BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
+			ProviderURL:    c.ExtraConfig.MachineAccountKeysProvider.URL,
+			CAFile:         c.ExtraConfig.MachineAccountKeysProvider.CAFile,
+			ClientCertFile: c.ExtraConfig.MachineAccountKeysProvider.ClientCertFile,
+			ClientKeyFile:  c.ExtraConfig.MachineAccountKeysProvider.ClientKeyFile,
+			Timeout:        time.Duration(c.ExtraConfig.MachineAccountKeysProvider.TimeoutSeconds) * time.Second,
+			Retries:        c.ExtraConfig.MachineAccountKeysProvider.Retries,
+			ExtrasAllow:    allow,
+		}
+		backend, _ := machineaccountkeysbackend.NewDynamicProvider(cfg)
+		provider.MachineAccountKeys = backend
 	}
 
 	return provider

@@ -1413,9 +1413,9 @@ func TestStructuredEndpointSliceCELTemplateRendering(t *testing.T) {
 	plugin.watchManagers.Store("", &testWatchManager{behavior: "grant"})
 
 	tests := []struct {
-		name      string
-		epsName   string
-		object    runtime.Object
+		name    string
+		epsName string
+		object  runtime.Object
 	}{
 		{
 			name:    "structured discoveryv1.EndpointSlice",

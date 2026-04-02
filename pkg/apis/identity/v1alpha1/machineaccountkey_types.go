@@ -7,6 +7,7 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:subresource:status
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 
 // MachineAccountKey is the Schema for the machineaccountkeys API
 // +kubebuilder:printcolumn:name="Machine Account",type="string",JSONPath=".spec.machineAccountName"
@@ -25,9 +26,9 @@ type MachineAccountKey struct {
 
 // MachineAccountKeySpec defines the desired state of MachineAccountKey
 type MachineAccountKeySpec struct {
-	// MachineAccountName is the name of the MachineAccount that owns this key.
+	// MachineAccountUserName is the email address of the MachineAccount that owns this key.
 	// +kubebuilder:validation:Required
-	MachineAccountName string `json:"machineAccountName"`
+	MachineAccountUserName string `json:"machineAccountUserName"`
 
 	// ExpirationDate is the date and time when the MachineAccountKey will expire.
 	// If not specified, the MachineAccountKey will never expire.
@@ -45,11 +46,25 @@ type MachineAccountKeyStatus struct {
 	// AuthProviderKeyID is the unique identifier for the key in the auth provider.
 	// This field is populated by the controller after the key is created in the auth provider.
 	// For example, when using Zitadel, a typical value might be: "326102453042806786"
-	AuthProviderKeyID string `json:"authProviderKeyId,omitempty"`
+	AuthProviderKeyID string `json:"authProviderKeyID,omitempty"`
+
+	// PrivateKey contains the PEM-encoded RSA private key generated during resource
+	// creation. This field is populated only in the creation response and is never
+	// persisted to etcd. Any value present on a GET or LIST response indicates a
+	// bug in the server implementation.
+	//
+	// Note: The private key is NOT logged in API server audit logs. The audit policy
+	// is configured to log MachineAccountKey resources at the Metadata level only,
+	// which redacts the response body containing the private key.
+	//
+	// +kubebuilder:validation:Optional
+	PrivateKey string `json:"privateKey,omitempty"`
 
 	// Conditions provide conditions that represent the current status of the MachineAccountKey.
 	// +kubebuilder:default={{type: "Ready", status: "Unknown", reason: "Unknown", message: "Waiting for control plane to reconcile", lastTransitionTime: "1970-01-01T00:00:00Z"}}
 	// +kubebuilder:validation:Optional
+	// +listType=map
+	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
