@@ -1840,7 +1840,7 @@ This can be a reference to a Role custom resource.
 
 
 Subject contains a reference to the object or user identities a role binding applies to.
-This can be a User or Group.
+This can be a User, Group, or MachineAccount.
 
 <table>
     <thead>
@@ -1857,7 +1857,7 @@ This can be a User or Group.
         <td>
           Kind of object being referenced. Values defined in Kind constants.<br/>
           <br/>
-            <i>Enum</i>: User, Group<br/>
+            <i>Enum</i>: User, Group, MachineAccount<br/>
         </td>
         <td>true</td>
       </tr><tr>
@@ -1873,8 +1873,8 @@ users.<br/>
         <td><b>namespace</b></td>
         <td>string</td>
         <td>
-          Namespace of the referenced object. If DNE, then for an SA it refers to the PolicyBinding resource's namespace.
-For a User or Group, it is ignored.<br/>
+          Namespace of the referenced object.
+If not specified for a Group, User or MachineAccount, it is ignored.<br/>
         </td>
         <td>false</td>
       </tr><tr>
