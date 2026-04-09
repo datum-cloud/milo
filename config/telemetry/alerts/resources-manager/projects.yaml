@@ -10,7 +10,7 @@ spec:
           expr: |
             (time() - milo_projects_created_timestamp) > 60
             unless ignoring(type, reason) (milo_projects_status_condition{type="Ready"} == 1)
-          for: 0s
+          for: 2m
           labels:
             severity: critical
             slo_violation: "true"
