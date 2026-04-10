@@ -6,5 +6,5 @@ on:
 
 jobs:
   set-month:
-    uses: datum-cloud/actions/.github/workflows/set-project-month.yaml@main
+    uses: datum-cloud/actions/.github/workflows/set-project-month.yaml@v1.13.2
     secrets: inherit
