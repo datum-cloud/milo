@@ -6,4 +6,7 @@ kind: Component
 
 components:
   - quota
-  - identity
+  # identity is intentionally excluded here — it contains ActivityPolicy resources
+  # which require the activity.miloapis.com CRDs to be installed. Those CRDs are
+  # provided by the activity service, which is not deployed in the milo test cluster.
+  # Deploy config/services/identity/ separately once the activity service is present.
