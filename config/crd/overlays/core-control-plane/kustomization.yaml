@@ -1,6 +1,7 @@
 resources:
-- ../../bases/iam/
-- ../../bases/resourcemanager/
-- ../../bases/notification/
-- ../../bases/quota/
-- ../../bases/crm/
+  - ../../bases/iam/
+  - ../../bases/resourcemanager/
+  - ../../bases/notification/
+  - ../../bases/quota/
+  - ../../bases/crm/
+  - ../../bases/vendormgmt/

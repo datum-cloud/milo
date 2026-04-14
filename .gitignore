@@ -1,4 +1,5 @@
 node_modules
+/vendor/
 bin/
 # Generated certificates for local development
 certs/
@@ -6,7 +7,6 @@ certs/
 .kube/
 
 .tool-versions
-vendor/
 
 # Location the test-infra repo will be copied to by the remote taskfile.
 .test-infra

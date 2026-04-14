@@ -1,0 +1,19 @@
+apiVersion: vendor.miloapis.com/v1alpha1
+kind: VendorProfile
+metadata:
+  name: aws
+spec:
+  displayName: Amazon Web Services
+  description: |
+    Amazon Web Services (AWS) provides cloud infrastructure services used for
+    compute, storage, and networking. AWS processes data as part of hosting
+    application workloads and storing customer data.
+  logoURL: https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg
+  websiteURL: https://aws.amazon.com
+  privacyPolicyURL: https://aws.amazon.com/privacy/
+  category: Infrastructure
+  purpose: Cloud infrastructure hosting for application workloads and data storage.
+  dataProcessingLocations:
+    - US
+    - EU
+  contactEmail: aws-privacy@amazon.com

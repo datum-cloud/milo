@@ -1,0 +1,194 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: vendorprofiles.vendor.miloapis.com
+spec:
+  group: vendor.miloapis.com
+  names:
+    categories:
+    - datum
+    kind: VendorProfile
+    listKind: VendorProfileList
+    plural: vendorprofiles
+    singular: vendorprofile
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.displayName
+      name: Display Name
+      type: string
+    - jsonPath: .spec.category
+      name: Category
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          VendorProfile is the Schema for the VendorProfiles API.
+          It represents a third-party vendor or sub-processor for compliance
+          documentation.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: VendorProfileSpec defines the desired state of VendorProfile.
+            properties:
+              category:
+                description: Type of service the vendor provides.
+                enum:
+                - Infrastructure
+                - Security
+                - Analytics
+                - Authentication
+                - DataProcessing
+                - Communication
+                - Monitoring
+                - Other
+                type: string
+              contactEmail:
+                description: Vendor contact email address.
+                type: string
+              dataProcessingLocations:
+                description: Countries or regions where the vendor processes data
+                  (e.g., "US", "EU").
+                items:
+                  type: string
+                type: array
+              description:
+                description: |-
+                  Markdown-formatted description of the vendor and its role as a
+                  sub-processor.
+                maxLength: 5000
+                type: string
+              displayName:
+                description: Human-readable vendor name (e.g., "Amazon Web Services").
+                maxLength: 256
+                type: string
+              logoURL:
+                description: URL to the vendor's logo image.
+                maxLength: 2048
+                type: string
+              privacyPolicyURL:
+                description: Link to the vendor's privacy policy.
+                maxLength: 2048
+                type: string
+              purpose:
+                description: Describes what data this vendor processes and why.
+                maxLength: 1000
+                type: string
+              websiteURL:
+                description: Vendor's primary website.
+                maxLength: 2048
+                type: string
+            required:
+            - category
+            - description
+            - displayName
+            - purpose
+            type: object
+          status:
+            description: VendorProfileStatus defines the observed state of VendorProfile.
+            properties:
+              conditions:
+                default:
+                - lastTransitionTime: "1970-01-01T00:00:00Z"
+                  message: Waiting for control plane to reconcile
+                  reason: Unknown
+                  status: Unknown
+                  type: Ready
+                description: |-
+                  Conditions represents the observations of a vendor profile's current state.
+                  Known condition types are: "Ready"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the most recent generation observed for this
+                  VendorProfile by the controller.
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

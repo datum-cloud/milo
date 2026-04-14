@@ -1,0 +1,19 @@
+apiVersion: iam.miloapis.com/v1alpha1
+kind: ProtectedResource
+metadata:
+  name: vendor.miloapis.com-vendorprofile
+spec:
+  serviceRef:
+    name: "vendor.miloapis.com"
+  kind: VendorProfile
+  plural: vendorprofiles
+  singular: vendorprofile
+  permissions:
+    - list
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
+    - use
