@@ -6,3 +6,4 @@ kind: Component
 
 components:
   - quota
+  - identity
