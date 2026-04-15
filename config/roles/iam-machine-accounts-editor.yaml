@@ -10,7 +10,7 @@ spec:
   inheritedRoles:
     - name: iam-machine-accounts-viewer
   includedPermissions:
-    - iam.miloapis.com/machineaccounts.create
-    - iam.miloapis.com/machineaccounts.update
-    - iam.miloapis.com/machineaccounts.patch
-    - iam.miloapis.com/machineaccounts.delete
+    - identity.miloapis.com/machineaccounts.create
+    - identity.miloapis.com/machineaccounts.update
+    - identity.miloapis.com/machineaccounts.patch
+    - identity.miloapis.com/machineaccounts.delete

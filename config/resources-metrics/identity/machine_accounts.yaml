@@ -2,7 +2,7 @@ kind: CustomResourceStateMetrics
 spec:
   resources:
     - groupVersionKind:
-        group: "iam.miloapis.com"
+        group: "identity.miloapis.com"
         kind: "MachineAccount"
         version: "v1alpha1"
       labelsFromPath:

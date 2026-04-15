@@ -2,7 +2,6 @@ apiVersion: identity.miloapis.com/v1alpha1
 kind: MachineAccountKey
 metadata:
   name: example-machine-account-key-32
-  namespace: default
 spec:
   machineAccountUserName: example-machine-account
   # If not specified, the key will never expire.

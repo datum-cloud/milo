@@ -13,10 +13,10 @@
 apiVersion: activity.miloapis.com/v1alpha1
 kind: ActivityPolicy
 metadata:
-  name: iam.miloapis.com-machineaccount
+  name: identity.miloapis.com-machineaccount
 spec:
   resource:
-    apiGroup: iam.miloapis.com
+    apiGroup: identity.miloapis.com
     kind: MachineAccount
 
   # Audit log rules for CRUD operations.

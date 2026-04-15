@@ -8,6 +8,6 @@ metadata:
 spec:
   launchStage: Beta
   includedPermissions:
-    - iam.miloapis.com/machineaccounts.get
-    - iam.miloapis.com/machineaccounts.list
-    - iam.miloapis.com/machineaccounts.watch
+    - identity.miloapis.com/machineaccounts.get
+    - identity.miloapis.com/machineaccounts.list
+    - identity.miloapis.com/machineaccounts.watch
