@@ -33,6 +33,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&SessionList{},
 		&UserIdentity{},
 		&UserIdentityList{},
+		&MachineAccount{},
+		&MachineAccountList{},
 		&MachineAccountKey{},
 		&MachineAccountKeyList{},
 	}
@@ -42,6 +44,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		Group:   SchemeGroupVersion.Group,
 		Version: runtime.APIVersionInternal,
 	},
+		&MachineAccount{},
+		&MachineAccountList{},
 		&MachineAccountKey{},
 		&MachineAccountKeyList{},
 	)

@@ -39,7 +39,7 @@ type MachineAccountSpec struct {
 // MachineAccountStatus defines the observed state of MachineAccount
 type MachineAccountStatus struct {
 	// The computed email of the machine account following the pattern:
-	// {metadata.name}@{metadata.namespace}.{project.metadata.name}.{global-suffix}
+	// {metadata.name}@{project-name}.{email-address-suffix}
 	Email string `json:"email,omitempty"`
 
 	// State represents the current activation state of the machine account from the auth provider.
