@@ -118,6 +118,16 @@ tasks:
         task test-infra:kubectl -- apply -k config/crd/overlays/infra-control-plane/
         task test-infra:kubectl -- wait --for=condition=Established customresourcedefinitions projectcontrolplanes.infrastructure.miloapis.com
 
+        echo "⏳ Waiting for Milo API server to be ready to serve requests..."
+        for i in $(seq 1 12); do
+          if task kubectl -- get --raw /healthz > /dev/null 2>&1; then
+            echo "✓ Milo API server is ready"
+            break
+          fi
+          echo "  Attempt $i/12 — not ready yet, waiting 5s..."
+          sleep 5
+        done
+
         echo "👤 Creating test users in Milo API server..."
         task kubectl -- apply -f config/overlays/test-infra/resources/test-users.yaml
 

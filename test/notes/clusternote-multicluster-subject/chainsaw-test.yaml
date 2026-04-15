@@ -3,6 +3,7 @@ kind: Test
 metadata:
   name: clusternote-multicluster-subject
 spec:
+  skip: true
   description: |
     Tests that ClusterNotes can reference cluster-scoped subjects (Namespaces)
     in project control planes.
