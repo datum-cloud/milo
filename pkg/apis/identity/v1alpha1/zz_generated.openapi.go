@@ -14,16 +14,67 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccount":          schema_pkg_apis_identity_v1alpha1_MachineAccount(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountKey":       schema_pkg_apis_identity_v1alpha1_MachineAccountKey(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountKeyList":   schema_pkg_apis_identity_v1alpha1_MachineAccountKeyList(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountKeySpec":   schema_pkg_apis_identity_v1alpha1_MachineAccountKeySpec(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountKeyStatus": schema_pkg_apis_identity_v1alpha1_MachineAccountKeyStatus(ref),
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountList":      schema_pkg_apis_identity_v1alpha1_MachineAccountList(ref),
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountSpec":      schema_pkg_apis_identity_v1alpha1_MachineAccountSpec(ref),
+		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountStatus":    schema_pkg_apis_identity_v1alpha1_MachineAccountStatus(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.Session":                 schema_pkg_apis_identity_v1alpha1_Session(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.SessionList":             schema_pkg_apis_identity_v1alpha1_SessionList(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.SessionStatus":           schema_pkg_apis_identity_v1alpha1_SessionStatus(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentity":            schema_pkg_apis_identity_v1alpha1_UserIdentity(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentityList":        schema_pkg_apis_identity_v1alpha1_UserIdentityList(ref),
 		"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.UserIdentityStatus":      schema_pkg_apis_identity_v1alpha1_UserIdentityStatus(ref),
+	}
+}
+
+func schema_pkg_apis_identity_v1alpha1_MachineAccount(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MachineAccount is the Schema for the machine accounts API",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountSpec", "go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccountStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -176,7 +227,7 @@ func schema_pkg_apis_identity_v1alpha1_MachineAccountKeyStatus(ref common.Refere
 					},
 					"privateKey": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PrivateKey contains the PEM-encoded RSA private key generated during resource creation. This field is populated only in the creation response and is never persisted to etcd. Any value present on a GET or LIST response indicates a bug in the server implementation.\n\nNote: private key material will appear in API server audit logs for creation events. This matches the behavior of similar systems (GCP service account keys).",
+							Description: "PrivateKey contains the PEM-encoded RSA private key generated during resource creation. This field is populated only in the creation response and is never persisted to etcd. Any value present on a GET or LIST response indicates a bug in the server implementation.\n\nNote: The private key is NOT logged in API server audit logs. The audit policy is configured to log MachineAccountKey resources at the Metadata level only, which redacts the response body containing the private key.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -192,6 +243,118 @@ func schema_pkg_apis_identity_v1alpha1_MachineAccountKeyStatus(ref common.Refere
 						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Conditions provide conditions that represent the current status of the MachineAccountKey.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_pkg_apis_identity_v1alpha1_MachineAccountList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MachineAccountList contains a list of MachineAccount",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccount"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"go.miloapis.com/milo/pkg/apis/identity/v1alpha1.MachineAccount", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_identity_v1alpha1_MachineAccountSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MachineAccountSpec defines the desired state of MachineAccount",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"state": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The state of the machine account. This state can be safely changed as needed. States:\n  - Active: The machine account can be used to authenticate.\n  - Inactive: The machine account is prohibited to be used to authenticate, and revokes all existing sessions.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_identity_v1alpha1_MachineAccountStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MachineAccountStatus defines the observed state of MachineAccount",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"email": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The computed email of the machine account following the pattern: {metadata.name}@{project-name}.{email-address-suffix}",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"state": {
+						SchemaProps: spec.SchemaProps{
+							Description: "State represents the current activation state of the machine account from the auth provider. This field tracks the state from the previous generation and is updated when state changes are successfully propagated to the auth provider. It helps optimize performance by only updating the auth provider when a state change is detected.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions provide conditions that represent the current status of the MachineAccount.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

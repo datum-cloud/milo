@@ -94,7 +94,6 @@ rules:
   resources:
   - groups/finalizers
   - platforminvitations/status
-  - userinvitations/finalizers
   - userinvitations/status
   verbs:
   - update
@@ -150,7 +149,6 @@ rules:
   - delete
   - get
   - list
-  - patch
   - update
   - watch
 - apiGroups:
