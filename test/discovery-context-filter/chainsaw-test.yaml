@@ -1,0 +1,177 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: discovery-context-filter
+spec:
+  description: |
+    End-to-end test for parent-context-aware API discovery.
+
+    Verifies that the discovery endpoint response is filtered per parent
+    context (Root vs Organization), driven by the
+    `discovery.miloapis.com/parent-contexts` CRD annotation. Exercises both
+    the bundled-CRD path (organizations, projects, organizationmemberships)
+    and the third-party-CRD path (a synthetic DiscoveryWidget CRD installed
+    mid-test).
+
+    The discovery filter is URL-driven — it consults only the request path
+    prefix — so this test does not need a real Organization to exist. The
+    kubeconfig points at `.../organizations/demo-discovery-filter-org/control-plane`
+    and the filter honours that alone.
+
+    Expectations:
+      At ROOT:
+        - organizations            present (tagged Root)
+        - projects                 hidden (tagged Organization)
+        - organizationmemberships  hidden (tagged Organization,User)
+        - discoverywidgets         hidden (tagged Organization)
+
+      At ORGANIZATION:
+        - organizations            hidden
+        - projects                 present
+        - organizationmemberships  present
+        - discoverywidgets         present
+
+      At USER:
+        - organizations            hidden
+        - projects                 hidden
+        - organizationmemberships  present (multi-context)
+        - discoverywidgets         hidden
+
+  clusters:
+    root:
+      kubeconfig: kubeconfig-root
+    org:
+      kubeconfig: kubeconfig-org
+    user:
+      kubeconfig: kubeconfig-user
+
+  concurrent: false
+  # The test only touches a cluster-scoped CRD; no ephemeral namespace is
+  # needed and creating one slows teardown when org/project controllers are
+  # unhealthy.
+  namespace: default
+  skipDelete: false
+
+  steps:
+    - name: install-external-crd
+      description: Install a third-party CRD tagged for the Organization context.
+      cluster: root
+      try:
+        - apply:
+            file: 02-external-crd.yaml
+        - wait:
+            apiVersion: apiextensions.k8s.io/v1
+            kind: CustomResourceDefinition
+            name: discoverywidgets.discovery-filter-test.example.com
+            timeout: 30s
+            for:
+              condition:
+                name: Established
+                value: "True"
+        # The registry informer observes CRD events eventually; give it a
+        # short window so the annotation is in the map before we query.
+        - sleep:
+            duration: 3s
+
+    - name: verify-root-context-discovery
+      description: Root context should expose organizations but hide Organization-tagged resources.
+      cluster: root
+      try:
+        - script:
+            timeout: 30s
+            content: |
+              set -e
+              RM_NAMES=$(kubectl --kubeconfig=kubeconfig-root get --raw \
+                "/apis/resourcemanager.miloapis.com/v1alpha1" \
+                | jq -r '.resources[].name' | sort -u)
+
+              echo "Root resourcemanager resources:"
+              echo "$RM_NAMES"
+
+              echo "$RM_NAMES" | grep -qx "organizations" \
+                || { echo "FAIL: organizations missing at root"; exit 1; }
+
+              ! echo "$RM_NAMES" | grep -qx "projects" \
+                || { echo "FAIL: projects should be hidden at root"; exit 1; }
+
+              ! echo "$RM_NAMES" | grep -qx "organizationmemberships" \
+                || { echo "FAIL: organizationmemberships should be hidden at root"; exit 1; }
+
+              WIDGET_NAMES=$(kubectl --kubeconfig=kubeconfig-root get --raw \
+                "/apis/discovery-filter-test.example.com/v1alpha1" \
+                | jq -r '.resources[].name // empty' | sort -u)
+
+              echo "Root example.com resources: ${WIDGET_NAMES:-<none>}"
+
+              [ -z "$WIDGET_NAMES" ] \
+                || { echo "FAIL: discoverywidgets should be hidden at root"; exit 1; }
+
+              echo "PASS: root-context discovery"
+
+    - name: verify-org-context-discovery
+      description: Organization context should expose Organization-tagged resources and hide Root-tagged ones.
+      cluster: org
+      try:
+        - script:
+            timeout: 30s
+            content: |
+              set -e
+              RM_NAMES=$(kubectl --kubeconfig=kubeconfig-org get --raw \
+                "/apis/resourcemanager.miloapis.com/v1alpha1" \
+                | jq -r '.resources[].name' | sort -u)
+
+              echo "Org resourcemanager resources:"
+              echo "$RM_NAMES"
+
+              echo "$RM_NAMES" | grep -qx "projects" \
+                || { echo "FAIL: projects missing in org context"; exit 1; }
+
+              echo "$RM_NAMES" | grep -qx "organizationmemberships" \
+                || { echo "FAIL: organizationmemberships missing in org context"; exit 1; }
+
+              ! echo "$RM_NAMES" | grep -qx "organizations" \
+                || { echo "FAIL: organizations should be hidden in org context"; exit 1; }
+
+              WIDGET_NAMES=$(kubectl --kubeconfig=kubeconfig-org get --raw \
+                "/apis/discovery-filter-test.example.com/v1alpha1" \
+                | jq -r '.resources[].name' | sort -u)
+
+              echo "Org example.com resources: $WIDGET_NAMES"
+
+              echo "$WIDGET_NAMES" | grep -qx "discoverywidgets" \
+                || { echo "FAIL: discoverywidgets missing in org context"; exit 1; }
+
+              echo "PASS: org-context discovery"
+
+    - name: verify-user-context-discovery
+      description: User context should expose multi-context resources (organizationmemberships) and hide the rest.
+      cluster: user
+      try:
+        - script:
+            timeout: 30s
+            content: |
+              set -e
+              RM_NAMES=$(kubectl --kubeconfig=kubeconfig-user get --raw \
+                "/apis/resourcemanager.miloapis.com/v1alpha1" \
+                | jq -r '.resources[].name' | sort -u)
+
+              echo "User resourcemanager resources:"
+              echo "$RM_NAMES"
+
+              echo "$RM_NAMES" | grep -qx "organizationmemberships" \
+                || { echo "FAIL: organizationmemberships missing in user context (multi-context annotation)"; exit 1; }
+
+              ! echo "$RM_NAMES" | grep -qx "organizations" \
+                || { echo "FAIL: organizations should be hidden in user context"; exit 1; }
+
+              ! echo "$RM_NAMES" | grep -qx "projects" \
+                || { echo "FAIL: projects should be hidden in user context"; exit 1; }
+
+              echo "PASS: user-context discovery"
+
+    - name: cleanup-external-crd
+      description: Remove the external CRD so the registry forgets the entry.
+      cluster: root
+      try:
+        - delete:
+            file: 02-external-crd.yaml
