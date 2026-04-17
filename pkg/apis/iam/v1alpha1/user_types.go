@@ -47,7 +47,7 @@ const (
 // +kubebuilder:resource:path=users,scope=Cluster
 // +kubebuilder:selectablefield:JSONPath=".status.registrationApproval"
 // +kubebuilder:selectablefield:JSONPath=".spec.email"
-// +kubebuilder:metadata:annotations="discovery.miloapis.com/parent-contexts=User"
+// +kubebuilder:metadata:annotations="discovery.miloapis.com/parent-contexts=Platform,User"
 type User struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

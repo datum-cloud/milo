@@ -58,9 +58,9 @@ import (
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:path=organizationmemberships,scope=Namespaced,singular=organizationmembership
-// +kubebuilder:metadata:annotations="discovery.miloapis.com/parent-contexts=Organization,User"
 // +kubebuilder:selectablefield:JSONPath=".spec.userRef.name"
 // +kubebuilder:selectablefield:JSONPath=".spec.organizationRef.name"
+// +kubebuilder:metadata:annotations="discovery.miloapis.com/parent-contexts=Organization,User"
 type OrganizationMembership struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
