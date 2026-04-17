@@ -105,8 +105,19 @@ func filterAPIIndex(w http.ResponseWriter, req *http.Request, next http.Handler,
 
 	parentCtx := FromRequest(req.Context())
 
-	// Aggregated discovery (modern kubectl) — APIGroupDiscoveryList.
-	if isAggregatedDiscovery(cw.Header().Get("Content-Type")) {
+	// Detect aggregated discovery by Content-Type OR by the response body's
+	// kind field. The Milo API server returns plain application/json rather
+	// than the media type that includes as=APIGroupDiscoveryList, so we cannot
+	// rely on the header alone.
+	var kindProbe struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(cw.body.Bytes(), &kindProbe); err != nil {
+		cw.flushUnchanged()
+		return
+	}
+
+	if kindProbe.Kind == "APIGroupDiscoveryList" || isAggregatedDiscovery(cw.Header().Get("Content-Type")) {
 		var list apidiscoveryv2.APIGroupDiscoveryList
 		if err := json.Unmarshal(cw.body.Bytes(), &list); err != nil {
 			cw.flushUnchanged()
