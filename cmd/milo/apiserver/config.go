@@ -54,6 +54,7 @@ import (
 	identityopenapi "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	quotaapi "go.miloapis.com/milo/pkg/apis/quota"
 	"go.miloapis.com/milo/pkg/features"
+	discoveryctx "go.miloapis.com/milo/pkg/server/discovery"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
@@ -65,6 +66,11 @@ type Config struct {
 	Aggregator    *aggregatorapiserver.Config
 	ControlPlane  *controlplaneapiserver.Config
 	APIExtensions *apiextensionsapiserver.Config
+
+	// DiscoveryRegistry is the shared parent-context registry used by the
+	// discovery filter. Created in NewConfig, populated from CRDs by a
+	// post-start hook in CreateServerChain.
+	DiscoveryRegistry *discoveryctx.Registry
 
 	ExtraConfig
 }
@@ -126,6 +132,8 @@ type completedConfig struct {
 	Aggregator    aggregatorapiserver.CompletedConfig
 	ControlPlane  controlplaneapiserver.CompletedConfig
 	APIExtensions apiextensionsapiserver.CompletedConfig
+
+	DiscoveryRegistry *discoveryctx.Registry
 
 	ExtraConfig
 }
@@ -294,13 +302,21 @@ func (c *Config) Complete() (CompletedConfig, error) {
 		ControlPlane:  c.ControlPlane.Complete(),
 		APIExtensions: c.APIExtensions.Complete(),
 
+		DiscoveryRegistry: c.DiscoveryRegistry,
+
 		ExtraConfig: c.ExtraConfig,
 	}}, nil
 }
 
 func NewConfig(opts options.CompletedOptions) (*Config, error) {
+	var registry *discoveryctx.Registry
+	if utilfeature.DefaultFeatureGate.Enabled(features.DiscoveryContextFilter) {
+		registry = discoveryctx.NewRegistry()
+	}
+
 	c := &Config{
-		Options: opts,
+		Options:           opts,
+		DiscoveryRegistry: registry,
 	}
 
 	miloScheme := runtime.NewScheme()
@@ -339,6 +355,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	loopbackClientConfig := genericConfig.LoopbackClientConfig
 
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
+		if registry != nil {
+			h = discoveryctx.DiscoveryContextFilter(h, registry)
+		}
 		return datumfilters.ProjectRouterWithRequestInfo(
 			DefaultBuildHandlerChain(h, c, loopbackClientConfig), // build stock chain first
 			c.RequestInfoResolver,                                // then wrap with router
@@ -370,6 +389,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	apiExtensions.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
+		if registry != nil {
+			h = discoveryctx.DiscoveryContextFilter(h, registry)
+		}
 		return datumfilters.ProjectRouterWithRequestInfo(
 			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
@@ -393,6 +415,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	aggregator.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
+		if registry != nil {
+			h = discoveryctx.DiscoveryContextFilter(h, registry)
+		}
 		return datumfilters.ProjectRouterWithRequestInfo(
 			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
