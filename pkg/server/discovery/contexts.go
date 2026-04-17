@@ -2,7 +2,7 @@
 // Kubernetes API discovery responses served by the Milo control plane.
 //
 // Resources opt in to a set of "parent contexts" they are visible in
-// (Organization, Project, User, or Root). Discovery responses are filtered
+// (Organization, Project, User, or Platform). Discovery responses are filtered
 // per request based on the URL prefix the client used (e.g.
 // /apis/resourcemanager.miloapis.com/v1alpha1/organizations/{id}/control-plane/...).
 //
@@ -38,10 +38,10 @@ const AllContextsWildcard = "*"
 type ParentContext string
 
 const (
-	// ContextRoot is requests against the cluster root (no /organizations/{id}
-	// or /projects/{id}/control-plane prefix). This is where org-level lookup,
-	// user self-service, and platform-wide resources live.
-	ContextRoot ParentContext = "Root"
+	// ContextPlatform is requests against the platform root (no
+	// /organizations/{id} or /projects/{id}/control-plane prefix). This is
+	// where platform-wide resources like Organizations and Users live.
+	ContextPlatform ParentContext = "Platform"
 
 	// ContextOrganization is requests routed through
 	// /apis/resourcemanager.miloapis.com/v1alpha1/organizations/{id}/control-plane/...
@@ -70,7 +70,7 @@ func FromRequest(ctx context.Context) ParentContext {
 	if _, ok := filters.UserID(ctx); ok {
 		return ContextUser
 	}
-	return ContextRoot
+	return ContextPlatform
 }
 
 // ParseContexts parses the annotation value into a set of ParentContexts.

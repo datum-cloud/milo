@@ -25,7 +25,7 @@ func TestParseContexts(t *testing.T) {
 		{"Organization", []ParentContext{ContextOrganization}},
 		{"Organization,User", []ParentContext{ContextOrganization, ContextUser}},
 		{"Organization;User", []ParentContext{ContextOrganization, ContextUser}},
-		{"  Root , Organization  ", []ParentContext{ContextRoot, ContextOrganization}},
+		{"  Platform , Organization  ", []ParentContext{ContextPlatform, ContextOrganization}},
 		{"Organization,*,Project", nil}, // wildcard short-circuits
 	}
 	for _, tc := range cases {
@@ -38,12 +38,12 @@ func TestParseContexts(t *testing.T) {
 
 func TestRegistryStaticAndCRD(t *testing.T) {
 	r := NewRegistry()
-	r.RegisterStatic(schema.GroupResource{Group: "core", Resource: "configmaps"}, ContextRoot)
+	r.RegisterStatic(schema.GroupResource{Group: "core", Resource: "configmaps"}, ContextPlatform)
 	// Simulate a CRD entry by writing directly (informer path is exercised
 	// implicitly elsewhere; this keeps the test hermetic).
 	r.crd[schema.GroupResource{Group: "resourcemanager.miloapis.com", Resource: "projects"}] = []ParentContext{ContextOrganization}
 
-	if !r.IsVisible(schema.GroupResource{Group: "core", Resource: "configmaps"}, ContextRoot) {
+	if !r.IsVisible(schema.GroupResource{Group: "core", Resource: "configmaps"}, ContextPlatform) {
 		t.Error("static registration should be visible in matching context")
 	}
 	if r.IsVisible(schema.GroupResource{Group: "core", Resource: "configmaps"}, ContextProject) {
@@ -52,7 +52,7 @@ func TestRegistryStaticAndCRD(t *testing.T) {
 	if !r.IsVisible(schema.GroupResource{Group: "resourcemanager.miloapis.com", Resource: "projects"}, ContextOrganization) {
 		t.Error("CRD registration should be visible in matching context")
 	}
-	if r.IsVisible(schema.GroupResource{Group: "resourcemanager.miloapis.com", Resource: "projects"}, ContextRoot) {
+	if r.IsVisible(schema.GroupResource{Group: "resourcemanager.miloapis.com", Resource: "projects"}, ContextPlatform) {
 		t.Error("CRD registration should NOT be visible at root")
 	}
 	// Unregistered resource → visible everywhere (backwards-compatible).
@@ -65,8 +65,8 @@ func TestFilterAPIResourceListByContext(t *testing.T) {
 	registry := NewRegistry()
 	// Mark "projects" as Organization-only.
 	registry.crd[schema.GroupResource{Group: "resourcemanager.miloapis.com", Resource: "projects"}] = []ParentContext{ContextOrganization}
-	// Mark "organizations" as Root-only.
-	registry.crd[schema.GroupResource{Group: "resourcemanager.miloapis.com", Resource: "organizations"}] = []ParentContext{ContextRoot}
+	// Mark "organizations" as Platform-only.
+	registry.crd[schema.GroupResource{Group: "resourcemanager.miloapis.com", Resource: "organizations"}] = []ParentContext{ContextPlatform}
 	registry.hasInit = true
 
 	// Inner handler that returns a synthetic APIResourceList.
@@ -98,7 +98,7 @@ func TestFilterAPIResourceListByContext(t *testing.T) {
 			wantNames: []string{"organizations", "organizations/status", "untagged"},
 		},
 		{
-			name:      "project context hides Root-only and Organization-only",
+			name:      "project context hides Platform-only and Organization-only",
 			ctxSetter: func(c context.Context) context.Context { return request.WithProject(c, "p1") },
 			wantNames: []string{"untagged"},
 		},

@@ -7,7 +7,7 @@ spec:
     End-to-end test for parent-context-aware API discovery.
 
     Verifies that the discovery endpoint response is filtered per parent
-    context (Root vs Organization), driven by the
+    context (Platform vs Organization), driven by the
     `discovery.miloapis.com/parent-contexts` CRD annotation. Exercises both
     the bundled-CRD path (organizations, projects, organizationmemberships)
     and the third-party-CRD path (a synthetic DiscoveryWidget CRD installed
@@ -20,7 +20,7 @@ spec:
 
     Expectations:
       At ROOT:
-        - organizations            present (tagged Root)
+        - organizations            present (tagged Platform)
         - projects                 hidden (tagged Organization)
         - organizationmemberships  hidden (tagged Organization,User)
         - discoverywidgets         hidden (tagged Organization)
@@ -74,7 +74,7 @@ spec:
             duration: 3s
 
     - name: verify-root-context-discovery
-      description: Root context should expose organizations but hide Organization-tagged resources.
+      description: Platform context should expose organizations but hide Organization-tagged resources.
       cluster: root
       try:
         - script:
@@ -85,7 +85,7 @@ spec:
                 "/apis/resourcemanager.miloapis.com/v1alpha1" \
                 | jq -r '.resources[].name' | sort -u)
 
-              echo "Root resourcemanager resources:"
+              echo "Platform resourcemanager resources:"
               echo "$RM_NAMES"
 
               echo "$RM_NAMES" | grep -qx "organizations" \
@@ -101,7 +101,7 @@ spec:
                 "/apis/discovery-filter-test.example.com/v1alpha1" \
                 | jq -r '.resources[].name // empty' | sort -u)
 
-              echo "Root example.com resources: ${WIDGET_NAMES:-<none>}"
+              echo "Platform example.com resources: ${WIDGET_NAMES:-<none>}"
 
               [ -z "$WIDGET_NAMES" ] \
                 || { echo "FAIL: discoverywidgets should be hidden at root"; exit 1; }
@@ -109,7 +109,7 @@ spec:
               echo "PASS: root-context discovery"
 
     - name: verify-org-context-discovery
-      description: Organization context should expose Organization-tagged resources and hide Root-tagged ones.
+      description: Organization context should expose Organization-tagged resources and hide Platform-tagged ones.
       cluster: org
       try:
         - script:

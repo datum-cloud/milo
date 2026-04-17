@@ -23,7 +23,7 @@ context.
 
 | Context        | URL pattern                                                                              |
 | -------------- | ---------------------------------------------------------------------------------------- |
-| `Root`         | `/apis/...` (no parent prefix)                                                           |
+| `Platform`         | `/apis/...` (no parent prefix)                                                           |
 | `Organization` | `/apis/resourcemanager.miloapis.com/v1alpha1/organizations/{id}/control-plane/apis/...`  |
 | `Project`      | `.../projects/{id}/control-plane/apis/...`                                               |
 | `User`         | `/apis/iam.miloapis.com/v1alpha1/users/{id}/control-plane/apis/...`                      |
@@ -105,7 +105,7 @@ Static registrations take precedence over CRD annotations for the same
 ## What the client sees
 
 ```console
-# Root context — projects are hidden because they're tagged Organization-only.
+# Platform context — projects are hidden because they're tagged Organization-only.
 $ kubectl api-resources --api-group=resourcemanager.miloapis.com
 NAME             SHORTNAMES   APIVERSION                              NAMESPACED   KIND
 organizations                 resourcemanager.miloapis.com/v1alpha1   false        Organization

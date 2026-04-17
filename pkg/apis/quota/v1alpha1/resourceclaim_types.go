@@ -355,6 +355,7 @@ const (
 // +kubebuilder:selectablefield:JSONPath=".spec.resourceRef.kind"
 // +kubebuilder:selectablefield:JSONPath=".spec.resourceRef.name"
 // +kubebuilder:selectablefield:JSONPath=".spec.resourceRef.namespace"
+// +kubebuilder:metadata:annotations="discovery.miloapis.com/parent-contexts=Organization,Project"
 type ResourceClaim struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
