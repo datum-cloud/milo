@@ -309,7 +309,10 @@ func (c *Config) Complete() (CompletedConfig, error) {
 }
 
 func NewConfig(opts options.CompletedOptions) (*Config, error) {
-	registry := discoveryctx.NewRegistry()
+	var registry *discoveryctx.Registry
+	if utilfeature.DefaultFeatureGate.Enabled(features.DiscoveryContextFilter) {
+		registry = discoveryctx.NewRegistry()
+	}
 
 	c := &Config{
 		Options:           opts,
@@ -352,11 +355,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	loopbackClientConfig := genericConfig.LoopbackClientConfig
 
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		// Wrap the inner apiHandler with the discovery filter so it captures
-		// responses from the discovery endpoints. This is the innermost
-		// middleware so all parent-context decorators have populated the
-		// request context by the time the filter runs.
-		h = discoveryctx.DiscoveryContextFilter(h, registry)
+		if registry != nil {
+			h = discoveryctx.DiscoveryContextFilter(h, registry)
+		}
 		return datumfilters.ProjectRouterWithRequestInfo(
 			DefaultBuildHandlerChain(h, c, loopbackClientConfig), // build stock chain first
 			c.RequestInfoResolver,                                // then wrap with router
@@ -388,7 +389,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	apiExtensions.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		h = discoveryctx.DiscoveryContextFilter(h, registry)
+		if registry != nil {
+			h = discoveryctx.DiscoveryContextFilter(h, registry)
+		}
 		return datumfilters.ProjectRouterWithRequestInfo(
 			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
@@ -412,7 +415,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	aggregator.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
-		h = discoveryctx.DiscoveryContextFilter(h, registry)
+		if registry != nil {
+			h = discoveryctx.DiscoveryContextFilter(h, registry)
+		}
 		return datumfilters.ProjectRouterWithRequestInfo(
 			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
