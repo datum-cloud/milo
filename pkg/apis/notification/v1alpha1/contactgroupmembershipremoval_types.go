@@ -26,7 +26,7 @@ const (
 // +kubebuilder:validation:Type=object
 // +kubebuilder:selectablefield:JSONPath=".spec.contactRef.name"
 // +kubebuilder:selectablefield:JSONPath=".status.username"
-// +kubebuilder:metadata:annotations="discovery.miloapis.com/parent-contexts=Platform,User"
+// +kubebuilder:metadata:annotations="discovery.miloapis.com/parent-contexts=User"
 type ContactGroupMembershipRemoval struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

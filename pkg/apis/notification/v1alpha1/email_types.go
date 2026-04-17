@@ -156,7 +156,7 @@ type EmailStatus struct {
 // +kubebuilder:resource:scope=Namespaced
 // +kubebuilder:selectablefield:JSONPath=".spec.recipient.userRef.name"
 // +kubebuilder:selectablefield:JSONPath=".spec.recipient.emailAddress"
-// +kubebuilder:metadata:annotations="discovery.miloapis.com/parent-contexts=Platform,User"
+// +kubebuilder:metadata:annotations="discovery.miloapis.com/parent-contexts=User"
 type Email struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

@@ -93,9 +93,9 @@ func TestFilterAPIResourceListByContext(t *testing.T) {
 		wantNames []string // expected resource names (in order kept)
 	}{
 		{
-			name:      "root context hides Organization-only resource",
+			name:      "platform context passes through unfiltered",
 			ctxSetter: func(c context.Context) context.Context { return c },
-			wantNames: []string{"organizations", "organizations/status", "untagged"},
+			wantNames: []string{"organizations", "organizations/status", "projects", "untagged"},
 		},
 		{
 			name:      "project context hides Platform-only and Organization-only",

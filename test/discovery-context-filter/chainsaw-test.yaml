@@ -73,8 +73,8 @@ spec:
         - sleep:
             duration: 3s
 
-    - name: verify-root-context-discovery
-      description: Platform context should expose organizations but hide Organization-tagged resources.
+    - name: verify-platform-context-discovery
+      description: Platform context is unfiltered — controllers and admin tools must see all resources.
       cluster: root
       try:
         - script:
@@ -88,14 +88,15 @@ spec:
               echo "Platform resourcemanager resources:"
               echo "$RM_NAMES"
 
+              # Platform context passes through unfiltered — all resources visible.
               echo "$RM_NAMES" | grep -qx "organizations" \
-                || { echo "FAIL: organizations missing at root"; exit 1; }
+                || { echo "FAIL: organizations missing at platform"; exit 1; }
 
-              ! echo "$RM_NAMES" | grep -qx "projects" \
-                || { echo "FAIL: projects should be hidden at root"; exit 1; }
+              echo "$RM_NAMES" | grep -qx "projects" \
+                || { echo "FAIL: projects missing at platform"; exit 1; }
 
-              ! echo "$RM_NAMES" | grep -qx "organizationmemberships" \
-                || { echo "FAIL: organizationmemberships should be hidden at root"; exit 1; }
+              echo "$RM_NAMES" | grep -qx "organizationmemberships" \
+                || { echo "FAIL: organizationmemberships missing at platform"; exit 1; }
 
               WIDGET_NAMES=$(kubectl --kubeconfig=kubeconfig-root get --raw \
                 "/apis/discovery-filter-test.example.com/v1alpha1" \
@@ -103,10 +104,10 @@ spec:
 
               echo "Platform example.com resources: ${WIDGET_NAMES:-<none>}"
 
-              [ -z "$WIDGET_NAMES" ] \
-                || { echo "FAIL: discoverywidgets should be hidden at root"; exit 1; }
+              echo "$WIDGET_NAMES" | grep -qx "discoverywidgets" \
+                || { echo "FAIL: discoverywidgets missing at platform"; exit 1; }
 
-              echo "PASS: root-context discovery"
+              echo "PASS: platform-context discovery (unfiltered)"
 
     - name: verify-org-context-discovery
       description: Organization context should expose Organization-tagged resources and hide Platform-tagged ones.

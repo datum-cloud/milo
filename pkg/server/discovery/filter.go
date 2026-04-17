@@ -32,10 +32,13 @@ var apisGroupVersionRE = regexp.MustCompile(`^/apis/([^/]+)/([^/]+)/?$`)
 // boundary.
 func DiscoveryContextFilter(next http.Handler, registry *Registry) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// Only filter GETs against the discovery endpoints. Skip until the
-		// registry has loaded so we don't hide resources during apiserver
-		// startup.
-		if req.Method != http.MethodGet || !registry.HasSynced() {
+		// Only filter GETs against the discovery endpoints. Skip when:
+		// - not a GET (mutations don't touch discovery)
+		// - registry hasn't synced yet (fall open during startup)
+		// - request is at Platform context (no parent prefix in URL) —
+		//   controllers, admin tools, and internal clients operate here
+		//   and must see all resources to function correctly
+		if req.Method != http.MethodGet || !registry.HasSynced() || FromRequest(req.Context()) == ContextPlatform {
 			next.ServeHTTP(w, req)
 			return
 		}
