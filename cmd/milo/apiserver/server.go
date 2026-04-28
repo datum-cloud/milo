@@ -56,25 +56,29 @@ func init() {
 }
 
 var (
-	SystemNamespace                  string
-	sessionsProviderURL              string
-	sessionsProviderCAFile           string
-	sessionsProviderClientCert       string
-	sessionsProviderClientKey        string
-	providerTimeoutSeconds           int
-	providerRetries                  int
-	forwardExtras                    []string
-	userIdentitiesProviderURL        string
-	userIdentitiesProviderCAFile     string
-	userIdentitiesProviderClientCert string
-	userIdentitiesProviderClientKey  string
-	eventsProviderURL                string
-	eventsProviderCAFile             string
-	eventsProviderClientCert         string
-	eventsProviderClientKey          string
-	eventsProviderTimeoutSeconds     int
-	eventsProviderRetries            int
-	eventsForwardExtras              []string
+	SystemNamespace                      string
+	sessionsProviderURL                  string
+	sessionsProviderCAFile               string
+	sessionsProviderClientCert           string
+	sessionsProviderClientKey            string
+	providerTimeoutSeconds               int
+	providerRetries                      int
+	forwardExtras                        []string
+	userIdentitiesProviderURL            string
+	userIdentitiesProviderCAFile         string
+	userIdentitiesProviderClientCert     string
+	userIdentitiesProviderClientKey      string
+	machineAccountKeysProviderURL        string
+	machineAccountKeysProviderCAFile     string
+	machineAccountKeysProviderClientCert string
+	machineAccountKeysProviderClientKey  string
+	eventsProviderURL                    string
+	eventsProviderCAFile                 string
+	eventsProviderClientCert             string
+	eventsProviderClientKey              string
+	eventsProviderTimeoutSeconds         int
+	eventsProviderRetries                int
+	eventsForwardExtras                  []string
 )
 
 // NewCommand creates a *cobra.Command object with default parameters
@@ -184,6 +188,10 @@ func NewCommand() *cobra.Command {
 	fs.StringVar(&userIdentitiesProviderCAFile, "useridentities-provider-ca-file", "", "Path to CA file to validate useridentities provider TLS")
 	fs.StringVar(&userIdentitiesProviderClientCert, "useridentities-provider-client-cert", "", "Client certificate for mTLS to useridentities provider")
 	fs.StringVar(&userIdentitiesProviderClientKey, "useridentities-provider-client-key", "", "Client private key for mTLS to useridentities provider")
+	fs.StringVar(&machineAccountKeysProviderURL, "machineaccountkeys-provider-url", "", "Direct provider base URL for machineaccountkeys (e.g., https://zitadel-apiserver:8443)")
+	fs.StringVar(&machineAccountKeysProviderCAFile, "machineaccountkeys-provider-ca-file", "", "Path to CA file to validate machineaccountkeys provider TLS")
+	fs.StringVar(&machineAccountKeysProviderClientCert, "machineaccountkeys-provider-client-cert", "", "Client certificate for mTLS to machineaccountkeys provider")
+	fs.StringVar(&machineAccountKeysProviderClientKey, "machineaccountkeys-provider-client-key", "", "Client private key for mTLS to machineaccountkeys provider")
 	fs.StringVar(&eventsProviderURL, "events-provider-url", "", "Activity API server URL for events storage (e.g., https://activity-apiserver.activity-system.svc:443)")
 	fs.StringVar(&eventsProviderCAFile, "events-provider-ca-file", "", "Path to CA file to validate Activity provider TLS")
 	fs.StringVar(&eventsProviderClientCert, "events-provider-client-cert", "", "Client certificate for mTLS to Activity provider")
@@ -253,6 +261,14 @@ func Run(ctx context.Context, opts options.CompletedOptions) error {
 	config.ExtraConfig.UserIdentitiesProvider.Retries = providerRetries
 	config.ExtraConfig.UserIdentitiesProvider.ForwardExtras = forwardExtras
 
+	config.ExtraConfig.MachineAccountKeysProvider.URL = machineAccountKeysProviderURL
+	config.ExtraConfig.MachineAccountKeysProvider.CAFile = machineAccountKeysProviderCAFile
+	config.ExtraConfig.MachineAccountKeysProvider.ClientCertFile = machineAccountKeysProviderClientCert
+	config.ExtraConfig.MachineAccountKeysProvider.ClientKeyFile = machineAccountKeysProviderClientKey
+	config.ExtraConfig.MachineAccountKeysProvider.TimeoutSeconds = providerTimeoutSeconds
+	config.ExtraConfig.MachineAccountKeysProvider.Retries = providerRetries
+	config.ExtraConfig.MachineAccountKeysProvider.ForwardExtras = forwardExtras
+
 	config.ExtraConfig.EventsProvider.URL = eventsProviderURL
 	config.ExtraConfig.EventsProvider.CAFile = eventsProviderCAFile
 	config.ExtraConfig.EventsProvider.ClientCertFile = eventsProviderClientCert
@@ -296,6 +312,21 @@ func CreateServerChain(config CompletedConfig) (*aggregatorapiserver.APIAggregat
 		return nil, fmt.Errorf("failed to create apiextensions-apiserver: %w", err)
 	}
 	crdAPIEnabled := config.APIExtensions.GenericConfig.MergedResourceConfig.ResourceEnabled(apiextensionsv1.SchemeGroupVersion.WithResource("customresourcedefinitions"))
+
+	// Populate the discovery context registry from CRD annotations. The
+	// apiextensions informer factory is shared across the apiserver, so we
+	// reuse it rather than spinning up a parallel informer.
+	if reg := config.DiscoveryRegistry; reg != nil {
+		informers := apiExtensionsServer.Informers
+		apiExtensionsServer.GenericAPIServer.AddPostStartHookOrDie("milo-discovery-context-registry", func(hookCtx genericapiserver.PostStartHookContext) error {
+			go func() {
+				if err := reg.Run(hookCtx, informers); err != nil {
+					klog.ErrorS(err, "discovery context registry stopped")
+				}
+			}()
+			return nil
+		})
+	}
 
 	nativeAPIs, err := config.ControlPlane.New("datum-apiserver", apiExtensionsServer.GenericAPIServer)
 	if err != nil {

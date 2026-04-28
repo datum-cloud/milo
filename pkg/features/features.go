@@ -47,6 +47,24 @@ const (
 	// alpha: v0.1.0
 	// ga: v0.2.0
 	UserIdentities featuregate.Feature = "UserIdentities"
+
+	// DiscoveryContextFilter enables parent-context-aware filtering of API
+	// discovery responses. When enabled, resources tagged with the
+	// discovery.miloapis.com/parent-contexts CRD annotation are hidden from
+	// discovery in contexts where they don't apply (e.g. Organization-only
+	// resources are hidden at the User context). Platform context requests
+	// are never filtered.
+	//
+	// owner: @datum-cloud/platform
+	// alpha: v0.1.0
+	DiscoveryContextFilter featuregate.Feature = "DiscoveryContextFilter"
+
+	// MachineAccountKeys enables the identity.miloapis.com/v1alpha1 MachineAccountKey
+	// virtual API that proxies to an external identity provider for machine account key management.
+	//
+	// owner: @datum-cloud/platform
+	// alpha: v0.1.0
+	MachineAccountKeys featuregate.Feature = "MachineAccountKeys"
 )
 
 func init() {
@@ -56,7 +74,15 @@ func init() {
 // defaultFeatureGates defines the default state of Milo feature gates.
 // Features are listed in alphabetical order.
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
+	DiscoveryContextFilter: {
+		Default:    false,
+		PreRelease: featuregate.Alpha,
+	},
 	EventsProxy: {
+		Default:    false,
+		PreRelease: featuregate.Alpha,
+	},
+	MachineAccountKeys: {
 		Default:    false,
 		PreRelease: featuregate.Alpha,
 	},

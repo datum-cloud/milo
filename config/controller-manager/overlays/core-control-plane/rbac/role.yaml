@@ -295,6 +295,7 @@ rules:
   - organizationmemberships
   verbs:
   - create
+  - delete
   - get
   - list
   - watch

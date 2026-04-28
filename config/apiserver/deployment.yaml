@@ -11,7 +11,7 @@ spec:
   strategy:
     rollingUpdate:
       maxSurge: 25%
-      maxUnavailable: 25%
+      maxUnavailable: 0
     type: RollingUpdate
   template:
     metadata:
@@ -70,6 +70,11 @@ spec:
           - --useridentities-provider-ca-file=$(USERIDENTITIES_PROVIDER_CA_FILE)
           - --useridentities-provider-client-cert=$(USERIDENTITIES_PROVIDER_CLIENT_CERT_FILE)
           - --useridentities-provider-client-key=$(USERIDENTITIES_PROVIDER_CLIENT_KEY_FILE)
+          # MachineAccountKeys provider configuration
+          - --machineaccountkeys-provider-url=$(MACHINEACCOUNTKEYS_PROVIDER_URL)
+          - --machineaccountkeys-provider-ca-file=$(MACHINEACCOUNTKEYS_PROVIDER_CA_FILE)
+          - --machineaccountkeys-provider-client-cert=$(MACHINEACCOUNTKEYS_PROVIDER_CLIENT_CERT_FILE)
+          - --machineaccountkeys-provider-client-key=$(MACHINEACCOUNTKEYS_PROVIDER_CLIENT_KEY_FILE)
           # Events proxy provider configuration (requires EventsProxy feature gate)
           - --events-provider-url=$(EVENTS_PROVIDER_URL)
           - --events-provider-ca-file=$(EVENTS_PROVIDER_CA_FILE)
@@ -78,6 +83,7 @@ spec:
           - --events-provider-timeout=$(EVENTS_PROVIDER_TIMEOUT)
           - --events-provider-retries=$(EVENTS_PROVIDER_RETRIES)
           - --events-forward-extras=$(EVENTS_FORWARD_EXTRAS)
+          - --shutdown-delay-duration=$(SHUTDOWN_DELAY_DURATION)
         env:
           # Feature gates configuration
           # Sessions and UserIdentities are GA (enabled by default)
@@ -156,6 +162,14 @@ spec:
             value: ""
           - name: USERIDENTITIES_PROVIDER_CLIENT_KEY_FILE
             value: ""
+          - name: MACHINEACCOUNTKEYS_PROVIDER_URL
+            value: ""
+          - name: MACHINEACCOUNTKEYS_PROVIDER_CA_FILE
+            value: ""
+          - name: MACHINEACCOUNTKEYS_PROVIDER_CLIENT_CERT_FILE
+            value: ""
+          - name: MACHINEACCOUNTKEYS_PROVIDER_CLIENT_KEY_FILE
+            value: ""
           # Events proxy provider configuration (requires --feature-gates=EventsProxy=true)
           - name: EVENTS_PROVIDER_URL
             value: ""
@@ -171,6 +185,8 @@ spec:
             value: "3"
           - name: EVENTS_FORWARD_EXTRAS
             value: "iam.miloapis.com/parent-api-group,iam.miloapis.com/parent-type,iam.miloapis.com/parent-name"
+          - name: SHUTDOWN_DELAY_DURATION
+            value: "10s"
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -198,11 +214,11 @@ spec:
           timeoutSeconds: 15
         resources:
           requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
+            cpu: 200m
             memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
         startupProbe:
           failureThreshold: 30
           httpGet:
