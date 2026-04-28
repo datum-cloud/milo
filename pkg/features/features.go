@@ -48,12 +48,12 @@ const (
 	// ga: v0.2.0
 	UserIdentities featuregate.Feature = "UserIdentities"
 
-	// MachineAccountKeys enables the identity.miloapis.com/v1alpha1 MachineAccountKey
-	// virtual API that proxies to an external identity provider for machine account key management.
+	// ServiceAccountKeys enables the identity.miloapis.com/v1alpha1 ServiceAccountKey
+	// virtual API that proxies to an external identity provider for service account key management.
 	//
 	// owner: @datum-cloud/platform
 	// alpha: v0.1.0
-	MachineAccountKeys featuregate.Feature = "MachineAccountKeys"
+	ServiceAccountKeys featuregate.Feature = "ServiceAccountKeys"
 )
 
 func init() {
@@ -67,7 +67,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		Default:    false,
 		PreRelease: featuregate.Alpha,
 	},
-	MachineAccountKeys: {
+	ServiceAccountKeys: {
 		Default:    false,
 		PreRelease: featuregate.Alpha,
 	},

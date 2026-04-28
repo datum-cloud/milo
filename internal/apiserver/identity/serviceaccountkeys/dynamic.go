@@ -1,4 +1,4 @@
-package machineaccountkeys
+package serviceaccountkeys
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/transport"
 )
 
-// Config controls how the provider talks to the remote machineaccountkeys API **always via a remote URL**.
+// Config controls how the provider talks to the remote serviceaccountkeys API **always via a remote URL**.
 
 type Config struct {
 	BaseConfig *rest.Config
@@ -37,7 +37,7 @@ type Config struct {
 }
 
 // DynamicProvider implements Backend by proxying to a remote auth-provider
-// that serves the machineaccountkeys API (e.g. auth-provider-zitadel).
+// that serves the serviceaccountkeys API (e.g. auth-provider-zitadel).
 type DynamicProvider struct {
 	base        *rest.Config
 	gvr         schema.GroupVersionResource
@@ -75,7 +75,7 @@ func NewDynamicProvider(cfg Config) (*DynamicProvider, error) {
 		base.Timeout = cfg.Timeout
 	}
 
-	gvr := identityv1alpha1.SchemeGroupVersion.WithResource("machineaccountkeys")
+	gvr := identityv1alpha1.SchemeGroupVersion.WithResource("serviceaccountkeys")
 
 	return &DynamicProvider{
 		base:        base,
@@ -127,7 +127,7 @@ func (b *DynamicProvider) filterExtras(src map[string][]string) map[string][]str
 
 // ---- Public API (implements Backend) ----
 
-func (b *DynamicProvider) CreateMachineAccountKey(ctx context.Context, _ authuser.Info, key *identityv1alpha1.MachineAccountKey, opts *metav1.CreateOptions) (*identityv1alpha1.MachineAccountKey, error) {
+func (b *DynamicProvider) CreateServiceAccountKey(ctx context.Context, _ authuser.Info, key *identityv1alpha1.ServiceAccountKey, opts *metav1.CreateOptions) (*identityv1alpha1.ServiceAccountKey, error) {
 	dyn, err := b.dynForUser(ctx)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func (b *DynamicProvider) CreateMachineAccountKey(ctx context.Context, _ authuse
 	// Convert to unstructured for the dynamic client
 	uobj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert MachineAccountKey to unstructured: %w", err)
+		return nil, fmt.Errorf("failed to convert ServiceAccountKey to unstructured: %w", err)
 	}
 
 	var lastErr error
@@ -154,14 +154,14 @@ func (b *DynamicProvider) CreateMachineAccountKey(ctx context.Context, _ authuse
 		return nil, lastErr
 	}
 
-	out := new(identityv1alpha1.MachineAccountKey)
+	out := new(identityv1alpha1.ServiceAccountKey)
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(created.UnstructuredContent(), out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (b *DynamicProvider) ListMachineAccountKeys(ctx context.Context, _ authuser.Info, opts *metav1.ListOptions) (*identityv1alpha1.MachineAccountKeyList, error) {
+func (b *DynamicProvider) ListServiceAccountKeys(ctx context.Context, _ authuser.Info, opts *metav1.ListOptions) (*identityv1alpha1.ServiceAccountKeyList, error) {
 	if opts == nil {
 		opts = &metav1.ListOptions{}
 	}
@@ -180,14 +180,14 @@ func (b *DynamicProvider) ListMachineAccountKeys(ctx context.Context, _ authuser
 	if lastErr != nil {
 		return nil, lastErr
 	}
-	out := new(identityv1alpha1.MachineAccountKeyList)
+	out := new(identityv1alpha1.ServiceAccountKeyList)
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(ul.UnstructuredContent(), out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (b *DynamicProvider) GetMachineAccountKey(ctx context.Context, _ authuser.Info, name string) (*identityv1alpha1.MachineAccountKey, error) {
+func (b *DynamicProvider) GetServiceAccountKey(ctx context.Context, _ authuser.Info, name string) (*identityv1alpha1.ServiceAccountKey, error) {
 	dyn, err := b.dynForUser(ctx)
 	if err != nil {
 		return nil, err
@@ -203,14 +203,14 @@ func (b *DynamicProvider) GetMachineAccountKey(ctx context.Context, _ authuser.I
 	if lastErr != nil {
 		return nil, lastErr
 	}
-	out := new(identityv1alpha1.MachineAccountKey)
+	out := new(identityv1alpha1.ServiceAccountKey)
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uobj.UnstructuredContent(), out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (b *DynamicProvider) DeleteMachineAccountKey(ctx context.Context, _ authuser.Info, name string) error {
+func (b *DynamicProvider) DeleteServiceAccountKey(ctx context.Context, _ authuser.Info, name string) error {
 	dyn, err := b.dynForUser(ctx)
 	if err != nil {
 		return err
