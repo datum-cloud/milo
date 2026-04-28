@@ -356,27 +356,6 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 							Format:      "",
 						},
 					},
-					"location": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Location is the geographic location derived from the session IP, formatted as \"City, Country\" when both are available. Populated by an external enrichment service; empty when enrichment is unavailable or the IP is unknown.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"browser": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Browser is the browser name parsed from the session User-Agent string. Populated by an external enrichment service; empty when enrichment is unavailable or the User-Agent is unknown.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"os": {
-						SchemaProps: spec.SchemaProps{
-							Description: "OS is the operating system name parsed from the session User-Agent string. Populated by an external enrichment service; empty when enrichment is unavailable or the User-Agent is unknown.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 				},
 				Required: []string{"userUID", "provider", "createdAt"},
 			},

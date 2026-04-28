@@ -74,9 +74,6 @@ This resource provides information about user authentication sessions, including
 | `createdAt` | metav1.Time | The timestamp when the session was created. |
 | `lastUpdatedAt` | *metav1.Time | The last time the provider updated this session, e.g. Zitadel `change_date` (optional). |
 | `userAgent` | string | The client User-Agent string for this session, when the provider supplies it (optional). |
-| `location` | string | Geographic location derived from the session IP, formatted as "City, Country" when both are available. Populated by an external enrichment service; empty when enrichment is unavailable or the IP is unknown (optional). |
-| `browser` | string | Browser name parsed from the session User-Agent string. Populated by an external enrichment service; empty when enrichment is unavailable or the User-Agent is unknown (optional). |
-| `os` | string | Operating system name parsed from the session User-Agent string. Populated by an external enrichment service; empty when enrichment is unavailable or the User-Agent is unknown (optional). |
 
 ---
 
