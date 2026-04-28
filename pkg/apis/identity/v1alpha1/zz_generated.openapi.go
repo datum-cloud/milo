@@ -176,7 +176,7 @@ func schema_pkg_apis_identity_v1alpha1_MachineAccountKeyStatus(ref common.Refere
 					},
 					"privateKey": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PrivateKey contains the PEM-encoded RSA private key generated during resource creation. This field is populated only in the creation response and is never persisted to etcd. Any value present on a GET or LIST response indicates a bug in the server implementation.\n\nNote: private key material will appear in API server audit logs for creation events. This matches the behavior of similar systems (GCP service account keys).",
+							Description: "PrivateKey contains the PEM-encoded RSA private key generated during resource creation. This field is populated only in the creation response and is never persisted to etcd. Any value present on a GET or LIST response indicates a bug in the server implementation.\n\nNote: The private key is NOT logged in API server audit logs. The audit policy is configured to log MachineAccountKey resources at the Metadata level only, which redacts the response body containing the private key.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -303,43 +303,78 @@ func schema_pkg_apis_identity_v1alpha1_SessionStatus(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "SessionStatus contains session metadata exposed for display and management. All fields except those required for identity are optional and populated by the authentication provider.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"userUID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "UserUID is the unique identifier of the user who owns this session.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"provider": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "Provider is the authentication provider for this session (e.g. \"zitadel\").",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"ip": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "IP is the client IP address associated with the session, if known.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"fingerprintID": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "FingerprintID is an optional device or client fingerprint from the provider.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"createdAt": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Description: "CreatedAt is when the session was created.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
-					"expiresAt": {
+					"lastUpdatedAt": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Description: "LastUpdatedAt is the last time the provider updated this session (e.g. Zitadel change_date).",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"userAgent": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UserAgent is the client User-Agent string for this session, if the provider supplies it.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"location": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Location is the geographic location derived from the session IP, formatted as \"City, Country\" when both are available. Populated by an external enrichment service; empty when enrichment is unavailable or the IP is unknown.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"browser": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Browser is the browser name parsed from the session User-Agent string. Populated by an external enrichment service; empty when enrichment is unavailable or the User-Agent is unknown.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"os": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OS is the operating system name parsed from the session User-Agent string. Populated by an external enrichment service; empty when enrichment is unavailable or the User-Agent is unknown.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
