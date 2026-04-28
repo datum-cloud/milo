@@ -35,21 +35,6 @@ type SessionStatus struct {
 
 	// UserAgent is the client User-Agent string for this session, if the provider supplies it.
 	UserAgent string `json:"userAgent,omitempty"`
-
-	// Location is the geographic location derived from the session IP, formatted as
-	// "City, Country" when both are available. Populated by an external enrichment
-	// service; empty when enrichment is unavailable or the IP is unknown.
-	Location string `json:"location,omitempty"`
-
-	// Browser is the browser name parsed from the session User-Agent string.
-	// Populated by an external enrichment service; empty when enrichment is
-	// unavailable or the User-Agent is unknown.
-	Browser string `json:"browser,omitempty"`
-
-	// OS is the operating system name parsed from the session User-Agent string.
-	// Populated by an external enrichment service; empty when enrichment is
-	// unavailable or the User-Agent is unknown.
-	OS string `json:"os,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
