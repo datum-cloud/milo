@@ -1,4 +1,4 @@
-package machineaccountkeys
+package serviceaccountkeys
 
 import (
 	"context"
@@ -19,10 +19,10 @@ import (
 // Backend is the interface that the REST handler delegates all operations to.
 // Implementations proxy requests to the auth-provider (e.g. Zitadel) service.
 type Backend interface {
-	CreateMachineAccountKey(ctx context.Context, u authuser.Info, key *identityv1alpha1.MachineAccountKey, opts *metav1.CreateOptions) (*identityv1alpha1.MachineAccountKey, error)
-	ListMachineAccountKeys(ctx context.Context, u authuser.Info, opts *metav1.ListOptions) (*identityv1alpha1.MachineAccountKeyList, error)
-	GetMachineAccountKey(ctx context.Context, u authuser.Info, name string) (*identityv1alpha1.MachineAccountKey, error)
-	DeleteMachineAccountKey(ctx context.Context, u authuser.Info, name string) error
+	CreateServiceAccountKey(ctx context.Context, u authuser.Info, key *identityv1alpha1.ServiceAccountKey, opts *metav1.CreateOptions) (*identityv1alpha1.ServiceAccountKey, error)
+	ListServiceAccountKeys(ctx context.Context, u authuser.Info, opts *metav1.ListOptions) (*identityv1alpha1.ServiceAccountKeyList, error)
+	GetServiceAccountKey(ctx context.Context, u authuser.Info, name string) (*identityv1alpha1.ServiceAccountKey, error)
+	DeleteServiceAccountKey(ctx context.Context, u authuser.Info, name string) error
 }
 
 type REST struct {
@@ -39,10 +39,10 @@ var _ rest.SingularNameProvider = &REST{}
 
 func NewREST(b Backend) *REST { return &REST{backend: b} }
 
-func (r *REST) GetSingularName() string { return "machineaccountkey" }
+func (r *REST) GetSingularName() string { return "serviceaccountkey" }
 func (r *REST) NamespaceScoped() bool   { return false }
-func (r *REST) New() runtime.Object     { return &identityv1alpha1.MachineAccountKey{} }
-func (r *REST) NewList() runtime.Object { return &identityv1alpha1.MachineAccountKeyList{} }
+func (r *REST) New() runtime.Object     { return &identityv1alpha1.ServiceAccountKey{} }
+func (r *REST) NewList() runtime.Object { return &identityv1alpha1.ServiceAccountKeyList{} }
 
 func (r *REST) Create(
 	ctx context.Context,
@@ -52,17 +52,17 @@ func (r *REST) Create(
 ) (runtime.Object, error) {
 	logger := klog.FromContext(ctx)
 	u, _ := apirequest.UserFrom(ctx)
-	key, ok := obj.(*identityv1alpha1.MachineAccountKey)
+	key, ok := obj.(*identityv1alpha1.ServiceAccountKey)
 	if !ok {
-		return nil, apierrors.NewBadRequest("not a MachineAccountKey")
+		return nil, apierrors.NewBadRequest("not a ServiceAccountKey")
 	}
-	logger.V(4).Info("Creating machine account key", "name", key.Name, "machineAccount", key.Spec.MachineAccountUserName)
-	res, err := r.backend.CreateMachineAccountKey(ctx, u, key, opts)
+	logger.V(4).Info("Creating service account key", "name", key.Name, "serviceAccount", key.Spec.ServiceAccountUserName)
+	res, err := r.backend.CreateServiceAccountKey(ctx, u, key, opts)
 	if err != nil {
-		logger.Error(err, "Create machine account key failed", "name", key.Name)
+		logger.Error(err, "Create service account key failed", "name", key.Name)
 		return nil, err
 	}
-	logger.V(4).Info("Created machine account key", "name", res.Name, "authProviderKeyID", res.Status.AuthProviderKeyID)
+	logger.V(4).Info("Created service account key", "name", res.Name, "authProviderKeyID", res.Status.AuthProviderKeyID)
 	return res, nil
 }
 
@@ -75,17 +75,17 @@ func (r *REST) List(ctx context.Context, opts *metainternalversion.ListOptions) 
 		uid = u.GetUID()
 		groups = u.GetGroups()
 	}
-	logger.V(4).Info("Listing machine account keys", "username", username, "uid", uid, "groups", groups)
+	logger.V(4).Info("Listing service account keys", "username", username, "uid", uid, "groups", groups)
 	lo := metav1.ListOptions{}
 	if opts != nil && opts.FieldSelector != nil && !opts.FieldSelector.Empty() {
 		lo.FieldSelector = opts.FieldSelector.String()
 	}
-	res, err := r.backend.ListMachineAccountKeys(ctx, u, &lo)
+	res, err := r.backend.ListServiceAccountKeys(ctx, u, &lo)
 	if err != nil {
-		logger.Error(err, "List machine account keys failed")
+		logger.Error(err, "List service account keys failed")
 		return nil, err
 	}
-	logger.V(4).Info("Listed machine account keys", "count", len(res.Items))
+	logger.V(4).Info("Listed service account keys", "count", len(res.Items))
 	return res, nil
 }
 
@@ -97,13 +97,13 @@ func (r *REST) Get(ctx context.Context, name string, _ *metav1.GetOptions) (runt
 		username = u.GetName()
 		uid = u.GetUID()
 	}
-	logger.V(4).Info("Getting machine account key", "name", name, "username", username, "uid", uid)
-	res, err := r.backend.GetMachineAccountKey(ctx, u, name)
+	logger.V(4).Info("Getting service account key", "name", name, "username", username, "uid", uid)
+	res, err := r.backend.GetServiceAccountKey(ctx, u, name)
 	if err != nil {
-		logger.Error(err, "Get machine account key failed", "name", name)
+		logger.Error(err, "Get service account key failed", "name", name)
 		return nil, err
 	}
-	logger.V(4).Info("Got machine account key", "name", name, "authProviderKeyID", res.Status.AuthProviderKeyID)
+	logger.V(4).Info("Got service account key", "name", name, "authProviderKeyID", res.Status.AuthProviderKeyID)
 	return res, nil
 }
 
@@ -115,12 +115,12 @@ func (r *REST) Delete(ctx context.Context, name string, _ rest.ValidateObjectFun
 		username = u.GetName()
 		uid = u.GetUID()
 	}
-	logger.V(4).Info("Deleting machine account key", "name", name, "username", username, "uid", uid)
-	if err := r.backend.DeleteMachineAccountKey(ctx, u, name); err != nil {
-		logger.Error(err, "Delete machine account key failed", "name", name)
+	logger.V(4).Info("Deleting service account key", "name", name, "username", username, "uid", uid)
+	if err := r.backend.DeleteServiceAccountKey(ctx, u, name); err != nil {
+		logger.Error(err, "Delete service account key failed", "name", name)
 		return nil, false, err
 	}
-	logger.V(4).Info("Deleted machine account key", "name", name)
+	logger.V(4).Info("Deleted service account key", "name", name)
 	return &metav1.Status{Status: metav1.StatusSuccess}, true, nil
 }
 
@@ -131,34 +131,34 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 	table := &metav1.Table{
 		ColumnDefinitions: []metav1.TableColumnDefinition{
 			{Name: "Name", Type: "string"},
-			{Name: "Machine Account", Type: "string"},
+			{Name: "Service Account", Type: "string"},
 			{Name: "Key ID", Type: "string"},
 			{Name: "Age", Type: "date"},
 			{Name: "Expires", Type: "string"},
 		},
 	}
 
-	appendRow := func(mak *identityv1alpha1.MachineAccountKey) {
+	appendRow := func(sak *identityv1alpha1.ServiceAccountKey) {
 		age := metav1.Now().Rfc3339Copy()
-		if !mak.CreationTimestamp.IsZero() {
-			age = mak.CreationTimestamp
+		if !sak.CreationTimestamp.IsZero() {
+			age = sak.CreationTimestamp
 		}
 		expiresStr := "<none>"
-		if mak.Spec.ExpirationDate != nil {
-			expiresStr = mak.Spec.ExpirationDate.Time.Format(time.RFC3339)
+		if sak.Spec.ExpirationDate != nil {
+			expiresStr = sak.Spec.ExpirationDate.Time.Format(time.RFC3339)
 		}
 		table.Rows = append(table.Rows, metav1.TableRow{
-			Cells:  []interface{}{mak.Name, mak.Spec.MachineAccountUserName, mak.Status.AuthProviderKeyID, age.Time.Format(time.RFC3339), expiresStr},
-			Object: runtime.RawExtension{Object: mak},
+			Cells:  []interface{}{sak.Name, sak.Spec.ServiceAccountUserName, sak.Status.AuthProviderKeyID, age.Time.Format(time.RFC3339), expiresStr},
+			Object: runtime.RawExtension{Object: sak},
 		})
 	}
 
 	switch obj := object.(type) {
-	case *identityv1alpha1.MachineAccountKeyList:
+	case *identityv1alpha1.ServiceAccountKeyList:
 		for i := range obj.Items {
 			appendRow(&obj.Items[i])
 		}
-	case *identityv1alpha1.MachineAccountKey:
+	case *identityv1alpha1.ServiceAccountKey:
 		appendRow(obj)
 	default:
 		return nil, nil

@@ -162,13 +162,13 @@ spec:
             value: ""
           - name: USERIDENTITIES_PROVIDER_CLIENT_KEY_FILE
             value: ""
-          - name: MACHINEACCOUNTKEYS_PROVIDER_URL
+          - name: SERVICEACCOUNTKEYS_PROVIDER_URL
             value: ""
-          - name: MACHINEACCOUNTKEYS_PROVIDER_CA_FILE
+          - name: SERVICEACCOUNTKEYS_PROVIDER_CA_FILE
             value: ""
-          - name: MACHINEACCOUNTKEYS_PROVIDER_CLIENT_CERT_FILE
+          - name: SERVICEACCOUNTKEYS_PROVIDER_CLIENT_CERT_FILE
             value: ""
-          - name: MACHINEACCOUNTKEYS_PROVIDER_CLIENT_KEY_FILE
+          - name: SERVICEACCOUNTKEYS_PROVIDER_CLIENT_KEY_FILE
             value: ""
           # Events proxy provider configuration (requires --feature-gates=EventsProxy=true)
           - name: EVENTS_PROVIDER_URL

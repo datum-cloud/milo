@@ -11,17 +11,17 @@ import (
 func Install(scheme *runtime.Scheme) {
 	v1alpha1.AddToScheme(scheme)
 
-	// Register valid field selectors for MachineAccountKey so the generic API
+	// Register valid field selectors for ServiceAccountKey so the generic API
 	// server passes them through to the REST handler instead of rejecting them.
 	_ = scheme.AddFieldLabelConversionFunc(
 		schema.GroupVersionKind{
 			Group:   v1alpha1.SchemeGroupVersion.Group,
 			Version: v1alpha1.SchemeGroupVersion.Version,
-			Kind:    "MachineAccountKey",
+			Kind:    "ServiceAccountKey",
 		},
 		func(label, value string) (string, string, error) {
 			switch label {
-			case "spec.machineAccountUserName", "metadata.name", "metadata.namespace":
+			case "spec.serviceAccountUserName", "metadata.name", "metadata.namespace":
 				return label, value, nil
 			default:
 				return "", "", nil
