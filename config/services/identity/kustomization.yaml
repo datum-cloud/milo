@@ -5,3 +5,4 @@ kind: Component
 
 components:
   - policies
+  - telemetry/metrics
