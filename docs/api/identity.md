@@ -72,7 +72,8 @@ This resource provides information about user authentication sessions, including
 | `ip` | string | The IP address from which the session was created (optional). |
 | `fingerprintID` | string | A fingerprint identifier for the session (optional). |
 | `createdAt` | metav1.Time | The timestamp when the session was created. |
-| `expiresAt` | *metav1.Time | The timestamp when the session expires (optional). |
+| `lastUpdatedAt` | *metav1.Time | The last time the provider updated this session, e.g. Zitadel `change_date` (optional). |
+| `userAgent` | string | The client User-Agent string for this session, when the provider supplies it (optional). |
 
 ---
 

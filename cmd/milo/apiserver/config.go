@@ -45,7 +45,7 @@ import (
 
 	"go.miloapis.com/milo/internal/apiserver/admission/initializer"
 	eventsbackend "go.miloapis.com/milo/internal/apiserver/events"
-	machineaccountkeysbackend "go.miloapis.com/milo/internal/apiserver/identity/machineaccountkeys"
+	serviceaccountkeysbackend "go.miloapis.com/milo/internal/apiserver/identity/serviceaccountkeys"
 	sessionsbackend "go.miloapis.com/milo/internal/apiserver/identity/sessions"
 	useridentitiesbackend "go.miloapis.com/milo/internal/apiserver/identity/useridentities"
 	identitystorage "go.miloapis.com/milo/internal/apiserver/storage/identity"
@@ -54,6 +54,7 @@ import (
 	identityopenapi "go.miloapis.com/milo/pkg/apis/identity/v1alpha1"
 	quotaapi "go.miloapis.com/milo/pkg/apis/quota"
 	"go.miloapis.com/milo/pkg/features"
+	discoveryctx "go.miloapis.com/milo/pkg/server/discovery"
 	datumfilters "go.miloapis.com/milo/pkg/server/filters"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	openapicommon "k8s.io/kube-openapi/pkg/common"
@@ -66,13 +67,18 @@ type Config struct {
 	ControlPlane  *controlplaneapiserver.Config
 	APIExtensions *apiextensionsapiserver.Config
 
+	// DiscoveryRegistry is the shared parent-context registry used by the
+	// discovery filter. Created in NewConfig, populated from CRDs by a
+	// post-start hook in CreateServerChain.
+	DiscoveryRegistry *discoveryctx.Registry
+
 	ExtraConfig
 }
 
 type ExtraConfig struct {
 	SessionsProvider           SessionsProviderConfig
 	UserIdentitiesProvider     UserIdentitiesProviderConfig
-	MachineAccountKeysProvider MachineAccountKeysProviderConfig
+	ServiceAccountKeysProvider ServiceAccountKeysProviderConfig
 	EventsProvider             EventsProviderConfig
 }
 
@@ -109,8 +115,8 @@ type EventsProviderConfig struct {
 	ForwardExtras  []string
 }
 
-// MachineAccountKeysProviderConfig groups configuration for the machineaccountkeys backend provider
-type MachineAccountKeysProviderConfig struct {
+// ServiceAccountKeysProviderConfig groups configuration for the serviceaccountkeys backend provider
+type ServiceAccountKeysProviderConfig struct {
 	URL            string
 	CAFile         string
 	ClientCertFile string
@@ -126,6 +132,8 @@ type completedConfig struct {
 	Aggregator    aggregatorapiserver.CompletedConfig
 	ControlPlane  controlplaneapiserver.CompletedConfig
 	APIExtensions apiextensionsapiserver.CompletedConfig
+
+	DiscoveryRegistry *discoveryctx.Registry
 
 	ExtraConfig
 }
@@ -212,23 +220,23 @@ func newIdentityStorageProvider(c *CompletedConfig) controlplaneapiserver.RESTSt
 		provider.UserIdentities = backend
 	}
 
-	if utilfeature.DefaultFeatureGate.Enabled(features.MachineAccountKeys) {
-		allow := make(map[string]struct{}, len(c.ExtraConfig.MachineAccountKeysProvider.ForwardExtras))
-		for _, k := range c.ExtraConfig.MachineAccountKeysProvider.ForwardExtras {
+	if utilfeature.DefaultFeatureGate.Enabled(features.ServiceAccountKeys) {
+		allow := make(map[string]struct{}, len(c.ExtraConfig.ServiceAccountKeysProvider.ForwardExtras))
+		for _, k := range c.ExtraConfig.ServiceAccountKeysProvider.ForwardExtras {
 			allow[k] = struct{}{}
 		}
-		cfg := machineaccountkeysbackend.Config{
+		cfg := serviceaccountkeysbackend.Config{
 			BaseConfig:     c.ControlPlane.Generic.LoopbackClientConfig,
-			ProviderURL:    c.ExtraConfig.MachineAccountKeysProvider.URL,
-			CAFile:         c.ExtraConfig.MachineAccountKeysProvider.CAFile,
-			ClientCertFile: c.ExtraConfig.MachineAccountKeysProvider.ClientCertFile,
-			ClientKeyFile:  c.ExtraConfig.MachineAccountKeysProvider.ClientKeyFile,
-			Timeout:        time.Duration(c.ExtraConfig.MachineAccountKeysProvider.TimeoutSeconds) * time.Second,
-			Retries:        c.ExtraConfig.MachineAccountKeysProvider.Retries,
+			ProviderURL:    c.ExtraConfig.ServiceAccountKeysProvider.URL,
+			CAFile:         c.ExtraConfig.ServiceAccountKeysProvider.CAFile,
+			ClientCertFile: c.ExtraConfig.ServiceAccountKeysProvider.ClientCertFile,
+			ClientKeyFile:  c.ExtraConfig.ServiceAccountKeysProvider.ClientKeyFile,
+			Timeout:        time.Duration(c.ExtraConfig.ServiceAccountKeysProvider.TimeoutSeconds) * time.Second,
+			Retries:        c.ExtraConfig.ServiceAccountKeysProvider.Retries,
 			ExtrasAllow:    allow,
 		}
-		backend, _ := machineaccountkeysbackend.NewDynamicProvider(cfg)
-		provider.MachineAccountKeys = backend
+		backend, _ := serviceaccountkeysbackend.NewDynamicProvider(cfg)
+		provider.ServiceAccountKeys = backend
 	}
 
 	return provider
@@ -294,13 +302,21 @@ func (c *Config) Complete() (CompletedConfig, error) {
 		ControlPlane:  c.ControlPlane.Complete(),
 		APIExtensions: c.APIExtensions.Complete(),
 
+		DiscoveryRegistry: c.DiscoveryRegistry,
+
 		ExtraConfig: c.ExtraConfig,
 	}}, nil
 }
 
 func NewConfig(opts options.CompletedOptions) (*Config, error) {
+	var registry *discoveryctx.Registry
+	if utilfeature.DefaultFeatureGate.Enabled(features.DiscoveryContextFilter) {
+		registry = discoveryctx.NewRegistry()
+	}
+
 	c := &Config{
-		Options: opts,
+		Options:           opts,
+		DiscoveryRegistry: registry,
 	}
 
 	miloScheme := runtime.NewScheme()
@@ -339,6 +355,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 	loopbackClientConfig := genericConfig.LoopbackClientConfig
 
 	genericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
+		if registry != nil {
+			h = discoveryctx.DiscoveryContextFilter(h, registry)
+		}
 		return datumfilters.ProjectRouterWithRequestInfo(
 			DefaultBuildHandlerChain(h, c, loopbackClientConfig), // build stock chain first
 			c.RequestInfoResolver,                                // then wrap with router
@@ -370,6 +389,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	apiExtensions.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
+		if registry != nil {
+			h = discoveryctx.DiscoveryContextFilter(h, registry)
+		}
 		return datumfilters.ProjectRouterWithRequestInfo(
 			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
@@ -393,6 +415,9 @@ func NewConfig(opts options.CompletedOptions) (*Config, error) {
 		return nil, err
 	}
 	aggregator.GenericConfig.BuildHandlerChainFunc = func(h http.Handler, c *server.Config) http.Handler {
+		if registry != nil {
+			h = discoveryctx.DiscoveryContextFilter(h, registry)
+		}
 		return datumfilters.ProjectRouterWithRequestInfo(
 			DefaultBuildHandlerChain(h, c, loopbackClientConfig),
 			c.RequestInfoResolver,
