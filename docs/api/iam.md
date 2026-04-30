@@ -12,7 +12,7 @@ Resource Types:
 
 - [Group](#group)
 
-- [MachineAccount](#machineaccount)
+- [ServiceAccount](#serviceaccount)
 
 - [PlatformAccessApproval](#platformaccessapproval)
 
@@ -39,6 +39,7 @@ Resource Types:
 
 ## GroupMembership
 <sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
+
 
 
 
@@ -301,6 +302,7 @@ with respect to the current state of the instance.<br/>
 
 
 
+
 Group is the Schema for the groups API
 
 <table>
@@ -443,7 +445,7 @@ with respect to the current state of the instance.<br/>
       </tr></tbody>
 </table>
 
-## MachineAccount
+## ServiceAccount
 <sup><sup>[↩ Parent](#iammiloapiscomv1alpha1 )</sup></sup>
 
 
@@ -451,7 +453,8 @@ with respect to the current state of the instance.<br/>
 
 
 
-MachineAccount is the Schema for the machine accounts API
+
+ServiceAccount is the Schema for the service accounts API
 
 <table>
     <thead>
@@ -471,7 +474,7 @@ MachineAccount is the Schema for the machine accounts API
       <tr>
       <td><b>kind</b></td>
       <td>string</td>
-      <td>MachineAccount</td>
+      <td>ServiceAccount</td>
       <td>true</td>
       </tr>
       <tr>
@@ -480,29 +483,29 @@ MachineAccount is the Schema for the machine accounts API
       <td>Refer to the Kubernetes API documentation for the fields of the `metadata` field.</td>
       <td>true</td>
       </tr><tr>
-        <td><b><a href="#machineaccountspec">spec</a></b></td>
+        <td><b><a href="#serviceaccountspec">spec</a></b></td>
         <td>object</td>
         <td>
-          MachineAccountSpec defines the desired state of MachineAccount<br/>
+          ServiceAccountSpec defines the desired state of ServiceAccount<br/>
         </td>
         <td>false</td>
       </tr><tr>
-        <td><b><a href="#machineaccountstatus">status</a></b></td>
+        <td><b><a href="#serviceaccountstatus">status</a></b></td>
         <td>object</td>
         <td>
-          MachineAccountStatus defines the observed state of MachineAccount<br/>
+          ServiceAccountStatus defines the observed state of ServiceAccount<br/>
         </td>
         <td>false</td>
       </tr></tbody>
 </table>
 
 
-### MachineAccount.spec
-<sup><sup>[↩ Parent](#machineaccount)</sup></sup>
+### ServiceAccount.spec
+<sup><sup>[↩ Parent](#serviceaccount)</sup></sup>
 
 
 
-MachineAccountSpec defines the desired state of MachineAccount
+ServiceAccountSpec defines the desired state of ServiceAccount
 
 <table>
     <thead>
@@ -517,10 +520,10 @@ MachineAccountSpec defines the desired state of MachineAccount
         <td><b>state</b></td>
         <td>enum</td>
         <td>
-          The state of the machine account. This state can be safely changed as needed.
+          The state of the service account. This state can be safely changed as needed.
 States:
-  - Active: The machine account can be used to authenticate.
-  - Inactive: The machine account is prohibited to be used to authenticate, and revokes all existing sessions.<br/>
+  - Active: The service account can be used to authenticate.
+  - Inactive: The service account is prohibited to be used to authenticate, and revokes all existing sessions.<br/>
           <br/>
             <i>Enum</i>: Active, Inactive<br/>
             <i>Default</i>: Active<br/>
@@ -530,12 +533,12 @@ States:
 </table>
 
 
-### MachineAccount.status
-<sup><sup>[↩ Parent](#machineaccount)</sup></sup>
+### ServiceAccount.status
+<sup><sup>[↩ Parent](#serviceaccount)</sup></sup>
 
 
 
-MachineAccountStatus defines the observed state of MachineAccount
+ServiceAccountStatus defines the observed state of ServiceAccount
 
 <table>
     <thead>
@@ -547,17 +550,17 @@ MachineAccountStatus defines the observed state of MachineAccount
         </tr>
     </thead>
     <tbody><tr>
-        <td><b><a href="#machineaccountstatusconditionsindex">conditions</a></b></td>
+        <td><b><a href="#serviceaccountstatusconditionsindex">conditions</a></b></td>
         <td>[]object</td>
         <td>
-          Conditions provide conditions that represent the current status of the MachineAccount.<br/>
+          Conditions provide conditions that represent the current status of the ServiceAccount.<br/>
         </td>
         <td>false</td>
       </tr><tr>
         <td><b>email</b></td>
         <td>string</td>
         <td>
-          The computed email of the machine account following the pattern:
+          The computed email of the service account following the pattern:
 {metadata.name}@{metadata.namespace}.{project.metadata.name}.{global-suffix}<br/>
         </td>
         <td>false</td>
@@ -565,7 +568,7 @@ MachineAccountStatus defines the observed state of MachineAccount
         <td><b>state</b></td>
         <td>enum</td>
         <td>
-          State represents the current activation state of the machine account from the auth provider.
+          State represents the current activation state of the service account from the auth provider.
 This field tracks the state from the previous generation and is updated when state changes
 are successfully propagated to the auth provider. It helps optimize performance by only
 updating the auth provider when a state change is detected.<br/>
@@ -577,8 +580,8 @@ updating the auth provider when a state change is detected.<br/>
 </table>
 
 
-### MachineAccount.status.conditions[index]
-<sup><sup>[↩ Parent](#machineaccountstatus)</sup></sup>
+### ServiceAccount.status.conditions[index]
+<sup><sup>[↩ Parent](#serviceaccountstatus)</sup></sup>
 
 
 
