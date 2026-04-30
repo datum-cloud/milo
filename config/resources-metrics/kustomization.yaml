@@ -5,3 +5,9 @@ components:
   - iam/
   - identity/
   - resources-manager/
+  # ResourceMetricsPolicy resources for each service. These are owned exclusively
+  # by the milo-resource-metrics Kustomization and must not be included in any
+  # other path (e.g. crd/overlays/core-control-plane via the services component).
+  - ../services/iam/telemetry/metrics
+  - ../services/quota/telemetry/metrics
+  - ../services/resourcemanager/telemetry/metrics

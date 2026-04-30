@@ -5,10 +5,13 @@ kind: Component
 # Add new service directories here as they are created.
 
 components:
-  - iam
-  - resourcemanager
   - quota
   # identity is intentionally excluded here — it contains ActivityPolicy resources
   # which require the activity.miloapis.com CRDs to be installed. Those CRDs are
   # provided by the activity service, which is not deployed in the milo test cluster.
   # Deploy config/services/identity/ separately once the activity service is present.
+  #
+  # iam and resourcemanager are intentionally excluded here — their only content was
+  # ResourceMetricsPolicy resources, which are now owned exclusively by the
+  # resources-metrics component. Including them here would create Flux ownership
+  # conflicts with the milo-resource-metrics Kustomization.
