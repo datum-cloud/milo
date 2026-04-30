@@ -713,6 +713,15 @@ func Run(ctx context.Context, c *config.CompletedConfig, opts *Options) error {
 					logger.Error(err, "Error setting up user Slack notification controller")
 					klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 				}
+
+				userFraudSlackCtrl := iamcontroller.UserFraudSlackNotificationController{
+					Client:          ctrl.GetClient(),
+					SlackWebhookURL: userSlackWebhookURL,
+				}
+				if err := userFraudSlackCtrl.SetupWithManager(ctrl); err != nil {
+					logger.Error(err, "Error setting up user fraud Slack notification controller")
+					klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+				}
 			}
 
 			userWaitlistCtrl := iamcontroller.UserWaitlistController{
