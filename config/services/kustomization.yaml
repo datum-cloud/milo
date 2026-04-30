@@ -6,7 +6,6 @@ kind: Component
 
 components:
   - iam
-  - infrastructure
   - resourcemanager
   - quota
   # identity is intentionally excluded here — it contains ActivityPolicy resources
