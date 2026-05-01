@@ -5,6 +5,8 @@ kind: Component
 # Add new service directories here as they are created.
 
 components:
+  - iam
+  - resourcemanager
   - quota
   # identity is intentionally excluded here — it contains ActivityPolicy resources
   # which require the activity.miloapis.com CRDs to be installed. Those CRDs are
