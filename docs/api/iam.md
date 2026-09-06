@@ -2350,6 +2350,8 @@ ServiceAccount is the Schema for the service accounts API
         <td>object</td>
         <td>
           ServiceAccountSpec defines the desired state of ServiceAccount<br/>
+          <br/>
+            <i>Default</i>: map[]<br/>
         </td>
         <td>false</td>
       </tr><tr>
