@@ -21,6 +21,7 @@ type ServiceAccount struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	// +kubebuilder:default={}
 	Spec   ServiceAccountSpec   `json:"spec,omitempty"`
 	Status ServiceAccountStatus `json:"status,omitempty"`
 }
