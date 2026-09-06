@@ -9,6 +9,7 @@ spec:
     This test verifies:
     - A project can be deleted after reaching Ready status
     - The ResourceCleanup condition progresses through the expected states
+    - The project is visible in the main cluster context before deletion
     - The project is fully removed from both organization and main cluster contexts
 
   clusters:
@@ -63,6 +64,13 @@ spec:
                 value: 'True'
         - assert:
             file: assertions/assert-project-ready.yaml
+
+    - name: verify-project-listed-in-main-cluster
+      description: Verify the Project is visible in the main cluster before deletion
+      cluster: main
+      try:
+        - assert:
+            file: assertions/assert-project-exists-main.yaml
 
     - name: delete-project
       description: Delete the project and verify cleanup completes
