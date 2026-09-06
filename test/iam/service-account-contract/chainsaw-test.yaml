@@ -9,11 +9,14 @@ spec:
 
     This test verifies:
     - A ServiceAccount can be created in a Project control plane
-    - spec.state defaults to Active when spec.state is omitted
+    - spec.state defaults to Active when spec is present and spec.state is
+      omitted
+    - The ServiceAccount is not visible at the platform root, so it is
+      scoped to the Project control plane
     - A ServiceAccount can be deleted and is fully removed
 
     Key issuance, authentication, and revocation for service accounts need
-    the auth service, which the local env lacks, so they are not covered
+    the auth service, which the local environment lacks, so they are not covered
     here.
 
   clusters:
@@ -85,6 +88,18 @@ spec:
                 name: test-service-account
               spec:
                 state: Active
+
+    - name: verify-service-account-absent-at-root
+      description: Verify the ServiceAccount is not stored at the platform root
+      cluster: main
+      try:
+        - error:
+            timeout: 30s
+            resource:
+              apiVersion: iam.miloapis.com/v1alpha1
+              kind: ServiceAccount
+              metadata:
+                name: test-service-account
 
     - name: delete-service-account
       description: Delete the ServiceAccount and verify it is removed

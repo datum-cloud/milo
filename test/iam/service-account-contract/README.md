@@ -5,11 +5,14 @@ control plane served by the local Milo apiserver.
 
 This test verifies:
 - A ServiceAccount can be created in a Project control plane
-- spec.state defaults to Active when spec.state is omitted
+- spec.state defaults to Active when spec is present and spec.state is
+  omitted
+- The ServiceAccount is not visible at the platform root, so it is
+  scoped to the Project control plane
 - A ServiceAccount can be deleted and is fully removed
 
 Key issuance, authentication, and revocation for service accounts need
-the auth service, which the local env lacks, so they are not covered
+the auth service, which the local environment lacks, so they are not covered
 here.
 
 
@@ -20,7 +23,8 @@ here.
 | 1 | [setup-organization](#step-setup-organization) | 0 | 5 | 0 | 0 | 0 |
 | 2 | [create-project-and-wait-for-ready](#step-create-project-and-wait-for-ready) | 0 | 2 | 0 | 0 | 0 |
 | 3 | [create-service-account](#step-create-service-account) | 0 | 2 | 0 | 0 | 0 |
-| 4 | [delete-service-account](#step-delete-service-account) | 0 | 2 | 0 | 0 | 0 |
+| 4 | [verify-service-account-absent-at-root](#step-verify-service-account-absent-at-root) | 0 | 1 | 0 | 0 | 0 |
+| 5 | [delete-service-account](#step-delete-service-account) | 0 | 2 | 0 | 0 | 0 |
 
 ### Step: `setup-organization`
 
@@ -57,6 +61,16 @@ Create a ServiceAccount in the Project control plane and verify spec.state defau
 |:-:|---|:-:|:-:|---|
 | 1 | `apply` | 0 | 0 | *No description* |
 | 2 | `assert` | 0 | 0 | *No description* |
+
+### Step: `verify-service-account-absent-at-root`
+
+Verify the ServiceAccount is not stored at the platform root
+
+#### Try
+
+| # | Operation | Bindings | Outputs | Description |
+|:-:|---|:-:|:-:|---|
+| 1 | `error` | 0 | 0 | *No description* |
 
 ### Step: `delete-service-account`
 
