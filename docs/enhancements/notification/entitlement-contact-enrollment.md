@@ -1,43 +1,96 @@
+---
+status: provisional
+stage: alpha
+latest-milestone: "v0.1"
+---
+
 # Entitlement Registration Contact Group Enrollment
 
-> Status: Draft, seeking review. Source issue: datum-cloud/cloud-portal#1497.
+Source issue: datum-cloud/cloud-portal#1497.
 
-## Revision History
+- [Summary](#summary)
+- [Motivation](#motivation)
+  - [Goals](#goals)
+  - [Non-Goals](#non-goals)
+- [Proposal](#proposal)
+  - [User Stories](#user-stories)
+  - [Notes/Constraints/Caveats](#notesconstraintscaveats)
+  - [Risks and Mitigations](#risks-and-mitigations)
+- [Design Details](#design-details)
+- [Production Readiness Review Questionnaire](#production-readiness-review-questionnaire)
+- [Implementation History](#implementation-history)
+- [Drawbacks](#drawbacks)
+- [Alternatives](#alternatives)
 
-**v2 (this revision)**: Supersedes v1. In review, Scot (who owns service
-catalog) redirected the design:
-
-> "I'd drive it from the service catalog side. This way Milo's core system
-> doesn't understand what services are and service centric logic stays
-> contained within the service catalog. Kinda like why billing doesn't know
-> what a service is."
-
-Service catalog now owns this feature end to end. Milo's contact system
-stays generic: it knows about contacts and groups, not about services or
-entitlements.
-
-## Overview
+## Summary
 
 When a customer registers for a service (for example, Compute), internal
 staff want that person's CRM contact automatically added to the matching
 Contact Group (for example, `compute-testers`), so they don't have to
-maintain that list by hand.
+maintain that list by hand. This keeps internal contact lists in sync with
+real product usage instead of relying on someone remembering to update them.
 
-Service catalog will own this: when a customer's registration for a service
-goes active, and that service has been set up with a Contact Group, service
-catalog adds the customer's contact to that group.
+Service catalog will own this end to end: when a customer's registration for
+a service goes active, and that service has been set up with a Contact
+Group, service catalog adds the customer's contact to that group,
+auto-creating the group the first time it's needed.
 
-## How It Works
+## Motivation
+
+Today, keeping CRM contact lists (like `compute-testers`) aligned with who
+has actually signed up for a service is a manual process. Nobody is notified
+when a customer registers, so lists drift out of date, and support/success/
+sales lose a reliable signal of real product usage.
+
+### Goals
+
+- A customer registering for a service they've opted into CRM tracking for
+  gets added to the right Contact Group automatically, without a human
+  remembering to do it.
+- The mapping from a service to its Contact Group is something an operator
+  sets up once per service.
+- This work is contained to service catalog. Milo's contact system does not
+  need to understand what a service or an entitlement is — the same
+  separation billing already has.
+
+### Non-Goals
+
+- Automatically removing someone from a Contact Group when their
+  registration is revoked or rejected — that stays a manual/opt-out action
+  in this iteration.
+- Letting customers set contact info per project/org to drive group
+  membership (raised in the issue thread) — a materially different feature.
+- Any change to how Contact Groups are used or configured outside of this
+  enrollment flow.
+
+## Proposal
 
 An operator sets up a service to opt into this behavior by linking it to a
-Contact Group. Services that don't set this up stay unaffected; nothing
-changes for them.
+Contact Group. Services that don't set this up stay unaffected.
 
-When a customer registers for that service and the registration goes active,
-service catalog adds their CRM contact to the linked group.
+When a customer registers for that service and the registration goes
+active, service catalog adds their CRM contact to the linked group. If the
+group doesn't exist yet, service catalog creates it automatically rather
+than requiring an operator to create it first.
 
-- If the customer doesn't have a CRM contact yet, the enrollment isn't lost.
-  It completes as soon as their contact record shows up.
+### User Stories
+
+#### Story 1: A customer signs up for a tracked service
+
+As an internal user (support/success/sales), when a customer registers for
+Compute, I want their contact automatically added to `compute-testers` so
+our CRM list reflects real usage without me having to update it by hand.
+
+#### Story 2: An operator opts a new service into tracking
+
+As an operator, I want to link a service to a Contact Group once, and have
+every customer who registers for that service — past and future — get
+enrolled, without having to backfill the list myself.
+
+### Notes/Constraints/Caveats
+
+- If the customer doesn't have a CRM contact yet, the enrollment isn't
+  lost — it completes as soon as their contact record shows up.
 - If someone has already opted out of a group, that opt-out is respected;
   they won't be re-added.
 - If a customer registers for the same service more than once (for example,
@@ -45,11 +98,20 @@ service catalog adds their CRM contact to the linked group.
 - If an operator links a Contact Group to a service after customers have
   already registered, those existing registrations are picked up and
   enrolled too, not just new ones going forward.
-- If a service is linked to a group that doesn't exist yet, service catalog
-  creates it automatically rather than requiring an operator to create it
-  first (see Group Creation below).
+- Whether someone who received a service automatically (as a side effect of
+  registering for something else it depends on) should be enrolled the same
+  as someone who registered directly is an open question — this proposal
+  currently treats them the same.
 
-## Architecture
+### Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+| --- | --- | --- |
+| No automatic removal on revocation | A revoked customer stays listed as a tester until someone manually removes them | Explicit, called-out scope cut; confirm acceptable with support/success/sales before shipping |
+| Auto-created Contact Group has no sensible default for visibility/sync settings | A newly created group may not sync anywhere until an operator notices and configures it | Operator reviews and adjusts auto-created groups' settings after the fact; revisit if this proves to be a recurring gap |
+| Dependency-origin registrations counted the same as direct ones | CRM lists may include people who didn't directly opt in | Flagged as an open product question, not silently decided |
+
+## Design Details
 
 This stays entirely within service catalog; Milo's contact system is a
 passive API it writes to, not a participant in the decision-making.
@@ -68,38 +130,50 @@ passive API it writes to, not a participant in the decision-making.
   identity at registration time so service catalog can look up their
   contact later. This is a small, self-contained addition to how
   registrations are created.
-- **Group Creation**: service catalog creates the linked Contact Group
-  automatically the first time it's needed, using sensible defaults. An
-  operator can adjust the group's settings (for example, visibility, or
-  which external systems it syncs to) afterward in staff-portal, the same
-  way they manage any other Contact Group today.
+- Service catalog creates the linked Contact Group automatically the first
+  time it's needed, using sensible defaults. An operator can adjust the
+  group's settings (for example, visibility, or which external systems it
+  syncs to) afterward in staff-portal, the same way they manage any other
+  Contact Group today.
 
-## What This Does Not Do
+## Production Readiness Review Questionnaire
 
-- **No automatic removal.** If a customer's registration for a service is
-  later revoked or rejected, they are not automatically removed from the
-  Contact Group. Removing someone from a group stays a manual action, same
-  as it is today. This is a deliberate scope cut for this iteration, not an
-  oversight, and should be confirmed with stakeholders (support/success/
-  sales) before shipping.
+TBD — this is a low-risk, internal-tooling feature (no customer-facing
+behavior changes, opt-in per service). A full PRR pass will be done before
+this graduates past an initial rollout; noting the key points now:
 
-## Open Questions
+- **Enablement**: opt-in per service (an operator links a Contact Group).
+  No behavior change for any service until an operator does this.
+- **Rollback**: disabling is as simple as unlinking the Contact Group from
+  a service; no data is deleted, enrollment just stops happening for new
+  registrations.
+- **Failure mode**: if a customer's CRM contact doesn't exist yet, or the
+  contact API is briefly unavailable, enrollment is retried rather than
+  dropped.
 
-- Should someone who got a service automatically (as a side effect of
-  registering for something else it depends on) be enrolled the same as
-  someone who registered for it directly? This design currently treats them
-  the same. Flag if CRM only wants to count direct signups.
-- Confirm with stakeholders that no automatic removal on revocation is
-  acceptable for this first iteration.
-- Is there a point at which we should stop waiting for a customer's CRM
-  contact to show up and flag it instead of waiting indefinitely?
-- What defaults should an auto-created Contact Group start with (visibility,
-  external sync destinations), given no operator has made that call yet?
+## Implementation History
 
-## Out of Scope
+- 2026-09-07: Initial design proposed (Milo-side trigger approach).
+- 2026-09-07: Redirected to a service-catalog-owned approach per review
+  feedback (Milo's core should stay agnostic to what a service is, the same
+  way billing doesn't need to know what a service is).
 
-- Removing group membership automatically on revocation — deferred, needs a
-  product decision on whether that should even happen automatically.
-- Letting users set contact info per project/org to drive group membership
-  (raised in the issue thread) is a different feature entirely and is not
-  part of this design.
+## Drawbacks
+
+- Adds a new cross-repo dependency: service-catalog becomes a direct writer
+  to Milo's contact API, not just a reader of it.
+- Auto-creating Contact Groups means a group can exist with no sync
+  destinations configured until an operator notices, rather than always
+  being deliberately set up first.
+
+## Alternatives
+
+- **Drive this from Milo instead of service-catalog** (the original
+  direction): rejected because it would require Milo's core contact system
+  to understand what a service and an entitlement are, breaking the
+  separation Milo currently has (and that billing already follows) between
+  generic platform concepts and service-specific ones.
+- **Require an operator to pre-create the Contact Group** rather than
+  auto-creating it: considered and initially recommended, but revised after
+  feedback in favor of removing that manual step; an operator can still
+  adjust the auto-created group's settings afterward.
