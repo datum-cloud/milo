@@ -29,9 +29,9 @@ catalog adds the customer's contact to that group.
 
 ## How It Works
 
-An operator sets up a service to opt into this behavior by pointing it at a
-Contact Group (created and managed today through staff-portal, as it already
-is). Services that don't set this stay unaffected; nothing changes for them.
+An operator sets up a service to opt into this behavior by linking it to a
+Contact Group. Services that don't set this up stay unaffected; nothing
+changes for them.
 
 When a customer registers for that service and the registration goes active,
 service catalog adds their CRM contact to the linked group.
@@ -45,6 +45,34 @@ service catalog adds their CRM contact to the linked group.
 - If an operator links a Contact Group to a service after customers have
   already registered, those existing registrations are picked up and
   enrolled too, not just new ones going forward.
+- If a service is linked to a group that doesn't exist yet, service catalog
+  creates it automatically rather than requiring an operator to create it
+  first (see Group Creation below).
+
+## Architecture
+
+This stays entirely within service catalog; Milo's contact system is a
+passive API it writes to, not a participant in the decision-making.
+
+- Service catalog already tracks when a customer's registration for a
+  service goes active. A new piece of logic in service catalog watches for
+  that, and for each newly-active registration, checks whether the service
+  it's for has a Contact Group linked.
+- If so, it resolves the customer's CRM contact and adds them to that group
+  by writing directly to Milo's existing contact API — the same API a human
+  operator or any other client would use. No new integration point is added
+  on Milo's side, and Milo's own enrollment mechanism (used for other,
+  non-service-specific cases) is untouched.
+- Service registrations today don't record who requested them. Closing that
+  gap is a prerequisite: we need to capture the requesting customer's
+  identity at registration time so service catalog can look up their
+  contact later. This is a small, self-contained addition to how
+  registrations are created.
+- **Group Creation**: service catalog creates the linked Contact Group
+  automatically the first time it's needed, using sensible defaults. An
+  operator can adjust the group's settings (for example, visibility, or
+  which external systems it syncs to) afterward in staff-portal, the same
+  way they manage any other Contact Group today.
 
 ## What This Does Not Do
 
@@ -54,11 +82,6 @@ service catalog adds their CRM contact to the linked group.
   as it is today. This is a deliberate scope cut for this iteration, not an
   oversight, and should be confirmed with stakeholders (support/success/
   sales) before shipping.
-- **No automatic group creation.** An operator still creates the Contact
-  Group themselves (through staff-portal, as today) before linking a service
-  to it. Not every service should get a group, and there's no safe default
-  for how a new group should be configured, so this stays a deliberate,
-  manual step rather than being auto-created.
 
 ## Open Questions
 
@@ -70,11 +93,11 @@ service catalog adds their CRM contact to the linked group.
   acceptable for this first iteration.
 - Is there a point at which we should stop waiting for a customer's CRM
   contact to show up and flag it instead of waiting indefinitely?
+- What defaults should an auto-created Contact Group start with (visibility,
+  external sync destinations), given no operator has made that call yet?
 
 ## Out of Scope
 
-- Auto-creating a Contact Group per service — deferred; revisit if the
-  manual step turns out to be real toil.
 - Removing group membership automatically on revocation — deferred, needs a
   product decision on whether that should even happen automatically.
 - Letting users set contact info per project/org to drive group membership
