@@ -35,6 +35,7 @@ spec:
             }[5m]) >= 1
           for: 5m
           labels:
+            expected_no_match: "true"
             severity: critical
             service: milo-controller-manager
           annotations:
