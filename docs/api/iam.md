@@ -670,7 +670,7 @@ The UserController derives User.status.accessState from this resource.
         <td>
           PlatformAccessSpec defines the desired access state for a user on the platform.<br/>
         </td>
-        <td>false</td>
+        <td>true</td>
       </tr><tr>
         <td><b><a href="#platformaccessstatus">status</a></b></td>
         <td>object</td>
@@ -3254,7 +3254,7 @@ UserPreference is the Schema for the userpreferences API
         <td>
           UserPreferenceSpec defines the desired state of UserPreference<br/>
         </td>
-        <td>false</td>
+        <td>true</td>
       </tr><tr>
         <td><b><a href="#userpreferencestatus">status</a></b></td>
         <td>object</td>
